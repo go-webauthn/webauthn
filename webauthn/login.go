@@ -15,6 +15,8 @@ import (
 // LoginOption is used to provide parameters that modify the default Credential Assertion Payload that is sent to the user.
 type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
 
+type DiscoverableUserHandler func(userHandle []byte) (user *User, err error)
+
 // Creates the CredentialAssertion data payload that should be sent to the user agent for beginning the
 // login/assertion process. The format of this data can be seen in §5.5 of the WebAuthn specification
 // (https://www.w3.org/TR/webauthn/#assertion-options). These default values can be amended by providing
@@ -22,24 +24,41 @@ type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
 // RP in a secure manner and then provided to the FinishLogin function. This data helps us verify the
 // ownership of the credential being retreived.
 func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	return webauthn.beginLogin(&user, opts...)
+}
+
+// BeginDiscoverableLogin begins a client-side discoverable login, previously known as Resident Key logins.
+func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	return webauthn.beginLogin(nil, opts...)
+}
+
+func (webauthn *WebAuthn) beginLogin(u *User, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
 	challenge, err := protocol.CreateChallenge()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	credentials := user.WebAuthnCredentials()
+	var allowedCredentials []protocol.CredentialDescriptor
+	var userID []byte
+	if u != nil {
+		user := *u
 
-	if len(credentials) == 0 { // If the user does not have any credentials, we cannot do login
-		return nil, nil, protocol.ErrBadRequest.WithDetails("Found no credentials for user")
-	}
+		credentials := user.WebAuthnCredentials()
 
-	var allowedCredentials = make([]protocol.CredentialDescriptor, len(credentials))
+		if len(credentials) == 0 { // If the user does not have any credentials, we cannot do login
+			return nil, nil, protocol.ErrBadRequest.WithDetails("Found no credentials for user")
+		}
 
-	for i, credential := range credentials {
-		var credentialDescriptor protocol.CredentialDescriptor
-		credentialDescriptor.CredentialID = credential.ID
-		credentialDescriptor.Type = protocol.PublicKeyCredentialType
-		allowedCredentials[i] = credentialDescriptor
+		allowedCredentials = make([]protocol.CredentialDescriptor, len(credentials))
+
+		for i, credential := range credentials {
+			var credentialDescriptor protocol.CredentialDescriptor
+			credentialDescriptor.CredentialID = credential.ID
+			credentialDescriptor.Type = protocol.PublicKeyCredentialType
+			allowedCredentials[i] = credentialDescriptor
+		}
+
+		userID = user.WebAuthnID()
 	}
 
 	requestOptions := protocol.PublicKeyCredentialRequestOptions{
@@ -56,13 +75,13 @@ func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.
 
 	newSessionData := SessionData{
 		Challenge:            base64.RawURLEncoding.EncodeToString(challenge),
-		UserID:               user.WebAuthnID(),
+		UserID:               userID,
 		AllowedCredentialIDs: requestOptions.GetAllowedCredentialIDs(),
 		UserVerification:     requestOptions.UserVerification,
 		Extensions:           requestOptions.Extensions,
 	}
 
-	response := protocol.CredentialAssertion{requestOptions}
+	response := protocol.CredentialAssertion{Response: requestOptions}
 
 	return &response, &newSessionData, nil
 }
@@ -97,6 +116,19 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 	}
 
 	return webauthn.ValidateLogin(user, session, parsedResponse)
+}
+
+func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
+	if parsedResponse.Response.UserHandle == nil {
+		return nil, protocol.ErrBadRequest.WithDetails("Client-side Discoverable Assertion was attempted with a blank User Handle")
+	}
+
+	user, err := handler(parsedResponse.Response.UserHandle)
+	if err != nil {
+		return nil, protocol.ErrBadRequest.WithDetails("Failed to lookup Client-side Discoverable Credential")
+	}
+
+	return webauthn.ValidateLogin(*user, session, parsedResponse)
 }
 
 // ValidateLogin takes a parsed response and validates it against the user credentials and session data
