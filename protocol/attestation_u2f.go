@@ -7,8 +7,7 @@ import (
 	"crypto/x509"
 
 	"github.com/fxamacker/cbor/v2"
-
-	"github.com/duo-labs/webauthn/protocol/webauthncose"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
 var u2fAttestationKey = "fido-u2f"

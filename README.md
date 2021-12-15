@@ -1,28 +1,41 @@
-WebAuthn Library
-=============
-[![GoDoc](https://godoc.org/github.com/duo-labs/webauthn?status.svg)](https://godoc.org/github.com/duo-labs/webauthn)
-![Build Status](https://github.com/duo-labs/webauthn/workflows/Go/badge.svg)
-[![Go Report Card](https://goreportcard.com/badge/github.com/duo-labs/webauthn)](https://goreportcard.com/report/github.com/duo-labs/webauthn)
+# WebAuthn Library
+
+[![GoDoc](https://godoc.org/github.com/go-webauthn/webauthn?status.svg)](https://godoc.org/github.com/go-webauthn/webauthn)
+[![Go Report Card](https://goreportcard.com/badge/github.com/go-webauthn/webauthn)](https://goreportcard.com/report/github.com/go-webauthn/webauthn)
 
 
-This library is meant to handle [Web Authentication](https://w3c.github.io/webauthn) for Go apps that wish to implement a passwordless solution for users. While the specification is currently in Candidate Recommendation, this library conforms as much as possible to 
-the guidelines and implementation procedures outlined by the document.
+This library is meant to handle [Web Authentication](https://w3c.github.io/webauthn) for Go apps that wish to implement 
+a passwordless solution for users. While the specification is currently in Candidate Recommendation, this library
+conforms as much as possible to the guidelines and implementation procedures outlined by the document.
 
-### Demo at webauthn.io
-An implementation of this library can be used at [webauthn.io](https://webauthn.io) and the code for this website can be found in the Duo Labs repository [`webauthn-io`](https://github.com/duo-labs/webauthn.io).
+## Fork
 
-### Simplified demo
-A simplified demonstration of this library can be found [here](https://github.com/hbolimovsky/webauthn-example). It includes a minimal interface and is great for quickly testing out the code. The associated blog post can be found [here]().
+This library is a hard fork of github.com/duo-labs/webauthn however we do not have any affiliation with Duo Labs or any
+of the authors. This library should not be seen as a representation of them in any form. The intent of this library is
+to address outstanding issues with that library without having to wait on the maintainers to merge the PR's. 
 
-Quickstart
-----------
-`go get github.com/duo-labs/webauthn` and initialize it in your application with basic configuration values. 
+It is distributed under the same 3-Clause BSD license as the original fork, with the only amendment being the additional
+3-Clause BSD license attributing license rights to this repository.
 
-Make sure your `user` model is able to handle the interface functions laid out in `webauthn/user.go`. This means also supporting the storage and retrieval of the credential and authenticator structs in `webauthn/credential.go` and `webauthn/authenticator.go`, respectively.
+## Status
+
+This library is still version 0, as per semver rules there may be breaking changes without warning. While we strive to
+avoid such changes they may be unavoidable.
+
+## Quickstart
+
+`go get github.com/go-webauthn/webauthn` and initialize it in your application with basic configuration values. 
+
+Make sure your `user` model is able to handle the interface functions laid out in `webauthn/user.go`. This means also 
+supporting the storage and retrieval of the credential and authenticator structs in `webauthn/credential.go` and 
+`webauthn/authenticator.go`, respectively.
 
 ### Initialize the request handler
+
 ```golang
-import "github.com/duo-labs/webauthn/webauthn"
+import (
+	"github.com/go-webauthn/webauthn/webauthn"
+)
 
 var (
     web *webauthn.WebAuthn
@@ -32,10 +45,10 @@ var (
 // Your initialization function
 func main() {
     web, err = webauthn.New(&webauthn.Config{
-        RPDisplayName: "Duo Labs", // Display Name for your site
-        RPID: "duo.com", // Generally the FQDN for your site
-        RPOrigin: "https://login.duo.com", // The origin URL for WebAuthn requests
-        RPIcon: "https://duo.com/logo.png", // Optional icon URL for your site
+        RPDisplayName: "Go Webauthn", // Display Name for your site
+        RPID: "go-webauthn.local", // Generally the FQDN for your site
+        RPOrigin: "https://login.go-webauthn.local", // The origin URL for WebAuthn requests
+        RPIcon: "https://go-webauthn.local/logo.png", // Optional icon URL for your site
     })
     if err != nil {
         fmt.Println(err)
@@ -70,6 +83,7 @@ func FinishRegistration(w http.ResponseWriter, r *http.Request) {
 ```
 
 ### Logging into an account
+
 ```golang
 func BeginLogin(w http.ResponseWriter, r *http.Request) {
     user := datastore.GetUser() // Find the user
@@ -93,16 +107,21 @@ func FinishLogin(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-Modifying Credential Options
-----------------------------
-You can modify the default credential creation options for registration and login by providing optional structs to the `BeginRegistration` and `BeginLogin` functions. 
+## Modifying Credential Options
+
+You can modify the default credential creation options for registration and login by providing optional structs to the 
+`BeginRegistration` and `BeginLogin` functions. 
 
 ### Registration modifiers
+
 You can modify the registration options in the following ways:
+
 ```golang
 // Wherever you handle your WebAuthn requests
-import "github.com/duo-labs/webauthn/protocol"
-import "github.com/duo-labs/webauthn/webauthn"
+import (
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
+)
 
 var webAuthnHandler webauthn.WebAuthn // init this in your init function
 
@@ -124,15 +143,18 @@ func beginRegistration() {
 
     // Handle next steps
 }
-
 ```
 
 ### Login modifiers
+
 You can modify the login options to allow only certain credentials:
+
 ```golang
 // Wherever you handle your WebAuthn requests
-import "github.com/duo-labs/webauthn/protocol"
-import "github.com/duo-labs/webauthn/webauthn"
+import (
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
+)
 
 var webAuthnHandler webauthn.WebAuthn // init this in your init function
 
@@ -154,6 +176,7 @@ func beginLogin() {
 
 ```
 
-Acknowledgements
-----------------
-I could not have made this library without the work of [Jordan Wright](https://twitter.com/jw_sec) and the designs done for our demo site by [Emily Rosen](http://www.emiroze.design/). When I began refactoring this library in December 2018, [Koen Vlaswinkel's](https://github.com/koesie10) Golang WebAuthn library really helped set me in the right direction. A huge thanks to [Alex Seigler](https://github.com/aseigler) for his continuing work on this WebAuthn library and many others. Thanks to everyone who submitted issues and pull requests to help make this library what it is today!
+## Acknowledgements
+
+We graciously acknowledge the original authors of this library [github.com/duo-labs/webauthn](https://github.com/duo-labs/webauthn)
+for their amazing implementation. Without their amazing work this library could not exist.

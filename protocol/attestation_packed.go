@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/google/uuid"
-
-	"github.com/duo-labs/webauthn/metadata"
-	"github.com/duo-labs/webauthn/protocol/webauthncose"
 )
 
 var packedAttestationKey = "packed"

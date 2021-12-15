@@ -1,4 +1,4 @@
-module github.com/duo-labs/webauthn
+module github.com/go-webauthn/webauthn
 
 go 1.15
 

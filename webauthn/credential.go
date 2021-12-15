@@ -1,7 +1,7 @@
 package webauthn
 
 import (
-	"github.com/duo-labs/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/protocol"
 )
 
 // Credential contains all needed information about a WebAuthn credential for storage
