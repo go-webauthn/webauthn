@@ -4,8 +4,9 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/fxamacker/cbor/v2"
 	"golang.org/x/crypto/ed25519"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 // TestOKPSignatureVerification is a compatibility test to ensure that removing
@@ -58,7 +59,7 @@ MCowBQYDK2VwAyEAe4gQJK3JgtOAuHceO5v45LOZi8fQWDBmAs5NDy/kt4E=
 		},
 	}
 	// Get the CBOR-encoded representation of the OKPPublicKeyData
-	buf, _ := cbor.Marshal(key)
+	buf, _ := webauthncbor.Marshal(key)
 
 	got := DisplayPublicKey(buf)
 	if got != expected {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/fxamacker/cbor/v2"
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 // From §5.2.1 (https://www.w3.org/TR/webauthn/#authenticatorattestationresponse)
@@ -85,7 +85,7 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (*ParsedAttestationResponse
 		return nil, ErrParsingData.WithInfo(err.Error())
 	}
 
-	err = cbor.Unmarshal(ccr.AttestationObject, &p.AttestationObject)
+	err = webauthncbor.Unmarshal(ccr.AttestationObject, &p.AttestationObject)
 	if err != nil {
 		return nil, ErrParsingData.WithInfo(err.Error())
 	}

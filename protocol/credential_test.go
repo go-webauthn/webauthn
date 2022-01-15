@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/fxamacker/cbor/v2"
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 func TestParseCredentialCreationResponse(t *testing.T) {
@@ -113,10 +113,10 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			// Unmarshall CredentialPublicKey
 			var pkWant interface{}
 			keyBytesWant := tt.want.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
-			cbor.Unmarshal(keyBytesWant, &pkWant)
+			webauthncbor.Unmarshal(keyBytesWant, &pkWant)
 			var pkGot interface{}
 			keyBytesGot := got.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
-			cbor.Unmarshal(keyBytesGot, &pkGot)
+			webauthncbor.Unmarshal(keyBytesGot, &pkGot)
 			if !reflect.DeepEqual(pkGot, pkWant) {
 				t.Errorf("Response = %+v \n want: %+v", pkGot, pkWant)
 			}
