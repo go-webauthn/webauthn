@@ -78,7 +78,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte) (strin
 	}
 	e := pubKey.(webauthncose.EC2PublicKeyData)
 	valid, err = e.Verify(signatureData, sig)
-	if err != nil || valid != true {
+	if err != nil || !valid {
 		return androidAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
 	}
 	// §8.4.3. Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.

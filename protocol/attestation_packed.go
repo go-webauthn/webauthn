@@ -174,14 +174,22 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	// AAGUID MUST be wrapped in two OCTET STRINGS to be valid.
 	if len(foundAAGUID) > 0 {
 		unMarshalledAAGUID := []byte{}
-		asn1.Unmarshal(foundAAGUID, &unMarshalledAAGUID)
+		_, err = asn1.Unmarshal(foundAAGUID, &unMarshalledAAGUID)
+		if err != nil {
+			return attestationType, x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID could not be unmarshalled: %v", err))
+		}
+
 		if !bytes.Equal(aaguid, unMarshalledAAGUID) {
 			return attestationType, x5c, ErrInvalidAttestation.WithDetails("Certificate AAGUID does not match Auth Data certificate")
 		}
 	}
-	uuid, err := uuid.FromBytes(aaguid)
 
-	if meta, ok := metadata.Metadata[uuid]; ok {
+	parsedAAGUID, err := uuid.FromBytes(aaguid)
+	if err != nil {
+		return attestationType, x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID could not be parsed: %v", err))
+	}
+
+	if meta, ok := metadata.Metadata[parsedAAGUID]; ok {
 		for _, s := range meta.StatusReports {
 			if metadata.IsUndesiredAuthenticatorStatus(metadata.AuthenticatorStatus(s.Status)) {
 				return attestationType, x5c, ErrInvalidAttestation.WithDetails("Authenticator with undesirable status encountered")
@@ -191,12 +199,12 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 		if attCert.Subject.CommonName != attCert.Issuer.CommonName {
 			var hasBasicFull = false
 			for _, a := range meta.MetadataStatement.AttestationTypes {
-				if metadata.AuthenticatorAttestationType(a) == metadata.AuthenticatorAttestationType(metadata.BasicFull) {
+				if metadata.AuthenticatorAttestationType(a) == metadata.BasicFull {
 					hasBasicFull = true
 				}
 			}
 			if !hasBasicFull {
-				return attestationType, x5c, ErrInvalidAttestation.WithDetails("Attestation with full attestation from authentictor that does not support full attestation")
+				return attestationType, x5c, ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
 			}
 		}
 	} else {

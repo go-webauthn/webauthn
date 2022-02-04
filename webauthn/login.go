@@ -62,7 +62,7 @@ func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.
 		Extensions:           requestOptions.Extensions,
 	}
 
-	response := protocol.CredentialAssertion{requestOptions}
+	response := protocol.CredentialAssertion{Response: requestOptions}
 
 	return &response, &newSessionData, nil
 }
@@ -143,7 +143,7 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 	// This is in part handled by our Step 1
 
 	userHandle := parsedResponse.Response.UserHandle
-	if userHandle != nil && len(userHandle) > 0 {
+	if len(userHandle) > 0 {
 		if !bytes.Equal(userHandle, user.WebAuthnID()) {
 			return nil, protocol.ErrBadRequest.WithDetails("userHandle and User ID do not match")
 		}
