@@ -89,6 +89,22 @@ func WithAssertionExtensions(extensions protocol.AuthenticationExtensions) Login
 	}
 }
 
+// WithAppIdExtension automatically includes the specified appid if the AllowedCredentials contains a credential
+// with the type `fido-u2f`.
+func WithAppIdExtension(appid string) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		for _, credential := range cco.AllowedCredentials {
+			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
+				if cco.Extensions == nil {
+					cco.Extensions = map[string]interface{}{}
+				}
+
+				cco.Extensions[protocol.ExtensionAppID] = appid
+			}
+		}
+	}
+}
+
 // Take the response from the client and validate it against the user credentials and stored session data
 func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *http.Request) (*Credential, error) {
 	parsedResponse, err := protocol.ParseCredentialRequestResponse(response)
