@@ -183,7 +183,7 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) error {
 			a.ExtData = rawAuthData[len(rawAuthData)-remaining:]
 			remaining -= len(a.ExtData)
 		} else {
-			return ErrBadRequest.WithDetails("ClientExtensionResults flag set but extensions data is missing")
+			return ErrBadRequest.WithDetails("Extensions flag set but extensions data is missing")
 		}
 	}
 
