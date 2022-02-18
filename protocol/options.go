@@ -91,6 +91,11 @@ type AuthenticatorSelection struct {
 	// credentials. If the parameter is set to true, the authenticator MUST create a client-side-resident
 	// public key credential source when creating a public key credential.
 	RequireResidentKey *bool `json:"requireResidentKey,omitempty"`
+
+	// ResidentKey this member describes the Relying Party's requirements regarding resident
+	// credentials per Webauthn Level 2.
+	ResidentKey ResidentKeyRequirement `json:"residentKey,omitempty"`
+
 	// UserVerification This member describes the Relying Party's requirements regarding user verification for
 	// the create() operation. Eligible authenticators are filtered to only those capable of satisfying this
 	// requirement.
