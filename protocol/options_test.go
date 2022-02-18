@@ -26,7 +26,7 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 				Timeout:   60,
 				AllowedCredentials: []CredentialDescriptor{
 					{
-						"public-key", []byte("1234"), []AuthenticatorTransport{"usb"},
+						Type: "public-key", CredentialID: []byte("1234"), Transport: []AuthenticatorTransport{"usb"},
 					},
 				},
 				RelyingPartyID:   "test.org",
