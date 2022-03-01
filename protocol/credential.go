@@ -51,8 +51,8 @@ type CredentialCreationResponse struct {
 type ParsedCredentialCreationData struct {
 	ParsedPublicKeyCredential
 	Response   ParsedAttestationResponse
+	Transports []AuthenticatorTransport
 	Raw        CredentialCreationResponse
-	Transports []AuthenticatorTransport `json:"transports,omitempty"`
 }
 
 func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialCreationData, error) {
