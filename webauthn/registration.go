@@ -97,6 +97,22 @@ func WithExtensions(extension protocol.AuthenticationExtensions) RegistrationOpt
 	}
 }
 
+// WithAppIdExcludeExtension automatically includes the specified appid if the CredentialExcludeList contains a credential
+// with the type `fido-u2f`.
+func WithAppIdExcludeExtension(appid string) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		for _, credential := range cco.CredentialExcludeList {
+			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
+				if cco.Extensions == nil {
+					cco.Extensions = map[string]interface{}{}
+				}
+
+				cco.Extensions[protocol.ExtensionAppIDExclude] = appid
+			}
+		}
+	}
+}
+
 // Take the response from the authenticator and client and verify the credential against the user's credentials and
 // session data.
 func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, response *http.Request) (*Credential, error) {
