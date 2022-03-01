@@ -202,25 +202,25 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 		return "", nil
 	}
 
-	if clientValue, ok = ppkc.ClientExtensionResults["appid"]; ok {
-		if enableAppID, ok = clientValue.(bool); !ok {
-			return "", ErrBadRequest.WithDetails("Client Output appid did not have the expected type")
-		}
-
-		if !enableAppID {
-			return "", nil
-		}
-
-		if value, ok = authExt["appid"]; !ok {
-			return "", ErrBadRequest.WithDetails("Session Data does not have an appid but Client Output indicates it should be set")
-		}
-
-		if appID, ok = value.(string); !ok {
-			return "", ErrBadRequest.WithDetails("Session Data appid did not have the expected type")
-		}
-
-		return appID, nil
+	if clientValue, ok = ppkc.ClientExtensionResults["appid"]; !ok {
+		return "", nil
 	}
 
-	return "", nil
+	if enableAppID, ok = clientValue.(bool); !ok {
+		return "", ErrBadRequest.WithDetails("Client Output appid did not have the expected type")
+	}
+
+	if !enableAppID {
+		return "", nil
+	}
+
+	if value, ok = authExt["appid"]; !ok {
+		return "", ErrBadRequest.WithDetails("Session Data does not have an appid but Client Output indicates it should be set")
+	}
+
+	if appID, ok = value.(string); !ok {
+		return "", ErrBadRequest.WithDetails("Session Data appid did not have the expected type")
+	}
+
+	return appID, nil
 }

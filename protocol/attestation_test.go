@@ -32,7 +32,7 @@ func TestAttestationVerify(t *testing.T) {
 			// Test Base Verification
 			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, options.Response.RelyingParty.Name)
 			if err != nil {
-				t.Fatalf("Not valid: %+v (%+s)", err, err.(*Error).DevInfo)
+				t.Fatalf("Not valid: %+v (%s)", err, err.(*Error).DevInfo)
 			}
 		})
 	}
