@@ -15,6 +15,9 @@ import (
 // LoginOption is used to provide parameters that modify the default Credential Assertion Payload that is sent to the user.
 type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
 
+// DiscoverableUserHandler returns a *User given the provided userHandle.
+type DiscoverableUserHandler func(rawID, userHandle []byte) (user User, err error)
+
 // Creates the CredentialAssertion data payload that should be sent to the user agent for beginning the
 // login/assertion process. The format of this data can be seen in §5.5 of the WebAuthn specification
 // (https://www.w3.org/TR/webauthn/#assertion-options). These default values can be amended by providing
@@ -22,14 +25,9 @@ type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
 // RP in a secure manner and then provided to the FinishLogin function. This data helps us verify the
 // ownership of the credential being retreived.
 func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
-	challenge, err := protocol.CreateChallenge()
-	if err != nil {
-		return nil, nil, err
-	}
-
 	credentials := user.WebAuthnCredentials()
 
-	if len(credentials) == 0 { // If the user does not have any credentials, we cannot do login
+	if len(credentials) == 0 { // If the user does not have any credentials, we cannot perform an assertion.
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Found no credentials for user")
 	}
 
@@ -37,6 +35,20 @@ func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.
 
 	for i, credential := range credentials {
 		allowedCredentials[i] = credential.Descriptor()
+	}
+
+	return webauthn.beginLogin(user.WebAuthnID(), allowedCredentials, opts...)
+}
+
+// BeginDiscoverableLogin begins a client-side discoverable login, previously known as Resident Key logins.
+func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	return webauthn.beginLogin(nil, nil, opts...)
+}
+
+func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	challenge, err := protocol.CreateChallenge()
+	if err != nil {
+		return nil, nil, err
 	}
 
 	requestOptions := protocol.PublicKeyCredentialRequestOptions{
@@ -51,9 +63,9 @@ func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.
 		setter(&requestOptions)
 	}
 
-	newSessionData := SessionData{
+	sessionData := SessionData{
 		Challenge:            base64.RawURLEncoding.EncodeToString(challenge),
-		UserID:               user.WebAuthnID(),
+		UserID:               userID,
 		AllowedCredentialIDs: requestOptions.GetAllowedCredentialIDs(),
 		UserVerification:     requestOptions.UserVerification,
 		Extensions:           requestOptions.Extensions,
@@ -61,7 +73,7 @@ func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.
 
 	response := protocol.CredentialAssertion{Response: requestOptions}
 
-	return &response, &newSessionData, nil
+	return &response, &sessionData, nil
 }
 
 // Updates the allowed credential list with Credential Descripiptors, discussed in §5.10.3
@@ -118,6 +130,29 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
 	}
 
+	return webauthn.validateLogin(user, session, parsedResponse)
+}
+
+// ValidateDiscoverableLogin is an overloaded version of ValidateLogin that allows for discoverable credentials.
+func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
+	if session.UserID != nil {
+		return nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
+	}
+
+	if parsedResponse.Response.UserHandle == nil {
+		return nil, protocol.ErrBadRequest.WithDetails("Client-side Discoverable Assertion was attempted with a blank User Handle")
+	}
+
+	user, err := handler(parsedResponse.RawID, parsedResponse.Response.UserHandle)
+	if err != nil {
+		return nil, protocol.ErrBadRequest.WithDetails("Failed to lookup Client-side Discoverable Credential")
+	}
+
+	return webauthn.validateLogin(user, session, parsedResponse)
+}
+
+// ValidateLogin takes a parsed response and validates it against the user credentials and session data
+func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	// Step 1. If the allowCredentials option was given when this authentication ceremony was initiated,
 	// verify that credential.id identifies one of the public key credentials that were listed in
 	// allowCredentials.
