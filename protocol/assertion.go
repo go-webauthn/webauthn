@@ -124,7 +124,7 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 	// Handle steps 11 through 14, verifying the authenticator data.
 	validError = p.Response.AuthenticatorData.Verify(rpIDHash[:], appIDHash[:], verifyUser)
 	if validError != nil {
-		return ErrAuthData.WithInfo(validError.Error())
+		return validError
 	}
 
 	// allowedUserCredentialIDs := session.AllowedCredentialIDs
@@ -150,9 +150,14 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 		key, err = webauthncose.ParseFIDOPublicKey(credentialBytes)
 	}
 
+	if err != nil {
+		return ErrAssertionSignature.WithDetails(fmt.Sprintf("Error parsing the assertion public key: %+v", err))
+	}
+
 	valid, err := webauthncose.VerifySignature(key, sigData, p.Response.Signature)
-	if !valid {
+	if !valid || err != nil {
 		return ErrAssertionSignature.WithDetails(fmt.Sprintf("Error validating the assertion signature: %+v\n", err))
 	}
+
 	return nil
 }
