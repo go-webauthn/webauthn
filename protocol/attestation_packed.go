@@ -238,22 +238,19 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signatur
 		return attestationType, nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing the public key: %+v\n", err))
 	}
 
-	switch key.(type) {
+	switch k := key.(type) {
 	case webauthncose.OKPPublicKeyData:
-		k := key.(webauthncose.OKPPublicKeyData)
-		err := verifyKeyAlgorithm(k.Algorithm, alg)
+		err = verifyKeyAlgorithm(k.Algorithm, alg)
 		if err != nil {
 			return attestationType, nil, err
 		}
 	case webauthncose.EC2PublicKeyData:
-		k := key.(webauthncose.EC2PublicKeyData)
-		err := verifyKeyAlgorithm(k.Algorithm, alg)
+		err = verifyKeyAlgorithm(k.Algorithm, alg)
 		if err != nil {
 			return attestationType, nil, err
 		}
 	case webauthncose.RSAPublicKeyData:
-		k := key.(webauthncose.RSAPublicKeyData)
-		err := verifyKeyAlgorithm(k.Algorithm, alg)
+		err = verifyKeyAlgorithm(k.Algorithm, alg)
 		if err != nil {
 			return attestationType, nil, err
 		}

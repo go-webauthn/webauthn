@@ -78,18 +78,16 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	}
 
 	key, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
-	switch key.(type) {
+	switch k := key.(type) {
 	case webauthncose.EC2PublicKeyData:
-		e := key.(webauthncose.EC2PublicKeyData)
-		if pubArea.ECCParameters.CurveID != googletpm.EllipticCurve(e.Curve) ||
-			0 != pubArea.ECCParameters.Point.X.Cmp(new(big.Int).SetBytes(e.XCoord)) ||
-			0 != pubArea.ECCParameters.Point.Y.Cmp(new(big.Int).SetBytes(e.YCoord)) {
+		if pubArea.ECCParameters.CurveID != googletpm.EllipticCurve(k.Curve) ||
+			0 != pubArea.ECCParameters.Point.X.Cmp(new(big.Int).SetBytes(k.XCoord)) ||
+			0 != pubArea.ECCParameters.Point.Y.Cmp(new(big.Int).SetBytes(k.YCoord)) {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 	case webauthncose.RSAPublicKeyData:
-		r := key.(webauthncose.RSAPublicKeyData)
-		mod := new(big.Int).SetBytes(r.Modulus)
-		exp := uint32(r.Exponent[0]) + uint32(r.Exponent[1])<<8 + uint32(r.Exponent[2])<<16
+		mod := new(big.Int).SetBytes(k.Modulus)
+		exp := uint32(k.Exponent[0]) + uint32(k.Exponent[1])<<8 + uint32(k.Exponent[2])<<16
 		if 0 != pubArea.RSAParameters.Modulus.Cmp(mod) ||
 			pubArea.RSAParameters.Exponent != exp {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
