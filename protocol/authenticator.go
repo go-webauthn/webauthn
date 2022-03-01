@@ -195,28 +195,45 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) error {
 }
 
 // If Attestation Data is present, unmarshall that into the appropriate public key structure
-func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) error {
+func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) (err error) {
 	a.AttData.AAGUID = rawAuthData[37:53]
+
 	idLength := binary.BigEndian.Uint16(rawAuthData[53:55])
 	if len(rawAuthData) < int(55+idLength) {
 		return ErrBadRequest.WithDetails("Authenticator attestation data length too short")
 	}
+
 	a.AttData.CredentialID = rawAuthData[55 : 55+idLength]
-	a.AttData.CredentialPublicKey = unmarshalCredentialPublicKey(rawAuthData[55+idLength:])
+
+	a.AttData.CredentialPublicKey, err = unmarshalCredentialPublicKey(rawAuthData[55+idLength:])
+	if err != nil {
+		return ErrBadRequest.WithDetails(fmt.Sprintf("Could not unmarshal Credential Public Key: %v", err))
+	}
+
 	return nil
 }
 
 // Unmarshall the credential's Public Key into CBOR encoding
-func unmarshalCredentialPublicKey(keyBytes []byte) []byte {
+func unmarshalCredentialPublicKey(keyBytes []byte) ([]byte, error) {
 	var m interface{}
-	webauthncbor.Unmarshal(keyBytes, &m)
-	rawBytes, _ := webauthncbor.Marshal(m)
-	return rawBytes
+
+	err := webauthncbor.Unmarshal(keyBytes, &m)
+	if err != nil {
+		return nil, err
+	}
+
+	rawBytes, err := webauthncbor.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return rawBytes, nil
 }
 
 // ResidentKeyRequired - Require that the key be private key resident to the client device
 func ResidentKeyRequired() *bool {
 	required := true
+
 	return &required
 }
 

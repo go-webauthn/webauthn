@@ -220,7 +220,11 @@ func Test_unmarshalCredentialPublicKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := unmarshalCredentialPublicKey(tt.args.keyBytes); !reflect.DeepEqual(got, tt.want) {
+			got, err := unmarshalCredentialPublicKey(tt.args.keyBytes)
+
+			if err != nil {
+				t.Errorf("unmarshalCredentialPublicKey() returned err %v", err)
+			} else if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("unmarshalCredentialPublicKey() = %v, want %v", got, tt.want)
 			}
 		})

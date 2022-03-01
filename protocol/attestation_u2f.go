@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/x509"
+	"fmt"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -25,7 +26,11 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	// Signing procedure step - If the credential public key of the given credential is not of
 	// algorithm -7 ("ES256"), stop and return an error.
 	key := webauthncose.EC2PublicKeyData{}
-	webauthncbor.Unmarshal(att.AuthData.AttData.CredentialPublicKey, &key)
+
+	err := webauthncbor.Unmarshal(att.AuthData.AttData.CredentialPublicKey, &key)
+	if err != nil {
+		return u2fAttestationKey, nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Could not unmarshal Credential Public Key: %v", err))
+	}
 
 	if webauthncose.COSEAlgorithmIdentifier(key.PublicKeyData.Algorithm) != webauthncose.AlgES256 {
 		return u2fAttestationKey, nil, ErrUnsupportedAlgorithm.WithDetails("Non-ES256 Public Key algorithm used")

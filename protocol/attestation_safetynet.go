@@ -73,11 +73,19 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string
 
 	token, err := jwt.Parse(string(response), func(token *jwt.Token) (interface{}, error) {
 		chain := token.Header["x5c"].([]interface{})
+
 		o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
+
 		n, err := base64.StdEncoding.Decode(o, []byte(chain[0].(string)))
+		if err != nil {
+			return nil, err
+		}
+
 		cert, err := x509.ParseCertificate(o[:n])
+
 		return cert.PublicKey, err
 	})
+
 	if err != nil {
 		return safetyNetAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err))
 	}

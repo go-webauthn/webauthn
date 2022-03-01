@@ -65,9 +65,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 
 	// Assertion Step 7. Verify that the value of C.type is the string webauthn.get.
 	if c.Type != ceremony {
-		err := ErrVerification.WithDetails("Error validating ceremony type")
-		err.WithInfo(fmt.Sprintf("Expected Value: %s\n Received: %s\n", ceremony, c.Type))
-		return err
+		return ErrVerification.WithDetails("Error validating ceremony type").WithInfo(fmt.Sprintf("Expected Value: %s\n Received: %s\n", ceremony, c.Type))
 	}
 
 	// Registration Step 4. Verify that the value of C.challenge matches the challenge

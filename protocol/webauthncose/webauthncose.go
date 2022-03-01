@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/pem"
+	"fmt"
 	"hash"
 	"math/big"
 
@@ -159,22 +160,45 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
 // Figure out what kind of COSE material was provided and create the data for the new key
 func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 	pk := PublicKeyData{}
-	webauthncbor.Unmarshal(keyBytes, &pk)
+
+	err := webauthncbor.Unmarshal(keyBytes, &pk)
+	if err != nil {
+		return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall Public Key data: %v", err))
+	}
+
 	switch COSEKeyType(pk.KeyType) {
 	case OctetKey:
 		var o OKPPublicKeyData
-		webauthncbor.Unmarshal(keyBytes, &o)
+
+		err := webauthncbor.Unmarshal(keyBytes, &o)
+		if err != nil {
+			return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall OK Public Key data: %v", err))
+		}
+
 		o.PublicKeyData = pk
+
 		return o, nil
 	case EllipticKey:
 		var e EC2PublicKeyData
-		webauthncbor.Unmarshal(keyBytes, &e)
+
+		err := webauthncbor.Unmarshal(keyBytes, &e)
+		if err != nil {
+			return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall EC2 Public Key data: %v", err))
+		}
+
 		e.PublicKeyData = pk
+
 		return e, nil
 	case RSAKey:
 		var r RSAPublicKeyData
-		webauthncbor.Unmarshal(keyBytes, &r)
+
+		err := webauthncbor.Unmarshal(keyBytes, &r)
+		if err != nil {
+			return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall RSA Public Key data: %v", err))
+		}
+
 		r.PublicKeyData = pk
+
 		return r, nil
 	default:
 		return nil, ErrUnsupportedKey

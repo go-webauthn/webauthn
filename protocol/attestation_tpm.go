@@ -78,6 +78,10 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	}
 
 	key, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
+	if err != nil {
+		return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Public Key could not be parsed in the COSE format: %v", err))
+	}
+
 	switch k := key.(type) {
 	case webauthncose.EC2PublicKeyData:
 		if pubArea.ECCParameters.CurveID != googletpm.EllipticCurve(k.Curve) ||
@@ -101,6 +105,10 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	// Validate that certInfo is valid:
 	certInfo, err := googletpm.DecodeAttestationData(certInfoBytes)
+	if err != nil {
+		return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Could not decode Attestation data, %v", err))
+	}
+
 	// 1/4 Verify that magic is set to TPM_GENERATED_VALUE.
 	if certInfo.Magic != 0xff544347 {
 		return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Magic is not set to TPM_GENERATED_VALUE")
@@ -174,7 +182,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate")
 		}
 
-		if false == isValidTPMManufacturer(manufacturer) {
+		if !isValidTPMManufacturer(manufacturer) {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Invalid TPM manufacturer")
 		}
 
@@ -190,7 +198,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 				ekuValid = true
 			}
 		}
-		if false == ekuValid {
+		if !ekuValid {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("AIK certificate missing EKU")
 		}
 
@@ -209,7 +217,8 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 				}
 			}
 		}
-		if constraints.IsCA != false {
+
+		if constraints.IsCA {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints missing or CA is true")
 		}
 		// 6/6 An Authority Information Access (AIA) extension with entry id-ad-ocsp and a CRL Distribution Point

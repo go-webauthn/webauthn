@@ -66,7 +66,7 @@ func attestationTestUnpackResponse(t *testing.T, response string) ParsedCredenti
 }
 
 func TestPackedAttestationVerification(t *testing.T) {
-	t.Run(fmt.Sprintf("Testing Self Packed"), func(t *testing.T) {
+	t.Run("Testing Self Packed", func(t *testing.T) {
 		pcc := attestationTestUnpackResponse(t, testAttestationResponses[0])
 
 		// Test Packed Verification
