@@ -8,7 +8,10 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
-var minAuthDataLength = 37
+var (
+	minAuthDataLength     = 37
+	minAttestedAuthLength = 55
+)
 
 // Authenticators respond to Relying Party requests by returning an object derived from the
 // AuthenticatorResponse interface. See §5.2. Authenticator Responses
@@ -159,8 +162,11 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) error {
 	remaining := len(rawAuthData) - minAuthDataLength
 
 	if a.Flags.HasAttestedCredentialData() {
-		if len(rawAuthData) > minAuthDataLength {
-			a.unmarshalAttestedData(rawAuthData)
+		if len(rawAuthData) > minAttestedAuthLength {
+			validError := a.unmarshalAttestedData(rawAuthData)
+			if validError != nil {
+				return validError
+			}
 			attDataLen := len(a.AttData.AAGUID) + 2 + len(a.AttData.CredentialID) + len(a.AttData.CredentialPublicKey)
 			remaining = remaining - attDataLen
 		} else {
@@ -189,11 +195,15 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) error {
 }
 
 // If Attestation Data is present, unmarshall that into the appropriate public key structure
-func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) {
+func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) error {
 	a.AttData.AAGUID = rawAuthData[37:53]
 	idLength := binary.BigEndian.Uint16(rawAuthData[53:55])
+	if len(rawAuthData) < int(55+idLength) {
+		return ErrBadRequest.WithDetails("Authenticator attestation data length too short")
+	}
 	a.AttData.CredentialID = rawAuthData[55 : 55+idLength]
 	a.AttData.CredentialPublicKey = unmarshalCredentialPublicKey(rawAuthData[55+idLength:])
+	return nil
 }
 
 // Unmarshall the credential's Public Key into CBOR encoding
