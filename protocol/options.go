@@ -49,6 +49,9 @@ type CredentialDescriptor struct {
 	CredentialID []byte `json:"id"`
 	// The authenticator transports that can be used
 	Transport []AuthenticatorTransport `json:"transports,omitempty"`
+
+	// The AttestationType from the Credential. Used internally only.
+	AttestationType string `json:"-"`
 }
 
 // CredentialParameter is the credential type and algorithm

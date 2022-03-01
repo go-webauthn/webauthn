@@ -6,3 +6,8 @@ package protocol
 // (https://www.w3.org/TR/webauthn/#sctn-defined-extensions).
 
 type AuthenticationExtensionsClientOutputs map[string]interface{}
+
+const (
+	ExtensionAppID        = "appid"
+	ExtensionAppIDExclude = "appidExclude"
+)

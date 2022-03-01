@@ -36,10 +36,7 @@ func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.
 	var allowedCredentials = make([]protocol.CredentialDescriptor, len(credentials))
 
 	for i, credential := range credentials {
-		var credentialDescriptor protocol.CredentialDescriptor
-		credentialDescriptor.CredentialID = credential.ID
-		credentialDescriptor.Type = protocol.PublicKeyCredentialType
-		allowedCredentials[i] = credentialDescriptor
+		allowedCredentials[i] = credential.Descriptor()
 	}
 
 	requestOptions := protocol.PublicKeyCredentialRequestOptions{
@@ -86,6 +83,22 @@ func WithUserVerification(userVerification protocol.UserVerificationRequirement)
 func WithAssertionExtensions(extensions protocol.AuthenticationExtensions) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
 		cco.Extensions = extensions
+	}
+}
+
+// WithAppIdExtension automatically includes the specified appid if the AllowedCredentials contains a credential
+// with the type `fido-u2f`.
+func WithAppIdExtension(appid string) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		for _, credential := range cco.AllowedCredentials {
+			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
+				if cco.Extensions == nil {
+					cco.Extensions = map[string]interface{}{}
+				}
+
+				cco.Extensions[protocol.ExtensionAppID] = appid
+			}
+		}
 	}
 }
 

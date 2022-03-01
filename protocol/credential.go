@@ -198,11 +198,11 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 
 	// If the credential does not have the correct attestation type it is assumed to NOT be a fido-u2f credential.
 	// https://w3c.github.io/webauthn/#sctn-fido-u2f-attestation
-	if credentialAttestationType != "fido-u2f" {
+	if credentialAttestationType != CredentialTypeFIDOU2F {
 		return "", nil
 	}
 
-	if clientValue, ok = ppkc.ClientExtensionResults["appid"]; !ok {
+	if clientValue, ok = ppkc.ClientExtensionResults[ExtensionAppID]; !ok {
 		return "", nil
 	}
 
@@ -214,7 +214,7 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 		return "", nil
 	}
 
-	if value, ok = authExt["appid"]; !ok {
+	if value, ok = authExt[ExtensionAppID]; !ok {
 		return "", ErrBadRequest.WithDetails("Session Data does not have an appid but Client Output indicates it should be set")
 	}
 
@@ -224,3 +224,7 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 
 	return appID, nil
 }
+
+const (
+	CredentialTypeFIDOU2F = "fido-u2f"
+)

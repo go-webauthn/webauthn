@@ -21,6 +21,16 @@ type Credential struct {
 	Authenticator Authenticator
 }
 
+// Descriptor converts a Credential into a protocol.CredentialDescriptor.
+func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
+	return protocol.CredentialDescriptor{
+		Type:            protocol.PublicKeyCredentialType,
+		CredentialID:    c.ID,
+		Transport:       c.Transport,
+		AttestationType: c.AttestationType,
+	}
+}
+
 // MakeNewCredential will return a credential pointer on successful validation of a registration response
 func MakeNewCredential(c *protocol.ParsedCredentialCreationData) (*Credential, error) {
 	newCredential := &Credential{
