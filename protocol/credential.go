@@ -45,14 +45,14 @@ type ParsedPublicKeyCredential struct {
 type CredentialCreationResponse struct {
 	PublicKeyCredential
 	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
-	Transport           []string                         `json:"transports,omitempty"`
+	Transports          []string                         `json:"transports,omitempty"`
 }
 
 type ParsedCredentialCreationData struct {
 	ParsedPublicKeyCredential
-	Response  ParsedAttestationResponse
-	Raw       CredentialCreationResponse
-	Transport []AuthenticatorTransport `json:"transports,omitempty"`
+	Response   ParsedAttestationResponse
+	Raw        CredentialCreationResponse
+	Transports []AuthenticatorTransport `json:"transports,omitempty"`
 }
 
 func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialCreationData, error) {
@@ -90,12 +90,8 @@ func ParseCredentialCreationResponseBody(body io.Reader) (*ParsedCredentialCreat
 	pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
 	pcc.Raw = ccr
 
-	for _, t := range ccr.Transport {
-		transport := AuthenticatorTransport(t)
-		switch transport {
-		case USB, BLE, NFC, Internal:
-			pcc.Transport = append(pcc.Transport, transport)
-		}
+	for _, t := range ccr.Transports {
+		pcc.Transports = append(pcc.Transports, AuthenticatorTransport(t))
 	}
 
 	parsedAttestationResponse, err := ccr.AttestationResponse.Parse()
