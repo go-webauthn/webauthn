@@ -127,12 +127,12 @@ func TestSelectAuthenticator(t *testing.T) {
 		{"Generate Correct Authenticator Selection",
 			args{
 				att: "platform",
-				rrk: p.ResidentKeyUnrequired(),
+				rrk: p.ResidentKeyNotRequired(),
 				uv:  "preferred",
 			},
 			p.AuthenticatorSelection{
 				AuthenticatorAttachment: p.Platform,
-				RequireResidentKey:      p.ResidentKeyUnrequired(),
+				RequireResidentKey:      p.ResidentKeyNotRequired(),
 				UserVerification:        p.VerificationPreferred,
 			},
 		},

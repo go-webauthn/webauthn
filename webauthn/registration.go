@@ -113,6 +113,19 @@ func WithAppIdExcludeExtension(appid string) RegistrationOption {
 	}
 }
 
+// WithResidentKeyRequirement sets both the resident key and require resident key protocol options. When
+func WithResidentKeyRequirement(requirement protocol.ResidentKeyRequirement) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.AuthenticatorSelection.ResidentKey = requirement
+		switch requirement {
+		case protocol.ResidentKeyRequirementRequired:
+			cco.AuthenticatorSelection.RequireResidentKey = protocol.ResidentKeyRequired()
+		default:
+			cco.AuthenticatorSelection.RequireResidentKey = protocol.ResidentKeyNotRequired()
+		}
+	}
+}
+
 // Take the response from the authenticator and client and verify the credential against the user's credentials and
 // session data.
 func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, response *http.Request) (*Credential, error) {
