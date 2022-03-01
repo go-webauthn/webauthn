@@ -23,17 +23,17 @@ There are several differences between the upstream library and this one. We will
 
 * There are minimal breaking changes between this library and the upstream one. Identified breaking changes exist in the 
   following commits:
-  *  Change of protocol.ResidentKeyUnrequired() to protocol.ResidentKeyNotRequired() 5ad54f89952eb238a7d6e10ed2d443738351d67f.
+  *  Change of protocol.ResidentKeyUnrequired() to protocol.ResidentKeyNotRequired() [5ad54f8](https://github.com/go-webauthn/webauthn/commit/5ad54f89952eb238a7d6e10ed2d443738351d67f).
 * This library is versioned with branches per minor version for back-porting fixes.
 * The following PR's in the upstream repository are merged in one form or another:
-  * PR132 was merged in 401a3f63b5fb3c91faa52c56a9295b78d62e039f.
-  * PR131 was merged in 509e08fb364c78be30067a93d976730a8fe4a656 (cherry-pick squashed).
-  * PR130 was merged in 729227d1ec0504ebb518f38e72bcd10ae68c4130 (v0.2.x) and 93a942a90dbb82d997e1ed2945ba41b37d47890f (v0.1.x).
-  * PR122 was merged in 2bbb113b333b775d2d7c5551b7220f713f666f00.
-  * PR116 was (effectively) merged in d64d2ba780240964310c7f5862add333bc659348.
+  * PR132 was merged in [401a3f6](https://github.com/go-webauthn/webauthn/commit/401a3f63b5fb3c91faa52c56a9295b78d62e039f).
+  * PR131 was merged in [509e08f](https://github.com/go-webauthn/webauthn/commit/509e08fb364c78be30067a93d976730a8fe4a656) (cherry-pick squashed).
+  * PR130 was merged in [729227d](https://github.com/go-webauthn/webauthn/commit/729227d1ec0504ebb518f38e72bcd10ae68c4130) (v0.2.x) and [93a942a](https://github.com/go-webauthn/webauthn/commit/93a942a90dbb82d997e1ed2945ba41b37d47890f) (v0.1.x).
+  * PR122 was merged in [2bbb113](https://github.com/go-webauthn/webauthn/commit/2bbb113b333b775d2d7c5551b7220f713f666f00).
+  * PR116 was (effectively) merged in [d64d2ba](https://github.com/go-webauthn/webauthn/commit/d64d2ba780240964310c7f5862add333bc659348).
 * The following misc fixes have been merged:
-  * Ensuring the credential ID length is not too long in b3b93ac3770a26a92adbcd4b527bbb391127931b (v0.2.x) and 35287ea54b50b1f553f3cc0f0f5527039f375e2c (v0.1.x).
-  * Ensuring errors are effectively checked, ineffectual checks are not done, and general linting fixes in 90be0fe276222bd574cf19856081979789ce9fca.
+  * Ensuring the credential ID length is not too long in [b3b93ac](https://github.com/go-webauthn/webauthn/commit/b3b93ac3770a26a92adbcd4b527bbb391127931b) (v0.2.x) and [35287ea](https://github.com/go-webauthn/webauthn/commit/35287ea54b50b1f553f3cc0f0f5527039f375e2c) (v0.1.x).
+  * Ensuring errors are effectively checked, ineffectual checks are not done, and general linting fixes in [90be0fe](https://github.com/go-webauthn/webauthn/commit/90be0fe276222bd574cf19856081979789ce9fca).
 
 ## Status
 
