@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/fxamacker/cbor/v2"
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 var minAuthDataLength = 37
@@ -199,8 +199,8 @@ func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) {
 // Unmarshall the credential's Public Key into CBOR encoding
 func unmarshalCredentialPublicKey(keyBytes []byte) []byte {
 	var m interface{}
-	cbor.Unmarshal(keyBytes, &m)
-	rawBytes, _ := cbor.Marshal(m)
+	webauthncbor.Unmarshal(keyBytes, &m)
+	rawBytes, _ := webauthncbor.Marshal(m)
 	return rawBytes
 }
 
