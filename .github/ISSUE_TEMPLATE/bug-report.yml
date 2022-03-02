@@ -1,0 +1,56 @@
+---
+name: Bug Report
+description: Report a potential bug
+labels:
+  - type/potential-bug
+  - status/needs-triage
+  - priority/normal
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report. Please try to give as much information as possible for
+        us to be able to reproduce the issue and provide a quick fix.
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: What version of the library are you using?
+      options:
+        - 0.2.1
+        - 0.2.0
+        - 0.1.3
+        - 0.1.2
+        - 0.1.1
+        - 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the bug
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Describe how we can reproduce this issue
+    validations:
+      required: true
+  - type: textarea
+    id: expectations
+    attributes:
+      label: Expectations
+      description: Describe the desired or expected results
+    validations:
+      required: false
+  - type: textarea
+    id: documentation
+    attributes:
+      label: Documentation
+      description: Provide any relevant specification or other documentaiton if applicable
+    validations:
+      required: false
+...
