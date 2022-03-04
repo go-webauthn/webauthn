@@ -23,7 +23,8 @@ There are several differences between the upstream library and this one. We will
 
 * There are minimal breaking changes between this library and the upstream one. Identified breaking changes exist in the 
   following commits:
-  *  Change of protocol.ResidentKeyUnrequired() to protocol.ResidentKeyNotRequired() [5ad54f8](https://github.com/go-webauthn/webauthn/commit/5ad54f89952eb238a7d6e10ed2d443738351d67f).
+  * ~~Change of protocol.ResidentKeyUnrequired() to protocol.ResidentKeyNotRequired() [5ad54f8](https://github.com/go-webauthn/webauthn/commit/5ad54f89952eb238a7d6e10ed2d443738351d67f).~~
+    This method has been restored as a deprecated function making the migration path clearer.
 * This library is versioned with branches per minor version for back-porting fixes.
 * The following PR's in the upstream repository are merged in one form or another:
   * PR132 was merged in [401a3f6](https://github.com/go-webauthn/webauthn/commit/401a3f63b5fb3c91faa52c56a9295b78d62e039f).
