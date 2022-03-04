@@ -263,6 +263,11 @@ func ResidentKeyNotRequired() *bool {
 	return &required
 }
 
+// Deprecated: ResidentKeyUnrequired is an alias for ResidentKeyNotRequired and will be completely removed in the future.
+func ResidentKeyUnrequired() *bool {
+	return ResidentKeyNotRequired()
+}
+
 // Verify on AuthenticatorData handles Steps 9 through 12 for Registration
 // and Steps 11 through 14 for Assertion.
 func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerificationRequired bool) error {
