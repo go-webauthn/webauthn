@@ -26,6 +26,8 @@ There are several differences between the upstream library and this one. We will
   * ~~Change of protocol.ResidentKeyUnrequired() to protocol.ResidentKeyNotRequired() [5ad54f8](https://github.com/go-webauthn/webauthn/commit/5ad54f89952eb238a7d6e10ed2d443738351d67f).~~
     This method has been restored as a deprecated function making the migration path clearer.
 * This library is versioned with branches per minor version for back-porting fixes.
+* The following upstream issues have been resolved:
+  * Issue 76 related to the google.golang.org/grpc/naming dependency has been resolved by forking the cloudflare library.
 * The following PR's in the upstream repository are merged in one form or another:
   * PR132 was merged in [401a3f6](https://github.com/go-webauthn/webauthn/commit/401a3f63b5fb3c91faa52c56a9295b78d62e039f).
   * PR131 was merged in [509e08f](https://github.com/go-webauthn/webauthn/commit/509e08fb364c78be30067a93d976730a8fe4a656) (cherry-pick squashed).
