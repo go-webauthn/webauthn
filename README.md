@@ -27,7 +27,10 @@ There are several differences between the upstream library and this one. We will
     This method has been restored as a deprecated function making the migration path clearer.
 * This library is versioned with branches per minor version for back-porting fixes.
 * The following upstream issues have been resolved:
-  * Issue 76 related to the google.golang.org/grpc/naming dependency has been resolved by forking the cloudflare library.
+  * Issue 76 was fixed related to the google.golang.org/grpc/naming dependency was fixed by merging 
+    [c561447](https://github.com/go-webauthn/webauthn/commit/c561447e218d73421476565a3d66ab6dc934966c) 
+    which migrates from the github.com/cloudflare/cfssl module to a fork of the features used by this module implemented
+    in [1edcf14](https://github.com/go-webauthn/revoke/commit/1edcf14a748f88f41663433f336e07604f5e72c1).
 * The following PR's in the upstream repository are merged in one form or another:
   * PR132 was merged in [401a3f6](https://github.com/go-webauthn/webauthn/commit/401a3f63b5fb3c91faa52c56a9295b78d62e039f).
   * PR131 was merged in [509e08f](https://github.com/go-webauthn/webauthn/commit/509e08fb364c78be30067a93d976730a8fe4a656) (cherry-pick squashed).
