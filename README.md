@@ -26,6 +26,8 @@ There are several differences between the upstream library and this one. We will
   * ~~Change of protocol.ResidentKeyUnrequired() to protocol.ResidentKeyNotRequired() [5ad54f8](https://github.com/go-webauthn/webauthn/commit/5ad54f89952eb238a7d6e10ed2d443738351d67f).~~
     This method has been restored as a deprecated function making the migration path clearer.
 * This library is versioned with branches per minor version for back-porting fixes.
+* This library releases tagged versions.
+* This library has a smaller dependency tree because of [c561447](https://github.com/go-webauthn/webauthn/commit/c561447e218d73421476565a3d66ab6dc934966c).
 * The following upstream issues have been resolved:
   * Issue 76 was fixed related to the google.golang.org/grpc/naming dependency was fixed by merging 
     [c561447](https://github.com/go-webauthn/webauthn/commit/c561447e218d73421476565a3d66ab6dc934966c) 
