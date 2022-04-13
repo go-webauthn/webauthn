@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/fxamacker/cbor/v2 v2.4.0
-	github.com/go-webauthn/revoke v0.1.0
+	github.com/go-webauthn/revoke v0.1.1
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/google/uuid v1.3.0
 	github.com/mitchellh/mapstructure v1.4.3
