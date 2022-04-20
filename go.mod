@@ -7,7 +7,7 @@ require (
 	github.com/go-webauthn/revoke v0.1.1
 	github.com/golang-jwt/jwt/v4 v4.4.1
 	github.com/google/uuid v1.3.0
-	github.com/mitchellh/mapstructure v1.4.3
+	github.com/mitchellh/mapstructure v1.5.0
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
 )
 
