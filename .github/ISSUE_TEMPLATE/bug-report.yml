@@ -17,6 +17,8 @@ body:
       label: Version
       description: What version of the library are you using?
       options:
+        - 0.3.1
+        - 0.3.0
         - 0.2.2
         - 0.2.1
         - 0.2.0
@@ -51,7 +53,7 @@ body:
     id: documentation
     attributes:
       label: Documentation
-      description: Provide any relevant specification or other documentaiton if applicable
+      description: Provide any relevant specification or other documentation if applicable
     validations:
       required: false
 ...

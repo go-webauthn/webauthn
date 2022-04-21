@@ -24,7 +24,7 @@ body:
     id: documentation
     attributes:
       label: Documentation
-      description: Provide any relevant specification or other documentaiton if applicable
+      description: Provide any relevant specification or other documentation if applicable
     validations:
       required: false
 ...
