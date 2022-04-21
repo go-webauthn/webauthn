@@ -70,10 +70,12 @@ Must be one of the following:
 * **fix**: A bug fix
 * **perf**: A code change that improves performance
 * **refactor**: A code change that neither fixes a bug nor adds a feature
+* **revert**: Revert a commit
+* **release**: Publish a release
 * **test**: Adding missing tests or correcting existing tests
 
-
 ##### Scope
+
 The scope should be the name of the npm package affected (as perceived by the person reading the changelog generated
 from commit messages).
 
