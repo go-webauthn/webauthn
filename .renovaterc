@@ -29,6 +29,7 @@
     }
   ],
   "postUpdateOptions": [
-      "gomodTidy1.17"
+      "gomodTidy",
+      "gomodNoMassage"
   ]
 }
