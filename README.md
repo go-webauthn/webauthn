@@ -42,6 +42,7 @@ There are several differences between the upstream library and this one. We will
 * The following misc fixes have been merged:
   * Ensuring the credential ID length is not too long in [b3b93ac](https://github.com/go-webauthn/webauthn/commit/b3b93ac3770a26a92adbcd4b527bbb391127931b) (v0.2.x) and [35287ea](https://github.com/go-webauthn/webauthn/commit/35287ea54b50b1f553f3cc0f0f5527039f375e2c) (v0.1.x).
   * Ensuring errors are effectively checked, ineffectual checks are not done, and general linting fixes in [90be0fe](https://github.com/go-webauthn/webauthn/commit/90be0fe276222bd574cf19856081979789ce9fca).
+  * A potential nil pointer error in ParseFIDOPublicKey.
 
 ## Status
 

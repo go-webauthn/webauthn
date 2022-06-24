@@ -158,11 +158,10 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
 }
 
 // Figure out what kind of COSE material was provided and create the data for the new key
-func ParsePublicKey(keyBytes []byte) (interface{}, error) {
+func ParsePublicKey(keyBytes []byte) (k interface{}, err error) {
 	pk := PublicKeyData{}
 
-	err := webauthncbor.Unmarshal(keyBytes, &pk)
-	if err != nil {
+	if err = webauthncbor.Unmarshal(keyBytes, &pk); err != nil {
 		return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall Public Key data: %v", err))
 	}
 
@@ -170,8 +169,7 @@ func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 	case OctetKey:
 		var o OKPPublicKeyData
 
-		err := webauthncbor.Unmarshal(keyBytes, &o)
-		if err != nil {
+		if err = webauthncbor.Unmarshal(keyBytes, &o); err != nil {
 			return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall OK Public Key data: %v", err))
 		}
 
@@ -181,8 +179,7 @@ func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 	case EllipticKey:
 		var e EC2PublicKeyData
 
-		err := webauthncbor.Unmarshal(keyBytes, &e)
-		if err != nil {
+		if err = webauthncbor.Unmarshal(keyBytes, &e); err != nil {
 			return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall EC2 Public Key data: %v", err))
 		}
 
@@ -192,8 +189,7 @@ func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 	case RSAKey:
 		var r RSAPublicKeyData
 
-		err := webauthncbor.Unmarshal(keyBytes, &r)
-		if err != nil {
+		if err = webauthncbor.Unmarshal(keyBytes, &r); err != nil {
 			return nil, ErrUnsupportedKey.WithDetails(fmt.Sprintf("Could not unmarshall RSA Public Key data: %v", err))
 		}
 
@@ -205,8 +201,12 @@ func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 	}
 }
 
-func ParseFIDOPublicKey(keyBytes []byte) (EC2PublicKeyData, error) {
+func ParseFIDOPublicKey(keyBytes []byte) (interface{}, error) {
 	x, y := elliptic.Unmarshal(elliptic.P256(), keyBytes)
+
+	if x == nil || y == nil {
+		return nil, ErrUnsupportedKey.WithDetails("Could not unmarshall EC2 Public Key data")
+	}
 
 	return EC2PublicKeyData{
 		PublicKeyData: PublicKeyData{
@@ -262,7 +262,6 @@ const (
 )
 
 func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
-
 	switch k := key.(type) {
 	case OKPPublicKeyData:
 		return k.Verify(data, sig)
