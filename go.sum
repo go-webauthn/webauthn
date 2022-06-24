@@ -2,6 +2,8 @@ github.com/fxamacker/cbor/v2 v2.4.0 h1:ri0ArlOR+5XunOP8CRUowT0pSJOwhW098ZCUyskZD
 github.com/fxamacker/cbor/v2 v2.4.0/go.mod h1:TA1xS00nchWmaBnEIxPSE5oHLuJBAVvqrtAnWBwBCVo=
 github.com/go-webauthn/revoke v0.1.1 h1:3Ana75ARxM19cq1llWzYbfmGIQ8woDWtSJ/6Y+iQxeo=
 github.com/go-webauthn/revoke v0.1.1/go.mod h1:dh18I4Pd+1bgMckV9KfzN1aRz3vvps7ARZTKCb8qKB0=
+github.com/go-webauthn/revoke v0.1.2 h1:k1CiG5nPtKmVkH2XucYWcbRARwL8GhqFZ8N57wPrgXk=
+github.com/go-webauthn/revoke v0.1.2/go.mod h1:fPsKNzp6BcGKuQnsB+3gw0KCTr8tY7HOIrphBjZZL10=
 github.com/golang-jwt/jwt/v4 v4.4.2 h1:rcc4lwaZgFMCZ5jxF9ABolDcIHdBytAFgqFPbSJQAYs=
 github.com/golang-jwt/jwt/v4 v4.4.2/go.mod h1:m21LjoU+eqJr34lmDMbreY2eSTRJ1cv77w39/MY0Ch0=
 github.com/google/uuid v1.3.0 h1:t6JiXgmwXMjEs8VusXIJk2BXHsn+wx8BZdTaoZ5fu7I=
