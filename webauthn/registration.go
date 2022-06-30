@@ -97,6 +97,13 @@ func WithExtensions(extension protocol.AuthenticationExtensions) RegistrationOpt
 	}
 }
 
+// Provide credential parameters to registration options
+func WithCredentialParameters(credentialParams []protocol.CredentialParameter) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.Parameters = credentialParams
+	}
+}
+
 // WithAppIdExcludeExtension automatically includes the specified appid if the CredentialExcludeList contains a credential
 // with the type `fido-u2f`.
 func WithAppIdExcludeExtension(appid string) RegistrationOption {
