@@ -363,7 +363,7 @@ var COSECurveToTPMCurve = []struct {
 	{webauthncose.P521, googletpm.CurveNISTP521},
 }
 
-// Return the Hashing interface to be used for a given COSE Algorithm
+// Return the TPM elliptic curve for a given COSE elliptic curve
 func CoseCurveToTpmCurve(coseCurve webauthncose.COSEEllipticCurve) googletpm.EllipticCurve {
 	for _, details := range COSECurveToTPMCurve {
 		if details.coseCurve == coseCurve {
