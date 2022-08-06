@@ -261,6 +261,29 @@ const (
 	RSAKey COSEKeyType = 3
 )
 
+// The COSE Elliptic Curves
+// https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves
+type COSEEllipticCurve int
+
+const (
+	// EC2 NIST P-256 also known as secp256r1
+	P256 COSEEllipticCurve = 1
+	// EC2 NIST P-384 also known as secp384r1
+	P384 COSEEllipticCurve = 2
+	// EC2 NIST P-521 also known as secp521r1
+	P521 COSEEllipticCurve = 3
+	// OKP X25519 for use w/ ECDH only
+	X25519 COSEEllipticCurve = 4
+	// OKP X448 for use w/ ECDH only
+	X448 COSEEllipticCurve = 5
+	// OKP Ed25519 for use w/ EdDSA only
+	Ed25519 COSEEllipticCurve = 6
+	// OKP Ed448 for use w/ EdDSA only
+	Ed448 COSEEllipticCurve = 7
+	// EC2 SECG secp256k1 curve
+	secp256k1 COSEEllipticCurve = 8
+)
+
 func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
 	switch k := key.(type) {
 	case OKPPublicKeyData:

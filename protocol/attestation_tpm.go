@@ -84,7 +84,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	switch k := key.(type) {
 	case webauthncose.EC2PublicKeyData:
-		if pubArea.ECCParameters.CurveID != googletpm.EllipticCurve(k.Curve) ||
+		if pubArea.ECCParameters.CurveID != googletpm.EllipticCurve(CoseCurveToTpmCurve(webauthncose.COSEEllipticCurve(k.Curve))) ||
 			0 != pubArea.ECCParameters.Point.X.Cmp(new(big.Int).SetBytes(k.XCoord)) ||
 			0 != pubArea.ECCParameters.Point.Y.Cmp(new(big.Int).SetBytes(k.YCoord)) {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
@@ -352,4 +352,38 @@ func isValidTPMManufacturer(id string) bool {
 		}
 	}
 	return false
+}
+
+type tpmEccCurve int
+
+const (
+	// TCG TPM Rev 2.0, part 2, structures, section 6.4, TPM_ECC_CURVE
+	TPM_ECC_NONE      = iota // 0x0000
+	TPM_ECC_NIST_P192        // 0x0001
+	TPM_ECC_NIST_P224        // 0x0002
+	TPM_ECC_NIST_P256        // 0x0003
+	TPM_ECC_NIST_P384        // 0x0004
+	TPM_ECC_NIST_P521        // 0x0005
+	TPM_ECC_BN_P256   = 0x10 // 0x0010 curve to support ECDAA
+	TPM_ECC_BN_P638          // 0x0011 curve to support ECDAA
+	TPM_ECC_SM2_P256  = 0x20 // 0x0020
+)
+
+var COSECurveToTPMCurve = []struct {
+	coseCurve webauthncose.COSEEllipticCurve
+	tpmCurve  tpmEccCurve
+}{
+	{webauthncose.P256, TPM_ECC_NIST_P256},
+	{webauthncose.P384, TPM_ECC_NIST_P384},
+	{webauthncose.P521, TPM_ECC_NIST_P521},
+}
+
+// Return the Hashing interface to be used for a given COSE Algorithm
+func CoseCurveToTpmCurve(coseCurve webauthncose.COSEEllipticCurve) tpmEccCurve {
+	for _, details := range COSECurveToTPMCurve {
+		if details.coseCurve == coseCurve {
+			return details.tpmCurve
+		}
+	}
+	return TPM_ECC_NONE
 }
