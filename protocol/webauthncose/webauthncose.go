@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/crypto/ed25519"
 
+	"github.com/go-webauthn/webauthn/protocol/googletpm"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
@@ -221,7 +222,8 @@ func ParseFIDOPublicKey(keyBytes []byte) (interface{}, error) {
 // COSEAlgorithmIdentifier From §5.10.5. A number identifying a cryptographic algorithm. The algorithm
 // identifiers SHOULD be values registered in the IANA COSE Algorithms registry
 // [https://www.w3.org/TR/webauthn/#biblio-iana-cose-algs-reg], for instance, -7 for "ES256"
-//  and -257 for "RS256".
+//
+//	and -257 for "RS256".
 type COSEAlgorithmIdentifier int
 
 const (
@@ -283,6 +285,19 @@ const (
 	// EC2 SECG secp256k1 curve
 	secp256k1 COSEEllipticCurve = 8
 )
+
+func (k *EC2PublicKeyData) TPMCurveID() googletpm.EllipticCurve {
+	switch COSEEllipticCurve(k.Curve) {
+	case P256:
+		return googletpm.CurveNISTP256 // TPM_ECC_NIST_P256
+	case P384:
+		return googletpm.CurveNISTP384 // TPM_ECC_NIST_P384
+	case P521:
+		return googletpm.CurveNISTP521 // TPM_ECC_NIST_P521
+	default:
+		return googletpm.EllipticCurve(0) // TPM_ECC_NONE
+	}
+}
 
 func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
 	switch k := key.(type) {
