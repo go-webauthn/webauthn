@@ -84,15 +84,15 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	switch k := key.(type) {
 	case webauthncose.EC2PublicKeyData:
-		if pubArea.ECCParameters.CurveID != googletpm.EllipticCurve(k.Curve) ||
-			0 != pubArea.ECCParameters.Point.X.Cmp(new(big.Int).SetBytes(k.XCoord)) ||
-			0 != pubArea.ECCParameters.Point.Y.Cmp(new(big.Int).SetBytes(k.YCoord)) {
+		if pubArea.ECCParameters.CurveID != k.TPMCurveID() ||
+			pubArea.ECCParameters.Point.X.Cmp(new(big.Int).SetBytes(k.XCoord)) != 0 ||
+			pubArea.ECCParameters.Point.Y.Cmp(new(big.Int).SetBytes(k.YCoord)) != 0 {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 	case webauthncose.RSAPublicKeyData:
 		mod := new(big.Int).SetBytes(k.Modulus)
 		exp := uint32(k.Exponent[0]) + uint32(k.Exponent[1])<<8 + uint32(k.Exponent[2])<<16
-		if 0 != pubArea.RSAParameters.Modulus.Cmp(mod) ||
+		if pubArea.RSAParameters.Modulus.Cmp(mod) != 0 ||
 			pubArea.RSAParameters.Exponent != exp {
 			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
@@ -121,7 +121,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	f := webauthncose.HasherFromCOSEAlg(coseAlg)
 	h := f()
 	h.Write(attToBeSigned)
-	if 0 != bytes.Compare(certInfo.ExtraData, h.Sum(nil)) {
+	if !bytes.Equal(certInfo.ExtraData, h.Sum(nil)) {
 		return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("ExtraData is not set to hash of attToBeSigned")
 	}
 	// 4/4 Verify that attested contains a TPMS_CERTIFY_INFO structure as specified in
@@ -131,7 +131,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	f, err = certInfo.AttestedCertifyInfo.Name.Digest.Alg.HashConstructor()
 	h = f()
 	h.Write(pubAreaBytes)
-	if 0 != bytes.Compare(h.Sum(nil), certInfo.AttestedCertifyInfo.Name.Digest.Value) {
+	if !bytes.Equal(h.Sum(nil), certInfo.AttestedCertifyInfo.Name.Digest.Value) {
 		return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails("Hash value mismatch attested and pubArea")
 	}
 
@@ -175,6 +175,9 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 		for _, ext := range aikCert.Extensions {
 			if ext.Id.Equal([]int{2, 5, 29, 17}) {
 				manufacturer, model, version, err = parseSANExtension(ext.Value)
+				if err != nil {
+					return tpmAttestationKey, nil, err
+				}
 			}
 		}
 
