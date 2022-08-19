@@ -22,20 +22,21 @@ func init() {
 
 // From §8.2. https://www.w3.org/TR/webauthn/#packed-attestation
 // The packed attestation statement looks like:
-//		packedStmtFormat = {
-//		 	alg: COSEAlgorithmIdentifier,
-//		 	sig: bytes,
-//		 	x5c: [ attestnCert: bytes, * (caCert: bytes) ]
-//		 } OR
-//		 {
-//		 	alg: COSEAlgorithmIdentifier, (-260 for ED256 / -261 for ED512)
-//		 	sig: bytes,
-//		 	ecdaaKeyId: bytes
-//		 } OR
-//		 {
-//		 	alg: COSEAlgorithmIdentifier
-//		 	sig: bytes,
-//		 }
+//
+//	packedStmtFormat = {
+//	 	alg: COSEAlgorithmIdentifier,
+//	 	sig: bytes,
+//	 	x5c: [ attestnCert: bytes, * (caCert: bytes) ]
+//	 } OR
+//	 {
+//	 	alg: COSEAlgorithmIdentifier, (-260 for ED256 / -261 for ED512)
+//	 	sig: bytes,
+//	 	ecdaaKeyId: bytes
+//	 } OR
+//	 {
+//	 	alg: COSEAlgorithmIdentifier
+//	 	sig: bytes,
+//	 }
 func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
@@ -107,9 +108,9 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-	err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, signature)
-	if err != nil {
-		return attestationType, x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
+
+	if err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, signature); err != nil {
+		return attestationType, x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 	}
 
 	// Step 2.2 Verify that attestnCert meets the requirements in §8.2.1 Packed attestation statement certificate requirements.
@@ -244,7 +245,7 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signatur
 
 	key, err := webauthncose.ParsePublicKey(pubKey)
 	if err != nil {
-		return attestationType, nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing the public key: %+v\n", err))
+		return attestationType, nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing the public key: %+v", err))
 	}
 
 	switch k := key.(type) {
@@ -269,7 +270,7 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signatur
 
 	valid, err := webauthncose.VerifySignature(key, verificationData, signature)
 	if !valid && err == nil {
-		return attestationType, nil, ErrInvalidAttestation.WithDetails("Unabled to verify signature")
+		return attestationType, nil, ErrInvalidAttestation.WithDetails("Unable to verify signature")
 	}
 
 	return attestationType, nil, err

@@ -22,12 +22,15 @@ func init() {
 // From §8.8. https://www.w3.org/TR/webauthn-2/#sctn-apple-anonymous-attestation
 // The apple attestation statement looks like:
 // $$attStmtType //= (
-// 	fmt: "apple",
-// 	attStmt: appleStmtFormat
+//
+//	fmt: "apple",
+//	attStmt: appleStmtFormat
+//
 // )
-// appleStmtFormat = {
-// 		x5c: [ credCert: bytes, * (caCert: bytes) ]
-//   }
+//
+//	appleStmtFormat = {
+//			x5c: [ credCert: bytes, * (caCert: bytes) ]
+//	  }
 func verifyAppleKeyFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
 
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
@@ -81,7 +84,7 @@ func verifyAppleKeyFormat(att AttestationObject, clientDataHash []byte) (string,
 	// TODO: Probably move this part to webauthncose.go
 	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
 	if err != nil {
-		return appleAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
+		return appleAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err))
 	}
 	credPK := pubKey.(webauthncose.EC2PublicKeyData)
 	subjectPK := credCert.PublicKey.(*ecdsa.PublicKey)

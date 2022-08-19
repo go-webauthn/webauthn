@@ -65,7 +65,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 
 	// Assertion Step 7. Verify that the value of C.type is the string webauthn.get.
 	if c.Type != ceremony {
-		return ErrVerification.WithDetails("Error validating ceremony type").WithInfo(fmt.Sprintf("Expected Value: %s\n Received: %s\n", ceremony, c.Type))
+		return ErrVerification.WithDetails("Error validating ceremony type").WithInfo(fmt.Sprintf("Expected Value: %s, Received: %s", ceremony, c.Type))
 	}
 
 	// Registration Step 4. Verify that the value of C.challenge matches the challenge
@@ -90,7 +90,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 
 	if !strings.EqualFold(FullyQualifiedOrigin(clientDataOrigin), relyingPartyOrigin) {
 		err := ErrVerification.WithDetails("Error validating origin")
-		return err.WithInfo(fmt.Sprintf("Expected Value: %s\n Received: %s\n", relyingPartyOrigin, FullyQualifiedOrigin(clientDataOrigin)))
+		return err.WithInfo(fmt.Sprintf("Expected Value: %s, Received: %s", relyingPartyOrigin, FullyQualifiedOrigin(clientDataOrigin)))
 	}
 
 	// Registration Step 6 and Assertion Step 10. Verify that the value of C.tokenBinding.status
@@ -102,7 +102,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 			return ErrParsingData.WithDetails("Error decoding clientData, token binding present without status")
 		}
 		if c.TokenBinding.Status != Present && c.TokenBinding.Status != Supported && c.TokenBinding.Status != NotSupported {
-			return ErrParsingData.WithDetails("Error decoding clientData, token binding present with invalid status").WithInfo(fmt.Sprintf("Got: %s\n", c.TokenBinding.Status))
+			return ErrParsingData.WithDetails("Error decoding clientData, token binding present with invalid status").WithInfo(fmt.Sprintf("Got: %s", c.TokenBinding.Status))
 		}
 	}
 	// Not yet fully implemented by the spec, browsers, and me.

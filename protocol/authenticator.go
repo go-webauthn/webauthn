@@ -167,7 +167,7 @@ func (flag AuthenticatorFlags) HasExtensions() bool {
 func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) error {
 	if minAuthDataLength > len(rawAuthData) {
 		err := ErrBadRequest.WithDetails("Authenticator data length too short")
-		info := fmt.Sprintf("Expected data greater than %d bytes. Got %d bytes\n", minAuthDataLength, len(rawAuthData))
+		info := fmt.Sprintf("Expected data greater than %d bytes. Got %d bytes", minAuthDataLength, len(rawAuthData))
 		return err.WithInfo(info)
 	}
 
@@ -276,7 +276,7 @@ func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerifi
 	// Verify that the RP ID hash in authData is indeed the SHA-256
 	// hash of the RP ID expected by the RP.
 	if !bytes.Equal(a.RPIDHash[:], rpIdHash) && !bytes.Equal(a.RPIDHash[:], appIDHash) {
-		return ErrVerification.WithInfo(fmt.Sprintf("RP Hash mismatch. Expected %x and Received %x\n", a.RPIDHash, rpIdHash))
+		return ErrVerification.WithInfo(fmt.Sprintf("RP Hash mismatch. Expected %x and Received %x", a.RPIDHash, rpIdHash))
 	}
 
 	// Registration Step 10 & Assertion Step 12
