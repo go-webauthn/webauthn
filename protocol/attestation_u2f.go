@@ -130,11 +130,10 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	verificationData.Write(publicKeyU2F.Bytes())
 
 	// Step 6. Verify the sig using verificationData and certificate public key per SEC1[https://www.w3.org/TR/webauthn/#biblio-sec1].
-	sigErr := attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), signature)
-	if sigErr != nil {
-		return u2fAttestationKey, nil, sigErr
+	if err = attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), signature); err != nil {
+		return u2fAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 	}
 
 	// Step 7. If successful, return attestation type Basic with the attestation trust path set to x5c.
-	return "Fido U2F Basic", x5c, sigErr
+	return "Fido U2F Basic", x5c, nil
 }
