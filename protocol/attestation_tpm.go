@@ -155,9 +155,8 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 		sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
 
-		err = aikCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), certInfoBytes, sigBytes)
-		if err != nil {
-			return tpmAttestationKey, nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
+		if err = aikCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), certInfoBytes, sigBytes); err != nil {
+			return tpmAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 		}
 		// Verify that aikCert meets the requirements in §8.3.1 TPM Attestation Statement Certificate Requirements
 
@@ -231,6 +230,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	return tpmAttestationKey, x5c, err
 }
+
 func forEachSAN(extension []byte, callback func(tag int, data []byte) error) error {
 	// RFC 5280, 4.2.1.6
 

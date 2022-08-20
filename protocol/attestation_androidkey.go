@@ -18,14 +18,17 @@ func init() {
 // From §8.4. https://www.w3.org/TR/webauthn/#android-key-attestation
 // The android-key attestation statement looks like:
 // $$attStmtType //= (
-// 	fmt: "android-key",
-// 	attStmt: androidStmtFormat
+//
+//	fmt: "android-key",
+//	attStmt: androidStmtFormat
+//
 // )
-// androidStmtFormat = {
-// 		alg: COSEAlgorithmIdentifier,
-// 		sig: bytes,
-// 		x5c: [ credCert: bytes, * (caCert: bytes) ]
-//   }
+//
+//	androidStmtFormat = {
+//			alg: COSEAlgorithmIdentifier,
+//			sig: bytes,
+//			x5c: [ credCert: bytes, * (caCert: bytes) ]
+//	  }
 func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
 	// Given the verification procedure inputs attStmt, authenticatorData and clientDataHash, the verification procedure is as follows:
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
@@ -67,19 +70,19 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte) (strin
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-	err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, sig)
-	if err != nil {
-		return androidAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
+
+	if err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, sig); err != nil {
+		return androidAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 	}
 	// Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.
 	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
 	if err != nil {
-		return androidAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
+		return androidAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err))
 	}
 	e := pubKey.(webauthncose.EC2PublicKeyData)
 	valid, err = e.Verify(signatureData, sig)
 	if err != nil || !valid {
-		return androidAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
+		return androidAttestationKey, nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err))
 	}
 	// §8.4.3. Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
 	// attCert.Extensions
