@@ -18,7 +18,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Not valid: %+v", err)
 			}
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationKey)
 		})
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"reflect"
 	"testing"
+
+	"github.com/go-webauthn/webauthn/metadata"
 )
 
 func Test_verifySafetyNetFormat(t *testing.T) {
@@ -12,7 +14,7 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 		clientDataHash []byte
 	}
 	successAttResponse := attestationTestUnpackResponse(t, safetyNetTestResponse["success"]).Response.AttestationObject
-	successClienDataHash := sha256.Sum256(attestationTestUnpackResponse(t, safetyNetTestResponse["success"]).Raw.AttestationResponse.ClientDataJSON)
+	successClientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, safetyNetTestResponse["success"]).Raw.AttestationResponse.ClientDataJSON)
 	tests := []struct {
 		name    string
 		args    args
@@ -24,9 +26,9 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 			"success",
 			args{
 				successAttResponse,
-				successClienDataHash[:],
+				successClientDataHash[:],
 			},
-			"Basic attestation with SafetyNet",
+			string(metadata.BasicFull),
 			nil,
 			false,
 		},
