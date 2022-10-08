@@ -66,9 +66,7 @@ func Test_verifyPackedFormat(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("verifyPackedFormat() got = %v, want %v", got, tt.want)
 			}
-			//if !reflect.DeepEqual(got1, tt.want1) {
-			//	t.Errorf("verifyPackedFormat() got1 = %v, want %v", got1, tt.want1)
-			//}
+			// TODO: Consider doing something with the second return value from verifyPackedFormat, x5c
 		})
 	}
 }

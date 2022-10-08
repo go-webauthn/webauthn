@@ -8,7 +8,6 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/pem"
-	"fmt"
 	"hash"
 	"math/big"
 
@@ -324,7 +323,7 @@ func DisplayPublicKey(cpk []byte) string {
 			Type:  "RSA PUBLIC KEY",
 			Bytes: data,
 		})
-		return fmt.Sprintf("%s", pemBytes)
+		return string(pemBytes)
 	case EC2PublicKeyData:
 		pKey := parsedKey.(EC2PublicKeyData)
 		var curve elliptic.Curve
@@ -351,7 +350,7 @@ func DisplayPublicKey(cpk []byte) string {
 			Type:  "PUBLIC KEY",
 			Bytes: data,
 		})
-		return fmt.Sprintf("%s", pemBytes)
+		return string(pemBytes)
 	case OKPPublicKeyData:
 		pKey := parsedKey.(OKPPublicKeyData)
 		if len(pKey.XCoord) != ed25519.PublicKeySize {
@@ -367,7 +366,7 @@ func DisplayPublicKey(cpk []byte) string {
 			Type:  "PUBLIC KEY",
 			Bytes: data,
 		})
-		return fmt.Sprintf("%s", pemBytes)
+		return string(pemBytes)
 
 	default:
 		return "Cannot display key of this type"
