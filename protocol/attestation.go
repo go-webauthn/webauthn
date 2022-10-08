@@ -2,10 +2,13 @@ package protocol
 
 import (
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 
+	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/google/uuid"
 )
 
 // From §5.2.1 (https://www.w3.org/TR/webauthn/#authenticatorattestationresponse)
@@ -52,7 +55,6 @@ type ParsedAttestationResponse struct {
 // perform self attestation of the credential public key with the corresponding credential private key.
 // All this information is returned by authenticators any time a new public key credential is generated, in
 // the overall form of an attestation object. (https://www.w3.org/TR/webauthn/#attestation-object)
-//
 type AttestationObject struct {
 	// The authenticator data, including the newly created public key. See AuthenticatorData for more info
 	AuthData AuthenticatorData
@@ -147,9 +149,43 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 	// Step 14. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
-	attestationType, _, err := formatHandler(*attestationObject, clientDataHash)
+	attestationType, x5c, err := formatHandler(*attestationObject, clientDataHash)
 	if err != nil {
 		return err.(*Error).WithInfo(attestationType)
+	}
+
+	uuid, err := uuid.FromBytes(attestationObject.AuthData.AttData.AAGUID)
+	if err != nil {
+		return err
+	}
+	if meta, ok := metadata.Metadata[uuid]; ok {
+		for _, s := range meta.StatusReports {
+			if metadata.IsUndesiredAuthenticatorStatus(s.Status) {
+				return ErrInvalidAttestation.WithDetails("Authenticator with undesirable status encountered")
+			}
+		}
+
+		if x5c != nil {
+			attestnCert, err := x509.ParseCertificate(x5c[0].([]byte))
+			if err != nil {
+				return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c")
+			}
+			if attestnCert.Subject.CommonName != attestnCert.Issuer.CommonName {
+				var hasBasicFull = false
+				for _, a := range meta.MetadataStatement.AttestationTypes {
+					if metadata.AuthenticatorAttestationType(a) == metadata.BasicFull {
+						hasBasicFull = true
+					}
+				}
+				if !hasBasicFull {
+					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authentictor that does not support full attestation")
+				}
+			}
+		}
+	} else {
+		if metadata.Conformance {
+			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during conformance testing", uuid.String()))
+		}
 	}
 
 	return nil
