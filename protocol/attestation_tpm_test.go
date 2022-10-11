@@ -26,11 +26,11 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-			attestationKey, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:])
+			attestationType, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:])
 			if err != nil {
 				t.Fatalf("Not valid: %+v", err)
 			}
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		})
 	}
 }
@@ -126,11 +126,11 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		attestationKey, _, err := verifyTPMFormat(tt.att, nil)
+		attestationType, _, err := verifyTPMFormat(tt.att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }
@@ -353,11 +353,11 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			},
 		}
 
-		attestationKey, _, err := verifyTPMFormat(att, nil)
+		attestationType, _, err := verifyTPMFormat(att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }
@@ -439,11 +439,11 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 			t.Fatal(err)
 		}
 		att.AttStatement["certInfo"] = certInfo
-		attestationKey, _, err := verifyTPMFormat(att, nil)
+		attestationType, _, err := verifyTPMFormat(att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }
@@ -551,11 +551,11 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	}
 	for _, tt := range tests {
 		att.AttStatement["x5c"] = tt.x5c
-		attestationKey, _, err := verifyTPMFormat(att, nil)
+		attestationType, _, err := verifyTPMFormat(att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }
