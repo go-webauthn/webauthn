@@ -4,13 +4,13 @@ go 1.19
 
 require (
 	github.com/fxamacker/cbor/v2 v2.4.0
-	github.com/go-webauthn/revoke v0.1.3
+	github.com/go-webauthn/revoke v0.1.4
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/google/go-tpm v0.3.3
 	github.com/google/uuid v1.3.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/stretchr/testify v1.8.0
-	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8
+	golang.org/x/crypto v0.0.0-20221010152910-d6f0a8c073c2
 )
 
 require (
