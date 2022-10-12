@@ -1,10 +1,22 @@
 package protocol
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
+	"encoding/binary"
+	"math/big"
 	"testing"
 
-	"github.com/go-webauthn/webauthn/protocol/googletpm"
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
+	"github.com/google/go-tpm/tpm2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,11 +26,11 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-			attestationKey, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:])
+			attestationType, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:])
 			if err != nil {
 				t.Fatalf("Not valid: %+v", err)
 			}
-			assert.Equal(t, "attca", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		})
 	}
 }
@@ -33,7 +45,7 @@ var testAttestationTPMResponses = []string{
 				"attestationObject": "o2NmbXRjdHBtZ2F0dFN0bXSmY2FsZzn__mNzaWdZAQCqAcGoi2IFXCF5xxokjR5yOAwK_11iCOqt8hCkpHE9rW602J3KjhcRQzoFf1UxZvadwmYcHHMxDQDmVuOhH-yW-DfARVT7O3MzlhhzrGTNO_-jhGFsGeEdz0RgNsviDdaVP5lNsV6Pe4bMhgBv1aTkk0zx1T8sxK8B7gKT6x80RIWg89_aYY4gHR4n65SRDp2gOGI2IHDvqTwidyeaAHVPbDrF8iDbQ88O-GH_fheAtFtgjbIq-XQbwVdzQhYdWyL0XVUwGLSSuABuB4seRPkyZCKoOU6VuuQzfWNpH2Nl05ybdXi27HysUexgfPxihB3PbR8LJdi1j04tRg3JvBUvY3ZlcmMyLjBjeDVjglkFuzCCBbcwggOfoAMCAQICEGEZiaSlAkKpqaQOKDYmWPkwDQYJKoZIhvcNAQELBQAwQTE_MD0GA1UEAxM2RVVTLU5UQy1LRVlJRC1FNEE4NjY2RjhGNEM2RDlDMzkzMkE5NDg4NDc3ODBBNjgxMEM0MjEzMB4XDTIyMDExMjIyMTUxOFoXDTI3MDYxMDE4NTQzNlowADCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKo-7DHdiipZTzfA9fpTaIMVK887zM0nXAVIvU0kmGAsPpTYbf7dn1DAl6BhcDkXs2WrwYP02K8RxXWOF4jf7esMAIkr65zPWqLys8WRNM60d7g9GOADwbN8qrY0hepSsaJwjhswbNJI6L8vJwnnrQ6UWVCm3xHqn8CB2iSWNSUnshgTQTkJ1ZEdToeD51sFXUE0fSxXjyIiSAAD4tCIZkmHFVqchzfqUgiiM_mbbKzUnxEZ6c6r39ccHzbm4Ir-u62repQnVXKTpzFBbJ-Eg15REvw6xuYaGtpItk27AXVcEodfAylf7pgQPfExWkoMZfb8faqbQAj5x29mBJvlzj0CAwEAAaOCAeowggHmMA4GA1UdDwEB_wQEAwIHgDAMBgNVHRMBAf8EAjAAMG0GA1UdIAEB_wRjMGEwXwYJKwYBBAGCNxUfMFIwUAYIKwYBBQUHAgIwRB5CAFQAQwBQAEEAIAAgAFQAcgB1AHMAdABlAGQAIAAgAFAAbABhAHQAZgBvAHIAbQAgACAASQBkAGUAbgB0AGkAdAB5MBAGA1UdJQQJMAcGBWeBBQgDMFAGA1UdEQEB_wRGMESkQjBAMT4wEAYFZ4EFAgIMB05QQ1Q3NXgwFAYFZ4EFAgEMC2lkOjRFNTQ0MzAwMBQGBWeBBQIDDAtpZDowMDA3MDAwMjAfBgNVHSMEGDAWgBQ3yjAtSXrnaSNOtzy1PEXxOO1ZUDAdBgNVHQ4EFgQU1ml3H5Tzrs0Nev69tFNhPZnhaV0wgbIGCCsGAQUFBwEBBIGlMIGiMIGfBggrBgEFBQcwAoaBkmh0dHA6Ly9hemNzcHJvZGV1c2Fpa3B1Ymxpc2guYmxvYi5jb3JlLndpbmRvd3MubmV0L2V1cy1udGMta2V5aWQtZTRhODY2NmY4ZjRjNmQ5YzM5MzJhOTQ4ODQ3NzgwYTY4MTBjNDIxMy9lMDFjMjA2Mi1mYmRjLTQwYTUtYTQwZi1jMzc3YzBmNzY1MWMuY2VyMA0GCSqGSIb3DQEBCwUAA4ICAQAz-YGrj0S841gyMZuit-qsKpKNdxbkaEhyB1baexHGcMzC2y1O1kpTrpaH3I80hrIZFtYoA2xKQ1j67uoC6vm1PhsJB6qhs9T7zmWZ1VtleJTYGNZ_bYY2wo65qJHFB5TXkevJUVe2G39kB_W1TKB6g_GSwb4a5e4D_Sjp7b7RZpyIKHT1_UE1H4RXgR9Qi68K4WVaJXJUS6T4PHrRc4PeGUoJLQFUGxYokWIf456G32GwGgvUSX76K77pVv4Y-kT3v5eEJdYxlS4EVT13a17KWd0DdLje0Ae69q_DQSlrHVLUrADvuZMeM8jxyPQvDb7ETKLsSUeHm73KOCGLStcGQ3pB49nt3d9XdWCcUwUrmbBF2G7HsRgTNbj16G6QUcWroQEqNrBG49aO9mMZ0NwSn5d3oNuXSXjLdGBXM1ukLZ-GNrZDYw5KXU102_5VpHpjIHrZh0dXg3Q9eucKe6EkFbH65-O5VaQWUnR5WJpt6-fl_l0iHqHnKXbgL6tjeerCqZWDvFsOak05R-hosAoQs_Ni0EsgZqHwR_VlG86fsSwCVU3_sDKTNs_Je08ewJ_bbMB5Tq6k1Sxs8Aw8R96EwjQLp3z-Zva1myU-KerYYVDl5BdvgPqbD8Xmst-z6vrP3CJbtr8jgqVS7RWy_cJOA8KCZ6IS_75QT7Gblq6UGFkG7zCCBuswggTToAMCAQICEzMAAAbTtnznKsOrB-gAAAAABtMwDQYJKoZIhvcNAQELBQAwgYwxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpXYXNoaW5ndG9uMRAwDgYDVQQHEwdSZWRtb25kMR4wHAYDVQQKExVNaWNyb3NvZnQgQ29ycG9yYXRpb24xNjA0BgNVBAMTLU1pY3Jvc29mdCBUUE0gUm9vdCBDZXJ0aWZpY2F0ZSBBdXRob3JpdHkgMjAxNDAeFw0yMTA2MTAxODU0MzZaFw0yNzA2MTAxODU0MzZaMEExPzA9BgNVBAMTNkVVUy1OVEMtS0VZSUQtRTRBODY2NkY4RjRDNkQ5QzM5MzJBOTQ4ODQ3NzgwQTY4MTBDNDIxMzCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAJA7GLwHWWbn2H8DRppxQfre4zll1sgE3Wxt9DTYWt5-v-xKwCQb6z_7F1py7LMe58qLqglAgVhS6nEvN2puZ1GzejdsFFxz2gyEfH1y-X3RGp0dxS6UKwEtmksaMEKIRQn2GgKdUkiuvkaxaoznuExoTPyu0aXk6yFsX5KEDu9UZCgt66bRy6m3KIRnn1VK2frZfqGYi8C8x9Q69oGG316tUwAIm3ypDtv3pREXsDLYE1U5Irdv32hzJ4CqqPyau-qJS18b8CsjvgOppwXRSwpOmU7S3xqo-F7h1eeFw2tgHc7PEPt8MSSKeba8Fz6QyiLhgFr8jFUvKRzk4B41HFUMqXYawbhAtfIBiGGsGrrdNKb7MxISnH1E6yLVCQGGhXiN9U7V0h8Gn56eKzopGlubw7yMmgu8Cu2wBX_a_jFmIBHnn8YgwcRm6NvT96KclDHnFqPVm3On12bG31F7EYkIRGLbaTT6avEu9rL6AJn7Xr245Sa6dC_OSMRKqLSufxp6O6f2TH2g4kvT0Go9SeyM2_acBjIiQ0rFeBOm49H4E4VcJepf79FkljovD68imeZ5MXjxepcCzS138374Jeh7k28JePwJnjDxS8n9Dr6xOU3_wxS1gN5cW6cXSoiPGe0JM4CEyAcUtKrvpUWoTajxxnylZuvS8ou2thfH2PQlAgMBAAGjggGOMIIBijAOBgNVHQ8BAf8EBAMCAoQwGwYDVR0lBBQwEgYJKwYBBAGCNxUkBgVngQUIAzAWBgNVHSAEDzANMAsGCSsGAQQBgjcVHzASBgNVHRMBAf8ECDAGAQH_AgEAMB0GA1UdDgQWBBQ3yjAtSXrnaSNOtzy1PEXxOO1ZUDAfBgNVHSMEGDAWgBR6jArOL0hiF-KU0a5VwVLscXSkVjBwBgNVHR8EaTBnMGWgY6Bhhl9odHRwOi8vd3d3Lm1pY3Jvc29mdC5jb20vcGtpb3BzL2NybC9NaWNyb3NvZnQlMjBUUE0lMjBSb290JTIwQ2VydGlmaWNhdGUlMjBBdXRob3JpdHklMjAyMDE0LmNybDB9BggrBgEFBQcBAQRxMG8wbQYIKwYBBQUHMAKGYWh0dHA6Ly93d3cubWljcm9zb2Z0LmNvbS9wa2lvcHMvY2VydHMvTWljcm9zb2Z0JTIwVFBNJTIwUm9vdCUyMENlcnRpZmljYXRlJTIwQXV0aG9yaXR5JTIwMjAxNC5jcnQwDQYJKoZIhvcNAQELBQADggIBAFZTSitCISvll6i6rPUPd8Wt2mogRw6I_c-dWQzdc9-SY9iaIGXqVSPKKOlAYU2ju7nvN6AvrIba6sngHeU0AUTeg1UZ5-bDFOWdSgPaGyH_EN_l-vbV6SJPzOmZHJOHfw2WT8hjlFaTaKYRXxzFH7PUR4nxGRbWtdIGgQhUlWg5oo_FO4bvLKfssPSONn684qkAVierq-ly1WeqJzOYhd4EylgVJ9NL3YUhg8dYcHAieptDzF7OcDqffbuZLZUx6xcyibhWQcntAh7a3xPwqXxENsHhme_bqw_kqa-NVk-Wz4zdoiNNLRvUmCSL1WLc4JPsFJ08Ekn1kW7f9ZKnie5aw-29jEf6KIBt4lGDD3tXTfaOVvWcDbu92jMOO1dhEIj63AwQiDJgZhqnrpjlyWU_X0IVQlaPBg80AE0Y3sw1oMrY0XwdeQUjSpH6e5fTYKrNB6NMT1jXGjKIzVg8XbPWlnebP2wEhq8rYiDR31b9B9Sw_naK7Xb-Cqi-VQdUtknSjeljusrBpxGUx-EIJci0-dzeXRT5_376vyKSuYxA1Xd2jd4EknJLIAVLT3rb10DCuKGLDgafbsfTBxVoEa9hSjYOZUr_m3WV6t6I9WPYjVyhyi7fCEIG4JE7YbM4na4jg5q3DM8ibE8jyufAq0PfJZTJyi7c2Q2N_9NgnCNwZ3B1YkFyZWFYdgAjAAsABAByACCd_8vzbDg65pn7mGjcbcuJ1xU4hL4oA5IsEkFYv60irgAQABAAAwAQACAek7g2C8TeORRoKxuN7HrJ5OinVGuHzEgYODyUsF9D1wAggXPPXn-Pm_4IF0c4XVaJjmHO3EB2KBwdg_L60N0IL9xoY2VydEluZm9Yof9UQ0eAFwAiAAvQNGTLa2wT6u8SKDDdwkgaq5Cmh6jcD_6ULvM9ZmvdbwAUtMInD3WtGSdWHPWijMrW_TfYo-gAAAABPuBems3Sywu4aQsGAe85iOosjtXIACIAC5FPRiZSJzjYMNnAz9zFtM62o57FJwv8F5gNEcioqhHwACIACyVXxq1wZhDsqTqdYr7vQUUJ3vwWVrlN0ZQv5HFnHqWdaGF1dGhEYXRhWKR0puqSE8mcL3SyJJKzIM9AJiqUwalQoDl_KSULYIQe8EUAAAAACJhwWMrcS4G24TDeUNy-lgAghsS2ywFz_LWf9-lC35vC9uJTVD3ZCVdweZvESUbjXnSlAQIDJiABIVggHpO4NgvE3jkUaCsbjex6yeTop1Rrh8xIGDg8lLBfQ9ciWCCBc89ef4-b_ggXRzhdVomOYc7cQHYoHB2D8vrQ3Qgv3A",
 				"clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoidXpuOXUwVHgtTEJkdEdnRVJzYmtIUkJqaVV0NWkycnZtMkJCVFpyV3FFbyIsIm9yaWdpbiI6Imh0dHBzOi8vd2ViYXV0aG4uaW8iLCJjcm9zc09yaWdpbiI6ZmFsc2V9"
 		}
-    }`,
+	}`,
 	// TPM attestation with RSA SHA1
 	`{
 		"rawId": "UJDoUJoGiDQF_EEZ3G_z9Lfq16_KFaXtMTjwTUrrRlc",
@@ -107,74 +119,443 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 			AttestationObject{AttStatement: defaultAttStatement},
 			"Unable to decode TPMT_PUBLIC in attestation statement",
 		},
+		{
+			"TPM Negative Test Unsupported Public Key Type",
+			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": makeDefaultRSAPublicBytes()}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
+			"Unsupported Public Key Type",
+		},
 	}
 	for _, tt := range tests {
-		attestationKey, _, err := verifyTPMFormat(tt.att, nil)
+		attestationType, _, err := verifyTPMFormat(tt.att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }
 
-var defaultAttStatement = map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": []byte{}}
+func makeDefaultRSAPublicBytes() []byte {
+	r, _ := defaultRSAPublic.Encode()
+	return r
+}
+
+var (
+	defaultRSAPublic = tpm2.Public{
+		Type:       tpm2.AlgRSA,
+		NameAlg:    tpm2.AlgSHA256,
+		Attributes: tpm2.FlagSignerDefault,
+		RSAParameters: &tpm2.RSAParams{
+			Sign: &tpm2.SigScheme{
+				Alg:  tpm2.AlgRSASSA,
+				Hash: tpm2.AlgSHA256,
+			},
+			KeyBits: 2048,
+		},
+	}
+
+	defaultECCPublic = tpm2.Public{
+		Type:       tpm2.AlgECC,
+		NameAlg:    tpm2.AlgSHA256,
+		Attributes: tpm2.FlagSignerDefault,
+		ECCParameters: &tpm2.ECCParams{
+			Sign: &tpm2.SigScheme{
+				Alg:  tpm2.AlgECDSA,
+				Hash: tpm2.AlgSHA256,
+			},
+			CurveID: tpm2.CurveNISTP256,
+		},
+	}
+)
+
+var defaultAttStatement = map[string]interface{}{"ver": "2.0", "alg": int64(-257), "x5c": []interface{}{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": []byte{}}
+
+type CredentialPublicKey struct {
+	KeyType   int64  `cbor:"1,keyasint" json:"kty"`
+	Algorithm int64  `cbor:"3,keyasint" json:"alg"`
+	Curve     int64  `cbor:"-1,keyasint,omitempty" json:"crv"`
+	XCoord    []byte `cbor:"-2,keyasint,omitempty" json:"x"`
+	YCoord    []byte `cbor:"-3,keyasint,omitempty" json:"y"`
+	Modulus   []byte `cbor:"-1,keyasint,omitempty" json:"n"`
+	Exponent  []byte `cbor:"-2,keyasint,omitempty" json:"e"`
+}
+
+func corruptBytes(in []byte) []byte {
+	out := make([]byte, len(in))
+	copy(out, in)
+	out[len(in)-1] ^= 0xff
+	return out
+}
+
+func uint32ToBytes(i uint32) []byte {
+	t := make([]byte, 4)
+	binary.LittleEndian.PutUint32(t, i)
+	o := make([]byte, 3)
+	copy(o, t)
+	return o
+}
+
+func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.PrivateKey, error) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
+	}
+
+	r := webauthncose.RSAPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.RSAKey),
+			Algorithm: int64(webauthncose.AlgRS256),
+		},
+		Modulus:  rsaKey.N.Bytes(),
+		Exponent: uint32ToBytes(uint32(rsaKey.E)),
+	}
+
+	eccKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
+	}
+
+	c := CredentialPublicKey{
+		KeyType:   int64(webauthncose.EllipticKey),
+		Algorithm: int64(webauthncose.AlgES256),
+		Curve:     int64(webauthncose.P256),
+		XCoord:    eccKey.X.Bytes(),
+		YCoord:    eccKey.Y.Bytes(),
+	}
+
+	e := webauthncose.EC2PublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   c.KeyType,
+			Algorithm: c.Algorithm,
+		},
+		Curve:  c.Curve,
+		XCoord: c.XCoord,
+		YCoord: c.YCoord,
+	}
+
+	okpKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
+	}
+	o := webauthncose.OKPPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.OctetKey),
+			Algorithm: int64(webauthncose.AlgEdDSA),
+		},
+		Curve:  int64(webauthncose.Ed25519),
+		XCoord: okpKey,
+	}
+
+	epk, err := webauthncbor.Marshal(e)
+	if err != nil {
+		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
+	}
+	rpk, err := webauthncbor.Marshal(r)
+	if err != nil {
+		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
+	}
+	opk, err := webauthncbor.Marshal(o)
+	return epk, rpk, opk, *rsaKey, *eccKey, err
+}
 
 func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
+
+	epk, rpk, opk, rsaKey, eccKey, err := getTPMAttestionKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	tests := []struct {
-		name    string
-		public  googletpm.Public
-		wantErr string
-	}{}
+		name      string
+		keyType   webauthncose.COSEKeyType
+		rsaParams tpm2.RSAParams
+		eccParams tpm2.ECCParams
+		cpk       []byte
+		wantErr   string
+	}{
+		{
+			"TPM Negative Test pubArea curve mismatch",
+			webauthncose.EllipticKey,
+			tpm2.RSAParams{},
+			tpm2.ECCParams{CurveID: tpm2.CurveNISTP224, Point: tpm2.ECPoint{XRaw: eccKey.X.Bytes(), YRaw: eccKey.Y.Bytes()}},
+			epk,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"TPM Negative Test pubArea X mismatch",
+			webauthncose.EllipticKey,
+			tpm2.RSAParams{},
+			tpm2.ECCParams{CurveID: tpm2.CurveNISTP256, Point: tpm2.ECPoint{XRaw: corruptBytes(eccKey.X.Bytes()), YRaw: eccKey.Y.Bytes()}},
+			epk,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"TPM Negative Test pubArea Y mismatch",
+			webauthncose.EllipticKey,
+			tpm2.RSAParams{},
+			tpm2.ECCParams{CurveID: tpm2.CurveNISTP256, Point: tpm2.ECPoint{XRaw: eccKey.X.Bytes(), YRaw: corruptBytes(eccKey.Y.Bytes())}},
+			epk,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"TPM Negative Test pubArea N mismatch",
+			webauthncose.RSAKey,
+			tpm2.RSAParams{ModulusRaw: corruptBytes(rsaKey.N.Bytes()), ExponentRaw: uint32(rsaKey.E)},
+			tpm2.ECCParams{},
+			rpk,
+			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"TPM Negative Test pubArea E mismatch",
+			webauthncose.RSAKey,
+			tpm2.RSAParams{ModulusRaw: rsaKey.N.Bytes(), ExponentRaw: uint32(rsaKey.E + 1)},
+			tpm2.ECCParams{},
+			rpk,
+			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"TPM Negative Test pubArea unsupported key type",
+			webauthncose.OctetKey,
+			tpm2.RSAParams{},
+			tpm2.ECCParams{},
+			opk,
+			"Unsupported Public Key Type",
+		},
+	}
 	for _, tt := range tests {
 		attStmt := make(map[string]interface{}, len(defaultAttStatement))
 		for id, v := range defaultAttStatement {
 			attStmt[id] = v
 		}
 
-		//attStmt["pubArea"], _ = tt.public.Encode()
+		public := tpm2.Public{}
+		switch tt.keyType {
+		case webauthncose.EllipticKey:
+			public = defaultECCPublic
+			public.ECCParameters.CurveID = tt.eccParams.CurveID
+			public.ECCParameters.Point.XRaw = tt.eccParams.Point.XRaw
+			public.ECCParameters.Point.YRaw = tt.eccParams.Point.YRaw
+		case webauthncose.RSAKey:
+			public = defaultRSAPublic
+			public.RSAParameters.ExponentRaw = tt.rsaParams.ExponentRaw
+			public.RSAParameters.ModulusRaw = tt.rsaParams.ModulusRaw
+		case webauthncose.OctetKey:
+			public = defaultECCPublic
+		}
+
+		attStmt["pubArea"], _ = public.Encode()
 		att := AttestationObject{
 			AttStatement: attStmt,
+			AuthData: AuthenticatorData{
+				AttData: AttestedCredentialData{
+					CredentialPublicKey: tt.cpk,
+				},
+			},
 		}
-		attestationKey, _, err := verifyTPMFormat(att, nil)
+
+		attestationType, _, err := verifyTPMFormat(att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }
 
 func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
+	attStmt := make(map[string]interface{}, len(defaultAttStatement))
+	for id, v := range defaultAttStatement {
+		attStmt[id] = v
+	}
+	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+	r := webauthncose.RSAPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.RSAKey),
+			Algorithm: int64(webauthncose.AlgRS256),
+		},
+		Modulus:  rsaKey.N.Bytes(),
+		Exponent: uint32ToBytes(uint32(rsaKey.E)),
+	}
+
+	public := defaultRSAPublic
+	public.RSAParameters.ExponentRaw = uint32(rsaKey.E)
+	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
+	attStmt["pubArea"], _ = public.Encode()
+	rpk, _ := webauthncbor.Marshal(r)
+	att := AttestationObject{
+		AttStatement: attStmt,
+		AuthData: AuthenticatorData{
+			AttData: AttestedCredentialData{
+				CredentialPublicKey: rpk,
+			},
+		},
+	}
+
+	f := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+	h := f()
+	h.Write(att.RawAuthData)
+	extraData := h.Sum(nil)
+
 	tests := []struct {
-		name           string
-		att            AttestationObject
-		clientDataHash [32]byte
-		wantErr        string
-	}{}
+		name     string
+		certInfo tpm2.AttestationData
+		wantErr  string
+	}{
+		{
+			"TPM Negative Test CertInfo invalid certInfo",
+			tpm2.AttestationData{},
+			"decoding Magic/Type: EOF",
+		},
+		{
+			"TPM Negative Test CertInfo magic value not 0xff544347",
+			tpm2.AttestationData{Magic: 42, Type: tpm2.TagAttestCreation, AttestedCreationInfo: &tpm2.CreationInfo{}},
+			"incorrect magic value: 2a",
+		},
+		{
+			"TPM Negative Test CertInfo type not TagAttestCertify",
+			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCreation, AttestedCreationInfo: &tpm2.CreationInfo{}},
+			"Type is not set to TPM_ST_ATTEST_CERTIFY",
+		},
+		{
+			"TPM Negative Test CertInfo type not TagAttestCertify",
+			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{}},
+			"ExtraData is not set to hash of attToBeSigned",
+		},
+		{
+			"TPM Negative Test CertInfo Name/pubArea mismatch",
+			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{Name: tpm2.Name{Digest: nil}}, ExtraData: extraData},
+			"Name doesn't have a Digest, can't compare to Public",
+		},
+		{
+			"TPM Negative Test CertInfo Name/pubArea mismatch",
+			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{Name: tpm2.Name{Digest: &tpm2.HashValue{Alg: tpm2.AlgSHA256, Value: extraData}}}, ExtraData: h.Sum(nil)},
+			"Hash value mismatch attested and pubArea",
+		},
+	}
 	for _, tt := range tests {
-		attestationKey, _, err := verifyTPMFormat(tt.att, tt.clientDataHash[:])
+		certInfo, err := tt.certInfo.Encode()
+		if tt.certInfo.Magic != 0 && err != nil {
+			t.Fatal(err)
+		}
+		att.AttStatement["certInfo"] = certInfo
+		attestationType, _, err := verifyTPMFormat(att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }
 
+var (
+	x5cTemplate = x509.Certificate{
+		SerialNumber: big.NewInt(0),
+		Version:      3,
+		Subject: pkix.Name{
+			Country:            []string{"US"},
+			Organization:       []string{"Duo Labs"},
+			OrganizationalUnit: []string{"Authenticator Attestation"},
+			CommonName:         "WebAuthn.io",
+		},
+		Extensions: []pkix.Extension{
+			{
+				Id:       asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}),
+				Critical: false,
+				Value: []byte{
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+				},
+			},
+		},
+		IsCA: false,
+	}
+)
+
 func TestTPMAttestationVerificationFailX5c(t *testing.T) {
+	attStmt := make(map[string]interface{}, len(defaultAttStatement))
+	for id, v := range defaultAttStatement {
+		attStmt[id] = v
+	}
+	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+	r := webauthncose.RSAPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.RSAKey),
+			Algorithm: int64(webauthncose.AlgRS256),
+		},
+		Modulus:  rsaKey.N.Bytes(),
+		Exponent: uint32ToBytes(uint32(rsaKey.E)),
+	}
+
+	public := defaultRSAPublic
+	public.RSAParameters.ExponentRaw = uint32(rsaKey.E)
+	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
+	pubBytes, _ := public.Encode()
+	attStmt["pubArea"] = pubBytes
+	rpk, _ := webauthncbor.Marshal(r)
+	att := AttestationObject{
+		AttStatement: attStmt,
+		AuthData: AuthenticatorData{
+			AttData: AttestedCredentialData{
+				CredentialPublicKey: rpk,
+			},
+		},
+	}
+
+	f := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+	h := f()
+	h.Write(att.RawAuthData)
+	extraData := h.Sum(nil)
+
+	h.Reset()
+	h.Write(pubBytes)
+	pubName := h.Sum(nil)
+
+	certInfo := tpm2.AttestationData{
+		Magic: 0xff544347,
+		Type:  tpm2.TagAttestCertify,
+		AttestedCertifyInfo: &tpm2.CertifyInfo{
+			Name: tpm2.Name{
+				Digest: &tpm2.HashValue{
+					Alg:   tpm2.AlgSHA256,
+					Value: pubName,
+				},
+			},
+		},
+		ExtraData: extraData,
+	}
+	attStmt["certInfo"], _ = certInfo.Encode()
+
+	makeX5c := func(b []byte) []interface{} {
+		q := make([]interface{}, 1)
+		q[0] = b
+		return q
+	}
+
 	tests := []struct {
-		name           string
-		att            AttestationObject
-		clientDataHash [32]byte
-		wantErr        string
-	}{}
+		name    string
+		x5c     []interface{}
+		wantErr string
+	}{
+		{
+			"TPM Negative Test x5c empty",
+			make([]interface{}, 1),
+			"Error getting certificate from x5c cert chain",
+		},
+		{
+			"TPM Negative Test x5c can't parse",
+			makeX5c(make([]byte, 1)),
+			"Error parsing certificate from ASN.1",
+		},
+	}
 	for _, tt := range tests {
-		attestationKey, _, err := verifyTPMFormat(tt.att, tt.clientDataHash[:])
+		att.AttStatement["x5c"] = tt.x5c
+		attestationType, _, err := verifyTPMFormat(att, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
-			assert.Equal(t, "tpm", attestationKey)
+			assert.Equal(t, "attca", attestationType)
 		}
 	}
 }

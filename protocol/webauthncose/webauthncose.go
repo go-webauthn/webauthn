@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/crypto/ed25519"
 
-	"github.com/go-webauthn/webauthn/protocol/googletpm"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/google/go-tpm/tpm2"
 )
 
 // PublicKeyData The public key portion of a Relying Party-specific credential key pair, generated
@@ -273,31 +273,28 @@ const (
 	Secp256k1
 )
 
-func (k *EC2PublicKeyData) TPMCurveID() googletpm.EllipticCurve {
+func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
 	switch COSEEllipticCurve(k.Curve) {
 	case P256:
-		return googletpm.CurveNISTP256 // TPM_ECC_NIST_P256
+		return tpm2.CurveNISTP256 // TPM_ECC_NIST_P256
 	case P384:
-		return googletpm.CurveNISTP384 // TPM_ECC_NIST_P384
+		return tpm2.CurveNISTP384 // TPM_ECC_NIST_P384
 	case P521:
-		return googletpm.CurveNISTP521 // TPM_ECC_NIST_P521
+		return tpm2.CurveNISTP521 // TPM_ECC_NIST_P521
 	default:
-		return googletpm.EllipticCurve(0) // TPM_ECC_NONE
+		return tpm2.EllipticCurve(0) // TPM_ECC_NONE
 	}
 }
 
 func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
 
-	switch key.(type) {
+	switch key := key.(type) {
 	case OKPPublicKeyData:
-		o := key.(OKPPublicKeyData)
-		return o.Verify(data, sig)
+		return key.Verify(data, sig)
 	case EC2PublicKeyData:
-		e := key.(EC2PublicKeyData)
-		return e.Verify(data, sig)
+		return key.Verify(data, sig)
 	case RSAPublicKeyData:
-		r := key.(RSAPublicKeyData)
-		return r.Verify(data, sig)
+		return key.Verify(data, sig)
 	default:
 		return false, ErrUnsupportedKey
 	}
@@ -308,12 +305,11 @@ func DisplayPublicKey(cpk []byte) string {
 	if err != nil {
 		return "Cannot display key"
 	}
-	switch parsedKey.(type) {
+	switch parsedKey := parsedKey.(type) {
 	case RSAPublicKeyData:
-		pKey := parsedKey.(RSAPublicKeyData)
 		rKey := &rsa.PublicKey{
-			N: big.NewInt(0).SetBytes(pKey.Modulus),
-			E: int(uint(pKey.Exponent[2]) | uint(pKey.Exponent[1])<<8 | uint(pKey.Exponent[0])<<16),
+			N: big.NewInt(0).SetBytes(parsedKey.Modulus),
+			E: int(uint(parsedKey.Exponent[2]) | uint(parsedKey.Exponent[1])<<8 | uint(parsedKey.Exponent[0])<<16),
 		}
 		data, err := x509.MarshalPKIXPublicKey(rKey)
 		if err != nil {
@@ -325,9 +321,8 @@ func DisplayPublicKey(cpk []byte) string {
 		})
 		return string(pemBytes)
 	case EC2PublicKeyData:
-		pKey := parsedKey.(EC2PublicKeyData)
 		var curve elliptic.Curve
-		switch COSEAlgorithmIdentifier(pKey.Algorithm) {
+		switch COSEAlgorithmIdentifier(parsedKey.Algorithm) {
 		case AlgES256:
 			curve = elliptic.P256()
 		case AlgES384:
@@ -339,8 +334,8 @@ func DisplayPublicKey(cpk []byte) string {
 		}
 		eKey := &ecdsa.PublicKey{
 			Curve: curve,
-			X:     big.NewInt(0).SetBytes(pKey.XCoord),
-			Y:     big.NewInt(0).SetBytes(pKey.YCoord),
+			X:     big.NewInt(0).SetBytes(parsedKey.XCoord),
+			Y:     big.NewInt(0).SetBytes(parsedKey.YCoord),
 		}
 		data, err := x509.MarshalPKIXPublicKey(eKey)
 		if err != nil {
@@ -352,12 +347,11 @@ func DisplayPublicKey(cpk []byte) string {
 		})
 		return string(pemBytes)
 	case OKPPublicKeyData:
-		pKey := parsedKey.(OKPPublicKeyData)
-		if len(pKey.XCoord) != ed25519.PublicKeySize {
+		if len(parsedKey.XCoord) != ed25519.PublicKeySize {
 			return "Cannot display key"
 		}
 		var oKey ed25519.PublicKey = make([]byte, ed25519.PublicKeySize)
-		copy(oKey, pKey.XCoord)
+		copy(oKey, parsedKey.XCoord)
 		data, err := marshalEd25519PublicKey(oKey)
 		if err != nil {
 			return "Cannot display key"
