@@ -1,6 +1,6 @@
 {
   "constraints": {
-    "go": "1.18"
+    "go": "1.19"
   },
   "extends": [
     "config:base",
