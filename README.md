@@ -5,49 +5,23 @@
 
 
 This library is meant to handle [Web Authentication](https://w3c.github.io/webauthn) for Go apps that wish to implement 
-a passwordless solution for users. While the specification is currently in Candidate Recommendation, this library
-conforms as much as possible to the guidelines and implementation procedures outlined by the document.
+a passwordless solution for users. This library conforms as much as possible to the guidelines and implementation
+procedures outlined by the document.
 
 ## Fork
 
-This library is a hard fork of github.com/duo-labs/webauthn however we do not have any affiliation with Duo Labs or any
-of the authors. This library should not be seen as a representation of them in any form. The intent of this library is
-to address outstanding issues with that library without having to wait on the maintainers to merge the PR's. 
+This library is a hard fork of [github.com/duo-labs/webauthn] and is tentatively the natural successor to that library.
+
+See the [migration](MIGRATION.md) guide for more information about how to migrate and the differences between the
+libraries.
 
 It is distributed under the same 3-Clause BSD license as the original fork, with the only amendment being the additional
 3-Clause BSD license attributing license rights to this repository.
 
-### Differences
-
-There are several differences between the upstream library and this one. We will aim to keep this list updated:
-
-* There are minimal breaking changes between this library and the upstream one. Identified breaking changes exist in the 
-  following commits:
-  * ~~Change of protocol.ResidentKeyUnrequired() to protocol.ResidentKeyNotRequired() [5ad54f8](https://github.com/go-webauthn/webauthn/commit/5ad54f89952eb238a7d6e10ed2d443738351d67f).~~
-    This method has been restored as a deprecated function making the migration path clearer.
-* This library is versioned with branches per minor version for back-porting fixes.
-* This library releases tagged versions.
-* This library has a smaller dependency tree because of [c561447](https://github.com/go-webauthn/webauthn/commit/c561447e218d73421476565a3d66ab6dc934966c).
-* The following upstream issues have been resolved:
-  * Issue 76 was fixed related to the google.golang.org/grpc/naming dependency was fixed by merging 
-    [c561447](https://github.com/go-webauthn/webauthn/commit/c561447e218d73421476565a3d66ab6dc934966c) 
-    which migrates from the github.com/cloudflare/cfssl module to a fork of the features used by this module implemented
-    in [1edcf14](https://github.com/go-webauthn/revoke/commit/1edcf14a748f88f41663433f336e07604f5e72c1).
-* The following PR's in the upstream repository are merged in one form or another:
-  * PR132 was merged in [401a3f6](https://github.com/go-webauthn/webauthn/commit/401a3f63b5fb3c91faa52c56a9295b78d62e039f).
-  * PR131 was merged in [509e08f](https://github.com/go-webauthn/webauthn/commit/509e08fb364c78be30067a93d976730a8fe4a656) (cherry-pick squashed).
-  * PR130 was merged in [729227d](https://github.com/go-webauthn/webauthn/commit/729227d1ec0504ebb518f38e72bcd10ae68c4130) (v0.2.x) and [93a942a](https://github.com/go-webauthn/webauthn/commit/93a942a90dbb82d997e1ed2945ba41b37d47890f) (v0.1.x).
-  * PR122 was merged in [2bbb113](https://github.com/go-webauthn/webauthn/commit/2bbb113b333b775d2d7c5551b7220f713f666f00).
-  * PR116 was (effectively) merged in [d64d2ba](https://github.com/go-webauthn/webauthn/commit/d64d2ba780240964310c7f5862add333bc659348).
-* The following misc fixes have been merged:
-  * Ensuring the credential ID length is not too long in [b3b93ac](https://github.com/go-webauthn/webauthn/commit/b3b93ac3770a26a92adbcd4b527bbb391127931b) (v0.2.x) and [35287ea](https://github.com/go-webauthn/webauthn/commit/35287ea54b50b1f553f3cc0f0f5527039f375e2c) (v0.1.x).
-  * Ensuring errors are effectively checked, ineffectual checks are not done, and general linting fixes in [90be0fe](https://github.com/go-webauthn/webauthn/commit/90be0fe276222bd574cf19856081979789ce9fca).
-  * A potential nil pointer error in ParseFIDOPublicKey in [3551cfa](https://github.com/go-webauthn/webauthn/commit/3551cfae24f258cd9c978a73711fb9551f82d1e4).
-
 ## Status
 
 This library is still version 0, as per semver rules there may be breaking changes without warning. While we strive to
-avoid such changes they may be unavoidable.
+avoid such changes and strive to notify users they may be unavoidable.
 
 ## Quickstart
 
@@ -205,5 +179,8 @@ func beginLogin() {
 
 ## Acknowledgements
 
-We graciously acknowledge the original authors of this library [github.com/duo-labs/webauthn](https://github.com/duo-labs/webauthn)
-for their amazing implementation. Without their amazing work this library could not exist.
+We graciously acknowledge the original authors of this library [github.com/duo-labs/webauthn] for their amazing
+implementation. Without their amazing work this library could not exist.
+
+
+[github.com/duo-labs/webauthn]: https://github.com/duo-labs/webauthn
