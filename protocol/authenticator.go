@@ -99,6 +99,8 @@ const (
 	BLE AuthenticatorTransport = "ble"
 	// Internal the client should use an internal source like a TPM or SE
 	Internal AuthenticatorTransport = "internal"
+	// HYBRID indicates the respective authenticator can be contacted using a combination of (often separate) data-transport and proximity mechanisms. This supports, for example, authentication on a desktop computer using a smartphone.
+	HYBRID AuthenticatorTransport = "hybrid"
 )
 
 // A WebAuthn Relying Party may require user verification for some of its operations but not for others,
