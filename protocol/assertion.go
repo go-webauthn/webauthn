@@ -100,7 +100,7 @@ func ParseCredentialRequestResponseBody(body io.Reader) (*ParsedCredentialAssert
 // Follow the remaining steps outlined in §7.2 Verifying an authentication assertion
 // (https://www.w3.org/TR/webauthn/#verifying-assertion) and return an error if there
 // is a failure during each step.
-func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID, relyingPartyOrigin, appID string, verifyUser bool, credentialBytes []byte) error {
+func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID string, relyingPartyOrigins []string, appID string, verifyUser bool, credentialBytes []byte) error {
 
 	// Steps 4 through 6 in verifying the assertion data (https://www.w3.org/TR/webauthn/#verifying-assertion) are
 	// "assertive" steps, i.e "Let JSONtext be the result of running UTF-8 decode on the value of cData."
@@ -108,7 +108,7 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 
 	// Handle steps 7 through 10 of assertion by verifying stored data against the Collected Client Data
 	// returned by the authenticator
-	validError := p.Response.CollectedClientData.Verify(storedChallenge, AssertCeremony, relyingPartyOrigin)
+	validError := p.Response.CollectedClientData.Verify(storedChallenge, AssertCeremony, relyingPartyOrigins)
 	if validError != nil {
 		return validError
 	}

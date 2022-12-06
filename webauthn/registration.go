@@ -152,7 +152,7 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
 
-	invalidErr := parsedResponse.Verify(session.Challenge, shouldVerifyUser, webauthn.Config.RPID, webauthn.Config.RPOrigin)
+	invalidErr := parsedResponse.Verify(session.Challenge, shouldVerifyUser, webauthn.Config.RPID, webauthn.Config.RPOrigins)
 	if invalidErr != nil {
 		return nil, invalidErr
 	}
