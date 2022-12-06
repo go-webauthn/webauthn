@@ -23,7 +23,7 @@ type Credential struct {
 }
 
 // The PublicKeyCredential interface inherits from Credential, and contains
-//  the attributes that are returned to the caller when a new credential
+// the attributes that are returned to the caller when a new credential
 // is created, or a new assertion is requested.
 type ParsedCredential struct {
 	ID   string `cbor:"id"`
