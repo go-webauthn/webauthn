@@ -18,8 +18,10 @@ type WebAuthn struct {
 type Config struct {
 	RPDisplayName string
 	RPID          string
-	RPOrigins     []string
-	RPIcon        string
+	// Deprecated: Use RPOrigins instead
+	RPOrigin  string
+	RPOrigins []string
+	RPIcon    string
 	// Defaults for generating options
 	AttestationPreference  protocol.ConveyancePreference
 	AuthenticatorSelection protocol.AuthenticatorSelection
@@ -45,6 +47,10 @@ func (config *Config) validate() error {
 
 	if config.Timeout == 0 {
 		config.Timeout = defaultTimeout
+	}
+
+	if len(config.RPOrigin) > 0 {
+		config.RPOrigins = append(config.RPOrigins, config.RPOrigin)
 	}
 
 	if len(config.RPOrigins) == 0 {
