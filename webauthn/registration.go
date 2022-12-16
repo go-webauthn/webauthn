@@ -56,7 +56,7 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 
 	response := protocol.CredentialCreation{Response: creationOptions}
 	newSessionData := SessionData{
-		Challenge:        challenge,
+		Challenge:        challenge.String(),
 		UserID:           user.WebAuthnID(),
 		UserVerification: creationOptions.AuthenticatorSelection.UserVerification,
 	}

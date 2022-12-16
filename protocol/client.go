@@ -78,7 +78,6 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 	challenge := c.Challenge
 	if subtle.ConstantTimeCompare([]byte(storedChallenge), []byte(challenge)) != 1 {
 		err := ErrVerification.WithDetails("Error validating challenge")
-		fmt.Printf("%s %s\n", storedChallenge, challenge)
 		return err.WithInfo(fmt.Sprintf("Expected b Value: %#v\nReceived b: %#v\n", storedChallenge, challenge))
 	}
 

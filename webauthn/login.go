@@ -63,7 +63,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	sessionData := SessionData{
-		Challenge:            challenge,
+		Challenge:            challenge.String(),
 		UserID:               userID,
 		AllowedCredentialIDs: requestOptions.GetAllowedCredentialIDs(),
 		UserVerification:     requestOptions.UserVerification,

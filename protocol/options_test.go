@@ -7,7 +7,7 @@ import (
 
 func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T) {
 	type fields struct {
-		Challenge          string
+		Challenge          URLEncodedBase64
 		Timeout            int
 		RelyingPartyID     string
 		AllowedCredentials []CredentialDescriptor
@@ -22,7 +22,7 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 		{
 			"Correct Credential IDs",
 			fields{
-				Challenge: string([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
+				Challenge: URLEncodedBase64([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
 				Timeout:   60,
 				AllowedCredentials: []CredentialDescriptor{
 					{

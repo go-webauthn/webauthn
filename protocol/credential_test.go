@@ -149,7 +149,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 
 func TestParsedCredentialCreationData_Verify(t *testing.T) {
 	byteID, _ := base64.RawURLEncoding.DecodeString("6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g")
-	byteChallenge, _ := base64.RawURLEncoding.DecodeString("VzhHekZVOHBHamhvUmJXckxEbGFtQWZxX3k0UzFDWkcxVnVvZVJMQVJyRQ")
+	byteChallenge, _ := base64.RawURLEncoding.DecodeString("W8GzFU8pGjhoRbWrLDlamAfq_y4S1CZG1VuoeRLARrE")
 	byteAuthData, _ := base64.RawURLEncoding.DecodeString("dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAQOsa7QYSUFukFOLTmgeK6x2ktirNMgwy_6vIwwtegxI2flS1X-JAkZL5dsadg-9bEz2J7PnsbB0B08txvsyUSvKlAQIDJiABIVggLKF5xS0_BntttUIrm2Z2tgZ4uQDwllbdIfrrBMABCNciWCDHwin8Zdkr56iSIh0MrB5qZiEzYLQpEOREhMUkY6q4Vw")
 	byteRPIDHash, _ := base64.RawURLEncoding.DecodeString("dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvA")
 	byteCredentialPubKey, _ := base64.RawURLEncoding.DecodeString("pSJYIMfCKfxl2SvnqJIiHQysHmpmITNgtCkQ5ESExSRjqrhXAQIDJiABIVggLKF5xS0_BntttUIrm2Z2tgZ4uQDwllbdIfrrBMABCNc")
@@ -162,7 +162,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 		Raw                       CredentialCreationResponse
 	}
 	type args struct {
-		storedChallenge    string
+		storedChallenge    URLEncodedBase64
 		verifyUser         bool
 		relyingPartyID     string
 		relyingPartyOrigin string
@@ -221,7 +221,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				},
 			},
 			args: args{
-				storedChallenge:    string(byteChallenge),
+				storedChallenge:    URLEncodedBase64(byteChallenge),
 				verifyUser:         false,
 				relyingPartyID:     `webauthn.io`,
 				relyingPartyOrigin: `https://webauthn.io`,
@@ -236,7 +236,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				Response:                  tt.fields.Response,
 				Raw:                       tt.fields.Raw,
 			}
-			if err := pcc.Verify(tt.args.storedChallenge, tt.args.verifyUser, tt.args.relyingPartyID, tt.args.relyingPartyOrigin); (err != nil) != tt.wantErr {
+			if err := pcc.Verify(tt.args.storedChallenge.String(), tt.args.verifyUser, tt.args.relyingPartyID, tt.args.relyingPartyOrigin); (err != nil) != tt.wantErr {
 				t.Errorf("ParsedCredentialCreationData.Verify() error = %+v, wantErr %v", err, tt.wantErr)
 			}
 		})

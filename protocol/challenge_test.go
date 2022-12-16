@@ -2,23 +2,60 @@ package protocol
 
 import (
 	"encoding/base64"
+	"reflect"
 	"testing"
 )
 
 func TestCreateChallenge(t *testing.T) {
-	got, err := CreateChallenge()
+	tests := []struct {
+		name    string
+		want    URLEncodedBase64
+		wantErr bool
+	}{
+		{
+			"Successfull Challenge Create",
+			URLEncodedBase64{},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CreateChallenge()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CreateChallenge() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			tt.want = got
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("CreateChallenge() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestChallenge_String(t *testing.T) {
+	newChallenge, err := CreateChallenge()
 	if err != nil {
-		t.Errorf("CreateChallenge() error = %v, wantErr %v", err, false)
+		t.Errorf("CreateChallenge() error = %v", err)
 		return
 	}
-
-	decoded, err := base64.RawURLEncoding.DecodeString(got)
-	if err != nil {
-		t.Errorf("decode base64 encoded challenge, error = %v, wantErr %v", err, false)
-		return
+	wantChallenge := base64.RawURLEncoding.EncodeToString(newChallenge)
+	tests := []struct {
+		name string
+		c    URLEncodedBase64
+		want string
+	}{
+		{
+			"Successful String",
+			newChallenge,
+			wantChallenge,
+		},
 	}
-
-	if len(decoded) != ChallengeLength {
-		t.Errorf("invalid challenge length, len = %d, want = %d", len(decoded), ChallengeLength)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.c.String(); got != tt.want {
+				t.Errorf("Challenge.String() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
