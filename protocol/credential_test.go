@@ -165,7 +165,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 		storedChallenge    URLEncodedBase64
 		verifyUser         bool
 		relyingPartyID     string
-		relyingPartyOrigin string
+		relyingPartyOrigin []string
 	}
 	tests := []struct {
 		name    string
@@ -224,7 +224,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				storedChallenge:    URLEncodedBase64(byteChallenge),
 				verifyUser:         false,
 				relyingPartyID:     `webauthn.io`,
-				relyingPartyOrigin: `https://webauthn.io`,
+				relyingPartyOrigin: []string{`https://webauthn.io`},
 			},
 			wantErr: false,
 		},
