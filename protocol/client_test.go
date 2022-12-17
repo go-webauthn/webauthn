@@ -1,17 +1,16 @@
 package protocol
 
 import (
-	"encoding/base64"
 	"testing"
 )
 
-func setupCollectedClientData(challenge []byte, origin string) *CollectedClientData {
+func setupCollectedClientData(challenge URLEncodedBase64, origin string) *CollectedClientData {
 	ccd := &CollectedClientData{
-		Type:   CreateCeremony,
-		Origin: origin,
+		Type:      CreateCeremony,
+		Origin:    origin,
+		Challenge: challenge.String(),
 	}
 
-	ccd.Challenge = base64.RawURLEncoding.EncodeToString(challenge)
 	return ccd
 }
 
@@ -26,7 +25,7 @@ func TestVerifyCollectedClientData(t *testing.T) {
 
 	err = ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin})
 	if err != nil {
-		t.Fatalf("error verifying challenge: expected %#v got %#v", Challenge(ccd.Challenge), storedChallenge)
+		t.Fatalf("error verifying challenge: expected %#v got %#v", ccd.Challenge, storedChallenge)
 	}
 }
 
@@ -40,10 +39,10 @@ func TestVerifyCollectedClientDataIncorrectChallenge(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating challenge: %s", err)
 	}
-	storedChallenge := Challenge(bogusChallenge)
-	err = ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin})
+
+	err = ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin})
 	if err == nil {
-		t.Fatalf("error expected but not received. expected %#v got %#v", Challenge(ccd.Challenge), storedChallenge)
+		t.Fatalf("error expected but not received. expected %#v got %#v", ccd.Challenge, bogusChallenge)
 	}
 }
 

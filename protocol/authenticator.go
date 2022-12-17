@@ -99,6 +99,8 @@ const (
 	BLE AuthenticatorTransport = "ble"
 	// Internal the client should use an internal source like a TPM or SE
 	Internal AuthenticatorTransport = "internal"
+	// Hybrid indicates the respective authenticator can be contacted using a combination of (often separate) data-transport and proximity mechanisms. This supports, for example, authentication on a desktop computer using a smartphone.
+	Hybrid AuthenticatorTransport = "hybrid"
 )
 
 // A WebAuthn Relying Party may require user verification for some of its operations but not for others,
@@ -129,9 +131,11 @@ const (
 	// FlagUserVerified Bit 00000100 in the byte sequence. Tells us if user is verified
 	// by the authenticator using a biometric or PIN
 	FlagUserVerified // Referred to as UV
-	_                // Reserved
-	_                // Reserved
-	_                // Reserved
+	// FlagBackupEligible Bit 00001000 in the byte sequence. Tells us if a backup is eligible for device
+	FlagBackupEligible // Referred to as BE
+	// FlagBackupState Bit 00010000 in the byte sequence. Tells us if a backup state for device
+	FlagBackupState // Referred to as BS
+	_               // Reserved
 	// FlagAttestedCredentialData Bit 01000000 in the byte sequence. Indicates whether
 	// the authenticator added attested credential data.
 	FlagAttestedCredentialData // Referred to as AT
@@ -157,6 +161,16 @@ func (flag AuthenticatorFlags) HasAttestedCredentialData() bool {
 // HasExtensions returns if the ED flag was set
 func (flag AuthenticatorFlags) HasExtensions() bool {
 	return (flag & FlagHasExtensions) == FlagHasExtensions
+}
+
+// HasBackupEligible returns if the BE flag was set
+func (flag AuthenticatorFlags) HasBackupEligible() bool {
+	return (flag & FlagBackupEligible) == FlagBackupEligible
+}
+
+// HasBackupState returns if the BS flag was set
+func (flag AuthenticatorFlags) HasBackupState() bool {
+	return (flag & FlagBackupState) == FlagBackupState
 }
 
 // Unmarshal will take the raw Authenticator Data and marshalls it into AuthenticatorData for further validation.

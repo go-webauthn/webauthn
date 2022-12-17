@@ -17,8 +17,8 @@ Users who report bugs will at the discretion of the user be credited for the dis
 ## Process
 
 1. User privately reports a potential vulnerability.
-2. The [maintainers](https://github.com/orgs/go-webauthn/teams/maintainers) review the report and ascertain if additional information is required.
-3. The [maintainers](https://github.com/orgs/go-webauthn/teams/maintainers) reproduce the bug.
+2. The [maintainers](https://github.com/orgs/go-webauthn/people) review the report and ascertain if additional information is required.
+3. The [maintainers](https://github.com/orgs/go-webauthn/people) reproduce the bug.
 4. The bug is patched, and if possible the user reporting the bug is given access to a fixed version or git patch.
 5. The fix is confirmed to resolve the vulnerability.
 6. The fix is released.
