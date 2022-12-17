@@ -3,6 +3,7 @@ package protocol
 import (
 	"crypto/subtle"
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -49,11 +50,16 @@ const (
 	NotSupported TokenBindingStatus = "not-supported"
 )
 
+// Returns the origin per the HTML spec: (scheme)://(host)[:(port)]
+func FullyQualifiedOrigin(u *url.URL) string {
+	return fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+}
+
 // Handles steps 3 through 6 of verfying the registering client data of a
 // new credential and steps 7 through 10 of verifying an authentication assertion
 // See https://www.w3.org/TR/webauthn/#registering-a-new-credential
 // and https://www.w3.org/TR/webauthn/#verifying-assertion
-func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, relyingPartyOrigins []string) error {
+func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, rpOrigins []string) error {
 
 	// Registration Step 3. Verify that the value of C.type is webauthn.create.
 
@@ -77,9 +83,16 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 
 	// Registration Step 5 & Assertion Step 9. Verify that the value of C.origin matches
 	// the Relying Party's origin.
+	clientDataOrigin, err := url.Parse(c.Origin)
+	if err != nil {
+		return ErrParsingData.WithDetails("Error decoding clientData origin as URL")
+	}
+
+	fqOrigin := FullyQualifiedOrigin(clientDataOrigin)
+
 	found := false
-	for _, origin := range relyingPartyOrigins {
-		if strings.EqualFold(c.Origin, origin) {
+	for _, origin := range rpOrigins {
+		if strings.EqualFold(fqOrigin, origin) {
 			found = true
 			break
 		}
@@ -87,7 +100,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 
 	if !found {
 		err := ErrVerification.WithDetails("Error validating origin")
-		return err.WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", relyingPartyOrigins, c.Origin))
+		return err.WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", rpOrigins, fqOrigin))
 	}
 
 	// Registration Step 6 and Assertion Step 10. Verify that the value of C.tokenBinding.status
