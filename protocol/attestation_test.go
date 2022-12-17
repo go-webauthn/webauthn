@@ -83,7 +83,7 @@ func TestPackedAttestationVerification(t *testing.T) {
 var testAttestationOptions = []string{
 	// Direct Self Attestation with EC256 - MacOS
 	`{"publicKey": {
-		"challenge": "rWiex8xDOPfiCgyFu4BLW6vVOmXKgPwHrlMCgEs9SBA=",
+		"challenge": "rWiex8xDOPfiCgyFu4BLW6vVOmXKgPwHrlMCgEs9SBA",
 		"rp": {
 		"name": "http://localhost:9005",
 		"id": "localhost"
@@ -108,7 +108,7 @@ var testAttestationOptions = []string{
 	}}`,
 	// Direct Attestation with EC256
 	`{"publicKey": {
-		"challenge": "+Ri5NZTzJ8b6mvW3TVScLotEoALfgBa2Bn4YSaIObHc=",
+		"challenge": "-Ri5NZTzJ8b6mvW3TVScLotEoALfgBa2Bn4YSaIObHc",
 		"rp": {
 		"name": "https://webauthn.io",
 		"id": "webauthn.io"
@@ -134,7 +134,7 @@ var testAttestationOptions = []string{
 	// None Attestation with EC256
 	`{
 		"publicKey": {
-		  "challenge": "sVt4ScceMzqFSnfAq8hgLzblvo3fa4/aFVEcIESHIJ0=",
+		  "challenge": "sVt4ScceMzqFSnfAq8hgLzblvo3fa4_aFVEcIESHIJ0",
 		  "rp": {
 			"name": "https://webauthn.io",
 			"id": "webauthn.io"

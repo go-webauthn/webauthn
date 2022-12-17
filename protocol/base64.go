@@ -11,6 +11,10 @@ import (
 // decoded into a byte slice.
 type URLEncodedBase64 []byte
 
+func (e URLEncodedBase64) String() string {
+	return base64.RawURLEncoding.EncodeToString(e)
+}
+
 // UnmarshalJSON base64 decodes a URL-encoded value, storing the result in the
 // provided byte slice.
 func (e *URLEncodedBase64) UnmarshalJSON(data []byte) error {

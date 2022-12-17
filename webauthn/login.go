@@ -2,7 +2,6 @@ package webauthn
 
 import (
 	"bytes"
-	"encoding/base64"
 	"net/http"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -64,7 +63,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	sessionData := SessionData{
-		Challenge:            base64.RawURLEncoding.EncodeToString(challenge),
+		Challenge:            challenge.String(),
 		UserID:               userID,
 		AllowedCredentialIDs: requestOptions.GetAllowedCredentialIDs(),
 		UserVerification:     requestOptions.UserVerification,
