@@ -7,7 +7,7 @@ We take security very seriously. We ask everyone follows the
 than immediately making vulnerabilities public.
 
 If you believe you have discovered a vulnerability please privately contact one of the 
-[maintainers](https://github.com/orgs/go-webauthn/teams/maintainers) via the contact methods on their GitHub profile. In
+[maintainers](https://github.com/orgs/go-webauthn/teams/maintainers) via the contact methods on their GitHub profile. Alternatively you may [Report a Security Vulnerability](https://github.com/go-webauthn/webauthn/security/advisories/new) privately using the [GitHub Security Advisory Reporting beta](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability). In
 the future we will publish an official email for this purpose.
 
 ## Credit
