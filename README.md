@@ -10,7 +10,7 @@ procedures outlined by the document.
 
 ## Fork
 
-This library is a hard fork of [github.com/duo-labs/webauthn] and is tentatively the natural successor to that library.
+This library is a hard fork of [github.com/duo-labs/webauthn] and is the natural successor to that library.
 
 See the [migration](MIGRATION.md) guide for more information about how to migrate and the differences between the
 libraries.
