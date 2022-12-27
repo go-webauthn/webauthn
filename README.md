@@ -48,7 +48,7 @@ func main() {
     web, err = webauthn.New(&webauthn.Config{
         RPDisplayName: "Go Webauthn", // Display Name for your site
         RPID: "go-webauthn.local", // Generally the FQDN for your site
-        RPOrigin: "https://login.go-webauthn.local", // The origin URL for WebAuthn requests
+        RPOrigins: []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
         RPIcon: "https://go-webauthn.local/logo.png", // Optional icon URL for your site
     })
     if err != nil {
@@ -130,8 +130,8 @@ func beginRegistration() {
     // Updating the AuthenticatorSelection options. 
     // See the struct declarations for values
     authSelect := protocol.AuthenticatorSelection{        
-		AuthenticatorAttachment: protocol.AuthenticatorAttachment("platform"),
-		RequireResidentKey: protocol.ResidentKeyUnrequired(),
+        AuthenticatorAttachment: protocol.AuthenticatorAttachment("platform"),
+        RequireResidentKey: protocol.ResidentKeyUnrequired(),
         UserVerification: protocol.VerificationRequired
     }
 
