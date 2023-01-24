@@ -52,6 +52,10 @@ const (
 
 // FullyQualifiedOrigin returns the origin per the HTML spec: (scheme)://(host)[:(port)]
 func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
+	if strings.HasPrefix(rawOrigin, "android:apk-key-hash:") {
+		return rawOrigin, nil
+	}
+
 	var origin *url.URL
 
 	if origin, err = url.Parse(rawOrigin); err != nil {
