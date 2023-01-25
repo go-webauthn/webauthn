@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/google/uuid"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
 func downloadBytes(url string, c http.Client) ([]byte, error) {
@@ -28,7 +29,7 @@ func getEndpoints(c http.Client) ([]string, error) {
 		return nil, err
 	}
 
-	req, err := c.Post("https://mds3.certinfra.fidoalliance.org/getEndpoints", "application/json", bytes.NewBuffer(jsonReq))
+	req, err := c.Post("https://mds3.fido.tools/getEndpoints", "application/json", bytes.NewBuffer(jsonReq))
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func getTestMetadata(s string, c http.Client) (MetadataStatement, error) {
 		return statement, err
 	}
 
-	req, err := c.Post("https://mds3.certinfra.fidoalliance.org/getTestMetadata", "application/json", bytes.NewBuffer(jsonReq))
+	req, err := c.Post("https://mds3.fido.tools/getTestMetadata", "application/json", bytes.NewBuffer(jsonReq))
 	if err != nil {
 		return statement, err
 	}
