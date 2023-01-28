@@ -91,7 +91,7 @@ var testAttestationOptions = []string{
 		"user": {
 			"name": "self",
 			"displayName": "self",
-			"id": "2iEAAAAAAAAAAA=="
+			"id": "2iEAAAAAAAAAAA"
 		},
 		"pubKeyCredParams": [
 			{
@@ -116,7 +116,7 @@ var testAttestationOptions = []string{
 		"user": {
 			"name": "flort",
 			"displayName": "flort",
-			"id": "1DMAAAAAAAAAAA=="
+			"id": "1DMAAAAAAAAAAA"
 		},
 		"pubKeyCredParams": [
 			{
@@ -142,7 +142,7 @@ var testAttestationOptions = []string{
 		  "user": {
 			"name": "testuser1",
 			"displayName": "testuser1",
-			"id": "1zMAAAAAAAAAAA=="
+			"id": "1zMAAAAAAAAAAA"
 		  },
 		  "pubKeyCredParams": [
 			{
