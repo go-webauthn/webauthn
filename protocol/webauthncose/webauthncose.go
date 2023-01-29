@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/pem"
+	"fmt"
 	"hash"
 	"math/big"
 
@@ -183,8 +184,12 @@ func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 }
 
 // ParseFIDOPublicKey is only used when the appID extension is configured by the assertion response.
-func ParseFIDOPublicKey(keyBytes []byte) (EC2PublicKeyData, error) {
+func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 	x, y := elliptic.Unmarshal(elliptic.P256(), keyBytes)
+
+	if x == nil || y == nil {
+		return data, fmt.Errorf("elliptic unmarshall returned a nil value")
+	}
 
 	return EC2PublicKeyData{
 		PublicKeyData: PublicKeyData{
@@ -288,13 +293,13 @@ func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
 
 func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
 
-	switch key := key.(type) {
+	switch k := key.(type) {
 	case OKPPublicKeyData:
-		return key.Verify(data, sig)
+		return k.Verify(data, sig)
 	case EC2PublicKeyData:
-		return key.Verify(data, sig)
+		return k.Verify(data, sig)
 	case RSAPublicKeyData:
-		return key.Verify(data, sig)
+		return k.Verify(data, sig)
 	default:
 		return false, ErrUnsupportedKey
 	}
@@ -305,11 +310,11 @@ func DisplayPublicKey(cpk []byte) string {
 	if err != nil {
 		return "Cannot display key"
 	}
-	switch parsedKey := parsedKey.(type) {
+	switch k := parsedKey.(type) {
 	case RSAPublicKeyData:
 		rKey := &rsa.PublicKey{
-			N: big.NewInt(0).SetBytes(parsedKey.Modulus),
-			E: int(uint(parsedKey.Exponent[2]) | uint(parsedKey.Exponent[1])<<8 | uint(parsedKey.Exponent[0])<<16),
+			N: big.NewInt(0).SetBytes(k.Modulus),
+			E: int(uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16),
 		}
 		data, err := x509.MarshalPKIXPublicKey(rKey)
 		if err != nil {
@@ -322,7 +327,7 @@ func DisplayPublicKey(cpk []byte) string {
 		return string(pemBytes)
 	case EC2PublicKeyData:
 		var curve elliptic.Curve
-		switch COSEAlgorithmIdentifier(parsedKey.Algorithm) {
+		switch COSEAlgorithmIdentifier(k.Algorithm) {
 		case AlgES256:
 			curve = elliptic.P256()
 		case AlgES384:
@@ -334,8 +339,8 @@ func DisplayPublicKey(cpk []byte) string {
 		}
 		eKey := &ecdsa.PublicKey{
 			Curve: curve,
-			X:     big.NewInt(0).SetBytes(parsedKey.XCoord),
-			Y:     big.NewInt(0).SetBytes(parsedKey.YCoord),
+			X:     big.NewInt(0).SetBytes(k.XCoord),
+			Y:     big.NewInt(0).SetBytes(k.YCoord),
 		}
 		data, err := x509.MarshalPKIXPublicKey(eKey)
 		if err != nil {
@@ -347,11 +352,11 @@ func DisplayPublicKey(cpk []byte) string {
 		})
 		return string(pemBytes)
 	case OKPPublicKeyData:
-		if len(parsedKey.XCoord) != ed25519.PublicKeySize {
+		if len(k.XCoord) != ed25519.PublicKeySize {
 			return "Cannot display key"
 		}
 		var oKey ed25519.PublicKey = make([]byte, ed25519.PublicKeySize)
-		copy(oKey, parsedKey.XCoord)
+		copy(oKey, k.XCoord)
 		data, err := marshalEd25519PublicKey(oKey)
 		if err != nil {
 			return "Cannot display key"
