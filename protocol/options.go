@@ -12,7 +12,7 @@ type CredentialAssertion struct {
 	Response PublicKeyCredentialRequestOptions `json:"publicKey"`
 }
 
-// In order to create a Credential via create(), the caller specifies a few parameters in a CredentialCreationOptions object.
+// In order to create a Credential via create(), the caller specifies a few parameters in a PublicKeyCredentialCreationOptions object.
 // See §5.4. Options for Credential Creation https://www.w3.org/TR/webauthn/#dictionary-makecredentialoptions
 type PublicKeyCredentialCreationOptions struct {
 	Challenge              URLEncodedBase64         `json:"challenge"`

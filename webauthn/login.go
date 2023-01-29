@@ -7,8 +7,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
-// BEGIN REGISTRATION
-// These objects help us creat the CredentialCreationOptions
+// BEGIN LOGIN
+// These objects help us create the PublicKeyCredentialRequestOptions
 // that will be passed to the authenticator via the user client
 
 // LoginOption is used to provide parameters that modify the default Credential Assertion Payload that is sent to the user.
