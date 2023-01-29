@@ -58,11 +58,17 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 
 	var origin *url.URL
 
-	if origin, err = url.Parse(rawOrigin); err != nil {
+	if origin, err = url.ParseRequestURI(rawOrigin); err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s://%s", origin.Scheme, origin.Host), nil
+	if origin.OmitHost || origin.Host == "" {
+		return "", fmt.Errorf("url '%s' does not have a host", rawOrigin)
+	}
+
+	origin.Path, origin.RawPath, origin.RawQuery, origin.User = "", "", "", nil
+
+	return origin.String(), nil
 }
 
 // Handles steps 3 through 6 of verfying the registering client data of a
