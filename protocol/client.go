@@ -62,7 +62,7 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 		return "", err
 	}
 
-	if origin.OmitHost || origin.Host == "" {
+	if origin.Host == "" {
 		return "", fmt.Errorf("url '%s' does not have a host", rawOrigin)
 	}
 
