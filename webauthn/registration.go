@@ -9,7 +9,7 @@ import (
 )
 
 // BEGIN REGISTRATION
-// These objects help us creat the CredentialCreationOptions
+// These objects help us create the CredentialCreationOptions
 // that will be passed to the authenticator via the user client
 
 type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
