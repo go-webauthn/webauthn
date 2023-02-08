@@ -9,12 +9,12 @@ import (
 func TestCreateChallenge(t *testing.T) {
 	tests := []struct {
 		name    string
-		want    URLEncodedBase64
+		want    Challenge
 		wantErr bool
 	}{
 		{
 			"Successfull Challenge Create",
-			URLEncodedBase64{},
+			Challenge{},
 			false,
 		},
 	}
@@ -42,7 +42,7 @@ func TestChallenge_String(t *testing.T) {
 	wantChallenge := base64.RawURLEncoding.EncodeToString(newChallenge)
 	tests := []struct {
 		name string
-		c    URLEncodedBase64
+		c    Challenge
 		want string
 	}{
 		{

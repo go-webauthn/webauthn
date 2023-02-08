@@ -162,7 +162,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 		Raw                       CredentialCreationResponse
 	}
 	type args struct {
-		storedChallenge    URLEncodedBase64
+		storedChallenge    Challenge
 		verifyUser         bool
 		relyingPartyID     string
 		relyingPartyOrigin []string
@@ -221,7 +221,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				},
 			},
 			args: args{
-				storedChallenge:    URLEncodedBase64(byteChallenge),
+				storedChallenge:    byteChallenge,
 				verifyUser:         false,
 				relyingPartyID:     `webauthn.io`,
 				relyingPartyOrigin: []string{`https://webauthn.io`},
