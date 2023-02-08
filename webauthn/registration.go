@@ -3,6 +3,7 @@ package webauthn
 import (
 	"bytes"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -12,6 +13,7 @@ import (
 // These objects help us create the CredentialCreationOptions
 // that will be passed to the authenticator via the user client
 
+// RegistrationOption describes functions which are used to customize a registration request.
 type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
 
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator.
@@ -46,7 +48,6 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		User:                   webAuthnUser,
 		Parameters:             credentialParams,
 		AuthenticatorSelection: webauthn.Config.AuthenticatorSelection,
-		Timeout:                webauthn.Config.Timeout,
 		Attestation:            webauthn.Config.AttestationPreference,
 	}
 
@@ -54,11 +55,23 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		setter(&creationOptions)
 	}
 
+	if creationOptions.Timeout == 0 {
+		switch {
+		case webauthn.Config.Timeout != 0:
+			creationOptions.Timeout = webauthn.Config.Timeout
+		case creationOptions.AuthenticatorSelection.UserVerification == protocol.VerificationDiscouraged:
+			creationOptions.Timeout = int(webauthn.Config.Timeouts.RegistrationUVD.Milliseconds())
+		default:
+			creationOptions.Timeout = int(webauthn.Config.Timeouts.Registration.Milliseconds())
+		}
+	}
+
 	response := protocol.CredentialCreation{Response: creationOptions}
 	newSessionData := SessionData{
 		Challenge:        challenge.String(),
 		UserID:           user.WebAuthnID(),
 		UserVerification: creationOptions.AuthenticatorSelection.UserVerification,
+		Expires:          time.Now().Add(time.Millisecond * time.Duration(creationOptions.Timeout)),
 	}
 
 	if err != nil {
@@ -68,35 +81,39 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 	return &response, &newSessionData, nil
 }
 
-// Provide non-default parameters regarding the authenticator to select.
+// WithAuthenticatorSelection is a RegistrationOption which allows provision of non-default parameters regarding the
+// authenticator to select.
 func WithAuthenticatorSelection(authenticatorSelection protocol.AuthenticatorSelection) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		cco.AuthenticatorSelection = authenticatorSelection
 	}
 }
 
-// Provide non-default parameters regarding credentials to exclude from retrieval.
+// WithExclusions is a RegistrationOption which allows provision of non-default parameters regarding credentials to
+// exclude from retrieval.
 func WithExclusions(excludeList []protocol.CredentialDescriptor) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		cco.CredentialExcludeList = excludeList
 	}
 }
 
-// Provide non-default parameters regarding whether the authenticator should attest to the credential.
+// WithConveyancePreference is a RegistrationOption which allows provision of non-default parameters regarding whether
+// the authenticator should attest to the credential.
 func WithConveyancePreference(preference protocol.ConveyancePreference) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		cco.Attestation = preference
 	}
 }
 
-// Provide extension parameter to registration options
+// WithExtensions is a RegistrationOption which allows provision of non-default extensions.
 func WithExtensions(extension protocol.AuthenticationExtensions) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		cco.Extensions = extension
 	}
 }
 
-// Provide credential parameters to registration options
+// WithCredentialParameters is a RegistrationOption which allows provision of non-default parameters regarding the
+// protocol credential parameters.
 func WithCredentialParameters(credentialParams []protocol.CredentialParameter) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		cco.Parameters = credentialParams
@@ -132,8 +149,8 @@ func WithResidentKeyRequirement(requirement protocol.ResidentKeyRequirement) Reg
 	}
 }
 
-// Take the response from the authenticator and client and verify the credential against the user's credentials and
-// session data.
+// FinishRegistration takes the response from the authenticator and client and verify the credential against the user's
+// credentials and session data.
 func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, response *http.Request) (*Credential, error) {
 	parsedResponse, err := protocol.ParseCredentialCreationResponse(response)
 	if err != nil {
@@ -147,6 +164,10 @@ func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, res
 func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parsedResponse *protocol.ParsedCredentialCreationData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
+	}
+
+	if !session.Expires.IsZero() && session.Expires.Before(time.Now()) {
+		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired

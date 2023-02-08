@@ -3,6 +3,7 @@ package webauthn
 import (
 	"bytes"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -60,6 +61,17 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 
 	for _, setter := range opts {
 		setter(&requestOptions)
+	}
+
+	if requestOptions.Timeout == 0 {
+		switch {
+		case webauthn.Config.Timeout != 0:
+			requestOptions.Timeout = webauthn.Config.Timeout
+		case requestOptions.UserVerification == protocol.VerificationDiscouraged:
+			requestOptions.Timeout = int(webauthn.Config.Timeouts.LoginUVD.Milliseconds())
+		default:
+			requestOptions.Timeout = int(webauthn.Config.Timeouts.Login.Milliseconds())
+		}
 	}
 
 	sessionData := SessionData{
@@ -127,6 +139,10 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
+	}
+
+	if !session.Expires.IsZero() && session.Expires.Before(time.Now()) {
+		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
 	return webauthn.validateLogin(user, session, parsedResponse)

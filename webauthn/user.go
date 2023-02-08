@@ -1,20 +1,6 @@
 package webauthn
 
-// User is built to interface with the Relying Party's User entry and
-// elaborate the fields and methods needed for WebAuthn
-type User interface {
-	// User ID according to the Relying Party
-	WebAuthnID() []byte
-	// User Name according to the Relying Party
-	WebAuthnName() string
-	// Display Name of the user
-	WebAuthnDisplayName() string
-	// User's icon url
-	WebAuthnIcon() string
-	// Credentials owned by the user
-	WebAuthnCredentials() []Credential
-}
-
+// TODO: move this to a _test.go file.
 type defaultUser struct {
 	id []byte
 }
