@@ -2,6 +2,7 @@ package webauthn
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -17,7 +18,11 @@ import (
 type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
 
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator.
-func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOption) (*protocol.CredentialCreation, *SessionData, error) {
+func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOption) (response *protocol.CredentialCreation, sessionData *SessionData, err error) {
+	if err = webauthn.Config.validate(); err != nil {
+		return nil, nil, fmt.Errorf("error occurred validating the configuration: %w", err)
+	}
+
 	challenge, err := protocol.CreateChallenge()
 	if err != nil {
 		return nil, nil, err
@@ -57,28 +62,24 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 
 	if creationOptions.Timeout == 0 {
 		switch {
-		case webauthn.Config.Timeout != 0:
-			creationOptions.Timeout = webauthn.Config.Timeout
 		case creationOptions.AuthenticatorSelection.UserVerification == protocol.VerificationDiscouraged:
-			creationOptions.Timeout = int(webauthn.Config.Timeouts.RegistrationUVD.Milliseconds())
+			creationOptions.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
 		default:
-			creationOptions.Timeout = int(webauthn.Config.Timeouts.Registration.Milliseconds())
+			creationOptions.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
 		}
 	}
 
-	response := protocol.CredentialCreation{Response: creationOptions}
-	newSessionData := SessionData{
+	sessionData = &SessionData{
 		Challenge:        challenge.String(),
 		UserID:           user.WebAuthnID(),
 		UserVerification: creationOptions.AuthenticatorSelection.UserVerification,
-		Expires:          time.Now().Add(time.Millisecond * time.Duration(creationOptions.Timeout)),
 	}
 
-	if err != nil {
-		return nil, nil, protocol.ErrParsingData.WithDetails("Error packing session data")
+	if webauthn.Config.Timeouts.Registration.Enforce {
+		sessionData.Expires = time.Now().Add(time.Millisecond * time.Duration(creationOptions.Timeout))
 	}
 
-	return &response, &newSessionData, nil
+	return &protocol.CredentialCreation{Response: creationOptions}, sessionData, nil
 }
 
 // WithAuthenticatorSelection is a RegistrationOption which allows provision of non-default parameters regarding the
@@ -140,6 +141,7 @@ func WithAppIdExcludeExtension(appid string) RegistrationOption {
 func WithResidentKeyRequirement(requirement protocol.ResidentKeyRequirement) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		cco.AuthenticatorSelection.ResidentKey = requirement
+
 		switch requirement {
 		case protocol.ResidentKeyRequirementRequired:
 			cco.AuthenticatorSelection.RequireResidentKey = protocol.ResidentKeyRequired()

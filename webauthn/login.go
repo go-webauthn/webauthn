@@ -2,6 +2,7 @@ package webauthn
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -45,7 +46,11 @@ func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol
 	return webauthn.beginLogin(nil, nil, opts...)
 }
 
-func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (response *protocol.CredentialAssertion, sessionData *SessionData, err error) {
+	if err = webauthn.Config.validate(); err != nil {
+		return nil, nil, fmt.Errorf("error occurred validating the configuration: %w", err)
+	}
+
 	challenge, err := protocol.CreateChallenge()
 	if err != nil {
 		return nil, nil, err
@@ -65,16 +70,14 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 
 	if requestOptions.Timeout == 0 {
 		switch {
-		case webauthn.Config.Timeout != 0:
-			requestOptions.Timeout = webauthn.Config.Timeout
 		case requestOptions.UserVerification == protocol.VerificationDiscouraged:
-			requestOptions.Timeout = int(webauthn.Config.Timeouts.LoginUVD.Milliseconds())
+			requestOptions.Timeout = int(webauthn.Config.Timeouts.Login.TimeoutUVD.Milliseconds())
 		default:
-			requestOptions.Timeout = int(webauthn.Config.Timeouts.Login.Milliseconds())
+			requestOptions.Timeout = int(webauthn.Config.Timeouts.Login.Timeout.Milliseconds())
 		}
 	}
 
-	sessionData := SessionData{
+	sessionData = &SessionData{
 		Challenge:            challenge.String(),
 		UserID:               userID,
 		AllowedCredentialIDs: requestOptions.GetAllowedCredentialIDs(),
@@ -82,9 +85,11 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		Extensions:           requestOptions.Extensions,
 	}
 
-	response := protocol.CredentialAssertion{Response: requestOptions}
+	if webauthn.Config.Timeouts.Login.Enforce {
+		sessionData.Expires = time.Now().Add(time.Millisecond * time.Duration(requestOptions.Timeout))
+	}
 
-	return &response, &sessionData, nil
+	return &protocol.CredentialAssertion{Response: requestOptions}, sessionData, nil
 }
 
 // Updates the allowed credential list with Credential Descripiptors, discussed in §5.10.3
@@ -174,27 +179,34 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 	// NON-NORMATIVE Prior Step: Verify that the allowCredentials for the session are owned by the user provided
 	userCredentials := user.WebAuthnCredentials()
+
 	var credentialFound bool
+
 	if len(session.AllowedCredentialIDs) > 0 {
 		var credentialsOwned bool
+
 		for _, allowedCredentialID := range session.AllowedCredentialIDs {
 			for _, userCredential := range userCredentials {
 				if bytes.Equal(userCredential.ID, allowedCredentialID) {
 					credentialsOwned = true
 					break
 				}
+
 				credentialsOwned = false
 			}
 		}
+
 		if !credentialsOwned {
 			return nil, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
 		}
+
 		for _, allowedCredentialID := range session.AllowedCredentialIDs {
 			if bytes.Equal(parsedResponse.RawID, allowedCredentialID) {
 				credentialFound = true
 				break
 			}
 		}
+
 		if !credentialFound {
 			return nil, protocol.ErrBadRequest.WithDetails("User does not own the credential returned")
 		}
@@ -215,12 +227,15 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	// Step 3. Using credential’s id attribute (or the corresponding rawId, if base64url encoding is inappropriate
 	// for your use case), look up the corresponding credential public key.
 	var loginCredential Credential
+
 	for _, cred := range userCredentials {
 		if bytes.Equal(cred.ID, parsedResponse.RawID) {
 			loginCredential = cred
 			credentialFound = true
+
 			break
 		}
+
 		credentialFound = false
 	}
 

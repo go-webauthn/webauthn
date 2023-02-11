@@ -13,6 +13,7 @@ func New(config *Config) (*WebAuthn, error) {
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf("Configuration error: %+v", err)
 	}
+
 	return &WebAuthn{
 		config,
 	}, nil
@@ -59,25 +60,36 @@ type Config struct {
 	//
 	// Deprecated: Use RPOrigins instead.
 	RPOrigin string
+
+	validated bool
 }
 
 // TimeoutsConfig represents the WebAuthn timeouts configuration.
 type TimeoutsConfig struct {
-	// LoginUVD is the timeout for logins when the UserVerificationRequirement is set to discouraged.
-	LoginUVD time.Duration
+	Login        TimeoutConfig
+	Registration TimeoutConfig
+}
 
-	// Login is the timeout for logins when the UserVerificationRequirement is set to anything other than discouraged.
-	Login time.Duration
+// TimeoutConfig represents the WebAuthn timeouts configuration for either registration or login..
+type TimeoutConfig struct {
+	// Enforce the timeouts at the Relying Party / Server. This means if enabled and the user takes too long that even
+	// if the browser does not enforce the timeout the Relying Party / Server will.
+	Enforce bool
 
-	// RegistrationUVD is the timeout for registrations when the UserVerificationRequirement is set to discouraged.
-	RegistrationUVD time.Duration
+	// Timeout is the timeout for logins/registrations when the UserVerificationRequirement is set to anything other
+	// than discouraged.
+	Timeout time.Duration
 
-	// Registration is the timeout for registrations when the UserVerificationRequirement is set to anything other than discouraged.
-	Registration time.Duration
+	// TimeoutUVD is the timeout for logins/registrations when the UserVerificationRequirement is set to discouraged.
+	TimeoutUVD time.Duration
 }
 
 // Validate that the config flags in Config are properly set
 func (config *Config) validate() error {
+	if config.validated {
+		return nil
+	}
+
 	if len(config.RPDisplayName) == 0 {
 		return fmt.Errorf("Missing RPDisplayName")
 	}
@@ -91,20 +103,28 @@ func (config *Config) validate() error {
 		return fmt.Errorf("RPID not valid URI: %+v", err)
 	}
 
-	if config.Timeouts.Login.Milliseconds() == 0 {
-		config.Timeouts.Login = defaultTimeoutUV
+	defaultTimeoutConfig := defaultTimeout
+	defaultTimeoutUVDConfig := defaultTimeoutUVD
+
+	if config.Timeout != 0 {
+		defaultTimeoutConfig = time.Millisecond * time.Duration(config.Timeout)
+		defaultTimeoutUVDConfig = defaultTimeoutConfig
 	}
 
-	if config.Timeouts.LoginUVD.Milliseconds() == 0 {
-		config.Timeouts.LoginUVD = defaultTimeoutUVD
+	if config.Timeouts.Login.Timeout.Milliseconds() == 0 {
+		config.Timeouts.Login.Timeout = defaultTimeoutConfig
 	}
 
-	if config.Timeouts.Registration.Milliseconds() == 0 {
-		config.Timeouts.Registration = defaultTimeoutUV
+	if config.Timeouts.Login.TimeoutUVD.Milliseconds() == 0 {
+		config.Timeouts.Login.TimeoutUVD = defaultTimeoutUVDConfig
 	}
 
-	if config.Timeouts.RegistrationUVD.Milliseconds() == 0 {
-		config.Timeouts.RegistrationUVD = defaultTimeoutUVD
+	if config.Timeouts.Registration.Timeout.Milliseconds() == 0 {
+		config.Timeouts.Registration.Timeout = defaultTimeoutConfig
+	}
+
+	if config.Timeouts.Registration.TimeoutUVD.Milliseconds() == 0 {
+		config.Timeouts.Registration.TimeoutUVD = defaultTimeoutUVDConfig
 	}
 
 	if len(config.RPOrigin) > 0 {
@@ -123,6 +143,8 @@ func (config *Config) validate() error {
 	if config.AuthenticatorSelection.UserVerification == "" {
 		config.AuthenticatorSelection.UserVerification = protocol.VerificationPreferred
 	}
+
+	config.validated = true
 
 	return nil
 }
