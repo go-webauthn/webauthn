@@ -66,7 +66,7 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, [
 	ecdaaKeyID, ecdaaKeyPresent := att.AttStatement["ecdaaKeyId"].([]byte)
 	if ecdaaKeyPresent {
 		// Handle ECDAA Attestation steps for the x509 Certificate
-		return handleECDAAAttesation(sig, clientDataHash, ecdaaKeyID)
+		return handleECDAAAttestation(sig, clientDataHash, ecdaaKeyID)
 	}
 
 	// Step 4. If neither x5c nor ecdaaKeyId is present, self attestation is in use.
@@ -195,7 +195,7 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	return string(metadata.BasicFull), x5c, nil
 }
 
-func handleECDAAAttesation(signature, clientDataHash, ecdaaKeyID []byte) (string, []interface{}, error) {
+func handleECDAAAttestation(signature, clientDataHash, ecdaaKeyID []byte) (string, []interface{}, error) {
 	return "Packed (ECDAA)", nil, ErrNotSpecImplemented
 }
 
