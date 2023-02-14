@@ -39,8 +39,9 @@ func MakeNewCredential(c *protocol.ParsedCredentialCreationData) (*Credential, e
 		AttestationType: c.Response.AttestationObject.Format,
 		Transport:       c.Response.Transports,
 		Authenticator: Authenticator{
-			AAGUID:    c.Response.AttestationObject.AuthData.AttData.AAGUID,
-			SignCount: c.Response.AttestationObject.AuthData.Counter,
+			AAGUID:     c.Response.AttestationObject.AuthData.AttData.AAGUID,
+			SignCount:  c.Response.AttestationObject.AuthData.Counter,
+			Attachment: c.AuthenticatorAttachment,
 		},
 	}
 

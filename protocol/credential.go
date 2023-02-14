@@ -32,14 +32,16 @@ type ParsedCredential struct {
 
 type PublicKeyCredential struct {
 	Credential
-	RawID                  URLEncodedBase64                      `json:"rawId"`
-	ClientExtensionResults AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	RawID                   URLEncodedBase64                      `json:"rawId"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	AuthenticatorAttachment string                                `json:"authenticatorAttachment,omitempty"`
 }
 
 type ParsedPublicKeyCredential struct {
 	ParsedCredential
-	RawID                  []byte                                `json:"rawId"`
-	ClientExtensionResults AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	RawID                   []byte                                `json:"rawId"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	AuthenticatorAttachment AuthenticatorAttachment               `json:"authenticatorAttachment,omitempty"`
 }
 
 type CredentialCreationResponse struct {
@@ -97,9 +99,18 @@ func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialC
 		}
 	}
 
+	var attachment AuthenticatorAttachment
+
+	switch ccr.AuthenticatorAttachment {
+	case "platform":
+		attachment = Platform
+	case "cross-platform":
+		attachment = CrossPlatform
+	}
+
 	return &ParsedCredentialCreationData{
 		ParsedPublicKeyCredential{
-			ParsedCredential{ccr.ID, ccr.Type}, ccr.RawID, ccr.ClientExtensionResults,
+			ParsedCredential{ccr.ID, ccr.Type}, ccr.RawID, ccr.ClientExtensionResults, attachment,
 		},
 		*response,
 		ccr,
