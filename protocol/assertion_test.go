@@ -45,6 +45,9 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 						Type: "public-key",
 					},
 					RawID: byteID,
+					ClientExtensionResults: map[string]interface{}{
+						"appID": "example.com",
+					},
 				},
 				Response: ParsedAssertionResponse{
 					CollectedClientData: CollectedClientData{
@@ -73,6 +76,9 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 							ID:   "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
 						},
 						RawID: byteID,
+						ClientExtensionResults: map[string]interface{}{
+							"appID": "example.com",
+						},
 					},
 					AssertionResponse: AuthenticatorAssertionResponse{
 						AuthenticatorResponse: AuthenticatorResponse{
@@ -198,6 +204,7 @@ var testAssertionResponses = map[string]string{
 	`success`: `{
 		"id":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
 		"rawId":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
+		"clientExtensionResults":{"appID":"example.com"},
 		"type":"public-key",
 		"response":{
 			"authenticatorData":"dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBFXJJiGa3OAAI1vMYKZIsLJfHwVQMANwCOw-atj9C0vhWpfWU-whzNjeQS21Lpxfdk_G-omAtffWztpGoErlNOfuXWRqm9Uj9ANJck1p6lAQIDJiABIVggKAhfsdHcBIc0KPgAcRyAIK_-Vi-nCXHkRHPNaCMBZ-4iWCBxB8fGYQSBONi9uvq0gv95dGWlhJrBwCsj_a4LJQKVHQ",
