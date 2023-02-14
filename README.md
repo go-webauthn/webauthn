@@ -20,8 +20,8 @@ It is distributed under the same 3-Clause BSD license as the original fork, with
 
 ## Status
 
-This library is still version 0, as per semver rules there may be breaking changes without warning. While we strive to
-avoid such changes and strive to notify users they may be unavoidable.
+This library is still version 0, as per Semantic Versioning 2.0 rules there may be breaking changes without warning. 
+While we strive to avoid such changes and strive to notify users they may be unavoidable.
 
 ## Quickstart
 

@@ -65,7 +65,7 @@ func (k *OKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	return ed25519.Verify(key, data, sig), nil
 }
 
-// Verify Elliptic Curce Public Key Signature
+// Verify Elliptic Curve Public Key Signature
 func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	var curve elliptic.Curve
 	switch COSEAlgorithmIdentifier(k.Algorithm) {

@@ -39,20 +39,20 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte) (strin
 	// used to generate the attestation signature.
 	alg, present := att.AttStatement["alg"].(int64)
 	if !present {
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving alg value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
 	}
 
 	// Get the sig value - A byte string containing the attestation signature.
 	sig, present := att.AttStatement["sig"].([]byte)
 	if !present {
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving sig value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
 	// If x5c is not present, return an error
 	x5c, x509present := att.AttStatement["x5c"].([]interface{})
 	if !x509present {
 		// Handle Basic Attestation steps for the x509 Certificate
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving x5c value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
 	}
 
 	// §8.4.2. Verify that sig is a valid signature over the concatenation of authenticatorData and clientDataHash
@@ -209,7 +209,7 @@ type KM_KEY_ORIGIN int
 const (
 	KM_ORIGIN_GENERATED = iota /* Generated in keymaster.  Should not exist outside the TEE. */
 	KM_ORIGIN_DERIVED          /* Derived inside keymaster.  Likely exists off-device. */
-	KM_ORIGIN_IMPORTED         /* Imported into keymaster.  Existed as cleartext in Android. */
+	KM_ORIGIN_IMPORTED         /* Imported into keymaster.  Existed as clear text in Android. */
 	KM_ORIGIN_UNKNOWN          /* Keymaster did not record origin.  This value can only be seen on
 	 * keys in a keymaster0 implementation.  The keymaster0 adapter uses
 	 * this value to document the fact that it is unkown whether the key

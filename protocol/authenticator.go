@@ -183,7 +183,7 @@ func (flag AuthenticatorFlags) HasBackupState() bool {
 	return (flag & FlagBackupState) == FlagBackupState
 }
 
-// Unmarshal will take the raw Authenticator Data and marshalls it into AuthenticatorData for further validation.
+// Unmarshal will take the raw Authenticator Data and marshals it into AuthenticatorData for further validation.
 // The authenticator data has a compact but extensible encoding. This is desired since authenticators can be
 // devices with limited capabilities and low power requirements, with much simpler software stacks than the client platform.
 // The authenticator data structure is a byte array of 37 bytes or more, and is laid out in this table:

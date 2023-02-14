@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/metadata"
-
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
@@ -45,13 +44,13 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, [
 
 	alg, present := att.AttStatement["alg"].(int64)
 	if !present {
-		return packedAttestationKey, nil, ErrAttestationFormat.WithDetails("Error retreiving alg value")
+		return packedAttestationKey, nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
 	}
 
 	// Get the sig value - A byte string containing the attestation signature.
 	sig, present := att.AttStatement["sig"].([]byte)
 	if !present {
-		return packedAttestationKey, nil, ErrAttestationFormat.WithDetails("Error retreiving sig value")
+		return packedAttestationKey, nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
 	// Step 2. If x5c is present, this indicates that the attestation type is not ECDAA.
@@ -236,7 +235,7 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signatur
 
 	valid, err := webauthncose.VerifySignature(key, verificationData, signature)
 	if !valid && err == nil {
-		return "", nil, ErrInvalidAttestation.WithDetails("Unabled to verify signature")
+		return "", nil, ErrInvalidAttestation.WithDetails("Unable to verify signature")
 	}
 
 	return string(metadata.BasicSurrogate), nil, err

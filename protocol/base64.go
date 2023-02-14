@@ -7,7 +7,7 @@ import (
 )
 
 // URLEncodedBase64 represents a byte slice holding URL-encoded base64 data.
-// When fields of this type are unmarshaled from JSON, the data is base64
+// When fields of this type are unmarshalled from JSON, the data is base64
 // decoded into a byte slice.
 type URLEncodedBase64 []byte
 

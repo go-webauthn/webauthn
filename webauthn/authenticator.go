@@ -23,7 +23,7 @@ type Authenticator struct {
 	Attachment protocol.AuthenticatorAttachment
 }
 
-// Allow for easy marhsalling of authenticator options that are provided to the user
+// SelectAuthenticator allow for easy marshaling of authenticator options that are provided to the user
 func SelectAuthenticator(att string, rrk *bool, uv string) protocol.AuthenticatorSelection {
 	return protocol.AuthenticatorSelection{
 		AuthenticatorAttachment: protocol.AuthenticatorAttachment(att),

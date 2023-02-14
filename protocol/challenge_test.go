@@ -13,7 +13,7 @@ func TestCreateChallenge(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			"Successfull Challenge Create",
+			"Successful Challenge Creation",
 			URLEncodedBase64{},
 			false,
 		},
