@@ -171,19 +171,6 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 	}
 }
 
-var testAssertionOptions = map[string]string{
-	// None Attestation - MacOS TouchID
-	`success`: `{
-		"id":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
-		"rawId":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
-		"type":"public-key",
-		"response":{
-			"attestationObject":"o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVi7dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBFXJJiFa3OAAI1vMYKZIsLJfHwVQMANwCOw-atj9C0vhWpfWU-whzNjeQS21Lpxfdk_G-omAtffWztpGoErlNOfuXWRqm9Uj9ANJck1p6lAQIDJiABIVggKAhfsdHcBIc0KPgAcRyAIK_-Vi-nCXHkRHPNaCMBZ-4iWCBxB8fGYQSBONi9uvq0gv95dGWlhJrBwCsj_a4LJQKVHQ",
-			"clientDataJSON":"eyJjaGFsbGVuZ2UiOiJmeWV1dUdQOXp1ZWoyRkdqZXZpNzlienFNS1d4aTRQWUlhXzV3ajI2MVcwIiwib3JpZ2luIjoiaHR0cHM6Ly93ZWJhdXRobi5pbyIsInR5cGUiOiJ3ZWJhdXRobi5jcmVhdGUifQ"}
-		}
-	`,
-}
-
 var testAssertionResponses = map[string]string{
 	// None Attestation - MacOS TouchID
 	`success`: `{
