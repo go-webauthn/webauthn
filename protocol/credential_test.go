@@ -44,6 +44,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
 						"appid": true,
 					},
+					AuthenticatorAttachment: Platform,
 				},
 				Response: ParsedAttestationResponse{
 					CollectedClientData: CollectedClientData{
@@ -77,6 +78,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
 							"appid": true,
 						},
+						AuthenticatorAttachment: "platform",
 					},
 					AttestationResponse: AuthenticatorAttestationResponse{
 						AuthenticatorResponse: AuthenticatorResponse{
@@ -137,6 +139,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
 							"appid": true,
 						},
+						AuthenticatorAttachment: "not-valid",
 					},
 					AttestationResponse: AuthenticatorAttestationResponse{
 						AuthenticatorResponse: AuthenticatorResponse{
@@ -164,6 +167,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
 						"appid": true,
 					},
+					AuthenticatorAttachment: CrossPlatform,
 				},
 				Response: ParsedAttestationResponse{
 					CollectedClientData: CollectedClientData{
@@ -197,6 +201,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
 							"appid": true,
 						},
+						AuthenticatorAttachment: "cross-platform",
 					},
 					AttestationResponse: AuthenticatorAttestationResponse{
 						AuthenticatorResponse: AuthenticatorResponse{
@@ -353,6 +358,7 @@ var testCredentialRequestResponses = map[string]string{
 	"id":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 	"rawId":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 	"type":"public-key",
+	"authenticatorAttachment":"platform",
 	"clientExtensionResults":{
 		"appid":true
 	},
@@ -368,6 +374,7 @@ var testCredentialRequestResponses = map[string]string{
 	"id":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 	"rawId":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 	"type":"public-key",
+	"authenticatorAttachment":"not-valid",
 	"transports":["usb","nfc","fake"],
 	"clientExtensionResults":{
 		"appid":true
@@ -383,6 +390,7 @@ var testCredentialRequestResponses = map[string]string{
 	"id":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 	"rawId":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 	"type":"public-key",
+	"authenticatorAttachment":"cross-platform",
 	"transports":["usb","nfc","fake"],
 	"clientExtensionResults":{
 		"appid":true

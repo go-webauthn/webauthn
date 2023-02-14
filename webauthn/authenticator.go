@@ -1,7 +1,7 @@
 package webauthn
 
 import (
-	p "github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/protocol"
 )
 
 type Authenticator struct {
@@ -18,14 +18,17 @@ type Authenticator struct {
 	// this information into their risk scoring. Whether the Relying Party updates the stored signature
 	// counter value in this case, or not, or fails the authentication ceremony or not, is Relying Party-specific.
 	CloneWarning bool
+
+	// Attachment is the authenticatorAttachment value returned by the request.
+	Attachment protocol.AuthenticatorAttachment
 }
 
 // Allow for easy marhsalling of authenticator options that are provided to the user
-func SelectAuthenticator(att string, rrk *bool, uv string) p.AuthenticatorSelection {
-	return p.AuthenticatorSelection{
-		AuthenticatorAttachment: p.AuthenticatorAttachment(att),
+func SelectAuthenticator(att string, rrk *bool, uv string) protocol.AuthenticatorSelection {
+	return protocol.AuthenticatorSelection{
+		AuthenticatorAttachment: protocol.AuthenticatorAttachment(att),
 		RequireResidentKey:      rrk,
-		UserVerification:        p.UserVerificationRequirement(uv),
+		UserVerification:        protocol.UserVerificationRequirement(uv),
 	}
 }
 
@@ -34,14 +37,14 @@ func SelectAuthenticator(att string, rrk *bool, uv string) p.AuthenticatorSelect
 // is nonzero or the value stored in conjunction with credential’s id attribute is nonzero, then
 // run the following sub-step:
 //
-//  If the signature counter value authData.signCount is
+//	If the signature counter value authData.signCount is
 //
-//  → Greater than the signature counter value stored in conjunction with credential’s id attribute.
-//  Update the stored signature counter value, associated with credential’s id attribute, to be the value of
-//  authData.signCount.
+//	→ Greater than the signature counter value stored in conjunction with credential’s id attribute.
+//	Update the stored signature counter value, associated with credential’s id attribute, to be the value of
+//	authData.signCount.
 //
-//  → Less than or equal to the signature counter value stored in conjunction with credential’s id attribute.
-//  This is a signal that the authenticator may be cloned, see CloneWarning above for more information.
+//	→ Less than or equal to the signature counter value stored in conjunction with credential’s id attribute.
+//	This is a signal that the authenticator may be cloned, see CloneWarning above for more information.
 func (a *Authenticator) UpdateCounter(authDataCount uint32) {
 	if authDataCount <= a.SignCount && (authDataCount != 0 || a.SignCount != 0) {
 		a.CloneWarning = true

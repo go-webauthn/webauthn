@@ -78,9 +78,18 @@ func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAs
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with bad type")
 	}
 
+	var attachment AuthenticatorAttachment
+
+	switch car.AuthenticatorAttachment {
+	case "platform":
+		attachment = Platform
+	case "cross-platform":
+		attachment = CrossPlatform
+	}
+
 	par = &ParsedCredentialAssertionData{
 		ParsedPublicKeyCredential{
-			ParsedCredential{car.ID, car.Type}, car.RawID, car.ClientExtensionResults,
+			ParsedCredential{car.ID, car.Type}, car.RawID, car.ClientExtensionResults, attachment,
 		},
 		ParsedAssertionResponse{
 			Signature:  car.AssertionResponse.Signature,
