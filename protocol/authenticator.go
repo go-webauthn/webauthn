@@ -145,11 +145,21 @@ const (
 
 // UserPresent returns if the UP flag was set
 func (flag AuthenticatorFlags) UserPresent() bool {
-	return (flag & FlagUserPresent) == FlagUserPresent
+	return flag.HasUserPresent()
 }
 
 // UserVerified returns if the UV flag was set
 func (flag AuthenticatorFlags) UserVerified() bool {
+	return flag.HasUserVerified()
+}
+
+// HasUserPresent returns if the UP flag was set
+func (flag AuthenticatorFlags) HasUserPresent() bool {
+	return (flag & FlagUserPresent) == FlagUserPresent
+}
+
+// HasUserVerified returns if the UV flag was set
+func (flag AuthenticatorFlags) HasUserVerified() bool {
 	return (flag & FlagUserVerified) == FlagUserVerified
 }
 
