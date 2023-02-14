@@ -41,7 +41,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte) (string, []
 	x5c, x509present := att.AttStatement["x5c"].([]interface{})
 	if !x509present {
 		// Handle Basic Attestation steps for the x509 Certificate
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving x5c value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
 	}
 
 	credCertBytes, valid := x5c[0].([]byte)

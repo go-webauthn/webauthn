@@ -115,7 +115,7 @@ const (
 	//
 	// This value indicates that the Relying Party is not interested in authenticator attestation. For example, in order
 	// to potentially avoid having to obtain user consent to relay identifying information to the Relying Party, or to
-	// save a roundtrip to an Attestation CA or Anonymization CA.
+	// save a round trip to an Attestation CA or Anonymization CA.
 	//
 	// This is the default value.
 	//

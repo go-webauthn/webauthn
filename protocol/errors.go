@@ -12,7 +12,7 @@ type Error struct {
 var (
 	ErrBadRequest = &Error{
 		Type:    "invalid_request",
-		Details: "Error reading the requst data",
+		Details: "Error reading the request data",
 	}
 	ErrChallengeMismatch = &Error{
 		Type:    "challenge_mismatch",

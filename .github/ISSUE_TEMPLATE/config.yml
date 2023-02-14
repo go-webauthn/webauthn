@@ -6,5 +6,5 @@ contact_links:
     about: Read the documentation
   - name: Question/Other
     url: https://github.com/go-webauthn/webauthn/discussions/new
-    about: Discuss other questsions etc.
+    about: Discuss other questions etc.
 ...

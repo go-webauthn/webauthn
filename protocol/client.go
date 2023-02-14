@@ -71,7 +71,7 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 	return origin.String(), nil
 }
 
-// Handles steps 3 through 6 of verfying the registering client data of a
+// Verify handles steps 3 through 6 of verifying the registering client data of a
 // new credential and steps 7 through 10 of verifying an authentication assertion
 // See https://www.w3.org/TR/webauthn/#registering-a-new-credential
 // and https://www.w3.org/TR/webauthn/#verifying-assertion

@@ -14,10 +14,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
-	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
 func TestTPMAttestationVerificationSuccess(t *testing.T) {
@@ -77,7 +78,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		{
 			"TPM Negative Test AttStatement Missing Ver",
 			AttestationObject{},
-			"Error retreiving ver value",
+			"Error retrieving ver value",
 		},
 		{
 			"TPM Negative Test AttStatement Ver not 2.0",
@@ -87,7 +88,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		{
 			"TPM Negative Test AttStatement Alg not present",
 			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0"}},
-			"Error retreiving alg value",
+			"Error retrieving alg value",
 		},
 		{
 			"TPM Negative Test AttStatement x5c not present",
@@ -102,17 +103,17 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		{
 			"TPM Negative Test AttStatement sig not present",
 			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}}},
-			"Error retreiving sig value",
+			"Error retrieving sig value",
 		},
 		{
 			"TPM Negative Test AttStatement certInfo not present",
 			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "sig": []byte{}}},
-			"Error retreiving certInfo value",
+			"Error retrieving certInfo value",
 		},
 		{
 			"TPM Negative Test AttStatement pubArea not present",
 			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "sig": []byte{}, "certInfo": []byte{}}},
-			"Error retreiving pubArea value",
+			"Error retrieving pubArea value",
 		},
 		{
 			"TPM Negative Test pubArea not TPMT_PUBLIC",

@@ -9,9 +9,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/go-tpm/tpm2"
+
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
-	"github.com/google/go-tpm/tpm2"
 )
 
 var tpmAttestationKey = "tpm"
@@ -29,7 +30,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	ver, present := att.AttStatement["ver"].(string)
 	if !present {
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving ver value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving ver value")
 	}
 
 	if ver != "2.0" {
@@ -38,7 +39,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	alg, present := att.AttStatement["alg"].(int64)
 	if !present {
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving alg value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
 	}
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
@@ -56,17 +57,17 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	sigBytes, present := att.AttStatement["sig"].([]byte)
 	if !present {
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving sig value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
 	certInfoBytes, present := att.AttStatement["certInfo"].([]byte)
 	if !present {
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving certInfo value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving certInfo value")
 	}
 
 	pubAreaBytes, present := att.AttStatement["pubArea"].([]byte)
 	if !present {
-		return "", nil, ErrAttestationFormat.WithDetails("Error retreiving pubArea value")
+		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving pubArea value")
 	}
 
 	// Verify that the public key specified by the parameters and unique fields of pubArea

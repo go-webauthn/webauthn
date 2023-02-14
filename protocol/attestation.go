@@ -185,7 +185,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 				}
 
 				if !hasBasicFull {
-					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authentictor that does not support full attestation")
+					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
 				}
 			}
 		}
