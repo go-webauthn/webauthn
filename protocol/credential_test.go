@@ -3,7 +3,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/base64"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"testing"
@@ -12,7 +12,7 @@ import (
 )
 
 func TestParseCredentialCreationResponse(t *testing.T) {
-	reqBody := ioutil.NopCloser(bytes.NewReader([]byte(testCredentialRequestBody)))
+	reqBody := io.NopCloser(bytes.NewReader([]byte(testCredentialRequestBody)))
 	httpReq := &http.Request{Body: reqBody}
 	type args struct {
 		response *http.Request
@@ -47,7 +47,6 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 						"appid": true,
 					},
 				},
-				Transports: []AuthenticatorTransport{USB, NFC, "fake"},
 				Response: ParsedAttestationResponse{
 					CollectedClientData: CollectedClientData{
 						Type:      CeremonyType("webauthn.create"),
@@ -68,6 +67,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 							},
 						},
 					},
+					Transports: []AuthenticatorTransport{USB, NFC, "fake"},
 				},
 				Raw: CredentialCreationResponse{
 					PublicKeyCredential: PublicKeyCredential{
@@ -103,8 +103,8 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			if !reflect.DeepEqual(got.ClientExtensionResults, tt.want.ClientExtensionResults) {
 				t.Errorf("Extensions = %v \n want: %v", got.ClientExtensionResults, tt.want.ClientExtensionResults)
 			}
-			if !reflect.DeepEqual(got.Transports, tt.want.Transports) {
-				t.Errorf("Transports = %v \n want: %v", got.Transports, tt.want.Transports)
+			if !reflect.DeepEqual(got.Response.Transports, tt.want.Response.Transports) {
+				t.Errorf("Transports = %v \n want: %v", got.Response.Transports, tt.want.Response.Transports)
 			}
 			if !reflect.DeepEqual(got.ID, tt.want.ID) {
 				t.Errorf("ID = %v \n want: %v", got, tt.want)
