@@ -51,6 +51,7 @@ func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAs
 	if response == nil || response.Body == nil {
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
+
 	return ParseCredentialRequestResponseBody(response.Body)
 }
 

@@ -4,17 +4,15 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
-	"net/http"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 func TestParseCredentialRequestResponse(t *testing.T) {
-	reqBody := io.NopCloser(bytes.NewReader([]byte(testAssertionResponses["success"])))
-	httpReq := &http.Request{Body: reqBody}
-
 	byteID, _ := base64.RawURLEncoding.DecodeString("AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng")
 	byteAAGUID, _ := base64.RawURLEncoding.DecodeString("rc4AAjW8xgpkiwsl8fBVAw")
 	byteRPIDHash, _ := base64.RawURLEncoding.DecodeString("dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvA")
@@ -25,20 +23,20 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 	byteClientDataJSON, _ := base64.RawURLEncoding.DecodeString("eyJjaGFsbGVuZ2UiOiJFNFBUY0lIX0hmWDFwQzZTaWdrMVNDOU5BbGdlenROMDQzOXZpOHpfYzlrIiwibmV3X2tleXNfbWF5X2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgiLCJvcmlnaW4iOiJodHRwczovL3dlYmF1dGhuLmlvIiwidHlwZSI6IndlYmF1dGhuLmdldCJ9")
 
 	type args struct {
-		response *http.Request
+		responseName string
 	}
-	tests := []struct {
-		name    string
-		args    args
-		want    *ParsedCredentialAssertionData
-		wantErr bool
+	testCases := []struct {
+		name      string
+		args      args
+		expected  *ParsedCredentialAssertionData
+		errString string
 	}{
 		{
-			name: "Successfully Parse Credential Assertion",
+			name: "ShouldParseCredentialAssertion",
 			args: args{
-				httpReq,
+				"success",
 			},
-			want: &ParsedCredentialAssertionData{
+			expected: &ParsedCredentialAssertionData{
 				ParsedPublicKeyCredential: ParsedPublicKeyCredential{
 					ParsedCredential: ParsedCredential{
 						ID:   "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
@@ -90,62 +88,49 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 					},
 				},
 			},
-			wantErr: false,
+			errString: "",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseCredentialRequestResponse(tt.args.response)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseCredentialRequestResponse() error = %v, wantErr %v", err, tt.wantErr)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := io.NopCloser(bytes.NewReader([]byte(testAssertionResponses[tc.args.responseName])))
+
+			actual, err := ParseCredentialRequestResponseBody(body)
+			if tc.errString != "" {
+				assert.EqualError(t, err, tc.errString)
+
 				return
 			}
-			if !reflect.DeepEqual(got.ClientExtensionResults, tt.want.ClientExtensionResults) {
-				t.Errorf("ClientExtensionResults = %v \n want: %v", got, tt.want)
-			}
-			if !reflect.DeepEqual(got.ID, tt.want.ID) {
-				t.Errorf("ID = %v \n want: %v", got.ID, tt.want.ID)
-			}
-			if !reflect.DeepEqual(got.ParsedCredential, tt.want.ParsedCredential) {
-				t.Errorf("ParsedCredential = %v \n want: %v", got, tt.want)
-			}
-			if !reflect.DeepEqual(got.ParsedPublicKeyCredential, tt.want.ParsedPublicKeyCredential) {
-				t.Errorf("ParsedPublicKeyCredential = %v \n want: %v", got.ParsedPublicKeyCredential.ClientExtensionResults, tt.want.ParsedPublicKeyCredential.ClientExtensionResults)
-			}
-			if !reflect.DeepEqual(got.Raw, tt.want.Raw) {
-				t.Errorf("Raw = %+v \n want: %+v", got.Raw, tt.want.Raw)
-			}
-			if !reflect.DeepEqual(got.RawID, tt.want.RawID) {
-				t.Errorf("RawID = %v \n want: %v", got, tt.want)
-			}
-			if !reflect.DeepEqual(got.Response, tt.want.Response) {
-				var pkInterfaceMismatch bool
-				if !reflect.DeepEqual(got.Response.CollectedClientData, tt.want.Response.CollectedClientData) {
-					t.Errorf("Collected Client Data = %v \n want: %v", got.Response.CollectedClientData, tt.want.Response.CollectedClientData)
-				}
-				if !reflect.DeepEqual(got.Response.Signature, tt.want.Response.Signature) {
-					t.Errorf("Signature = %v \n want: %v", got.Response.Signature, tt.want.Response.Signature)
-				}
-				if !reflect.DeepEqual(got.Response.AuthenticatorData.AttData.CredentialPublicKey, tt.want.Response.AuthenticatorData.AttData.CredentialPublicKey) {
-					// Unmarshall CredentialPublicKey
-					var pkWant interface{}
-					keyBytesWant := tt.want.Response.AuthenticatorData.AttData.CredentialPublicKey
-					webauthncbor.Unmarshal(keyBytesWant, &pkWant)
-					var pkGot interface{}
-					keyBytesGot := got.Response.AuthenticatorData.AttData.CredentialPublicKey
-					webauthncbor.Unmarshal(keyBytesGot, &pkGot)
-					if !reflect.DeepEqual(pkGot, pkWant) {
-						t.Errorf("Response = %+v \n want: %+v", pkGot, pkWant)
-					} else {
-						pkInterfaceMismatch = true
-					}
-				}
-				if pkInterfaceMismatch {
-					return
-				} else {
-					t.Errorf("Response = %+v \n want: %+v", got.Response, tt.want.Response)
-				}
-			}
+
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected.ClientExtensionResults, actual.ClientExtensionResults)
+			assert.Equal(t, tc.expected.ID, actual.ID)
+			assert.Equal(t, tc.expected.ParsedCredential, actual.ParsedCredential)
+			assert.Equal(t, tc.expected.ParsedPublicKeyCredential, actual.ParsedPublicKeyCredential)
+			assert.Equal(t, tc.expected.Raw, actual.Raw)
+			assert.Equal(t, tc.expected.RawID, actual.RawID)
+
+			assert.Equal(t, tc.expected.Response.CollectedClientData, actual.Response.CollectedClientData)
+
+			var (
+				pkExpected, pkActual interface{}
+			)
+
+			keyBytesExpected := tc.expected.Response.AuthenticatorData.AttData.CredentialPublicKey
+
+			assert.NoError(t, webauthncbor.Unmarshal(keyBytesExpected, &pkExpected))
+
+			keyBytesActual := actual.Response.AuthenticatorData.AttData.CredentialPublicKey
+
+			assert.NoError(t, webauthncbor.Unmarshal(keyBytesActual, &pkActual))
+
+			assert.Equal(t, pkExpected, pkActual)
+			assert.NotEqual(t, nil, pkExpected)
+			assert.NotEqual(t, nil, pkActual)
 		})
 	}
 }
