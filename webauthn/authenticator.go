@@ -1,7 +1,7 @@
 package webauthn
 
 import (
-	p "github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/protocol"
 )
 
 type Authenticator struct {
@@ -18,14 +18,17 @@ type Authenticator struct {
 	// this information into their risk scoring. Whether the Relying Party updates the stored signature
 	// counter value in this case, or not, or fails the authentication ceremony or not, is Relying Party-specific.
 	CloneWarning bool
+
+	// Attachment is the authenticatorAttachment value returned by the request.
+	Attachment protocol.AuthenticatorAttachment
 }
 
 // Allow for easy marhsalling of authenticator options that are provided to the user
-func SelectAuthenticator(att string, rrk *bool, uv string) p.AuthenticatorSelection {
-	return p.AuthenticatorSelection{
-		AuthenticatorAttachment: p.AuthenticatorAttachment(att),
+func SelectAuthenticator(att string, rrk *bool, uv string) protocol.AuthenticatorSelection {
+	return protocol.AuthenticatorSelection{
+		AuthenticatorAttachment: protocol.AuthenticatorAttachment(att),
 		RequireResidentKey:      rrk,
-		UserVerification:        p.UserVerificationRequirement(uv),
+		UserVerification:        protocol.UserVerificationRequirement(uv),
 	}
 }
 

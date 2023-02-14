@@ -31,7 +31,7 @@ var (
 		Details: "Error validating the authenticator response",
 	}
 	ErrAttestation = &Error{
-		Type:    "attesation_error",
+		Type:    "attestation_error",
 		Details: "Error validating the attestation data provided",
 	}
 	ErrInvalidAttestation = &Error{

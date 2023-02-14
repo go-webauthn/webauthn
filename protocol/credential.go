@@ -32,14 +32,16 @@ type ParsedCredential struct {
 
 type PublicKeyCredential struct {
 	Credential
-	RawID                  URLEncodedBase64                      `json:"rawId"`
-	ClientExtensionResults AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	RawID                   URLEncodedBase64                      `json:"rawId"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	AuthenticatorAttachment string                                `json:"authenticatorAttachment,omitempty"`
 }
 
 type ParsedPublicKeyCredential struct {
 	ParsedCredential
-	RawID                  []byte                                `json:"rawId"`
-	ClientExtensionResults AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	RawID                   []byte                                `json:"rawId"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	AuthenticatorAttachment AuthenticatorAttachment               `json:"authenticatorAttachment,omitempty"`
 }
 
 type CredentialCreationResponse struct {
@@ -50,9 +52,8 @@ type CredentialCreationResponse struct {
 
 type ParsedCredentialCreationData struct {
 	ParsedPublicKeyCredential
-	Response   ParsedAttestationResponse
-	Transports []AuthenticatorTransport
-	Raw        CredentialCreationResponse
+	Response ParsedAttestationResponse
+	Raw      CredentialCreationResponse
 }
 
 func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialCreationData, error) {
@@ -62,10 +63,10 @@ func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialC
 	return ParseCredentialCreationResponseBody(response.Body)
 }
 
-func ParseCredentialCreationResponseBody(body io.Reader) (*ParsedCredentialCreationData, error) {
+func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialCreationData, err error) {
 	var ccr CredentialCreationResponse
-	err := json.NewDecoder(body).Decode(&ccr)
-	if err != nil {
+
+	if err = json.NewDecoder(body).Decode(&ccr); err != nil {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo(err.Error())
 	}
 
@@ -86,26 +87,41 @@ func ParseCredentialCreationResponseBody(body io.Reader) (*ParsedCredentialCreat
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Type not public-key")
 	}
 
-	var pcc ParsedCredentialCreationData
-	pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
-	pcc.Raw = ccr
-
-	for _, t := range ccr.Transports {
-		pcc.Transports = append(pcc.Transports, AuthenticatorTransport(t))
-	}
-
-	parsedAttestationResponse, err := ccr.AttestationResponse.Parse()
+	response, err := ccr.AttestationResponse.Parse()
 	if err != nil {
 		return nil, ErrParsingData.WithDetails("Error parsing attestation response")
 	}
 
-	pcc.Response = *parsedAttestationResponse
+	// TODO: Remove this as it's a backwards compatability layer.
+	if len(response.Transports) == 0 && len(ccr.Transports) != 0 {
+		for _, t := range ccr.Transports {
+			response.Transports = append(response.Transports, AuthenticatorTransport(t))
+		}
+	}
 
-	return &pcc, nil
+	var attachment AuthenticatorAttachment
+
+	switch ccr.AuthenticatorAttachment {
+	case "platform":
+		attachment = Platform
+	case "cross-platform":
+		attachment = CrossPlatform
+	}
+
+	return &ParsedCredentialCreationData{
+		ParsedPublicKeyCredential{
+			ParsedCredential{ccr.ID, ccr.Type}, ccr.RawID, ccr.ClientExtensionResults, attachment,
+		},
+		*response,
+		ccr,
+	}, nil
 }
 
-// Verifies the Client and Attestation data as laid out by §7.1. Registering a new credential
-// https://www.w3.org/TR/webauthn/#registering-a-new-credential
+// Verify the Client and Attestation data.
+//
+// From: §7.1. Registering a New Credential
+//
+// See: https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential
 func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, relyingPartyID string, relyingPartyOrigins []string) error {
 
 	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data
@@ -122,7 +138,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 	// attestation statement attStmt. is handled while
 
 	// We do the above step while parsing and decoding the CredentialCreationResponse
-	// Handle steps 9 through 14 - This verifies the attestaion object and
+	// Handle steps 9 through 14 - This verifies the attestation object and
 	verifyError = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash[:], verifyUser)
 	if verifyError != nil {
 		return verifyError
@@ -131,7 +147,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 	// Step 15. If validation is successful, obtain a list of acceptable trust anchors (attestation root
 	// certificates or ECDAA-Issuer public keys) for that attestation type and attestation statement
 	// format fmt, from a trusted source or from policy. For example, the FIDO Metadata Service provides
-	// one way to obtain such information, using the aaguid in the attestedCredentialData in authData.
+	// one way to obtain such information, using the AAGUID in the attestedCredentialData in authData.
 	// [https://fidoalliance.org/specs/fido-v2.0-id-20180227/fido-metadata-service-v2.0-id-20180227.html]
 
 	// TODO: There are no valid AAGUIDs yet or trust sources supported. We could implement policy for the RP in
