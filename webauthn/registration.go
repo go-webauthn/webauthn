@@ -58,6 +58,7 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 	newSessionData := SessionData{
 		Challenge:        challenge.String(),
 		UserID:           user.WebAuthnID(),
+		UserDisplayName:  user.WebAuthnDisplayName(),
 		UserVerification: creationOptions.AuthenticatorSelection.UserVerification,
 	}
 
