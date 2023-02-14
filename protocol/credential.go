@@ -98,16 +98,11 @@ func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialC
 	}
 
 	return &ParsedCredentialCreationData{
-		ParsedPublicKeyCredential: ParsedPublicKeyCredential{
-			ParsedCredential: ParsedCredential{
-				ID:   ccr.ID,
-				Type: ccr.Type,
-			},
-			RawID:                  ccr.RawID,
-			ClientExtensionResults: ccr.ClientExtensionResults,
+		ParsedPublicKeyCredential{
+			ParsedCredential{ccr.ID, ccr.Type}, ccr.RawID, ccr.ClientExtensionResults,
 		},
-		Response: *response,
-		Raw:      ccr,
+		*response,
+		ccr,
 	}, nil
 }
 

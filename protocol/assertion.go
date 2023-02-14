@@ -58,10 +58,10 @@ func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAs
 // or makes the assertion verification steps easier to complete. This takes an io.Reader that contains
 // the assertion response data in a raw, mostly base64 encoded format, and parses the data into
 // manageable structures
-func ParseCredentialRequestResponseBody(body io.Reader) (*ParsedCredentialAssertionData, error) {
+func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAssertionData, err error) {
 	var car CredentialAssertionResponse
-	err := json.NewDecoder(body).Decode(&car)
-	if err != nil {
+
+	if err = json.NewDecoder(body).Decode(&car); err != nil {
 		return nil, ErrBadRequest.WithDetails("Parse error for Assertion")
 	}
 
@@ -69,32 +69,36 @@ func ParseCredentialRequestResponseBody(body io.Reader) (*ParsedCredentialAssert
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID missing")
 	}
 
-	_, err = base64.RawURLEncoding.DecodeString(car.ID)
-	if err != nil {
+	if _, err = base64.RawURLEncoding.DecodeString(car.ID); err != nil {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID not base64url encoded")
 	}
+
 	if car.Type != "public-key" {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with bad type")
 	}
-	var par ParsedCredentialAssertionData
-	par.ID, par.RawID, par.Type, par.ClientExtensionResults = car.ID, car.RawID, car.Type, car.ClientExtensionResults
-	par.Raw = car
 
-	par.Response.Signature = car.AssertionResponse.Signature
-	par.Response.UserHandle = car.AssertionResponse.UserHandle
+	par = &ParsedCredentialAssertionData{
+		ParsedPublicKeyCredential{
+			ParsedCredential{car.ID, car.Type}, car.RawID, car.ClientExtensionResults,
+		},
+		ParsedAssertionResponse{
+			Signature:  car.AssertionResponse.Signature,
+			UserHandle: car.AssertionResponse.UserHandle,
+		},
+		car,
+	}
 
 	// Step 5. Let JSONtext be the result of running UTF-8 decode on the value of cData.
 	// We don't call it cData but this is Step 5 in the spec.
-	err = json.Unmarshal(car.AssertionResponse.ClientDataJSON, &par.Response.CollectedClientData)
-	if err != nil {
+	if err = json.Unmarshal(car.AssertionResponse.ClientDataJSON, &par.Response.CollectedClientData); err != nil {
 		return nil, err
 	}
 
-	err = par.Response.AuthenticatorData.Unmarshal(car.AssertionResponse.AuthenticatorData)
-	if err != nil {
+	if err = par.Response.AuthenticatorData.Unmarshal(car.AssertionResponse.AuthenticatorData); err != nil {
 		return nil, ErrParsingData.WithDetails("Error unmarshalling auth data")
 	}
-	return &par, nil
+
+	return par, nil
 }
 
 // Follow the remaining steps outlined in §7.2 Verifying an authentication assertion
