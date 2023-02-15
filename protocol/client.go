@@ -10,7 +10,8 @@ import (
 // CollectedClientData represents the contextual bindings of both the WebAuthn Relying Party
 // and the client. It is a key-value mapping whose keys are strings. Values can be any type
 // that has a valid encoding in JSON. Its structure is defined by the following Web IDL.
-// https://www.w3.org/TR/webauthn/#sec-client-data
+//
+// Specification: §5.8.1. Client Data Used in WebAuthn Signatures (https://www.w3.org/TR/webauthn/#dictdef-collectedclientdata)
 type CollectedClientData struct {
 	// Type the string "webauthn.create" when creating new credentials,
 	// and "webauthn.get" when getting an assertion from an existing credential. The
@@ -20,7 +21,8 @@ type CollectedClientData struct {
 	Challenge    string        `json:"challenge"`
 	Origin       string        `json:"origin"`
 	TokenBinding *TokenBinding `json:"tokenBinding,omitempty"`
-	// Chromium (Chrome) returns a hint sometimes about how to handle clientDataJSON in a safe manner
+
+	// Chromium (Chrome) returns a hint sometimes about how to handle clientDataJSON in a safe manner.
 	Hint string `json:"new_keys_may_be_added_here,omitempty"`
 }
 
@@ -50,7 +52,7 @@ const (
 	NotSupported TokenBindingStatus = "not-supported"
 )
 
-// FullyQualifiedOrigin returns the origin per the HTML spec: (scheme)://(host)[:(port)]
+// FullyQualifiedOrigin returns the origin per the HTML spec: (scheme)://(host)[:(port)].
 func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 	if strings.HasPrefix(rawOrigin, "android:apk-key-hash:") {
 		return rawOrigin, nil
@@ -71,12 +73,11 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 	return origin.String(), nil
 }
 
-// Handles steps 3 through 6 of verfying the registering client data of a
+// Verify handles steps 3 through 6 of verifying the registering client data of a
 // new credential and steps 7 through 10 of verifying an authentication assertion
 // See https://www.w3.org/TR/webauthn/#registering-a-new-credential
 // and https://www.w3.org/TR/webauthn/#verifying-assertion
 func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, rpOrigins []string) error {
-
 	// Registration Step 3. Verify that the value of C.type is webauthn.create.
 
 	// Assertion Step 7. Verify that the value of C.type is the string webauthn.get.
@@ -106,6 +107,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 	}
 
 	found := false
+
 	for _, origin := range rpOrigins {
 		if strings.EqualFold(fqOrigin, origin) {
 			found = true
@@ -127,6 +129,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 		if c.TokenBinding.Status == "" {
 			return ErrParsingData.WithDetails("Error decoding clientData, token binding present without status")
 		}
+
 		if c.TokenBinding.Status != Present && c.TokenBinding.Status != Supported && c.TokenBinding.Status != NotSupported {
 			return ErrParsingData.
 				WithDetails("Error decoding clientData, token binding present with invalid status").

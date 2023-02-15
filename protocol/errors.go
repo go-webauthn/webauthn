@@ -1,18 +1,20 @@
 package protocol
 
 type Error struct {
-	// Short name for the type of error that has occurred
+	// Short name for the type of error that has occurred.
 	Type string `json:"type"`
-	// Additional details about the error
+
+	// Additional details about the error.
 	Details string `json:"error"`
-	// Information to help debug the error
+
+	// Information to help debug the error.
 	DevInfo string `json:"debug"`
 }
 
 var (
 	ErrBadRequest = &Error{
 		Type:    "invalid_request",
-		Details: "Error reading the requst data",
+		Details: "Error reading the request data",
 	}
 	ErrChallengeMismatch = &Error{
 		Type:    "challenge_mismatch",
@@ -75,11 +77,13 @@ func (e *Error) Error() string {
 func (e *Error) WithDetails(details string) *Error {
 	err := *e
 	err.Details = details
+
 	return &err
 }
 
 func (e *Error) WithInfo(info string) *Error {
 	err := *e
 	err.DevInfo = info
+
 	return &err
 }

@@ -12,10 +12,12 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 		att            AttestationObject
 		clientDataHash []byte
 	}
+
 	successAttResponse0 := attestationTestUnpackResponse(t, androidKeyTestResponse0["success"]).Response.AttestationObject
 	successClientDataHash0 := sha256.Sum256(attestationTestUnpackResponse(t, androidKeyTestResponse0["success"]).Raw.AttestationResponse.ClientDataJSON)
 	successAttResponse1 := attestationTestUnpackResponse(t, androidKeyTestResponse1["success"]).Response.AttestationObject
 	successClientDataHash1 := sha256.Sum256(attestationTestUnpackResponse(t, androidKeyTestResponse1["success"]).Raw.AttestationResponse.ClientDataJSON)
+
 	tests := []struct {
 		name    string
 		args    args
@@ -44,6 +46,7 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, _, err := verifyAndroidKeyFormat(tt.args.att, tt.args.clientDataHash)

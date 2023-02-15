@@ -1,8 +1,9 @@
 package protocol
 
-// From §5.4.1 (https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity).
-// PublicKeyCredentialEntity describes a user account, or a WebAuthn Relying Party,
-// with which a public key credential is associated.
+// CredentialEntity represents the PublicKeyCredentialEntity IDL and it describes a user account, or a WebAuthn Relying
+// Party with which a public key credential is associated.
+//
+// Specification: §5.4.1. Public Key Entity Description (https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity)
 type CredentialEntity struct {
 	// A human-palatable name for the entity. Its function depends on what the PublicKeyCredentialEntity represents:
 	//
@@ -13,27 +14,32 @@ type CredentialEntity struct {
 	// intended only for display, i.e., aiding the user in determining the difference between user accounts with similar
 	// displayNames. For example, "alexm", "alex.p.mueller@example.com" or "+14255551234".
 	Name string `json:"name"`
+
 	// A serialized URL which resolves to an image associated with the entity. For example,
 	// this could be a user’s avatar or a Relying Party's logo. This URL MUST be an a priori
 	// authenticated URL. Authenticators MUST accept and store a 128-byte minimum length for
 	// an icon member’s value. Authenticators MAY ignore an icon member’s value if its length
 	// is greater than 128 bytes. The URL’s scheme MAY be "data" to avoid fetches of the URL,
 	// at the cost of needing more storage.
+	//
+	// Deprecated: this has been removed from the specification recommendations.
 	Icon string `json:"icon,omitempty"`
 }
 
-// From §5.4.2 (https://www.w3.org/TR/webauthn/#sctn-rp-credential-params).
-// The PublicKeyCredentialRpEntity is used to supply additional
-// Relying Party attributes when creating a new credential.
+// The RelyingPartyEntity represents the PublicKeyCredentialRpEntity IDL and is used to supply additional Relying Party
+// attributes when creating a new credential.
+//
+// Specification: §5.4.2. Relying Party Parameters for Credential Generation (https://www.w3.org/TR/webauthn/#dictionary-rp-credential-params)
 type RelyingPartyEntity struct {
 	CredentialEntity
 	// A unique identifier for the Relying Party entity, which sets the RP ID.
 	ID string `json:"id"`
 }
 
-// From §5.4.3 (https://www.w3.org/TR/webauthn/#sctn-user-credential-params).
-// The PublicKeyCredentialUserEntity is used to supply additional
-// user account attributes when creating a new credential.
+// The UserEntity represents the PublicKeyCredentialUserEntity IDL and is used to supply additional user account
+// attributes when creating a new credential.
+//
+// Specification: §5.4.3 User Account Parameters for Credential Generation (https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity)
 type UserEntity struct {
 	CredentialEntity
 	// A human-palatable name for the user account, intended only for display.

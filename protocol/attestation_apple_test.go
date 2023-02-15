@@ -12,8 +12,10 @@ func Test_verifyAppleFormat(t *testing.T) {
 		att            AttestationObject
 		clientDataHash []byte
 	}
+
 	successAttResponse := attestationTestUnpackResponse(t, appleTestResponse["success"]).Response.AttestationObject
 	successClientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, appleTestResponse["success"]).Raw.AttestationResponse.ClientDataJSON)
+
 	tests := []struct {
 		name    string
 		args    args
@@ -32,6 +34,7 @@ func Test_verifyAppleFormat(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, _, err := verifyAppleFormat(tt.args.att, tt.args.clientDataHash)

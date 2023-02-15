@@ -25,6 +25,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 	type args struct {
 		responseName string
 	}
+
 	testCases := []struct {
 		name      string
 		args      args
@@ -99,6 +100,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 			body := io.NopCloser(bytes.NewReader([]byte(testAssertionResponses[tc.args.responseName])))
 
 			actual, err := ParseCredentialRequestResponseBody(body)
+
 			if tc.errString != "" {
 				assert.EqualError(t, err, tc.errString)
 
@@ -120,13 +122,8 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 				pkExpected, pkActual interface{}
 			)
 
-			keyBytesExpected := tc.expected.Response.AuthenticatorData.AttData.CredentialPublicKey
-
-			assert.NoError(t, webauthncbor.Unmarshal(keyBytesExpected, &pkExpected))
-
-			keyBytesActual := actual.Response.AuthenticatorData.AttData.CredentialPublicKey
-
-			assert.NoError(t, webauthncbor.Unmarshal(keyBytesActual, &pkActual))
+			assert.NoError(t, webauthncbor.Unmarshal(tc.expected.Response.AuthenticatorData.AttData.CredentialPublicKey, &pkExpected))
+			assert.NoError(t, webauthncbor.Unmarshal(actual.Response.AuthenticatorData.AttData.CredentialPublicKey, &pkActual))
 
 			assert.Equal(t, pkExpected, pkActual)
 			assert.NotEqual(t, nil, pkExpected)
@@ -141,6 +138,7 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 		Response                  ParsedAssertionResponse
 		Raw                       CredentialAssertionResponse
 	}
+
 	type args struct {
 		storedChallenge    URLEncodedBase64
 		relyingPartyID     string
@@ -148,6 +146,7 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 		verifyUser         bool
 		credentialBytes    []byte
 	}
+
 	tests := []struct {
 		name    string
 		fields  fields
@@ -156,6 +155,7 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &ParsedCredentialAssertionData{
@@ -172,7 +172,7 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 }
 
 var testAssertionResponses = map[string]string{
-	// None Attestation - MacOS TouchID
+	// None Attestation - MacOS TouchID.
 	`success`: `{
 		"id":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
 		"rawId":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",

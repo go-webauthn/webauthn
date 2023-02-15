@@ -12,12 +12,14 @@ func Test_verifyPackedFormat(t *testing.T) {
 		att            AttestationObject
 		clientDataHash []byte
 	}
+
 	successAttResponseES256 := attestationTestUnpackResponse(t, packedTestResponseES256["success"]).Response.AttestationObject
 	successClientDataHashES256 := sha256.Sum256(attestationTestUnpackResponse(t, packedTestResponseES256["success"]).Raw.AttestationResponse.ClientDataJSON)
 	successAttResponseES512 := attestationTestUnpackResponse(t, packedTestResponseES512["success"]).Response.AttestationObject
 	successClientDataHashES512 := sha256.Sum256(attestationTestUnpackResponse(t, packedTestResponseES512["success"]).Raw.AttestationResponse.ClientDataJSON)
 	successAttResponseSolo2 := attestationTestUnpackResponse(t, packedTestResponseSolo2["success"]).Response.AttestationObject
 	successClientDataHashSolo2 := sha256.Sum256(attestationTestUnpackResponse(t, packedTestResponseSolo2["success"]).Raw.AttestationResponse.ClientDataJSON)
+
 	tests := []struct {
 		name    string
 		args    args
@@ -56,6 +58,7 @@ func Test_verifyPackedFormat(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, _, err := verifyPackedFormat(tt.args.att, tt.args.clientDataHash)
@@ -63,10 +66,11 @@ func Test_verifyPackedFormat(t *testing.T) {
 				t.Errorf("verifyPackedFormat() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("verifyPackedFormat() got = %v, want %v", got, tt.want)
 			}
-			// TODO: Consider doing something with the second return value from verifyPackedFormat, x5c
+			// TODO: Consider doing something with the second return value from verifyPackedFormat, x5c.
 		})
 	}
 }

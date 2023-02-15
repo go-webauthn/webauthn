@@ -17,7 +17,7 @@ import (
 // which contains information about the authenticator, and the newly minted public key credential. The information in
 // both objects are used to verify the authenticity of the ceremony and new credential.
 //
-// See: https://w3c.github.io/webauthn/#typedefdef-publickeycredentialjson
+// See: https://www.w3.org/TR/webauthn/#typedefdef-publickeycredentialjson
 type AuthenticatorAttestationResponse struct {
 	// The byte slice of clientDataJSON, which becomes CollectedClientData
 	AuthenticatorResponse
@@ -185,7 +185,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 				}
 
 				if !hasBasicFull {
-					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authentictor that does not support full attestation")
+					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
 				}
 			}
 		}

@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/go-webauthn/webauthn)](https://goreportcard.com/report/github.com/go-webauthn/webauthn)
 
 
-This library is meant to handle [Web Authentication](https://w3c.github.io/webauthn) for Go apps that wish to implement 
+This library is meant to handle [Web Authentication](https://www.w3.org/TR/webauthn) for Go apps that wish to implement 
 a passwordless solution for users. This library conforms as much as possible to the guidelines and implementation
 procedures outlined by the document.
 
@@ -20,8 +20,8 @@ It is distributed under the same 3-Clause BSD license as the original fork, with
 
 ## Status
 
-This library is still version 0, as per semver rules there may be breaking changes without warning. While we strive to
-avoid such changes and strive to notify users they may be unavoidable.
+This library is still version 0, as per Semantic Versioning 2.0 rules there may be breaking changes without warning. 
+While we strive to avoid such changes and strive to notify users they may be unavoidable.
 
 ## Quickstart
 

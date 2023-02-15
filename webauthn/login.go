@@ -11,7 +11,7 @@ import (
 
 // BEGIN LOGIN
 // These objects help us create the PublicKeyCredentialRequestOptions
-// that will be passed to the authenticator via the user client
+// that will be passed to the authenticator via the user client.
 
 // LoginOption is used to provide parameters that modify the default Credential Assertion Payload that is sent to the user.
 type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
@@ -19,12 +19,13 @@ type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
 // DiscoverableUserHandler returns a *User given the provided userHandle.
 type DiscoverableUserHandler func(rawID, userHandle []byte) (user User, err error)
 
-// Creates the CredentialAssertion data payload that should be sent to the user agent for beginning the
-// login/assertion process. The format of this data can be seen in §5.5 of the WebAuthn specification
-// (https://www.w3.org/TR/webauthn/#assertion-options). These default values can be amended by providing
-// additional LoginOption parameters. This function also returns sessionData, that must be stored by the
-// RP in a secure manner and then provided to the FinishLogin function. This data helps us verify the
-// ownership of the credential being retreived.
+// BeginLogin creates the *protocol.CredentialAssertion data payload that should be sent to the user agent for beginning
+// the login/assertion process. The format of this data can be seen in §5.5 of the WebAuthn specification. These default
+// values can be amended by providing additional LoginOption parameters. This function also returns sessionData, that
+// must be stored by the RP in a secure manner and then provided to the FinishLogin function. This data helps us verify
+// the ownership of the credential being retrieved.
+//
+// Specification: §5.5. Options for Assertion Generation (https://www.w3.org/TR/webauthn/#dictionary-assertion-options)
 func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
 	credentials := user.WebAuthnCredentials()
 
@@ -92,22 +93,28 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	return &protocol.CredentialAssertion{Response: requestOptions}, sessionData, nil
 }
 
-// Updates the allowed credential list with Credential Descripiptors, discussed in §5.10.3
-// (https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialdescriptor) with user-supplied values
+// WithAllowedCredentials adjusts the allowed credential list with Credential Descriptors, discussed in the included
+// specification sections with user-supplied values.
+//
+// Specification: §5.10.3. Credential Descriptor (https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialdescriptor)
+//
+// Specification: §5.4.4. Authenticator Selection Criteria (https://www.w3.org/TR/webauthn/#dom-authenticatorselectioncriteria-userverification)
 func WithAllowedCredentials(allowList []protocol.CredentialDescriptor) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
 		cco.AllowedCredentials = allowList
 	}
 }
 
-// Request a user verification preference
+// WithUserVerification adjusts the user verification preference.
+//
+// Specification: §5.4.4. Authenticator Selection Criteria (https://www.w3.org/TR/webauthn/#dom-authenticatorselectioncriteria-userverification)
 func WithUserVerification(userVerification protocol.UserVerificationRequirement) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
 		cco.UserVerification = userVerification
 	}
 }
 
-// Request additional extensions for assertion
+// WithAssertionExtensions adjusts the requested extensions.
 func WithAssertionExtensions(extensions protocol.AuthenticationExtensions) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
 		cco.Extensions = extensions
@@ -130,7 +137,7 @@ func WithAppIdExtension(appid string) LoginOption {
 	}
 }
 
-// Take the response from the client and validate it against the user credentials and stored session data
+// FinishLogin takes the response from the client and validate it against the user credentials and stored session data.
 func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *http.Request) (*Credential, error) {
 	parsedResponse, err := protocol.ParseCredentialRequestResponse(response)
 	if err != nil {
@@ -140,7 +147,7 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 	return webauthn.ValidateLogin(user, session, parsedResponse)
 }
 
-// ValidateLogin takes a parsed response and validates it against the user credentials and session data
+// ValidateLogin takes a parsed response and validates it against the user credentials and session data.
 func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
@@ -171,13 +178,13 @@ func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHand
 	return webauthn.validateLogin(user, session, parsedResponse)
 }
 
-// ValidateLogin takes a parsed response and validates it against the user credentials and session data
+// ValidateLogin takes a parsed response and validates it against the user credentials and session data.
 func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	// Step 1. If the allowCredentials option was given when this authentication ceremony was initiated,
 	// verify that credential.id identifies one of the public key credentials that were listed in
 	// allowCredentials.
 
-	// NON-NORMATIVE Prior Step: Verify that the allowCredentials for the session are owned by the user provided
+	// NON-NORMATIVE Prior Step: Verify that the allowCredentials for the session are owned by the user provided.
 	userCredentials := user.WebAuthnCredentials()
 
 	var credentialFound bool
@@ -189,6 +196,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 			for _, userCredential := range userCredentials {
 				if bytes.Equal(userCredential.ID, allowedCredentialID) {
 					credentialsOwned = true
+
 					break
 				}
 
@@ -203,6 +211,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 		for _, allowedCredentialID := range session.AllowedCredentialIDs {
 			if bytes.Equal(parsedResponse.RawID, allowedCredentialID) {
 				credentialFound = true
+
 				break
 			}
 		}
@@ -215,7 +224,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	// Step 2. If credential.response.userHandle is present, verify that the user identified by this value is
 	// the owner of the public key credential identified by credential.id.
 
-	// This is in part handled by our Step 1
+	// This is in part handled by our Step 1.
 
 	userHandle := parsedResponse.Response.UserHandle
 	if len(userHandle) > 0 {
@@ -253,14 +262,21 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 		return nil, err
 	}
 
-	// Handle steps 4 through 16
+	// Handle steps 4 through 16.
 	validError := parsedResponse.Verify(session.Challenge, rpID, rpOrigins, appID, shouldVerifyUser, loginCredential.PublicKey)
 	if validError != nil {
 		return nil, validError
 	}
 
-	// Handle step 17
+	// Handle step 17.
 	loginCredential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
+
+	// TODO: The backup eligible flag shouldn't change. Should decide if we want to error if it does.
+	// Update flags from response data.
+	loginCredential.Flags.UserPresent = parsedResponse.Response.AuthenticatorData.Flags.HasUserPresent()
+	loginCredential.Flags.UserVerified = parsedResponse.Response.AuthenticatorData.Flags.HasUserVerified()
+	loginCredential.Flags.BackupEligible = parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible()
+	loginCredential.Flags.BackupState = parsedResponse.Response.AuthenticatorData.Flags.HasBackupState()
 
 	return &loginCredential, nil
 }

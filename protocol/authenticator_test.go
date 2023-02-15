@@ -7,8 +7,11 @@ import (
 )
 
 func TestAuthenticatorFlags_UserPresent(t *testing.T) {
-	var goodByte byte = 0x01
-	var badByte byte = 0x10
+	var (
+		goodByte byte = 0x01
+		badByte  byte = 0x10
+	)
+
 	tests := []struct {
 		name string
 		flag AuthenticatorFlags
@@ -25,6 +28,7 @@ func TestAuthenticatorFlags_UserPresent(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.flag.UserPresent(); got != tt.want {
@@ -35,8 +39,11 @@ func TestAuthenticatorFlags_UserPresent(t *testing.T) {
 }
 
 func TestAuthenticatorFlags_UserVerified(t *testing.T) {
-	var goodByte byte = 0x04
-	var badByte byte = 0x02
+	var (
+		goodByte byte = 0x04
+		badByte  byte = 0x02
+	)
+
 	tests := []struct {
 		name string
 		flag AuthenticatorFlags
@@ -53,6 +60,7 @@ func TestAuthenticatorFlags_UserVerified(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.flag.UserVerified(); got != tt.want {
@@ -63,8 +71,11 @@ func TestAuthenticatorFlags_UserVerified(t *testing.T) {
 }
 
 func TestAuthenticatorFlags_HasAttestedCredentialData(t *testing.T) {
-	var goodByte byte = 0x40
-	var badByte byte = 0x01
+	var (
+		goodByte byte = 0x40
+		badByte  byte = 0x01
+	)
+
 	tests := []struct {
 		name string
 		flag AuthenticatorFlags
@@ -81,6 +92,7 @@ func TestAuthenticatorFlags_HasAttestedCredentialData(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.flag.HasAttestedCredentialData(); got != tt.want {
@@ -91,8 +103,11 @@ func TestAuthenticatorFlags_HasAttestedCredentialData(t *testing.T) {
 }
 
 func TestAuthenticatorFlags_HasExtensions(t *testing.T) {
-	var goodByte byte = 0x80
-	var badByte byte = 0x01
+	var (
+		goodByte byte = 0x80
+		badByte  byte = 0x01
+	)
+
 	tests := []struct {
 		name string
 		flag AuthenticatorFlags
@@ -109,6 +124,7 @@ func TestAuthenticatorFlags_HasExtensions(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.flag.HasExtensions(); got != tt.want {
@@ -126,6 +142,7 @@ func TestAuthenticatorData_Unmarshal(t *testing.T) {
 		AttData  AttestedCredentialData
 		ExtData  []byte
 	}
+
 	type args struct {
 		rawAuthData []byte
 	}
@@ -156,6 +173,7 @@ func TestAuthenticatorData_Unmarshal(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &AuthenticatorData{
@@ -180,9 +198,11 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 		AttData  AttestedCredentialData
 		ExtData  []byte
 	}
+
 	type args struct {
 		rawAuthData []byte
 	}
+
 	tests := []struct {
 		name    string
 		fields  fields
@@ -191,6 +211,7 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &AuthenticatorData{
@@ -211,6 +232,7 @@ func Test_unmarshalCredentialPublicKey(t *testing.T) {
 	type args struct {
 		keyBytes []byte
 	}
+
 	tests := []struct {
 		name string
 		args args
@@ -218,6 +240,7 @@ func Test_unmarshalCredentialPublicKey(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := unmarshalCredentialPublicKey(tt.args.keyBytes)
@@ -239,10 +262,12 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 		AttData  AttestedCredentialData
 		ExtData  []byte
 	}
+
 	type args struct {
 		rpIdHash                 []byte
 		userVerificationRequired bool
 	}
+
 	tests := []struct {
 		name    string
 		fields  fields
@@ -251,6 +276,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 	}{
 		// TODO: Add test cases.
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &AuthenticatorData{

@@ -10,6 +10,7 @@ func TestRegistration_FinishRegistrationFailure(t *testing.T) {
 	user := &defaultUser{
 		id: []byte("123"),
 	}
+
 	session := SessionData{
 		UserID: []byte("ABC"),
 	}
