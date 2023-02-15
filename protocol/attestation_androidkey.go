@@ -16,7 +16,6 @@ func init() {
 	RegisterAttestationFormat(androidAttestationKey, verifyAndroidKeyFormat)
 }
 
-// From §8.4. https://www.w3.org/TR/webauthn/#android-key-attestation
 // The android-key attestation statement looks like:
 // $$attStmtType //= (
 //
@@ -30,6 +29,8 @@ func init() {
 //			sig: bytes,
 //			x5c: [ credCert: bytes, * (caCert: bytes) ]
 //	  }
+//
+// Specification: §8.4. Android Key Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-key-attestation)
 func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
 	// Given the verification procedure inputs attStmt, authenticatorData and clientDataHash, the verification procedure is as follows:
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
