@@ -114,7 +114,6 @@ func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAs
 //
 // Specification: §7.2 Verifying an Authentication Assertion (https://www.w3.org/TR/webauthn/#sctn-verifying-assertion)
 func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID string, relyingPartyOrigins []string, appID string, verifyUser bool, credentialBytes []byte) error {
-
 	// Steps 4 through 6 in verifying the assertion data (https://www.w3.org/TR/webauthn/#verifying-assertion) are
 	// "assertive" steps, i.e "Let JSONtext be the result of running UTF-8 decode on the value of cData."
 	// We handle these steps in part as we verify but also beforehand

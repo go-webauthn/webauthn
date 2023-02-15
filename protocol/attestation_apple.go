@@ -33,7 +33,6 @@ func init() {
 //			x5c: [ credCert: bytes, * (caCert: bytes) ]
 //	  }
 func verifyAppleFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
-
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
 
@@ -62,18 +61,20 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte) (string, []
 
 	// Step 4. Verify that nonce equals the value of the extension with OID 1.2.840.113635.100.8.2 in credCert.
 	var attExtBytes []byte
+
 	for _, ext := range credCert.Extensions {
 		if ext.Id.Equal([]int{1, 2, 840, 113635, 100, 8, 2}) {
 			attExtBytes = ext.Value
 		}
 	}
+
 	if len(attExtBytes) == 0 {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions missing 1.2.840.113635.100.8.2")
 	}
 
 	decoded := AppleAnonymousAttestation{}
-	_, err = asn1.Unmarshal([]byte(attExtBytes), &decoded)
-	if err != nil {
+
+	if _, err = asn1.Unmarshal(attExtBytes, &decoded); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to parse apple attestation certificate extensions")
 	}
 
@@ -87,6 +88,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte) (string, []
 	if err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
 	}
+
 	credPK := pubKey.(webauthncose.EC2PublicKeyData)
 	subjectPK := credCert.PublicKey.(*ecdsa.PublicKey)
 	credPKInfo := &ecdsa.PublicKey{
@@ -94,6 +96,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte) (string, []
 		X:     big.NewInt(0).SetBytes(credPK.XCoord),
 		Y:     big.NewInt(0).SetBytes(credPK.YCoord),
 	}
+
 	if !credPKInfo.Equal(subjectPK) {
 		return "", nil, ErrInvalidAttestation.WithDetails("Certificate public key does not match public key in authData")
 	}

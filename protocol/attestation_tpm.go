@@ -81,16 +81,17 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	if err != nil {
 		return "", nil, err
 	}
-	switch key := key.(type) {
+
+	switch k := key.(type) {
 	case webauthncose.EC2PublicKeyData:
-		if pubArea.ECCParameters.CurveID != key.TPMCurveID() ||
-			!bytes.Equal(pubArea.ECCParameters.Point.XRaw, key.XCoord) ||
-			!bytes.Equal(pubArea.ECCParameters.Point.YRaw, key.YCoord) {
+		if pubArea.ECCParameters.CurveID != k.TPMCurveID() ||
+			!bytes.Equal(pubArea.ECCParameters.Point.XRaw, k.XCoord) ||
+			!bytes.Equal(pubArea.ECCParameters.Point.YRaw, k.YCoord) {
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 	case webauthncose.RSAPublicKeyData:
-		exp := uint32(key.Exponent[0]) + uint32(key.Exponent[1])<<8 + uint32(key.Exponent[2])<<16
-		if !bytes.Equal(pubArea.RSAParameters.ModulusRaw, key.Modulus) ||
+		exp := uint32(k.Exponent[0]) + uint32(k.Exponent[1])<<8 + uint32(k.Exponent[2])<<16
+		if !bytes.Equal(pubArea.RSAParameters.ModulusRaw, k.Modulus) ||
 			pubArea.RSAParameters.Exponent() != exp {
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
@@ -112,13 +113,16 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	if certInfo.Type != tpm2.TagAttestCertify {
 		return "", nil, ErrAttestationFormat.WithDetails("Type is not set to TPM_ST_ATTEST_CERTIFY")
 	}
+
 	// 3/4 Verify that extraData is set to the hash of attToBeSigned using the hash algorithm employed in "alg".
 	f := webauthncose.HasherFromCOSEAlg(coseAlg)
 	h := f()
+
 	h.Write(attToBeSigned)
 	if !bytes.Equal(certInfo.ExtraData, h.Sum(nil)) {
 		return "", nil, ErrAttestationFormat.WithDetails("ExtraData is not set to hash of attToBeSigned")
 	}
+
 	// 4/4 Verify that attested contains a TPMS_CERTIFY_INFO structure as specified in
 	// [TPMv2-Part2] section 10.12.3, whose name field contains a valid Name for pubArea,
 	// as computed using the algorithm in the nameAlg field of pubArea
@@ -169,6 +173,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 		// 3/6 The Subject Alternative Name extension MUST be set as defined in [TPMv2-EK-Profile] section 3.2.9{}
 		var manufacturer, model, version string
+
 		for _, ext := range aikCert.Extensions {
 			if ext.Id.Equal([]int{2, 5, 29, 17}) {
 				manufacturer, model, version, err = parseSANExtension(ext.Value)
@@ -187,17 +192,22 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 		}
 
 		// 4/6 The Extended Key Usage extension MUST contain the "joint-iso-itu-t(2) internationalorganizations(23) 133 tcg-kp(8) tcg-kp-AIKCertificate(3)" OID.
-		var ekuValid = false
-		var eku []asn1.ObjectIdentifier
+		var (
+			ekuValid = false
+			eku      []asn1.ObjectIdentifier
+		)
+
 		for _, ext := range aikCert.Extensions {
 			if ext.Id.Equal([]int{2, 5, 29, 37}) {
 				rest, err := asn1.Unmarshal(ext.Value, &eku)
 				if len(rest) != 0 || err != nil || !eku[0].Equal(tcgKpAIKCertificate) {
 					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU missing 2.23.133.8.3")
 				}
+
 				ekuValid = true
 			}
 		}
+
 		if !ekuValid {
 			return "", nil, ErrAttestationFormat.WithDetails("AIK certificate missing EKU")
 		}
@@ -207,7 +217,9 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 			IsCA       bool `asn1:"optional"`
 			MaxPathLen int  `asn1:"optional,default:-1"`
 		}
+
 		var constraints basicConstraints
+
 		for _, ext := range aikCert.Extensions {
 			if ext.Id.Equal([]int{2, 5, 29, 19}) {
 				if rest, err := asn1.Unmarshal(ext.Value, &constraints); err != nil {
@@ -217,16 +229,18 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 				}
 			}
 		}
-		if constraints.IsCA {
-			return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints missing or CA is true")
-		}
+
 		// 6/6 An Authority Information Access (AIA) extension with entry id-ad-ocsp and a CRL Distribution Point
 		// extension [RFC5280] are both OPTIONAL as the status of many attestation certificates is available
 		// through metadata services. See, for example, the FIDO Metadata Service.
+		if constraints.IsCA {
+			return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints missing or CA is true")
+		}
 	}
 
 	return string(metadata.AttCA), x5c, err
 }
+
 func forEachSAN(extension []byte, callback func(tag int, data []byte) error) error {
 	// RFC 5280, 4.2.1.6
 
@@ -245,19 +259,23 @@ func forEachSAN(extension []byte, callback func(tag int, data []byte) error) err
 	//      iPAddress                       [7]     OCTET STRING,
 	//      registeredID                    [8]     OBJECT IDENTIFIER }
 	var seq asn1.RawValue
+
 	rest, err := asn1.Unmarshal(extension, &seq)
 	if err != nil {
 		return err
 	} else if len(rest) != 0 {
 		return errors.New("x509: trailing data after X.509 extension")
 	}
+
 	if !seq.IsCompound || seq.Tag != 16 || seq.Class != 0 {
 		return asn1.StructuralError{Msg: "bad SAN sequence"}
 	}
 
 	rest = seq.Bytes
+
 	for len(rest) > 0 {
 		var v asn1.RawValue
+
 		rest, err = asn1.Unmarshal(rest, &v)
 		if err != nil {
 			return err
@@ -315,6 +333,7 @@ func parseSANExtension(value []byte) (manufacturer string, model string, version
 		}
 		return nil
 	})
+
 	return
 }
 
@@ -350,5 +369,6 @@ func isValidTPMManufacturer(id string) bool {
 			return true
 		}
 	}
+
 	return false
 }

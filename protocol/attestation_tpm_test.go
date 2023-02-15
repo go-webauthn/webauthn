@@ -37,7 +37,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 }
 
 var testAttestationTPMResponses = []string{
-	// TPM attestation with ECC P256
+	// TPM attestation with ECC P256.
 	`{
 		"id": "hsS2ywFz_LWf9-lC35vC9uJTVD3ZCVdweZvESUbjXnQ",
 		"rawId": "hsS2ywFz_LWf9-lC35vC9uJTVD3ZCVdweZvESUbjXnQ",
@@ -47,7 +47,7 @@ var testAttestationTPMResponses = []string{
 				"clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoidXpuOXUwVHgtTEJkdEdnRVJzYmtIUkJqaVV0NWkycnZtMkJCVFpyV3FFbyIsIm9yaWdpbiI6Imh0dHBzOi8vd2ViYXV0aG4uaW8iLCJjcm9zc09yaWdpbiI6ZmFsc2V9"
 		}
 	}`,
-	// TPM attestation with RSA SHA1
+	// TPM attestation with RSA SHA1.
 	`{
 		"rawId": "UJDoUJoGiDQF_EEZ3G_z9Lfq16_KFaXtMTjwTUrrRlc",
 		"id": "UJDoUJoGiDQF_EEZ3G_z9Lfq16_KFaXtMTjwTUrrRlc",
@@ -57,7 +57,7 @@ var testAttestationTPMResponses = []string{
 		},
 		"type": "public-key"
 	}`,
-	// TPM attestation with RSA SHA256
+	// TPM attestation with RSA SHA256.
 	`{
 		"rawId": "h9XMhkVePN1Prq9Ks_VfwIsVZvt-jmSRTEnevTc-KB8",
 		"id": "h9XMhkVePN1Prq9Ks_VfwIsVZvt-jmSRTEnevTc-KB8",
@@ -183,16 +183,21 @@ type CredentialPublicKey struct {
 
 func corruptBytes(in []byte) []byte {
 	out := make([]byte, len(in))
+
 	copy(out, in)
+
 	out[len(in)-1] ^= 0xff
+
 	return out
 }
 
 func uint32ToBytes(i uint32) []byte {
-	t := make([]byte, 4)
+	t, o := make([]byte, 4), make([]byte, 3)
+
 	binary.LittleEndian.PutUint32(t, i)
-	o := make([]byte, 3)
+
 	copy(o, t)
+
 	return o
 }
 
@@ -238,6 +243,7 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 	if err != nil {
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
 	}
+
 	o := webauthncose.OKPPublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{
 			KeyType:   int64(webauthncose.OctetKey),
@@ -251,16 +257,18 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 	if err != nil {
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
 	}
+
 	rpk, err := webauthncbor.Marshal(r)
 	if err != nil {
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
 	}
+
 	opk, err := webauthncbor.Marshal(o)
+
 	return epk, rpk, opk, *rsaKey, *eccKey, err
 }
 
 func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
-
 	epk, rpk, opk, rsaKey, eccKey, err := getTPMAttestionKeys()
 	if err != nil {
 		t.Fatal(err)
@@ -330,6 +338,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 		}
 
 		public := tpm2.Public{}
+
 		switch tt.keyType {
 		case webauthncose.EllipticKey:
 			public = defaultECCPublic
@@ -365,9 +374,11 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 
 func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 	attStmt := make(map[string]interface{}, len(defaultAttStatement))
+
 	for id, v := range defaultAttStatement {
 		attStmt[id] = v
 	}
+
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
 	r := webauthncose.RSAPublicKeyData{
@@ -439,8 +450,10 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 		if tt.certInfo.Magic != 0 && err != nil {
 			t.Fatal(err)
 		}
+
 		att.AttStatement["certInfo"] = certInfo
 		attestationType, _, err := verifyTPMFormat(att, nil)
+
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
@@ -475,9 +488,11 @@ var (
 
 func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	attStmt := make(map[string]interface{}, len(defaultAttStatement))
+
 	for id, v := range defaultAttStatement {
 		attStmt[id] = v
 	}
+
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
 	r := webauthncose.RSAPublicKeyData{
@@ -531,6 +546,7 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	makeX5c := func(b []byte) []interface{} {
 		q := make([]interface{}, 1)
 		q[0] = b
+
 		return q
 	}
 
@@ -550,9 +566,11 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 			"Error parsing certificate from ASN.1",
 		},
 	}
+
 	for _, tt := range tests {
 		att.AttStatement["x5c"] = tt.x5c
 		attestationType, _, err := verifyTPMFormat(att, nil)
+
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {

@@ -14,23 +14,27 @@ type WebAuthn struct {
 	Config *Config
 }
 
-// The config values required for proper
+// Config is used to configure the WebAuthn provider.
 type Config struct {
 	RPDisplayName string
 	RPID          string
-	// Deprecated: Use RPOrigins instead
-	RPOrigin  string
-	RPOrigins []string
-	RPIcon    string
-	// Defaults for generating options
-	AttestationPreference  protocol.ConveyancePreference
+	RPOrigins     []string
+	RPIcon        string
+
+	// AttestationPreference is the default attestation preference when registering credentials.
+	AttestationPreference protocol.ConveyancePreference
+
+	// AuthenticatorSelection is the default authenticator selection for both logins and credential registrations.
 	AuthenticatorSelection protocol.AuthenticatorSelection
 
 	Timeout int
 	Debug   bool
+
+	// Deprecated: Use RPOrigins instead.
+	RPOrigin string
 }
 
-// Validate that the config flags in Config are properly set
+// Validate that the config flags in Config are properly set.
 func (config *Config) validate() error {
 	if len(config.RPDisplayName) == 0 {
 		return fmt.Errorf("Missing RPDisplayName")
@@ -69,11 +73,12 @@ func (config *Config) validate() error {
 	return nil
 }
 
-// Create a new WebAuthn object given the proper config flags
-func New(config *Config) (*WebAuthn, error) {
-	if err := config.validate(); err != nil {
-		return nil, fmt.Errorf("Configuration error: %+v", err)
+// New creates a new WebAuthn object given a valid Config.
+func New(config *Config) (webauthn *WebAuthn, err error) {
+	if err = config.validate(); err != nil {
+		return nil, fmt.Errorf("configuration error: %w", err)
 	}
+
 	return &WebAuthn{
 		config,
 	}, nil

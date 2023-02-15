@@ -4,7 +4,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
-// Credential contains all needed information about a WebAuthn credential for storage
+// Credential contains all needed information about a WebAuthn credential for storage.
 type Credential struct {
 	// A probabilistically-unique byte sequence identifying a public key credential source and its authentication assertions.
 	ID []byte
@@ -24,7 +24,7 @@ type Credential struct {
 	// The commonly stored flags.
 	Flags CredentialFlags
 
-	// The Authenticator information for a given certificate
+	// The Authenticator information for a given certificate.
 	Authenticator Authenticator
 }
 
@@ -53,7 +53,7 @@ func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 	}
 }
 
-// MakeNewCredential will return a credential pointer on successful validation of a registration response
+// MakeNewCredential will return a credential pointer on successful validation of a registration response.
 func MakeNewCredential(c *protocol.ParsedCredentialCreationData) (*Credential, error) {
 	newCredential := &Credential{
 		ID:              c.Response.AttestationObject.AuthData.AttData.CredentialID,

@@ -81,10 +81,12 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 		if !cv {
 			return "", x5c, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
 		}
+
 		ct, err := x509.ParseCertificate(cb)
 		if err != nil {
 			return "", x5c, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err))
 		}
+
 		if ct.NotBefore.After(time.Now()) || ct.NotAfter.Before(time.Now()) {
 			return "", x5c, ErrAttestationFormat.WithDetails("Cert in chain not time valid")
 		}
@@ -104,8 +106,8 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-	err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, signature)
-	if err != nil {
+
+	if err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, signature); err != nil {
 		return "", x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 	}
 
@@ -153,14 +155,16 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	// Step 2.2.3 (from §8.2.1) If the related attestation root certificate is used for multiple authenticator models,
 	// the Extension OID 1.3.6.1.4.1.45724.1.1.4 (id-fido-gen-ce-aaguid) MUST be present, containing the
 	// AAGUID as a 16-byte OCTET STRING. The extension MUST NOT be marked as critical.
-
 	idFido := asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}
+
 	var foundAAGUID []byte
+
 	for _, extension := range attCert.Extensions {
 		if extension.Id.Equal(idFido) {
 			if extension.Critical {
 				return "", x5c, ErrInvalidAttestation.WithDetails("Attestation certificate FIDO extension marked as critical")
 			}
+
 			foundAAGUID = extension.Value
 		}
 	}
@@ -172,7 +176,9 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	// AAGUID MUST be wrapped in two OCTET STRINGS to be valid.
 	if len(foundAAGUID) > 0 {
 		unMarshalledAAGUID := []byte{}
+
 		asn1.Unmarshal(foundAAGUID, &unMarshalledAAGUID)
+
 		if !bytes.Equal(aaguid, unMarshalledAAGUID) {
 			return "", x5c, ErrInvalidAttestation.WithDetails("Certificate AAGUID does not match Auth Data certificate")
 		}
@@ -210,27 +216,19 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signatur
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing the public key: %+v\n", err))
 	}
 
-	switch key.(type) {
+	switch k := key.(type) {
 	case webauthncose.OKPPublicKeyData:
-		k := key.(webauthncose.OKPPublicKeyData)
-		err := verifyKeyAlgorithm(k.Algorithm, alg)
-		if err != nil {
-			return "", nil, err
-		}
+		err = verifyKeyAlgorithm(k.Algorithm, alg)
 	case webauthncose.EC2PublicKeyData:
-		k := key.(webauthncose.EC2PublicKeyData)
-		err := verifyKeyAlgorithm(k.Algorithm, alg)
-		if err != nil {
-			return "", nil, err
-		}
+		err = verifyKeyAlgorithm(k.Algorithm, alg)
 	case webauthncose.RSAPublicKeyData:
-		k := key.(webauthncose.RSAPublicKeyData)
-		err := verifyKeyAlgorithm(k.Algorithm, alg)
-		if err != nil {
-			return "", nil, err
-		}
+		err = verifyKeyAlgorithm(k.Algorithm, alg)
 	default:
 		return "", nil, ErrInvalidAttestation.WithDetails("Error verifying the public key data")
+	}
+
+	if err != nil {
+		return "", nil, err
 	}
 
 	valid, err := webauthncose.VerifySignature(key, verificationData, signature)
@@ -245,5 +243,6 @@ func verifyKeyAlgorithm(keyAlgorithm, attestedAlgorithm int64) error {
 	if keyAlgorithm != attestedAlgorithm {
 		return ErrInvalidAttestation.WithDetails("Public key algorithm does not equal att statement algorithm")
 	}
+
 	return nil
 }

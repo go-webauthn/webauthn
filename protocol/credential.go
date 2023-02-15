@@ -8,9 +8,10 @@ import (
 	"net/http"
 )
 
-// The basic credential type that is inherited by WebAuthn's
-// PublicKeyCredential type
-// https://w3c.github.io/webappsec-credential-management/#credential
+// Credential is the basic credential type from the Credential Management specification that is inherited by WebAuthn's
+// PublicKeyCredential type.
+//
+// Specification: Credential Management §2.2. The Credential Interface (https://www.w3.org/TR/credential-management/#credential)
 type Credential struct {
 	// ID is The credential’s identifier. The requirements for the
 	// identifier are distinct for each type of credential. It might
@@ -22,9 +23,8 @@ type Credential struct {
 	Type string `json:"type"`
 }
 
-// The PublicKeyCredential interface inherits from Credential, and contains
-// the attributes that are returned to the caller when a new credential
-// is created, or a new assertion is requested.
+// ParsedCredential is the parsed PublicKeyCredential interface, inherits from Credential, and contains
+// the attributes that are returned to the caller when a new credential is created, or a new assertion is requested.
 type ParsedCredential struct {
 	ID   string `cbor:"id"`
 	Type string `cbor:"type"`
@@ -60,6 +60,7 @@ func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialC
 	if response == nil || response.Body == nil {
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
+
 	return ParseCredentialCreationResponseBody(response.Body)
 }
 
@@ -119,11 +120,8 @@ func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialC
 
 // Verify the Client and Attestation data.
 //
-// From: §7.1. Registering a New Credential
-//
-// See: https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential
+// Specification: §7.1. Registering a New Credential (https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential)
 func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, relyingPartyID string, relyingPartyOrigins []string) error {
-
 	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data
 	verifyError := pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, relyingPartyOrigins)
 	if verifyError != nil {
@@ -135,10 +133,10 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 
 	// Step 8. Perform CBOR decoding on the attestationObject field of the AuthenticatorAttestationResponse
 	// structure to obtain the attestation statement format fmt, the authenticator data authData, and the
-	// attestation statement attStmt. is handled while
+	// attestation statement attStmt.
 
 	// We do the above step while parsing and decoding the CredentialCreationResponse
-	// Handle steps 9 through 14 - This verifies the attestation object and
+	// Handle steps 9 through 14 - This verifies the attestation object.
 	verifyError = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash[:], verifyUser)
 	if verifyError != nil {
 		return verifyError
@@ -160,7 +158,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 	// - Otherwise, use the X.509 certificates returned by the verification procedure to verify that the
 	//   attestation public key correctly chains up to an acceptable root certificate.
 
-	// TODO: We're not supporting trust anchors, self-attestation policy, or acceptable root certs yet
+	// TODO: We're not supporting trust anchors, self-attestation policy, or acceptable root certs yet.
 
 	// Step 17. Check that the credentialId is not yet registered to any other user. If registration is
 	// requested for a credential that is already registered to a different user, the Relying Party SHOULD
@@ -168,7 +166,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 	// the older registration.
 
 	// TODO: We can't support this in the code's current form, the Relying Party would need to check for this
-	// against their database
+	// against their database.
 
 	// Step 18 If the attestation statement attStmt verified successfully and is found to be trustworthy, then
 	// register the new credential with the account that was denoted in the options.user passed to create(), by
@@ -209,7 +207,7 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 	}
 
 	// If the credential does not have the correct attestation type it is assumed to NOT be a fido-u2f credential.
-	// https://w3c.github.io/webauthn/#sctn-fido-u2f-attestation
+	// https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
 	if credentialAttestationType != CredentialTypeFIDOU2F {
 		return "", nil
 	}

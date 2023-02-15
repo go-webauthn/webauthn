@@ -14,6 +14,7 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 		UserVerification   UserVerificationRequirement
 		Extensions         AuthenticationExtensions
 	}
+
 	tests := []struct {
 		name   string
 		fields fields
@@ -38,6 +39,7 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &PublicKeyCredentialRequestOptions{
@@ -48,6 +50,7 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 				UserVerification:   tt.fields.UserVerification,
 				Extensions:         tt.fields.Extensions,
 			}
+
 			if got := a.GetAllowedCredentialIDs(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("PublicKeyCredentialRequestOptions.GetAllowedCredentialIDs() = %v, want %v", got, tt.want)
 			}
