@@ -18,7 +18,6 @@ func init() {
 	RegisterAttestationFormat(packedAttestationKey, verifyPackedFormat)
 }
 
-// From §8.2. https://www.w3.org/TR/webauthn/#packed-attestation
 // The packed attestation statement looks like:
 //
 //	packedStmtFormat = {
@@ -35,6 +34,8 @@ func init() {
 //	 	alg: COSEAlgorithmIdentifier
 //	 	sig: bytes,
 //	 }
+//
+// Specification: §8.2. Packed Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-packed-attestation)
 func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.

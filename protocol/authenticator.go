@@ -14,9 +14,12 @@ const (
 	maxCredentialIDLength = 1023
 )
 
-// Authenticators respond to Relying Party requests by returning an object derived from the
-// AuthenticatorResponse interface. See §5.2. Authenticator Responses
-// https://www.w3.org/TR/webauthn/#iface-authenticatorresponse
+// AuthenticatorResponse represents the IDL with the same name.
+//
+// Authenticators respond to Relying Party requests by returning an object derived from the AuthenticatorResponse
+// interface
+//
+// Specification: §5.2. Authenticator Responses (https://www.w3.org/TR/webauthn/#iface-authenticatorresponse)
 type AuthenticatorResponse struct {
 	// From the spec https://www.w3.org/TR/webauthn/#dom-authenticatorresponse-clientdatajson
 	// This attribute contains a JSON serialization of the client data passed to the authenticator
@@ -24,18 +27,20 @@ type AuthenticatorResponse struct {
 	ClientDataJSON URLEncodedBase64 `json:"clientDataJSON"`
 }
 
-// AuthenticatorData From §6.1 of the spec.
-// The authenticator data structure encodes contextual bindings made by the authenticator. These bindings
-// are controlled by the authenticator itself, and derive their trust from the WebAuthn Relying Party's
-// assessment of the security properties of the authenticator. In one extreme case, the authenticator
-// may be embedded in the client, and its bindings may be no more trustworthy than the client data.
-// At the other extreme, the authenticator may be a discrete entity with high-security hardware and
-// software, connected to the client over a secure channel. In both cases, the Relying Party receives
-// the authenticator data in the same format, and uses its knowledge of the authenticator to make
+// AuthenticatorData represents the IDL with the same name.
+//
+// The authenticator data structure encodes contextual bindings made by the authenticator. These bindings are controlled
+// by the authenticator itself, and derive their trust from the WebAuthn Relying Party's assessment of the security
+// properties of the authenticator. In one extreme case, the authenticator may be embedded in the client, and its
+// bindings may be no more trustworthy than the client data. At the other extreme, the authenticator may be a discrete
+// entity with high-security hardware and software, connected to the client over a secure channel. In both cases, the
+// Relying Party receives the authenticator data in the same format, and uses its knowledge of the authenticator to make
 // trust decisions.
 //
-// The authenticator data, at least during attestation, contains the Public Key that the RP stores
-// and will associate with the user attempting to register.
+// The authenticator data has a compact but extensible encoding. This is desired since authenticators can be devices
+// with limited capabilities and low power requirements, with much simpler software stacks than the client platform.
+//
+// Specification: §6.1. Authenticator Data (https://www.w3.org/TR/webauthn/#sctn-authenticator-data)
 type AuthenticatorData struct {
 	RPIDHash []byte                 `json:"rpid"`
 	Flags    AuthenticatorFlags     `json:"flags"`
@@ -47,37 +52,65 @@ type AuthenticatorData struct {
 type AttestedCredentialData struct {
 	AAGUID       []byte `json:"aaguid"`
 	CredentialID []byte `json:"credential_id"`
-	// The raw credential public key bytes received from the attestation data
+
+	// The raw credential public key bytes received from the attestation data.
 	CredentialPublicKey []byte `json:"public_key"`
 }
 
-// AuthenticatorAttachment https://www.w3.org/TR/webauthn/#dom-authenticatorselectioncriteria-authenticatorattachment
+// AuthenticatorAttachment represents the IDL enum of the same name, and is used as part of the Authenticator Selection
+// Criteria.
+//
+// This enumeration’s values describe authenticators' attachment modalities. Relying Parties use this to express a
+// preferred authenticator attachment modality when calling navigator.credentials.create() to create a credential.
+//
+// If this member is present, eligible authenticators are filtered to only authenticators attached with the specified
+// §5.4.5 Authenticator Attachment Enumeration (enum AuthenticatorAttachment). The value SHOULD be a member of
+// AuthenticatorAttachment but client platforms MUST ignore unknown values, treating an unknown value as if the member
+// does not exist.
+//
+// Specification: §5.4.4. Authenticator Selection Criteria (https://www.w3.org/TR/webauthn/#dom-authenticatorselectioncriteria-authenticatorattachment)
+//
+// Specification: §5.4.5. Authenticator Attachment Enumeration (https://www.w3.org/TR/webauthn/#enum-attachment)
 type AuthenticatorAttachment string
 
 const (
-	// Platform - A platform authenticator is attached using a client device-specific transport, called
-	// platform attachment, and is usually not removable from the client device. A public key credential
-	//  bound to a platform authenticator is called a platform credential.
+	// Platform represents a platform authenticator is attached using a client device-specific transport, called
+	// platform attachment, and is usually not removable from the client device. A public key credential bound to a
+	// platform authenticator is called a platform credential.
 	Platform AuthenticatorAttachment = "platform"
-	// CrossPlatform A roaming authenticator is attached using cross-platform transports, called
-	// cross-platform attachment. Authenticators of this class are removable from, and can "roam"
-	// among, client devices. A public key credential bound to a roaming authenticator is called a
-	// roaming credential.
+
+	// CrossPlatform represents a roaming authenticator is attached using cross-platform transports, called
+	// cross-platform attachment. Authenticators of this class are removable from, and can "roam" among, client devices.
+	// A public key credential bound to a roaming authenticator is called a roaming credential.
 	CrossPlatform AuthenticatorAttachment = "cross-platform"
 )
 
-// ResidentKeyRequirement https://www.w3.org/TR/webauthn/#dom-authenticatorselectioncriteria-residentkey
+// ResidentKeyRequirement represents the IDL of the same name.
+//
+// This enumeration’s values describe the Relying Party's requirements for client-side discoverable credentials
+// (formerly known as resident credentials or resident keys).
+//
+// Specifies the extent to which the Relying Party desires to create a client-side discoverable credential. For
+// historical reasons the naming retains the deprecated “resident” terminology. The value SHOULD be a member of
+// ResidentKeyRequirement but client platforms MUST ignore unknown values, treating an unknown value as if the member
+// does not exist. If no value is given then the effective value is required if requireResidentKey is true or
+// discouraged if it is false or absent.
+//
+// Specification: §5.4.4. Authenticator Selection Criteria (https://www.w3.org/TR/webauthn/#dom-authenticatorselectioncriteria-residentkey)
+//
+// Specification: §5.4.6. Resident Key Requirement Enumeration (https://www.w3.org/TR/webauthn/#enumdef-residentkeyrequirement)
 type ResidentKeyRequirement string
 
 const (
-	// ResidentKeyRequirementDiscouraged indicates to the client we do not want a discoverable credential. This is the default.
+	// ResidentKeyRequirementDiscouraged indicates the Relying Party prefers creating a server-side credential, but will
+	// accept a client-side discoverable credential. This is the default.
 	ResidentKeyRequirementDiscouraged ResidentKeyRequirement = "discouraged"
 
 	// ResidentKeyRequirementPreferred indicates to the client we would prefer a discoverable credential.
 	ResidentKeyRequirementPreferred ResidentKeyRequirement = "preferred"
 
-	// ResidentKeyRequirementRequired indicates to the client we require a discoverable credential and that it should
-	// fail if the credential does not support this feature.
+	// ResidentKeyRequirementRequired indicates the Relying Party requires a client-side discoverable credential, and is
+	// prepared to receive an error if a client-side discoverable credential cannot be created.
 	ResidentKeyRequirementRequired ResidentKeyRequirement = "required"
 )
 
@@ -125,8 +158,10 @@ type UserVerificationRequirement string
 const (
 	// VerificationRequired User verification is required to create/release a credential
 	VerificationRequired UserVerificationRequirement = "required"
+
 	// VerificationPreferred User verification is preferred to create/release a credential
 	VerificationPreferred UserVerificationRequirement = "preferred" // This is the default
+
 	// VerificationDiscouraged The authenticator should not verify the user for the credential
 	VerificationDiscouraged UserVerificationRequirement = "discouraged"
 )

@@ -56,8 +56,7 @@ type ParsedAttestationResponse struct {
 // attestation. All this information is returned by authenticators any time a new public key credential is generated, in
 // the overall form of an attestation object.
 //
-// From: §6.5. Attestation
-// See: https://www.w3.org/TR/webauthn/#sctn-attestation
+// Specification: §6.5. Attestation (https://www.w3.org/TR/webauthn/#sctn-attestation)
 type AttestationObject struct {
 	// The authenticator data, including the newly created public key. See AuthenticatorData for more info
 	AuthData AuthenticatorData

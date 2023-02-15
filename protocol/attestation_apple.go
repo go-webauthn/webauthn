@@ -20,7 +20,6 @@ func init() {
 	RegisterAttestationFormat(appleAttestationKey, verifyAppleFormat)
 }
 
-// From §8.8. https://www.w3.org/TR/webauthn-2/#sctn-apple-anonymous-attestation
 // The apple attestation statement looks like:
 // $$attStmtType //= (
 //
@@ -32,6 +31,8 @@ func init() {
 //	appleStmtFormat = {
 //			x5c: [ credCert: bytes, * (caCert: bytes) ]
 //	  }
+//
+// Specification: §8.8. Apple Anonymous Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation)
 func verifyAppleFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.

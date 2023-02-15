@@ -32,7 +32,6 @@ type SafetyNetResponse struct {
 
 // Thanks to @koesie10 and @herrjemand for outlining how to support this type really well
 
-// §8.5. Android SafetyNet Attestation Statement Format https://www.w3.org/TR/webauthn/#android-safetynet-attestation
 // When the authenticator in question is a platform-provided Authenticator on certain Android platforms, the attestation
 // statement is based on the SafetyNet API. In this case the authenticator data is completely controlled by the caller of
 // the SafetyNet API (typically an application running on the Android platform) and the attestation statement only provides
@@ -41,6 +40,8 @@ type SafetyNetResponse struct {
 //
 // provide information regarding provenance of the authenticator and its associated data. Therefore platform-provided
 // authenticators SHOULD make use of the Android Key Attestation when available, even if the SafetyNet API is also present.
+//
+// Specification: §8.5. Android SafetyNet Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation)
 func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
