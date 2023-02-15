@@ -12,10 +12,10 @@ import (
 	"hash"
 	"math/big"
 
+	"github.com/google/go-tpm/tpm2"
 	"golang.org/x/crypto/ed25519"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
-	"github.com/google/go-tpm/tpm2"
 )
 
 // PublicKeyData The public key portion of a Relying Party-specific credential key pair, generated
@@ -28,52 +28,64 @@ import (
 type PublicKeyData struct {
 	// Decode the results to int by default.
 	_struct bool `cbor:",keyasint" json:"public_key"`
+
 	// The type of key created. Should be OKP, EC2, or RSA.
 	KeyType int64 `cbor:"1,keyasint" json:"kty"`
+
 	// A COSEAlgorithmIdentifier for the algorithm used to derive the key signature.
 	Algorithm int64 `cbor:"3,keyasint" json:"alg"`
 }
 type EC2PublicKeyData struct {
 	PublicKeyData
+
 	// If the key type is EC2, the curve on which we derive the signature from.
 	Curve int64 `cbor:"-1,keyasint,omitempty" json:"crv"`
+
 	// A byte string 32 bytes in length that holds the x coordinate of the key.
 	XCoord []byte `cbor:"-2,keyasint,omitempty" json:"x"`
+
 	// A byte string 32 bytes in length that holds the y coordinate of the key.
 	YCoord []byte `cbor:"-3,keyasint,omitempty" json:"y"`
 }
 
 type RSAPublicKeyData struct {
 	PublicKeyData
-	// Represents the modulus parameter for the RSA algorithm
+
+	// Represents the modulus parameter for the RSA algorithm.
 	Modulus []byte `cbor:"-1,keyasint,omitempty" json:"n"`
-	// Represents the exponent parameter for the RSA algorithm
+
+	// Represents the exponent parameter for the RSA algorithm.
 	Exponent []byte `cbor:"-2,keyasint,omitempty" json:"e"`
 }
 
 type OKPPublicKeyData struct {
 	PublicKeyData
+
 	Curve int64
+
 	// A byte string that holds the x coordinate of the key.
 	XCoord []byte `cbor:"-2,keyasint,omitempty" json:"x"`
 }
 
-// Verify Octet Key Pair (OKP) Public Key Signature
+// Verify Octet Key Pair (OKP) Public Key Signature.
 func (k *OKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	var key ed25519.PublicKey = make([]byte, ed25519.PublicKeySize)
+
 	copy(key, k.XCoord)
+
 	return ed25519.Verify(key, data, sig), nil
 }
 
-// Verify Elliptic Curve Public Key Signature
+// Verify Elliptic Curve Public Key Signature.
 func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	var curve elliptic.Curve
+
 	switch COSEAlgorithmIdentifier(k.Algorithm) {
-	case AlgES512: // IANA COSE code for ECDSA w/ SHA-512
+	case AlgES512: // IANA COSE code for ECDSA w/ SHA-512.
 		curve = elliptic.P521()
-	case AlgES384: // IANA COSE code for ECDSA w/ SHA-384
+	case AlgES384: // IANA COSE code for ECDSA w/ SHA-384.
 		curve = elliptic.P384()
-	case AlgES256: // IANA COSE code for ECDSA w/ SHA-256
+	case AlgES256: // IANA COSE code for ECDSA w/ SHA-256.
 		curve = elliptic.P256()
 	default:
 		return false, ErrUnsupportedAlgorithm
@@ -92,15 +104,18 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	e := &ECDSASignature{}
 	f := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
 	h := f()
+
 	h.Write(data)
+
 	_, err := asn1.Unmarshal(sig, e)
 	if err != nil {
 		return false, ErrSigNotProvidedOrInvalid
 	}
+
 	return ecdsa.Verify(pubkey, h.Sum(nil), e.R, e.S), nil
 }
 
-// Verify RSA Public Key Signature
+// Verify RSA Public Key Signature.
 func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	pubkey := &rsa.PublicKey{
 		N: big.NewInt(0).SetBytes(k.Modulus),
@@ -112,6 +127,7 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	h.Write(data)
 
 	var hash crypto.Hash
+
 	switch COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm) {
 	case AlgRS1:
 		hash = crypto.SHA1
@@ -124,30 +140,33 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	default:
 		return false, ErrUnsupportedAlgorithm
 	}
+
 	switch COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm) {
 	case AlgPS256, AlgPS384, AlgPS512:
 		err := rsa.VerifyPSS(pubkey, hash, h.Sum(nil), sig, nil)
-		return err == nil, err
 
+		return err == nil, err
 	case AlgRS1, AlgRS256, AlgRS384, AlgRS512:
 		err := rsa.VerifyPKCS1v15(pubkey, hash, h.Sum(nil), sig)
+
 		return err == nil, err
 	default:
 		return false, ErrUnsupportedAlgorithm
 	}
 }
 
-// Return which signature algorithm is being used from the COSE Key
+// SigAlgFromCOSEAlg return which signature algorithm is being used from the COSE Key.
 func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) SignatureAlgorithm {
 	for _, details := range SignatureAlgorithmDetails {
 		if details.coseAlg == coseAlg {
 			return details.algo
 		}
 	}
+
 	return UnknownSignatureAlgorithm
 }
 
-// Return the Hashing interface to be used for a given COSE Algorithm
+// HasherFromCOSEAlg returns the Hashing interface to be used for a given COSE Algorithm.
 func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
 	for _, details := range SignatureAlgorithmDetails {
 		if details.coseAlg == coseAlg {
@@ -158,25 +177,32 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
 	return crypto.SHA256.New
 }
 
-// Figure out what kind of COSE material was provided and create the data for the new key
+// ParsePublicKey figures out what kind of COSE material was provided and create the data for the new key.
 func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 	pk := PublicKeyData{}
 	webauthncbor.Unmarshal(keyBytes, &pk)
+
 	switch COSEKeyType(pk.KeyType) {
 	case OctetKey:
 		var o OKPPublicKeyData
+
 		webauthncbor.Unmarshal(keyBytes, &o)
 		o.PublicKeyData = pk
+
 		return o, nil
 	case EllipticKey:
 		var e EC2PublicKeyData
+
 		webauthncbor.Unmarshal(keyBytes, &e)
 		e.PublicKeyData = pk
+
 		return e, nil
 	case RSAKey:
 		var r RSAPublicKeyData
+
 		webauthncbor.Unmarshal(keyBytes, &r)
 		r.PublicKeyData = pk
+
 		return r, nil
 	default:
 		return nil, ErrUnsupportedKey
@@ -208,91 +234,114 @@ func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 type COSEAlgorithmIdentifier int
 
 const (
-	// AlgES256 ECDSA with SHA-256
+	// AlgES256 ECDSA with SHA-256.
 	AlgES256 COSEAlgorithmIdentifier = -7
-	// AlgES384 ECDSA with SHA-384
+
+	// AlgES384 ECDSA with SHA-384.
 	AlgES384 COSEAlgorithmIdentifier = -35
-	// AlgES512 ECDSA with SHA-512
+
+	// AlgES512 ECDSA with SHA-512.
 	AlgES512 COSEAlgorithmIdentifier = -36
-	// AlgRS1 RSASSA-PKCS1-v1_5 with SHA-1
+
+	// AlgRS1 RSASSA-PKCS1-v1_5 with SHA-1.
 	AlgRS1 COSEAlgorithmIdentifier = -65535
-	// AlgRS256 RSASSA-PKCS1-v1_5 with SHA-256
+
+	// AlgRS256 RSASSA-PKCS1-v1_5 with SHA-256.
 	AlgRS256 COSEAlgorithmIdentifier = -257
-	// AlgRS384 RSASSA-PKCS1-v1_5 with SHA-384
+
+	// AlgRS384 RSASSA-PKCS1-v1_5 with SHA-384.
 	AlgRS384 COSEAlgorithmIdentifier = -258
-	// AlgRS512 RSASSA-PKCS1-v1_5 with SHA-512
+
+	// AlgRS512 RSASSA-PKCS1-v1_5 with SHA-512.
 	AlgRS512 COSEAlgorithmIdentifier = -259
-	// AlgPS256 RSASSA-PSS with SHA-256
+
+	// AlgPS256 RSASSA-PSS with SHA-256.
 	AlgPS256 COSEAlgorithmIdentifier = -37
-	// AlgPS384 RSASSA-PSS with SHA-384
+
+	// AlgPS384 RSASSA-PSS with SHA-384.
 	AlgPS384 COSEAlgorithmIdentifier = -38
-	// AlgPS512 RSASSA-PSS with SHA-512
+
+	// AlgPS512 RSASSA-PSS with SHA-512.
 	AlgPS512 COSEAlgorithmIdentifier = -39
-	// AlgEdDSA EdDSA
+
+	// AlgEdDSA EdDSA.
 	AlgEdDSA COSEAlgorithmIdentifier = -8
-	// ECDSA using secp256k1 curve and SHA-256
+
+	// AlgES256K is ECDSA using secp256k1 curve and SHA-256.
 	AlgES256K COSEAlgorithmIdentifier = -47
 )
 
-// The Key Type derived from the IANA COSE AuthData
+// COSEKeyType is The Key type derived from the IANA COSE AuthData.
 type COSEKeyType int
 
 const (
-	// Reserved value
+	// KeyTypeReserved is a reserved value.
 	KeyTypeReserved COSEKeyType = iota
-	// OctetKey is an Octet Key
+
+	// OctetKey is an Octet Key.
 	OctetKey
-	// EllipticKey is an Elliptic Curve Public Key
+
+	// EllipticKey is an Elliptic Curve Public Key.
 	EllipticKey
-	// RSAKey is an RSA Public Key
+
+	// RSAKey is an RSA Public Key.
 	RSAKey
-	// Symmetric Keys
+
+	// Symmetric Keys.
 	Symmetric
-	// Public key for HSS/LMS hash-based digital signature
+
+	// HSSLMS is the public key for HSS/LMS hash-based digital signature.
 	HSSLMS
-	// WalnutDSA public key
 )
 
-// The COSE Elliptic Curves
-// https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves
+// COSEEllipticCurve is an enumerator that represents the COSE Elliptic Curves.
+//
+// Specification: https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves
 type COSEEllipticCurve int
 
 const (
-	// Reserved value
+	// EllipticCurveReserved is the COSE EC Reserved value.
 	EllipticCurveReserved COSEEllipticCurve = iota
-	// NIST P-256 also known as secp256r1
+
+	// P256 represents NIST P-256 also known as secp256r1.
 	P256
-	// NIST P-384 also known as secp384r1
+
+	// P384 represents NIST P-384 also known as secp384r1.
 	P384
-	// NIST P-521 also known as secp521r1
+
+	// P521 represents NIST P-521 also known as secp521r1.
 	P521
-	// X25519 for use w/ ECDH only
+
+	// X25519 for use w/ ECDH only.
 	X25519
-	// X448 for use w/ ECDH only
+
+	// X448 for use w/ ECDH only.
 	X448
-	// Ed25519 for use w/ EdDSA only
+
+	// Ed25519 for use w/ EdDSA only.
 	Ed25519
-	// Ed448 for use w/ EdDSA only
+
+	// Ed448 for use w/ EdDSA only.
 	Ed448
-	// SECG secp256k1 curve
+
+	// Secp256k1 is the SECG secp256k1 curve.
 	Secp256k1
 )
 
 func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
 	switch COSEEllipticCurve(k.Curve) {
 	case P256:
-		return tpm2.CurveNISTP256 // TPM_ECC_NIST_P256
+		return tpm2.CurveNISTP256 // TPM_ECC_NIST_P256.
 	case P384:
-		return tpm2.CurveNISTP384 // TPM_ECC_NIST_P384
+		return tpm2.CurveNISTP384 // TPM_ECC_NIST_P384.
 	case P521:
-		return tpm2.CurveNISTP521 // TPM_ECC_NIST_P521
+		return tpm2.CurveNISTP521 // TPM_ECC_NIST_P521.
 	default:
-		return tpm2.EllipticCurve(0) // TPM_ECC_NONE
+		return tpm2.EllipticCurve(0) // TPM_ECC_NONE.
 	}
 }
 
 func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
-
 	switch k := key.(type) {
 	case OKPPublicKeyData:
 		return k.Verify(data, sig)
@@ -308,25 +357,30 @@ func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
 func DisplayPublicKey(cpk []byte) string {
 	parsedKey, err := ParsePublicKey(cpk)
 	if err != nil {
-		return "Cannot display key"
+		return keyCannotDisplay
 	}
+
 	switch k := parsedKey.(type) {
 	case RSAPublicKeyData:
 		rKey := &rsa.PublicKey{
 			N: big.NewInt(0).SetBytes(k.Modulus),
 			E: int(uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16),
 		}
+
 		data, err := x509.MarshalPKIXPublicKey(rKey)
 		if err != nil {
-			return "Cannot display key"
+			return keyCannotDisplay
 		}
+
 		pemBytes := pem.EncodeToMemory(&pem.Block{
 			Type:  "RSA PUBLIC KEY",
 			Bytes: data,
 		})
+
 		return string(pemBytes)
 	case EC2PublicKeyData:
 		var curve elliptic.Curve
+
 		switch COSEAlgorithmIdentifier(k.Algorithm) {
 		case AlgES256:
 			curve = elliptic.P256()
@@ -335,36 +389,45 @@ func DisplayPublicKey(cpk []byte) string {
 		case AlgES512:
 			curve = elliptic.P521()
 		default:
-			return "Cannot display key"
+			return keyCannotDisplay
 		}
+
 		eKey := &ecdsa.PublicKey{
 			Curve: curve,
 			X:     big.NewInt(0).SetBytes(k.XCoord),
 			Y:     big.NewInt(0).SetBytes(k.YCoord),
 		}
+
 		data, err := x509.MarshalPKIXPublicKey(eKey)
 		if err != nil {
-			return "Cannot display key"
+			return keyCannotDisplay
 		}
+
 		pemBytes := pem.EncodeToMemory(&pem.Block{
 			Type:  "PUBLIC KEY",
 			Bytes: data,
 		})
+
 		return string(pemBytes)
 	case OKPPublicKeyData:
 		if len(k.XCoord) != ed25519.PublicKeySize {
-			return "Cannot display key"
+			return keyCannotDisplay
 		}
+
 		var oKey ed25519.PublicKey = make([]byte, ed25519.PublicKeySize)
+
 		copy(oKey, k.XCoord)
+
 		data, err := marshalEd25519PublicKey(oKey)
 		if err != nil {
-			return "Cannot display key"
+			return keyCannotDisplay
 		}
+
 		pemBytes := pem.EncodeToMemory(&pem.Block{
 			Type:  "PUBLIC KEY",
 			Bytes: data,
 		})
+
 		return string(pemBytes)
 
 	default:
@@ -372,7 +435,7 @@ func DisplayPublicKey(cpk []byte) string {
 	}
 }
 
-// Algorithm enumerations used for
+// SignatureAlgorithm represents algorithm enumerations used for COSE signatures.
 type SignatureAlgorithm int
 
 const (
@@ -414,11 +477,11 @@ var SignatureAlgorithmDetails = []struct {
 }
 
 type Error struct {
-	// Short name for the type of error that has occurred
+	// Short name for the type of error that has occurred.
 	Type string `json:"type"`
-	// Additional details about the error
+	// Additional details about the error.
 	Details string `json:"error"`
-	// Information to help debug the error
+	// Information to help debug the error.
 	DevInfo string `json:"debug"`
 }
 
@@ -444,5 +507,6 @@ func (err *Error) Error() string {
 func (passedError *Error) WithDetails(details string) *Error {
 	err := *passedError
 	err.Details = details
+
 	return &err
 }

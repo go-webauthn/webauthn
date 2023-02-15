@@ -12,8 +12,10 @@ func TestVerifyU2FFormat(t *testing.T) {
 		att            AttestationObject
 		clientDataHash []byte
 	}
+
 	successAttResponse := attestationTestUnpackResponse(t, u2fTestResponse["success"]).Response.AttestationObject
 	successClientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, u2fTestResponse["success"]).Raw.AttestationResponse.ClientDataJSON)
+
 	tests := []struct {
 		name    string
 		args    args
@@ -32,6 +34,7 @@ func TestVerifyU2FFormat(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, _, err := verifyU2FFormat(tt.args.att, tt.args.clientDataHash)

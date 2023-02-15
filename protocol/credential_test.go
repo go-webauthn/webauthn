@@ -270,12 +270,14 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 		Response                  ParsedAttestationResponse
 		Raw                       CredentialCreationResponse
 	}
+
 	type args struct {
 		storedChallenge    URLEncodedBase64
 		verifyUser         bool
 		relyingPartyID     string
 		relyingPartyOrigin []string
 	}
+
 	tests := []struct {
 		name    string
 		fields  fields
@@ -338,6 +340,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 			wantErr: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pcc := &ParsedCredentialCreationData{

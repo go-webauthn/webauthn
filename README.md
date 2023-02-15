@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/go-webauthn/webauthn)](https://goreportcard.com/report/github.com/go-webauthn/webauthn)
 
 
-This library is meant to handle [Web Authentication](https://w3c.github.io/webauthn) for Go apps that wish to implement 
+This library is meant to handle [Web Authentication](https://www.w3.org/TR/webauthn) for Go apps that wish to implement 
 a passwordless solution for users. This library conforms as much as possible to the guidelines and implementation
 procedures outlined by the document.
 

@@ -12,42 +12,57 @@ type CredentialAssertion struct {
 	Response PublicKeyCredentialRequestOptions `json:"publicKey"`
 }
 
-// In order to create a Credential via create(), the caller specifies a few parameters in a PublicKeyCredentialCreationOptions object.
-// See §5.4. Options for Credential Creation https://www.w3.org/TR/webauthn/#dictionary-makecredentialoptions
+// PublicKeyCredentialCreationOptions represents the IDL of the same name.
+//
+// In order to create a Credential via create(), the caller specifies a few parameters in a
+// PublicKeyCredentialCreationOptions object.
+//
+// TODO: There is one field missing from this for WebAuthn Level 3. A string slice named 'attestationFormats'.
+//
+// Specification: §5.4. Options for Credential Creation (https://www.w3.org/TR/webauthn/#dictionary-makecredentialoptions)
 type PublicKeyCredentialCreationOptions struct {
-	Challenge              URLEncodedBase64         `json:"challenge"`
 	RelyingParty           RelyingPartyEntity       `json:"rp"`
 	User                   UserEntity               `json:"user"`
+	Challenge              URLEncodedBase64         `json:"challenge"`
 	Parameters             []CredentialParameter    `json:"pubKeyCredParams,omitempty"`
-	AuthenticatorSelection AuthenticatorSelection   `json:"authenticatorSelection,omitempty"`
 	Timeout                int                      `json:"timeout,omitempty"`
 	CredentialExcludeList  []CredentialDescriptor   `json:"excludeCredentials,omitempty"`
-	Extensions             AuthenticationExtensions `json:"extensions,omitempty"`
+	AuthenticatorSelection AuthenticatorSelection   `json:"authenticatorSelection,omitempty"`
 	Attestation            ConveyancePreference     `json:"attestation,omitempty"`
+	Extensions             AuthenticationExtensions `json:"extensions,omitempty"`
 }
 
 // The PublicKeyCredentialRequestOptions dictionary supplies get() with the data it needs to generate an assertion.
 // Its challenge member MUST be present, while its other members are OPTIONAL.
-// See §5.5. Options for Assertion Generation https://www.w3.org/TR/webauthn/#assertion-options
+//
+// TODO: There are two fields missing from this for WebAuthn Level 3. A string type named 'attestation', and a string
+// slice named 'attestationFormats'.
+//
+// Specification: §5.5. Options for Assertion Generation (https://www.w3.org/TR/webauthn/#dictionary-assertion-options)
 type PublicKeyCredentialRequestOptions struct {
 	Challenge          URLEncodedBase64            `json:"challenge"`
 	Timeout            int                         `json:"timeout,omitempty"`
 	RelyingPartyID     string                      `json:"rpId,omitempty"`
 	AllowedCredentials []CredentialDescriptor      `json:"allowCredentials,omitempty"`
-	UserVerification   UserVerificationRequirement `json:"userVerification,omitempty"` // Default is "preferred"
+	UserVerification   UserVerificationRequirement `json:"userVerification,omitempty"`
 	Extensions         AuthenticationExtensions    `json:"extensions,omitempty"`
 }
 
-// This dictionary contains the attributes that are specified by a caller when referring to a public
-// key credential as an input parameter to the create() or get() methods. It mirrors the fields of
-// the PublicKeyCredential object returned by the latter methods.
-// See §5.10.3. Credential Descriptor https://www.w3.org/TR/webauthn/#credential-dictionary
+// CredentialDescriptor represents the PublicKeyCredentialDescriptor IDL.
+//
+// This dictionary contains the attributes that are specified by a caller when referring to a public key credential as
+// an input parameter to the create() or get() methods. It mirrors the fields of the PublicKeyCredential object returned
+// by the latter methods.
+//
+// Specification: §5.10.3. Credential Descriptor (https://www.w3.org/TR/webauthn/#credential-dictionary)
 type CredentialDescriptor struct {
 	// The valid credential types.
 	Type CredentialType `json:"type"`
-	// CredentialID The ID of a credential to allow/disallow
+
+	// CredentialID The ID of a credential to allow/disallow.
 	CredentialID URLEncodedBase64 `json:"id"`
-	// The authenticator transports that can be used
+
+	// The authenticator transports that can be used.
 	Transport []AuthenticatorTransport `json:"transports,omitempty"`
 
 	// The AttestationType from the Credential. Used internally only.
@@ -55,18 +70,23 @@ type CredentialDescriptor struct {
 }
 
 // CredentialParameter is the credential type and algorithm
-// that the relying party wants the authenticator to create
+// that the relying party wants the authenticator to create.
 type CredentialParameter struct {
 	Type      CredentialType                       `json:"type"`
 	Algorithm webauthncose.COSEAlgorithmIdentifier `json:"alg"`
 }
 
-// This enumeration defines the valid credential types.
-// It is an extension point; values can be added to it in the future, as
-// more credential types are defined. The values of this enumeration are used
-// for versioning the Authentication Assertion and attestation structures according
-// to the type of the authenticator.
-// See §5.10.3. Credential Descriptor https://www.w3.org/TR/webauthn/#credentialType
+// CredentialType represents the PublicKeyCredentialType IDL and is used with the CredentialDescriptor IDL.
+//
+// This enumeration defines the valid credential types. It is an extension point; values can be added to it in the
+// future, as more credential types are defined. The values of this enumeration are used for versioning the
+// Authentication Assertion and attestation structures according to the type of the authenticator.
+//
+// Currently one credential type is defined, namely "public-key".
+//
+// Specification: §5.8.2. Credential Type Enumeration (https://www.w3.org/TR/webauthn/#enumdef-publickeycredentialtype)
+//
+// Specification: §5.8.3. Credential Descriptor (https://www.w3.org/TR/webauthn/#dictionary-credential-descriptor)
 type CredentialType string
 
 const (
@@ -74,19 +94,23 @@ const (
 	PublicKeyCredentialType CredentialType = "public-key"
 )
 
-// AuthenticationExtensions - referred to as AuthenticationExtensionsClientInputs in the
-// spec document, this member contains additional parameters requesting additional processing
-// by the client and authenticator.
-// This is currently under development
+// AuthenticationExtensions represents the AuthenticationExtensionsClientInputs IDL. This member contains additional
+// parameters requesting additional processing by the client and authenticator.
+//
+// Specification: §5.7.1. Authentication Extensions Client Inputs (https://www.w3.org/TR/webauthn/#iface-authentication-extensions-client-inputs)
 type AuthenticationExtensions map[string]interface{}
 
+// AuthenticatorSelection represents the AuthenticatorSelectionCriteria IDL.
+//
 // WebAuthn Relying Parties may use the AuthenticatorSelectionCriteria dictionary to specify their requirements
-// regarding authenticator attributes. See §5.4.4. Authenticator Selection Criteria
-// https://www.w3.org/TR/webauthn/#authenticatorSelection
+// regarding authenticator attributes.
+//
+// Specification: §5.4.4. Authenticator Selection Criteria (https://www.w3.org/TR/webauthn/#dictionary-authenticatorSelection)
 type AuthenticatorSelection struct {
 	// AuthenticatorAttachment If this member is present, eligible authenticators are filtered to only
-	// authenticators attached with the specified AuthenticatorAttachment enum
+	// authenticators attached with the specified AuthenticatorAttachment enum.
 	AuthenticatorAttachment AuthenticatorAttachment `json:"authenticatorAttachment,omitempty"`
+
 	// RequireResidentKey this member describes the Relying Party's requirements regarding resident
 	// credentials. If the parameter is set to true, the authenticator MUST create a client-side-resident
 	// public key credential source when creating a public key credential.
@@ -161,9 +185,11 @@ const (
 
 func (a *PublicKeyCredentialRequestOptions) GetAllowedCredentialIDs() [][]byte {
 	var allowedCredentialIDs = make([][]byte, len(a.AllowedCredentials))
+
 	for i, credential := range a.AllowedCredentials {
 		allowedCredentialIDs[i] = credential.CredentialID
 	}
+
 	return allowedCredentialIDs
 }
 

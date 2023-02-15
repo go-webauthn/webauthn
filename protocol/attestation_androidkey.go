@@ -71,55 +71,67 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte) (strin
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-	err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, sig)
-	if err != nil {
+
+	if err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, sig); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 	}
+
 	// Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.
 	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
 	if err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
 	}
+
 	e := pubKey.(webauthncose.EC2PublicKeyData)
+
 	valid, err = e.Verify(signatureData, sig)
-	if err != nil || valid != true {
+	if err != nil || !valid {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
 	}
+
 	// §8.4.3. Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
 	// attCert.Extensions
 	var attExtBytes []byte
+
 	for _, ext := range attCert.Extensions {
 		if ext.Id.Equal([]int{1, 3, 6, 1, 4, 1, 11129, 2, 1, 17}) {
 			attExtBytes = ext.Value
 		}
 	}
+
 	if len(attExtBytes) == 0 {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions missing 1.3.6.1.4.1.11129.2.1.17")
 	}
-	// As noted in §8.4.1 (https://w3c.github.io/webauthn/#key-attstn-cert-requirements) the Android Key Attestation attestation certificate's
+
+	// As noted in §8.4.1 (https://www.w3.org/TR/webauthn/#key-attstn-cert-requirements) the Android Key Attestation attestation certificate's
 	// android key attestation certificate extension data is identified by the OID "1.3.6.1.4.1.11129.2.1.17".
 	decoded := keyDescription{}
-	_, err = asn1.Unmarshal([]byte(attExtBytes), &decoded)
-	if err != nil {
+
+	if _, err = asn1.Unmarshal(attExtBytes, &decoded); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to parse Android key attestation certificate extensions")
 	}
+
 	// Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
 	if 0 != bytes.Compare(decoded.AttestationChallenge, clientDataHash) {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation challenge not equal to clientDataHash")
 	}
+
 	// The AuthorizationList.allApplications field is not present on either authorization list (softwareEnforced nor teeEnforced), since PublicKeyCredential MUST be scoped to the RP ID.
 	if nil != decoded.SoftwareEnforced.AllApplications || nil != decoded.TeeEnforced.AllApplications {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains all applications field")
 	}
+
 	// For the following, use only the teeEnforced authorization list if the RP wants to accept only keys from a trusted execution environment, otherwise use the union of teeEnforced and softwareEnforced.
 	// The value in the AuthorizationList.origin field is equal to KM_ORIGIN_GENERATED.  (which == 0)
 	if KM_ORIGIN_GENERATED != decoded.SoftwareEnforced.Origin || KM_ORIGIN_GENERATED != decoded.TeeEnforced.Origin {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED")
 	}
+
 	// The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN.  (which == 2)
 	if !contains(decoded.SoftwareEnforced.Purpose, KM_PURPOSE_SIGN) && !contains(decoded.TeeEnforced.Purpose, KM_PURPOSE_SIGN) {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN")
 	}
+
 	return string(metadata.BasicFull), x5c, err
 }
 
@@ -129,6 +141,7 @@ func contains(s []int, e int) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -212,7 +225,7 @@ const (
 	KM_ORIGIN_IMPORTED         /* Imported into keymaster.  Existed as clear text in Android. */
 	KM_ORIGIN_UNKNOWN          /* Keymaster did not record origin.  This value can only be seen on
 	 * keys in a keymaster0 implementation.  The keymaster0 adapter uses
-	 * this value to document the fact that it is unkown whether the key
+	 * this value to document the fact that it is unknown whether the key
 	 * was generated inside or imported into keymaster. */
 )
 

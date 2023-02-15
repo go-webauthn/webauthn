@@ -13,9 +13,11 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 		SignCount    uint32
 		CloneWarning bool
 	}
+
 	type args struct {
 		authDataCount uint32
 	}
+
 	tests := []struct {
 		name        string
 		fields      fields
@@ -83,6 +85,7 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 			true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Authenticator{
@@ -98,13 +101,13 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 				return
 			}
 
-			// If there's no clone warning then, assert that the SignCount is updated
+			// If there's no clone warning then, assert that the SignCount is updated.
 			if !a.CloneWarning && a.SignCount != tt.args.authDataCount {
 				t.Errorf("Sign Count value [%v] does not match expectation [%v]", a.SignCount, tt.args.authDataCount)
 				return
 			}
 
-			// If there's clone warning then, assert that the Sign Count remains unchanged
+			// If there's clone warning then, assert that the Sign Count remains unchanged.
 			if a.CloneWarning && a.SignCount != previousSignCount {
 				t.Errorf("Sign Count value [%v] does not match expectation [%v]", a.SignCount, tt.args.authDataCount)
 				return
@@ -119,6 +122,7 @@ func TestSelectAuthenticator(t *testing.T) {
 		rrk *bool
 		uv  string
 	}
+
 	tests := []struct {
 		name string
 		args args
@@ -149,6 +153,7 @@ func TestSelectAuthenticator(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := SelectAuthenticator(tt.args.att, tt.args.rrk, tt.args.uv); !reflect.DeepEqual(got, tt.want) {

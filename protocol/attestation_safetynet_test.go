@@ -13,8 +13,10 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 		att            AttestationObject
 		clientDataHash []byte
 	}
+
 	successAttResponse := attestationTestUnpackResponse(t, safetyNetTestResponse["success"]).Response.AttestationObject
 	successClientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, safetyNetTestResponse["success"]).Raw.AttestationResponse.ClientDataJSON)
+
 	tests := []struct {
 		name    string
 		args    args
@@ -33,6 +35,7 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, got1, err := verifySafetyNetFormat(tt.args.att, tt.args.clientDataHash)

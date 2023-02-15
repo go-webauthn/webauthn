@@ -18,6 +18,7 @@ func TestCreateChallenge(t *testing.T) {
 			false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := CreateChallenge()
@@ -39,7 +40,9 @@ func TestChallenge_String(t *testing.T) {
 		t.Errorf("CreateChallenge() error = %v", err)
 		return
 	}
+
 	wantChallenge := base64.RawURLEncoding.EncodeToString(newChallenge)
+
 	tests := []struct {
 		name string
 		c    URLEncodedBase64
@@ -51,6 +54,7 @@ func TestChallenge_String(t *testing.T) {
 			wantChallenge,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.c.String(); got != tt.want {

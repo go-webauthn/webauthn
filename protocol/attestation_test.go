@@ -40,18 +40,20 @@ func TestAttestationVerify(t *testing.T) {
 
 func attestationTestUnpackRequest(t *testing.T, request string) CredentialCreation {
 	options := CredentialCreation{}
+
 	if err := json.Unmarshal([]byte(request), &options); err != nil {
 		t.Fatal(err)
 	}
+
 	return options
 }
 
-func attestationTestUnpackResponse(t *testing.T, response string) ParsedCredentialCreationData {
+func attestationTestUnpackResponse(t *testing.T, response string) (pcc ParsedCredentialCreationData) {
 	ccr := CredentialCreationResponse{}
 	if err := json.Unmarshal([]byte(response), &ccr); err != nil {
 		t.Fatal(err)
 	}
-	var pcc ParsedCredentialCreationData
+
 	pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
 	pcc.Raw = ccr
 
@@ -69,8 +71,7 @@ func TestPackedAttestationVerification(t *testing.T) {
 	t.Run("Testing Self Packed", func(t *testing.T) {
 		pcc := attestationTestUnpackResponse(t, testAttestationResponses[0])
 
-		// Test Packed Verification
-		// Unpack args
+		// Test Packed Verification. Unpack args.
 		clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
 		_, _, err := verifyPackedFormat(pcc.Response.AttestationObject, clientDataHash[:])
@@ -81,7 +82,7 @@ func TestPackedAttestationVerification(t *testing.T) {
 }
 
 var testAttestationOptions = []string{
-	// Direct Self Attestation with EC256 - MacOS
+	// Direct Self Attestation with EC256 - MacOS.
 	`{"publicKey": {
 		"challenge": "rWiex8xDOPfiCgyFu4BLW6vVOmXKgPwHrlMCgEs9SBA",
 		"rp": {
@@ -106,7 +107,7 @@ var testAttestationOptions = []string{
 		"timeout": 60000,
 		"attestation": "direct"
 	}}`,
-	// Direct Attestation with EC256
+	// Direct Attestation with EC256.
 	`{"publicKey": {
 		"challenge": "-Ri5NZTzJ8b6mvW3TVScLotEoALfgBa2Bn4YSaIObHc",
 		"rp": {
@@ -131,7 +132,7 @@ var testAttestationOptions = []string{
 		"timeout": 60000,
 		"attestation": "direct"
 	}}`,
-	// None Attestation with EC256
+	// None Attestation with EC256.
 	`{
 		"publicKey": {
 		  "challenge": "sVt4ScceMzqFSnfAq8hgLzblvo3fa4_aFVEcIESHIJ0",
@@ -161,7 +162,7 @@ var testAttestationOptions = []string{
 }
 
 var testAttestationResponses = []string{
-	// Self Attestation with EC256 - MacOS
+	// Self Attestation with EC256 - MacOS.
 	`{ 
 		"id": "AOx6vFGGITtlwjhqFFvAkJmBzSzfwE1dBa1fVR_Ltq5L35FJRNdgkXe84v3-0TEVNCSp",
 		"rawId": "AOx6vFGGITtlwjhqFFvAkJmBzSzfwE1dBa1fVR_Ltq5L35FJRNdgkXe84v3-0TEVNCSp",
@@ -171,7 +172,7 @@ var testAttestationResponses = []string{
 		},
 		"type": "public-key"
 	}`,
-	// Direct Attestation with EC256 - Titan
+	// Direct Attestation with EC256 - Titan.
 	`{ 
 		"id": "FOxcmsqPLNCHtyILvbNkrtHMdKAeqSJXYZDbeFd0kc5Enm8Kl6a0Jp0szgLilDw1S4CjZhe9Z2611EUGbjyEmg",
 		"rawId": "FOxcmsqPLNCHtyILvbNkrtHMdKAeqSJXYZDbeFd0kc5Enm8Kl6a0Jp0szgLilDw1S4CjZhe9Z2611EUGbjyEmg",
@@ -181,7 +182,7 @@ var testAttestationResponses = []string{
 		},
 		"type": "public-key"
 	}`,
-	// None Attestation with EC256 - Titan
+	// None Attestation with EC256 - Titan.
 	`{
 		"id": "6Jry73M_WVWDoXLsGxRsBVVHpPWDpNy1ETGXUEvJLdTAn5Ew6nDGU6W8iO3ZkcLEqr-CBwvx0p2WAxzt8RiwQQ",
 		"rawId": "6Jry73M_WVWDoXLsGxRsBVVHpPWDpNy1ETGXUEvJLdTAn5Ew6nDGU6W8iO3ZkcLEqr-CBwvx0p2WAxzt8RiwQQ",
