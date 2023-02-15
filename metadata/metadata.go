@@ -107,7 +107,7 @@ type StatusReport struct {
 type AuthenticatorAttestationType string
 
 const (
-	// BasicFull - Indicates full basic attestation, based on an attestation private key shared among a class of authenticators (e.g. same model). Authenticators must provide its attestation signature during the registration process for the same reason. The attestation trust anchor is shared with FIDO Servers out of band (as part of the Metadata). This sharing process shouldt be done according to [UAFMetadataService].
+	// BasicFull - Indicates full basic attestation, based on an attestation private key shared among a class of authenticators (e.g. same model). Authenticators must provide its attestation signature during the registration process for the same reason. The attestation trust anchor is shared with FIDO Servers out of band (as part of the Metadata). This sharing process should be done according to [UAFMetadataService].
 	BasicFull AuthenticatorAttestationType = "basic_full"
 	// BasicSurrogate - Just syntactically a Basic Attestation. The attestation object self-signed, i.e. it is signed using the UAuth.priv key, i.e. the key corresponding to the UAuth.pub key included in the attestation object. As a consequence it does not provide a cryptographic proof of the security characteristics. But it is the best thing we can do if the authenticator is not able to have an attestation private key.
 	BasicSurrogate AuthenticatorAttestationType = "basic_surrogate"
@@ -174,6 +174,7 @@ func IsUndesiredAuthenticatorStatus(status AuthenticatorStatus) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -339,10 +340,10 @@ type MetadataStatement struct {
 	UserVerificationDetails [][]VerificationMethodDescriptor `json:"userVerificationDetails"`
 	// A 16-bit number representing the bit fields defined by the KEY_PROTECTION constants in the FIDO Registry of Predefined Values
 	KeyProtection []string `json:"keyProtection"`
-	// This entry is set to true or it is ommitted, if the Uauth private key is restricted by the authenticator to only sign valid FIDO signature assertions.
+	// This entry is set to true or it is omitted, if the Uauth private key is restricted by the authenticator to only sign valid FIDO signature assertions.
 	// This entry is set to false, if the authenticator doesn't restrict the Uauth key to only sign valid FIDO signature assertions.
 	IsKeyRestricted bool `json:"isKeyRestricted"`
-	// This entry is set to true or it is ommitted, if Uauth key usage always requires a fresh user verification
+	// This entry is set to true or it is omitted, if Uauth key usage always requires a fresh user verification
 	// This entry is set to false, if the Uauth key can be used without requiring a fresh user verification, e.g. without any additional user interaction, if the user was verified a (potentially configurable) caching time ago.
 	IsFreshUserVerificationRequired bool `json:"isFreshUserVerificationRequired"`
 	// A 16-bit number representing the bit fields defined by the MATCHER_PROTECTION constants in the FIDO Registry of Predefined Values
@@ -441,6 +442,7 @@ func algKeyCoseDictionary() func(AuthenticationAlgorithm) algKeyCose {
 		ALG_SIGN_ED25519_EDDSA_SHA512_RAW:   {KeyType: webauthncose.OctetKey, Algorithm: webauthncose.AlgEdDSA, Curve: webauthncose.Ed25519},
 		ALG_SIGN_ED448_EDDSA_SHA512_RAW:     {KeyType: webauthncose.OctetKey, Algorithm: webauthncose.AlgEdDSA, Curve: webauthncose.Ed448},
 	}
+
 	return func(key AuthenticationAlgorithm) algKeyCose {
 		return mapping[key]
 	}
@@ -452,6 +454,7 @@ func AlgKeyMatch(key algKeyCose, algs []AuthenticationAlgorithm) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -523,22 +526,23 @@ type AuthenticatorGetInfo struct {
 	VendorPrototypeConfigCommands []uint `json:"vendorPrototypeConfigCommands"`
 }
 
-// MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint
+// MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint.
 type MDSGetEndpointsRequest struct {
 	// The URL of the local server endpoint, e.g. https://webauthn.io/
 	Endpoint string `json:"endpoint"`
 }
 
-// MDSGetEndpointsResponse is the response received from a conformance metadata getEndpoints request
+// MDSGetEndpointsResponse is the response received from a conformance metadata getEndpoints request.
 type MDSGetEndpointsResponse struct {
-	// The status of the response
+	// The status of the response.
 	Status string `json:"status"`
-	// An array of urls, each pointing to a MetadataTOCPayload
+	// An array of urls, each pointing to a MetadataTOCPayload.
 	Result []string `json:"result"`
 }
 
 func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 	var payload MetadataBLOBPayload
+
 	token, err := jwt.Parse(string(body), func(token *jwt.Token) (interface{}, error) {
 		// 2. If the x5u attribute is present in the JWT Header, then
 		if _, ok := token.Header["x5u"].([]interface{}); ok {
@@ -555,29 +559,33 @@ func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 			chain = x5c
 		}
 
-		// The certificate chain MUST be verified to properly chain to the metadata TOC signing trust anchor
+		// The certificate chain MUST be verified to properly chain to the metadata TOC signing trust anchor.
 		valid, err := validateChain(chain, c)
 		if !valid || err != nil {
 			return nil, err
 		}
-		// chain validated, extract the TOC signing certificate from the chain
 
-		// create a buffer large enough to hold the certificate bytes
+		// Chain validated, extract the TOC signing certificate from the chain. Create a buffer large enough to hold the
+		// certificate bytes.
 		o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
-		// base64 decode the certificate into the buffer
+
+		// base64 decode the certificate into the buffer.
 		n, err := base64.StdEncoding.Decode(o, []byte(chain[0].(string)))
 		if err != nil {
 			return nil, err
 		}
-		// parse the certificate from the buffer
+
+		// Parse the certificate from the buffer.
 		cert, err := x509.ParseCertificate(o[:n])
 		if err != nil {
 			return nil, err
 		}
+
 		// 4. Verify the signature of the Metadata TOC object using the TOC signing certificate chain
-		// jwt.Parse() uses the TOC signing certificate public key internally to verify the signature
+		// jwt.Parse() uses the TOC signing certificate public key internally to verify the signature.
 		return cert.PublicKey, err
 	})
+
 	if err != nil {
 		return payload, err
 	}
@@ -589,10 +597,12 @@ func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 
 func validateChain(chain []interface{}, c http.Client) (bool, error) {
 	oRoot := make([]byte, base64.StdEncoding.DecodedLen(len(MDSRoot)))
+
 	nRoot, err := base64.StdEncoding.Decode(oRoot, []byte(MDSRoot))
 	if err != nil {
 		return false, err
 	}
+
 	rootcert, err := x509.ParseCertificate(oRoot[:nRoot])
 	if err != nil {
 		return false, err
@@ -603,10 +613,12 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 	roots.AddCert(rootcert)
 
 	o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[1].(string))))
+
 	n, err := base64.StdEncoding.Decode(o, []byte(chain[1].(string)))
 	if err != nil {
 		return false, err
 	}
+
 	intcert, err := x509.ParseCertificate(o[:n])
 	if err != nil {
 		return false, err
@@ -614,6 +626,7 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 
 	if revoked, ok := revoke.VerifyCertificate(intcert); !ok {
 		issuer := intcert.IssuingCertificateURL
+
 		if issuer != nil {
 			return false, errCRLUnavailable
 		}
@@ -625,14 +638,17 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 	ints.AddCert(intcert)
 
 	l := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
+
 	n, err = base64.StdEncoding.Decode(l, []byte(chain[0].(string)))
 	if err != nil {
 		return false, err
 	}
+
 	leafcert, err := x509.ParseCertificate(l[:n])
 	if err != nil {
 		return false, err
 	}
+
 	if revoked, ok := revoke.VerifyCertificate(leafcert); !ok {
 		return false, errCRLUnavailable
 	} else if revoked {
@@ -643,16 +659,18 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 		Roots:         roots,
 		Intermediates: ints,
 	}
+
 	_, err = leafcert.Verify(opts)
+
 	return err == nil, err
 }
 
 type MetadataError struct {
-	// Short name for the type of error that has occurred
+	// Short name for the type of error that has occurred.
 	Type string `json:"type"`
-	// Additional details about the error
+	// Additional details about the error.
 	Details string `json:"error"`
-	// Information to help debug the error
+	// Information to help debug the error.
 	DevInfo string `json:"debug"`
 }
 
