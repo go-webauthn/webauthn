@@ -23,8 +23,8 @@ import (
 // using fxamacker's cbor library ("github.com/fxamacker/cbor/v2") which is why there are cbor tags
 // included. The tag field values correspond to the IANA COSE keys that give their respective
 // values.
-// See §6.4.1.1 https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples for examples of this
-// COSE data.
+//
+// Specification: §6.4.1.1. Examples of credentialPublicKey Values Encoded in COSE_Key Format (https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples)
 type PublicKeyData struct {
 	// Decode the results to int by default.
 	_struct bool `cbor:",keyasint" json:"public_key"`
@@ -226,11 +226,11 @@ func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 	}, nil
 }
 
-// COSEAlgorithmIdentifier From §5.10.5. A number identifying a cryptographic algorithm. The algorithm
-// identifiers SHOULD be values registered in the IANA COSE Algorithms registry
-// [https://www.w3.org/TR/webauthn/#biblio-iana-cose-algs-reg], for instance, -7 for "ES256"
+// COSEAlgorithmIdentifier is a number identifying a cryptographic algorithm. The algorithm identifiers SHOULD be values
+// registered in the IANA COSE Algorithms registry [https://www.w3.org/TR/webauthn/#biblio-iana-cose-algs-reg], for
+// instance, -7 for "ES256" and -257 for "RS256".
 //
-//	and -257 for "RS256".
+// Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn/#sctn-alg-identifier)
 type COSEAlgorithmIdentifier int
 
 const (
