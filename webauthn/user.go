@@ -9,6 +9,8 @@ type User interface {
 	// To ensure secure operation, authentication and authorization decisions MUST be made on the basis of this id
 	// member, not the displayName nor name members. See Section 6.1 of [RFC8266].
 	//
+	// It's recommended this value is completely random and uses the entire 64 bytes.
+	//
 	// Specification: §5.4.3. User Account Parameters for Credential Generation (https://w3c.github.io/webauthn/#dom-publickeycredentialuserentity-id)
 	WebAuthnID() []byte
 

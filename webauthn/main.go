@@ -27,6 +27,8 @@ type Config struct {
 	// AuthenticatorSelection is the default authenticator selection for both logins and credential registrations.
 	AuthenticatorSelection protocol.AuthenticatorSelection
 
+	StringEncodeUserID bool
+
 	Timeout int
 	Debug   bool
 
