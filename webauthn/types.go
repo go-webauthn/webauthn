@@ -91,11 +91,11 @@ func (config *Config) validate() error {
 	}
 
 	if len(config.RPDisplayName) == 0 {
-		return fmt.Errorf("Missing RPDisplayName")
+		return fmt.Errorf(errFmtEmptyField, "RPDisplayName")
 	}
 
 	if len(config.RPID) == 0 {
-		return fmt.Errorf("Missing RPID")
+		return fmt.Errorf(errFmtEmptyField, "RPID")
 	}
 
 	_, err := url.Parse(config.RPID)
@@ -128,16 +128,19 @@ func (config *Config) validate() error {
 	}
 
 	if len(config.RPOrigin) > 0 {
-		config.RPOrigins = append(config.RPOrigins, config.RPOrigin)
+		if len(config.RPOrigins) != 0 {
+			return fmt.Errorf("deprecated field 'RPOrigin' can't be defined at the same tme as the replacement field 'RPOrigins'")
+		}
+
+		config.RPOrigins = []string{config.RPOrigin}
 	}
 
 	if len(config.RPOrigins) == 0 {
-		return fmt.Errorf("missing at least one RPOrigin")
+		return fmt.Errorf("must provide at least one value to the 'RPOrigins' field")
 	}
 
 	if config.AuthenticatorSelection.RequireResidentKey == nil {
-		rrk := false
-		config.AuthenticatorSelection.RequireResidentKey = &rrk
+		config.AuthenticatorSelection.RequireResidentKey = protocol.ResidentKeyNotRequired()
 	}
 
 	if config.AuthenticatorSelection.UserVerification == "" {

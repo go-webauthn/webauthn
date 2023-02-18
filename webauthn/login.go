@@ -47,9 +47,9 @@ func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol
 	return webauthn.beginLogin(nil, nil, opts...)
 }
 
-func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (response *protocol.CredentialAssertion, sessionData *SessionData, err error) {
+func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (assertion *protocol.CredentialAssertion, session *SessionData, err error) {
 	if err = webauthn.Config.validate(); err != nil {
-		return nil, nil, fmt.Errorf("error occurred validating the configuration: %w", err)
+		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
 	}
 
 	challenge, err := protocol.CreateChallenge()
@@ -57,40 +57,41 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		return nil, nil, err
 	}
 
-	requestOptions := protocol.PublicKeyCredentialRequestOptions{
-		Challenge:          challenge,
-		Timeout:            webauthn.Config.Timeout,
-		RelyingPartyID:     webauthn.Config.RPID,
-		UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
-		AllowedCredentials: allowedCredentials,
+	assertion = &protocol.CredentialAssertion{
+		Response: protocol.PublicKeyCredentialRequestOptions{
+			Challenge:          challenge,
+			RelyingPartyID:     webauthn.Config.RPID,
+			UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
+			AllowedCredentials: allowedCredentials,
+		},
 	}
 
-	for _, setter := range opts {
-		setter(&requestOptions)
+	for _, opt := range opts {
+		opt(&assertion.Response)
 	}
 
-	if requestOptions.Timeout == 0 {
+	if assertion.Response.Timeout == 0 {
 		switch {
-		case requestOptions.UserVerification == protocol.VerificationDiscouraged:
-			requestOptions.Timeout = int(webauthn.Config.Timeouts.Login.TimeoutUVD.Milliseconds())
+		case assertion.Response.UserVerification == protocol.VerificationDiscouraged:
+			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.TimeoutUVD.Milliseconds())
 		default:
-			requestOptions.Timeout = int(webauthn.Config.Timeouts.Login.Timeout.Milliseconds())
+			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.Timeout.Milliseconds())
 		}
 	}
 
-	sessionData = &SessionData{
+	session = &SessionData{
 		Challenge:            challenge.String(),
 		UserID:               userID,
-		AllowedCredentialIDs: requestOptions.GetAllowedCredentialIDs(),
-		UserVerification:     requestOptions.UserVerification,
-		Extensions:           requestOptions.Extensions,
+		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
+		UserVerification:     assertion.Response.UserVerification,
+		Extensions:           assertion.Response.Extensions,
 	}
 
 	if webauthn.Config.Timeouts.Login.Enforce {
-		sessionData.Expires = time.Now().Add(time.Millisecond * time.Duration(requestOptions.Timeout))
+		session.Expires = time.Now().Add(time.Millisecond * time.Duration(assertion.Response.Timeout))
 	}
 
-	return &protocol.CredentialAssertion{Response: requestOptions}, sessionData, nil
+	return assertion, session, nil
 }
 
 // WithAllowedCredentials adjusts the allowed credential list with Credential Descriptors, discussed in the included

@@ -21,7 +21,7 @@ type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator.
 func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOption) (creation *protocol.CredentialCreation, session *SessionData, err error) {
 	if err = webauthn.Config.validate(); err != nil {
-		return nil, nil, fmt.Errorf("error occurred validating the configuration: %w", err)
+		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
 	}
 
 	challenge, err := protocol.CreateChallenge()
@@ -59,8 +59,8 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		},
 	}
 
-	for _, setter := range opts {
-		setter(&creation.Response)
+	for _, opt := range opts {
+		opt(&creation.Response)
 	}
 
 	if creation.Response.Timeout == 0 {
