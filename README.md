@@ -67,7 +67,6 @@ func main() {
 		RPDisplayName: "Go Webauthn", // Display Name for your site
 		RPID: "go-webauthn.local", // Generally the FQDN for your site
 		RPOrigins: []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
-		RPIcon: "https://go-webauthn.local/logo.png", // Optional icon URL for your site
 	}
 	
 	if w, err = webauthn.New(wconfig); err != nil {
@@ -257,7 +256,6 @@ func main() {
 		RPDisplayName: "Go Webauthn",                               // Display Name for your site
 		RPID:          "go-webauthn.local",                         // Generally the FQDN for your site
 		RPOrigins:     []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
-		RPIcon:        "https://go-webauthn.local/logo.png",        // Optional icon URL for your site
 		Timeouts: webauthn.TimeoutsConfig{
 			Login: webauthn.TimeoutConfig{
 				Enforce:    true, // Require the response from the client comes before the end of the timeout.
