@@ -75,7 +75,6 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 	session = &SessionData{
 		Challenge:        challenge.String(),
 		UserID:           user.WebAuthnID(),
-		UserDisplayName:  user.WebAuthnDisplayName(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
 	}
 
