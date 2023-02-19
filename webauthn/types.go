@@ -11,7 +11,7 @@ import (
 // New creates a new WebAuthn object given the proper Config.
 func New(config *Config) (*WebAuthn, error) {
 	if err := config.validate(); err != nil {
-		return nil, fmt.Errorf("Configuration error: %+v", err)
+		return nil, fmt.Errorf(errFmtConfigValidate, err)
 	}
 
 	return &WebAuthn{
