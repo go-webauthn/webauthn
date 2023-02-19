@@ -2,7 +2,9 @@ package webauthn
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -17,7 +19,11 @@ import (
 type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
 
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator.
-func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOption) (*protocol.CredentialCreation, *SessionData, error) {
+func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOption) (creation *protocol.CredentialCreation, session *SessionData, err error) {
+	if err = webauthn.Config.validate(); err != nil {
+		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
+	}
+
 	challenge, err := protocol.CreateChallenge()
 	if err != nil {
 		return nil, nil, err
@@ -25,7 +31,7 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 
 	var entityUserID interface{}
 
-	if webauthn.Config.StringEncodeUserID {
+	if webauthn.Config.EncodeUserIDAsString {
 		entityUserID = string(user.WebAuthnID())
 	} else {
 		entityUserID = protocol.URLEncodedBase64(user.WebAuthnID())
@@ -50,28 +56,41 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 
 	credentialParams := defaultRegistrationCredentialParameters()
 
-	creationOptions := protocol.PublicKeyCredentialCreationOptions{
-		RelyingParty:           entityRelyingParty,
-		User:                   entityUser,
-		Challenge:              challenge,
-		Parameters:             credentialParams,
-		AuthenticatorSelection: webauthn.Config.AuthenticatorSelection,
-		Timeout:                webauthn.Config.Timeout,
-		Attestation:            webauthn.Config.AttestationPreference,
+	creation = &protocol.CredentialCreation{
+		Response: protocol.PublicKeyCredentialCreationOptions{
+			RelyingParty:           entityRelyingParty,
+			User:                   entityUser,
+			Challenge:              challenge,
+			Parameters:             credentialParams,
+			AuthenticatorSelection: webauthn.Config.AuthenticatorSelection,
+			Attestation:            webauthn.Config.AttestationPreference,
+		},
 	}
 
-	for _, setter := range opts {
-		setter(&creationOptions)
+	for _, opt := range opts {
+		opt(&creation.Response)
 	}
 
-	response := protocol.CredentialCreation{Response: creationOptions}
-	session := SessionData{
+	if creation.Response.Timeout == 0 {
+		switch {
+		case creation.Response.AuthenticatorSelection.UserVerification == protocol.VerificationDiscouraged:
+			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
+		default:
+			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
+		}
+	}
+
+	session = &SessionData{
 		Challenge:        challenge.String(),
 		UserID:           user.WebAuthnID(),
-		UserVerification: creationOptions.AuthenticatorSelection.UserVerification,
+		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
 	}
 
-	return &response, &session, nil
+	if webauthn.Config.Timeouts.Registration.Enforce {
+		session.Expires = time.Now().Add(time.Millisecond * time.Duration(creation.Response.Timeout))
+	}
+
+	return creation, session, nil
 }
 
 // WithAuthenticatorSelection adjusts the non-default parameters regarding the authenticator to select during
@@ -156,6 +175,10 @@ func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, res
 func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parsedResponse *protocol.ParsedCredentialCreationData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
+	}
+
+	if !session.Expires.IsZero() && session.Expires.Before(time.Now()) {
+		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired

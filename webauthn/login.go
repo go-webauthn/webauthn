@@ -2,7 +2,9 @@ package webauthn
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -45,35 +47,51 @@ func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol
 	return webauthn.beginLogin(nil, nil, opts...)
 }
 
-func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (assertion *protocol.CredentialAssertion, session *SessionData, err error) {
+	if err = webauthn.Config.validate(); err != nil {
+		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
+	}
+
 	challenge, err := protocol.CreateChallenge()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	requestOptions := protocol.PublicKeyCredentialRequestOptions{
-		Challenge:          challenge,
-		Timeout:            webauthn.Config.Timeout,
-		RelyingPartyID:     webauthn.Config.RPID,
-		UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
-		AllowedCredentials: allowedCredentials,
+	assertion = &protocol.CredentialAssertion{
+		Response: protocol.PublicKeyCredentialRequestOptions{
+			Challenge:          challenge,
+			RelyingPartyID:     webauthn.Config.RPID,
+			UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
+			AllowedCredentials: allowedCredentials,
+		},
 	}
 
-	for _, setter := range opts {
-		setter(&requestOptions)
+	for _, opt := range opts {
+		opt(&assertion.Response)
 	}
 
-	sessionData := SessionData{
+	if assertion.Response.Timeout == 0 {
+		switch {
+		case assertion.Response.UserVerification == protocol.VerificationDiscouraged:
+			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.TimeoutUVD.Milliseconds())
+		default:
+			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.Timeout.Milliseconds())
+		}
+	}
+
+	session = &SessionData{
 		Challenge:            challenge.String(),
 		UserID:               userID,
-		AllowedCredentialIDs: requestOptions.GetAllowedCredentialIDs(),
-		UserVerification:     requestOptions.UserVerification,
-		Extensions:           requestOptions.Extensions,
+		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
+		UserVerification:     assertion.Response.UserVerification,
+		Extensions:           assertion.Response.Extensions,
 	}
 
-	response := protocol.CredentialAssertion{Response: requestOptions}
+	if webauthn.Config.Timeouts.Login.Enforce {
+		session.Expires = time.Now().Add(time.Millisecond * time.Duration(assertion.Response.Timeout))
+	}
 
-	return &response, &sessionData, nil
+	return assertion, session, nil
 }
 
 // WithAllowedCredentials adjusts the allowed credential list with Credential Descriptors, discussed in the included
@@ -134,6 +152,10 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
+	}
+
+	if !session.Expires.IsZero() && session.Expires.Before(time.Now()) {
+		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
 	return webauthn.validateLogin(user, session, parsedResponse)
