@@ -26,18 +26,15 @@ type WebAuthn struct {
 
 // Config represents the WebAuthn configuration.
 type Config struct {
-	// RPDisplayName configures the display name for the Relying Party Server. This can be any string.
-	RPDisplayName string
-
 	// RPID configures the Relying Party Server ID. This should generally be the origin without a scheme and port.
 	RPID string
+
+	// RPDisplayName configures the display name for the Relying Party Server. This can be any string.
+	RPDisplayName string
 
 	// RPOrigins configures the list of Relying Party Server Origins that are permitted. These should be fully
 	// qualified origins.
 	RPOrigins []string
-
-	// RPIcon
-	RPIcon string
 
 	// AttestationPreference sets the default attestation conveyance preferences.
 	AttestationPreference protocol.ConveyancePreference
@@ -48,20 +45,30 @@ type Config struct {
 	// Debug enables various debug options.
 	Debug bool
 
-	// Timeout configures the default timeout in milliseconds.
-	//
-	// Deprecated: Use Timeouts instead.
-	Timeout int
+	// EncodeUserIDAsString ensures the user.id value during registrations is encoded as a raw UTF8 string. This is
+	// useful when you only use printable ASCII characters for the random user.id but the browser library does not
+	// decode the URL Safe Base64 data.
+	EncodeUserIDAsString bool
 
 	// Timeouts configures various timeouts.
 	Timeouts TimeoutsConfig
+
+	validated bool
+
+	// RPIcon sets the icon URL for the Relying Party Server.
+	//
+	// Deprecated: this option has been removed from newer specifications due to security considerations.
+	RPIcon string
 
 	// RPOrigin configures the permitted Relying Party Server Origin.
 	//
 	// Deprecated: Use RPOrigins instead.
 	RPOrigin string
 
-	validated bool
+	// Timeout configures the default timeout in milliseconds.
+	//
+	// Deprecated: Use Timeouts instead.
+	Timeout int
 }
 
 // TimeoutsConfig represents the WebAuthn timeouts configuration.
@@ -91,16 +98,23 @@ func (config *Config) validate() error {
 	}
 
 	if len(config.RPDisplayName) == 0 {
-		return fmt.Errorf(errFmtEmptyField, "RPDisplayName")
+		return fmt.Errorf(errFmtFieldEmpty, "RPDisplayName")
 	}
 
 	if len(config.RPID) == 0 {
-		return fmt.Errorf(errFmtEmptyField, "RPID")
+		return fmt.Errorf(errFmtFieldEmpty, "RPID")
 	}
 
-	_, err := url.Parse(config.RPID)
-	if err != nil {
-		return fmt.Errorf("RPID not valid URI: %+v", err)
+	var err error
+
+	if _, err = url.Parse(config.RPID); err != nil {
+		return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
+	}
+
+	if config.RPIcon != "" {
+		if _, err = url.Parse(config.RPIcon); err != nil {
+			return fmt.Errorf(errFmtFieldNotValidURI, "RPIcon", err)
+		}
 	}
 
 	defaultTimeoutConfig := defaultTimeout
@@ -160,6 +174,8 @@ type User interface {
 	//
 	// To ensure secure operation, authentication and authorization decisions MUST be made on the basis of this id
 	// member, not the displayName nor name members. See Section 6.1 of [RFC8266].
+	//
+	// It's recommended this value is completely random and uses the entire 64 bytes.
 	//
 	// Specification: §5.4.3. User Account Parameters for Credential Generation (https://w3c.github.io/webauthn/#dom-publickeycredentialuserentity-id)
 	WebAuthnID() []byte

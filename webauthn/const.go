@@ -5,8 +5,9 @@ import (
 )
 
 const (
-	errFmtEmptyField     = "the field '%s' must be configured but it is empty"
-	errFmtConfigValidate = "error occurred validating the configuration: %w"
+	errFmtFieldEmpty       = "the field '%s' must be configured but it is empty"
+	errFmtFieldNotValidURI = "field '%s' is not a valid URI: %w"
+	errFmtConfigValidate   = "error occurred validating the configuration: %w"
 )
 
 const (

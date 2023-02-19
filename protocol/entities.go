@@ -46,9 +46,10 @@ type UserEntity struct {
 	// For example, "Alex P. Müller" or "田中 倫". The Relying Party SHOULD let
 	// the user choose this, and SHOULD NOT restrict the choice more than necessary.
 	DisplayName string `json:"displayName,omitempty"`
+
 	// ID is the user handle of the user account entity. To ensure secure operation,
 	// authentication and authorization decisions MUST be made on the basis of this id
 	// member, not the displayName nor name members. See Section 6.1 of
 	// [RFC8266](https://www.w3.org/TR/webauthn/#biblio-rfc8266).
-	ID URLEncodedBase64 `json:"id"`
+	ID interface{} `json:"id"`
 }

@@ -29,8 +29,16 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		return nil, nil, err
 	}
 
+	var entityUserID interface{}
+
+	if webauthn.Config.EncodeUserIDAsString {
+		entityUserID = string(user.WebAuthnID())
+	} else {
+		entityUserID = protocol.URLEncodedBase64(user.WebAuthnID())
+	}
+
 	entityUser := protocol.UserEntity{
-		ID:          user.WebAuthnID(),
+		ID:          entityUserID,
 		DisplayName: user.WebAuthnDisplayName(),
 		CredentialEntity: protocol.CredentialEntity{
 			Name: user.WebAuthnName(),
