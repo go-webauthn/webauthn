@@ -31,80 +31,137 @@ Make sure your `user` model is able to handle the interface functions laid out i
 supporting the storage and retrieval of the credential and authenticator structs in `webauthn/credential.go` and 
 `webauthn/authenticator.go`, respectively.
 
+## Examples
+
+The following examples show some basic use cases of the library. For consistency sake the following variables are used
+to denote specific things:
+
+- Variable `w`: the `webauthn.WebAuthn` instance you initialize elsewhere in your code
+- Variable `datastore`: the pseudocode backend service that stores your webauthn session data and users such as PostgreSQL 
+- Variable `session`: the webauthn.SessionData object
+- Variable `user`: your webauthn.User implementation
+
+We try to avoid using specific external libraries (excluding stdlib) where possible, and you'll need to adapt these
+examples with this in mind.
+
 ### Initialize the request handler
 
-```golang
+```go
+package example
+
 import (
+	"fmt"
+	"time"
+
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
 var (
-    web *webauthn.WebAuthn
-    err error
+	w *webauthn.WebAuthn
+	err error
 )
 
 // Your initialization function
 func main() {
-    web, err = webauthn.New(&webauthn.Config{
-        RPDisplayName: "Go Webauthn", // Display Name for your site
-        RPID: "go-webauthn.local", // Generally the FQDN for your site
-        RPOrigins: []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
-        RPIcon: "https://go-webauthn.local/logo.png", // Optional icon URL for your site
-    })
-    if err != nil {
-        fmt.Println(err)
-    }
+	wconfig := &webauthn.Config{
+		RPDisplayName: "Go Webauthn", // Display Name for your site
+		RPID: "go-webauthn.local", // Generally the FQDN for your site
+		RPOrigins: []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
+	}
+	
+	if w, err = webauthn.New(wconfig); err != nil {
+		fmt.Println(err)
+	}
 }
-
 ```
 
 ### Registering an account
 
-```golang
+```go
+package example
+
 func BeginRegistration(w http.ResponseWriter, r *http.Request) {
-    user := datastore.GetUser() // Find or create the new user  
-    options, sessionData, err := web.BeginRegistration(&user)
-    // handle errors if present
-    // store the sessionData values 
-    JSONResponse(w, options, http.StatusOK) // return the options generated
-    // options.publicKey contain our registration options
+	user := datastore.GetUser() // Find or create the new user  
+	options, session, err := web.BeginRegistration(user)
+	// handle errors if present
+	// store the sessionData values 
+	JSONResponse(w, options, http.StatusOK) // return the options generated
+	// options.publicKey contain our registration options
 }
 
 func FinishRegistration(w http.ResponseWriter, r *http.Request) {
-    user := datastore.GetUser() // Get the user  
-    // Get the session data stored from the function above
-    // using gorilla/sessions it could look like this
-    sessionData := store.Get(r, "registration-session")
-    parsedResponse, err := protocol.ParseCredentialCreationResponseBody(r.Body)
-    credential, err := web.CreateCredential(&user, sessionData, parsedResponse)
-    // Handle validation or input errors
-    // If creation was successful, store the credential object
-    JSONResponse(w, "Registration Success", http.StatusOK) // Handle next steps
+	response, err := protocol.ParseCredentialCreationResponseBody(r.Body)
+	if err != nil {
+		// Handle Error and return.
+		
+		return
+	}
+	
+	user := datastore.GetUser() // Get the user
+	
+	// Get the session data stored from the function above
+	session := datastore.GetSession()
+		
+	credential, err := w.CreateCredential(user, session, response)
+	if err != nil {
+		// Handle Error and return.
+
+		return
+	}
+	
+	// If creation was successful, store the credential object
+	JSONResponse(w, "Registration Success", http.StatusOK) // Handle next steps
+	
+	// Pseudocode to add the user credential.
+	user.AddCredential(credential)
+	datastore.SaveUser(user)
 }
 ```
 
 ### Logging into an account
 
-```golang
+```go
+package example
+
 func BeginLogin(w http.ResponseWriter, r *http.Request) {
-    user := datastore.GetUser() // Find the user
-    options, sessionData, err := webauthn.BeginLogin(&user)
-    // handle errors if present
-    // store the sessionData values
-    JSONResponse(w, options, http.StatusOK) // return the options generated
-    // options.publicKey contain our registration options
+	user := datastore.GetUser() // Find the user
+	
+	options, session, err := w.BeginLogin(user)
+	if err != nil {
+		// Handle Error and return.
+
+		return
+	}
+	
+	// store the session values
+	datastore.SaveSession(session)
+	
+	JSONResponse(w, options, http.StatusOK) // return the options generated
+	// options.publicKey contain our registration options
 }
 
 func FinishLogin(w http.ResponseWriter, r *http.Request) {
-    user := datastore.GetUser() // Get the user 
-    // Get the session data stored from the function above
-    // using gorilla/sessions it could look like this
-    sessionData := store.Get(r, "login-session")
-    parsedResponse, err := protocol.ParseCredentialRequestResponseBody(r.Body)
-    credential, err := webauthn.ValidateLogin(&user, sessionData, parsedResponse)
-    // Handle validation or input errors
-    // If login was successful, handle next steps
-    JSONResponse(w, "Login Success", http.StatusOK)
+	response, err := protocol.ParseCredentialRequestResponseBody(r.Body)
+	if err != nil {
+		// Handle Error and return.
+
+		return
+	}
+	
+	user := datastore.GetUser() // Get the user 
+	
+	// Get the session data stored from the function above
+	session := datastore.GetSession()
+	
+	credential, err := w.ValidateLogin(user, session, response)
+	if err != nil {
+		// Handle Error and return.
+
+		return
+	}
+	
+	// If login was successful, handle next steps
+	JSONResponse(w, "Login Success", http.StatusOK)
 }
 ```
 
@@ -117,32 +174,33 @@ You can modify the default credential creation options for registration and logi
 
 You can modify the registration options in the following ways:
 
-```golang
-// Wherever you handle your WebAuthn requests
+```go
+package example
+
 import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-var webAuthnHandler webauthn.WebAuthn // init this in your init function
+var w webauthn.WebAuthn // init this in your init function
 
 func beginRegistration() {
-    // Updating the AuthenticatorSelection options. 
-    // See the struct declarations for values
-    authSelect := protocol.AuthenticatorSelection{        
-        AuthenticatorAttachment: protocol.AuthenticatorAttachment("platform"),
-        RequireResidentKey: protocol.ResidentKeyUnrequired(),
-        UserVerification: protocol.VerificationRequired
-    }
+	// Updating the AuthenticatorSelection options. 
+	// See the struct declarations for values
+	authSelect := protocol.AuthenticatorSelection{
+		AuthenticatorAttachment: protocol.AuthenticatorAttachment("platform"),
+		RequireResidentKey: protocol.ResidentKeyNotRequired(),
+		UserVerification: protocol.VerificationRequired,
+	}
 
-    // Updating the ConveyencePreference options. 
-    // See the struct declarations for values
-    conveyencePref := protocol.ConveyancePreference(protocol.PreferNoAttestation)
+	// Updating the ConveyencePreference options. 
+	// See the struct declarations for values
+	conveyancePref := protocol.PreferNoAttestation
 
-    user := datastore.GetUser() // Get the user  
-    opts, sessionData, err webAuthnHandler.BeginRegistration(&user, webauthn.WithAuthenticatorSelection(authSelect), webauthn.WithConveyancePreference(conveyancePref))
+	user := datastore.GetUser() // Get the user  
+	opts, session, err := w.BeginRegistration(user, webauthn.WithAuthenticatorSelection(authSelect), webauthn.WithConveyancePreference(conveyancePref))
 
-    // Handle next steps
+	// Handle next steps
 }
 ```
 
@@ -150,31 +208,73 @@ func beginRegistration() {
 
 You can modify the login options to allow only certain credentials:
 
-```golang
-// Wherever you handle your WebAuthn requests
+```go
+package example
+
 import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-var webAuthnHandler webauthn.WebAuthn // init this in your init function
+var w webauthn.WebAuthn // init this in your init function
 
 func beginLogin() {
-    // Updating the AuthenticatorSelection options. 
-    // See the struct declarations for values
-    allowList := make([]protocol.CredentialDescriptor, 1)
-    allowList[0] = protocol.CredentialDescriptor{
-        CredentialID: credentialToAllowID,
-        Type: protocol.CredentialType("public-key"),
-    }
+	// Updating the AuthenticatorSelection options. 
+	// See the struct declarations for values
+	allowList := make([]protocol.CredentialDescriptor, 1)
+	allowList[0] = protocol.CredentialDescriptor{
+		CredentialID: credentialToAllowID,
+		Type: protocol.CredentialType("public-key"),
+	}
 
-    user := datastore.GetUser() // Get the user  
+	user := datastore.GetUser() // Get the user  
 
-    opts, sessionData, err := webAuthnHandler.BeginLogin(&user, webauthn.wat.WithAllowedCredentials(allowList))
+	opts, session, err := w.BeginLogin(user, webauthn.WithAllowedCredentials(allowList))
 
-    // Handle next steps
+	// Handle next steps
 }
+```
 
+## Timeout Mechanics
+
+The library by default does not enforce timeouts. However the default timeouts sent to the browser are taken from the
+specification. You can override both of these behaviours however.
+
+```go
+package example
+
+import (
+	"fmt"
+	"time"
+	
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
+)
+
+func main() {
+	wconfig := &webauthn.Config{
+		RPDisplayName: "Go Webauthn",                               // Display Name for your site
+		RPID:          "go-webauthn.local",                         // Generally the FQDN for your site
+		RPOrigins:     []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
+		Timeouts: webauthn.TimeoutsConfig{
+			Login: webauthn.TimeoutConfig{
+				Enforce:    true, // Require the response from the client comes before the end of the timeout.
+				Timeout:    time.Second * 60, // Standard timeout for login sessions.
+				TimeoutUVD: time.Second * 60, // Timeout for login sessions which have user verification set to discouraged.
+			},
+			Registration: webauthn.TimeoutConfig{
+				Enforce:    true, // Require the response from the client comes before the end of the timeout.
+				Timeout:    time.Second * 60, // Standard timeout for registration sessions.
+				TimeoutUVD: time.Second * 60, // Timeout for login sessions which have user verification set to discouraged.
+			},
+		},
+	}
+	
+	w, err := webauthn.New(wconfig)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
 ```
 
 ## Acknowledgements

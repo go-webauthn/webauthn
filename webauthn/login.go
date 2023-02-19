@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -59,7 +60,6 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	assertion = &protocol.CredentialAssertion{
 		Response: protocol.PublicKeyCredentialRequestOptions{
 			Challenge:          challenge,
-			Timeout:            webauthn.Config.Timeout,
 			RelyingPartyID:     webauthn.Config.RPID,
 			UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
 			AllowedCredentials: allowedCredentials,
@@ -70,12 +70,25 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		opt(&assertion.Response)
 	}
 
+	if assertion.Response.Timeout == 0 {
+		switch {
+		case assertion.Response.UserVerification == protocol.VerificationDiscouraged:
+			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.TimeoutUVD.Milliseconds())
+		default:
+			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.Timeout.Milliseconds())
+		}
+	}
+
 	session = &SessionData{
 		Challenge:            challenge.String(),
 		UserID:               userID,
 		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
 		UserVerification:     assertion.Response.UserVerification,
 		Extensions:           assertion.Response.Extensions,
+	}
+
+	if webauthn.Config.Timeouts.Login.Enforce {
+		session.Expires = time.Now().Add(time.Millisecond * time.Duration(assertion.Response.Timeout))
 	}
 
 	return assertion, session, nil
@@ -139,6 +152,10 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
+	}
+
+	if !session.Expires.IsZero() && session.Expires.Before(time.Now()) {
+		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
 	return webauthn.validateLogin(user, session, parsedResponse)

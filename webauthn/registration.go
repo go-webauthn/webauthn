@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -54,7 +55,6 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 			Challenge:              challenge,
 			Parameters:             credentialParams,
 			AuthenticatorSelection: webauthn.Config.AuthenticatorSelection,
-			Timeout:                webauthn.Config.Timeout,
 			Attestation:            webauthn.Config.AttestationPreference,
 		},
 	}
@@ -63,10 +63,23 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		opt(&creation.Response)
 	}
 
+	if creation.Response.Timeout == 0 {
+		switch {
+		case creation.Response.AuthenticatorSelection.UserVerification == protocol.VerificationDiscouraged:
+			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
+		default:
+			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
+		}
+	}
+
 	session = &SessionData{
 		Challenge:        challenge.String(),
 		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
+	}
+
+	if webauthn.Config.Timeouts.Registration.Enforce {
+		session.Expires = time.Now().Add(time.Millisecond * time.Duration(creation.Response.Timeout))
 	}
 
 	return creation, session, nil
@@ -154,6 +167,10 @@ func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, res
 func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parsedResponse *protocol.ParsedCredentialCreationData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
+	}
+
+	if !session.Expires.IsZero() && session.Expires.Before(time.Now()) {
+		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
