@@ -567,10 +567,10 @@ func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 
 		// Chain validated, extract the TOC signing certificate from the chain. Create a buffer large enough to hold the
 		// certificate bytes.
-		o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
+		o := make([]byte, base64.StdEncoding.Strict().DecodedLen(len(chain[0].(string))))
 
 		// base64 decode the certificate into the buffer.
-		n, err := base64.StdEncoding.Decode(o, []byte(chain[0].(string)))
+		n, err := base64.StdEncoding.Strict().Decode(o, []byte(chain[0].(string)))
 		if err != nil {
 			return nil, err
 		}
@@ -596,9 +596,11 @@ func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 }
 
 func validateChain(chain []interface{}, c http.Client) (bool, error) {
-	oRoot := make([]byte, base64.StdEncoding.DecodedLen(len(MDSRoot)))
+	decoder := base64.StdEncoding.Strict()
 
-	nRoot, err := base64.StdEncoding.Decode(oRoot, []byte(MDSRoot))
+	oRoot := make([]byte, decoder.DecodedLen(len(MDSRoot)))
+
+	nRoot, err := decoder.Decode(oRoot, []byte(MDSRoot))
 	if err != nil {
 		return false, err
 	}
@@ -612,9 +614,9 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 
 	roots.AddCert(rootcert)
 
-	o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[1].(string))))
+	o := make([]byte, decoder.DecodedLen(len(chain[1].(string))))
 
-	n, err := base64.StdEncoding.Decode(o, []byte(chain[1].(string)))
+	n, err := decoder.Decode(o, []byte(chain[1].(string)))
 	if err != nil {
 		return false, err
 	}
@@ -637,9 +639,9 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 	ints := x509.NewCertPool()
 	ints.AddCert(intcert)
 
-	l := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
+	l := make([]byte, decoder.DecodedLen(len(chain[0].(string))))
 
-	n, err = base64.StdEncoding.Decode(l, []byte(chain[0].(string)))
+	n, err = decoder.Decode(l, []byte(chain[0].(string)))
 	if err != nil {
 		return false, err
 	}

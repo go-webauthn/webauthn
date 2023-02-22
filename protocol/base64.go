@@ -12,7 +12,7 @@ import (
 type URLEncodedBase64 []byte
 
 func (e URLEncodedBase64) String() string {
-	return base64.RawURLEncoding.EncodeToString(e)
+	return base64.RawURLEncoding.Strict().EncodeToString(e)
 }
 
 // UnmarshalJSON base64 decodes a URL-encoded value, storing the result in the
@@ -29,9 +29,11 @@ func (e *URLEncodedBase64) UnmarshalJSON(data []byte) error {
 	// Trim the trailing equal characters.
 	data = bytes.TrimRight(data, "=")
 
-	out := make([]byte, base64.RawURLEncoding.DecodedLen(len(data)))
+	decoder := base64.RawURLEncoding.Strict()
 
-	n, err := base64.RawURLEncoding.Decode(out, data)
+	out := make([]byte, decoder.DecodedLen(len(data)))
+
+	n, err := decoder.Decode(out, data)
 	if err != nil {
 		return err
 	}
@@ -49,5 +51,5 @@ func (e URLEncodedBase64) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 
-	return []byte(`"` + base64.RawURLEncoding.EncodeToString(e) + `"`), nil
+	return []byte(`"` + e.String() + `"`), nil
 }

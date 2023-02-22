@@ -68,7 +68,7 @@ func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAs
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID missing")
 	}
 
-	if _, err = base64.RawURLEncoding.DecodeString(car.ID); err != nil {
+	if _, err = base64.RawURLEncoding.Strict().DecodeString(car.ID); err != nil {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID not base64url encoded")
 	}
 
