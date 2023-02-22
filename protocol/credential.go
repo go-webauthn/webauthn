@@ -71,6 +71,14 @@ func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialC
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo(err.Error())
 	}
 
+	return ccr.Parse()
+}
+
+// Parse validates and parses the CredentialCreationResponse into a ParsedCredentialCreationData. This receiver
+// is unlikely to be expressly guaranteed under the versioning policy. Users looking for this guarantee should see
+// ParseCredentialCreationResponseBody instead, and this receiver should only be used if that function is inadequate
+// for their use case.
+func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData, err error) {
 	if ccr.ID == "" {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Missing ID")
 	}
@@ -93,7 +101,7 @@ func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialC
 		return nil, ErrParsingData.WithDetails("Error parsing attestation response")
 	}
 
-	// TODO: Remove this as it's a backwards compatability layer.
+	// TODO: Remove this as it's a backwards compatibility layer.
 	if len(response.Transports) == 0 && len(ccr.Transports) != 0 {
 		for _, t := range ccr.Transports {
 			response.Transports = append(response.Transports, AuthenticatorTransport(t))
