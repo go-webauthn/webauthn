@@ -77,14 +77,14 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to find the SafetyNet response")
 	}
 
-	decoder := base64.StdEncoding.Strict()
+	encoding := base64.StdEncoding.Strict()
 
 	token, err := jwt.Parse(string(response), func(token *jwt.Token) (interface{}, error) {
 		chain := token.Header["x5c"].([]interface{})
 
-		o := make([]byte, decoder.DecodedLen(len(chain[0].(string))))
+		o := make([]byte, encoding.DecodedLen(len(chain[0].(string))))
 
-		n, err := decoder.Decode(o, []byte(chain[0].(string)))
+		n, err := encoding.Decode(o, []byte(chain[0].(string)))
 		if err != nil {
 			return nil, err
 		}
@@ -108,16 +108,16 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string
 	// of authenticatorData and clientDataHash.
 	nonceBuffer := sha256.Sum256(append(att.RawAuthData, clientDataHash...))
 
-	nonceBytes, err := decoder.DecodeString(safetyNetResponse.Nonce)
+	nonceBytes, err := encoding.DecodeString(safetyNetResponse.Nonce)
 	if !bytes.Equal(nonceBuffer[:], nonceBytes) || err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails("Invalid nonce for in SafetyNet response")
 	}
 
 	// §8.5.4 Let attestationCert be the attestation certificate (https://www.w3.org/TR/webauthn/#attestation-certificate)
 	certChain := token.Header["x5c"].([]interface{})
-	l := make([]byte, decoder.DecodedLen(len(certChain[0].(string))))
+	l := make([]byte, encoding.DecodedLen(len(certChain[0].(string))))
 
-	n, err := decoder.Decode(l, []byte(certChain[0].(string)))
+	n, err := encoding.Decode(l, []byte(certChain[0].(string)))
 	if err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err))
 	}

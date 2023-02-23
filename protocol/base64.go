@@ -28,11 +28,11 @@ func (e *URLEncodedBase64) UnmarshalJSON(data []byte) error {
 	// Trim the trailing padding characters.
 	data = bytes.TrimRight(data, "=")
 
-	decoder := base64.RawURLEncoding.Strict()
+	encoding := base64.RawURLEncoding.Strict()
 
-	out := make([]byte, decoder.DecodedLen(len(data)))
+	out := make([]byte, encoding.DecodedLen(len(data)))
 
-	n, err := decoder.Decode(out, data)
+	n, err := encoding.Decode(out, data)
 	if err != nil {
 		return err
 	}

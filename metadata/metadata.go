@@ -565,12 +565,14 @@ func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 			return nil, err
 		}
 
+		encoding := base64.StdEncoding.Strict()
+
 		// Chain validated, extract the TOC signing certificate from the chain. Create a buffer large enough to hold the
 		// certificate bytes.
-		o := make([]byte, base64.StdEncoding.Strict().DecodedLen(len(chain[0].(string))))
+		o := make([]byte, encoding.DecodedLen(len(chain[0].(string))))
 
 		// base64 decode the certificate into the buffer.
-		n, err := base64.StdEncoding.Strict().Decode(o, []byte(chain[0].(string)))
+		n, err := encoding.Decode(o, []byte(chain[0].(string)))
 		if err != nil {
 			return nil, err
 		}
@@ -596,11 +598,11 @@ func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 }
 
 func validateChain(chain []interface{}, c http.Client) (bool, error) {
-	decoder := base64.StdEncoding.Strict()
+	encoding := base64.StdEncoding.Strict()
 
-	oRoot := make([]byte, decoder.DecodedLen(len(MDSRoot)))
+	oRoot := make([]byte, encoding.DecodedLen(len(MDSRoot)))
 
-	nRoot, err := decoder.Decode(oRoot, []byte(MDSRoot))
+	nRoot, err := encoding.Decode(oRoot, []byte(MDSRoot))
 	if err != nil {
 		return false, err
 	}
@@ -614,9 +616,9 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 
 	roots.AddCert(rootcert)
 
-	o := make([]byte, decoder.DecodedLen(len(chain[1].(string))))
+	o := make([]byte, encoding.DecodedLen(len(chain[1].(string))))
 
-	n, err := decoder.Decode(o, []byte(chain[1].(string)))
+	n, err := encoding.Decode(o, []byte(chain[1].(string)))
 	if err != nil {
 		return false, err
 	}
@@ -639,9 +641,9 @@ func validateChain(chain []interface{}, c http.Client) (bool, error) {
 	ints := x509.NewCertPool()
 	ints.AddCert(intcert)
 
-	l := make([]byte, decoder.DecodedLen(len(chain[0].(string))))
+	l := make([]byte, encoding.DecodedLen(len(chain[0].(string))))
 
-	n, err = decoder.Decode(l, []byte(chain[0].(string)))
+	n, err = encoding.Decode(l, []byte(chain[0].(string)))
 	if err != nil {
 		return false, err
 	}
