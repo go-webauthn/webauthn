@@ -64,6 +64,14 @@ func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAs
 		return nil, ErrBadRequest.WithDetails("Parse error for Assertion")
 	}
 
+	return car.Parse()
+}
+
+// Parse validates and parses the CredentialAssertionResponse into a ParseCredentialCreationResponseBody. This receiver
+// is unlikely to be expressly guaranteed under the versioning policy. Users looking for this guarantee should see
+// ParseCredentialRequestResponseBody instead, and this receiver should only be used if that function is inadequate
+// for their use case.
+func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionData, err error) {
 	if car.ID == "" {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID missing")
 	}
