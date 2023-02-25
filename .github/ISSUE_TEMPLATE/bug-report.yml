@@ -18,6 +18,11 @@ body:
       description: What version of the library are you using or which versions do you see the issue in?
       multiple: true
       options:
+        - 0.8.2
+        - 0.8.1
+        - 0.8.0
+        - 0.7.2
+        - 0.7.1
         - 0.7.0
         - 0.6.2
         - 0.6.1
