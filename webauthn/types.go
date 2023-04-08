@@ -166,7 +166,7 @@ func (config *Config) validate() error {
 	return nil
 }
 
-// User is am interface with the Relying Party's User entry and provides the fields and methods needed for WebAuthn
+// User is an interface with the Relying Party's User entry and provides the fields and methods needed for WebAuthn
 // registration operations.
 type User interface {
 	// WebAuthnID provides the user handle of the user account. A user handle is an opaque byte sequence with a maximum
