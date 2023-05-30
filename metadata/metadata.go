@@ -7,10 +7,11 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/go-webauthn/revoke"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
+
+	"github.com/go-webauthn/x/revoke"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )

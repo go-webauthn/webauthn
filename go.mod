@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/fxamacker/cbor/v2 v2.4.0
-	github.com/go-webauthn/revoke v0.1.10
+	github.com/go-webauthn/x v0.1.2
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/google/go-tpm v0.3.3
 	github.com/google/uuid v1.3.0
