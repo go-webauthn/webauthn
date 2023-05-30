@@ -173,7 +173,7 @@ func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHand
 
 	user, err := handler(parsedResponse.RawID, parsedResponse.Response.UserHandle)
 	if err != nil {
-		return nil, protocol.ErrBadRequest.WithDetails("Failed to lookup Client-side Discoverable Credential")
+		return nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err))
 	}
 
 	return webauthn.validateLogin(user, session, parsedResponse)
