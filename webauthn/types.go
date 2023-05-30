@@ -207,7 +207,6 @@ type User interface {
 type SessionData struct {
 	Challenge            string    `json:"challenge"`
 	UserID               []byte    `json:"user_id"`
-	UserDisplayName      string    `json:"user_display_name"`
 	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty"`
 	Expires              time.Time `json:"expires"`
 
