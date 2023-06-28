@@ -14,7 +14,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
