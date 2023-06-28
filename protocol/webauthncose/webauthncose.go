@@ -12,7 +12,7 @@ import (
 	"hash"
 	"math/big"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"golang.org/x/crypto/ed25519"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
