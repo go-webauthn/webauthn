@@ -93,17 +93,8 @@ func getTestMetadata(s string, c http.Client) (MetadataStatement, error) {
 }
 
 func TestProductionMetadataTOCParsing(t *testing.T) {
-	httpClient := &http.Client{
-		Timeout: time.Second * 30,
-	}
-
-	bytes, err := downloadBytes("https://mds.fidoalliance.org/", *httpClient)
-	if err != nil {
+	if err := PopulateMetadata(ProductionMDSURL); err != nil {
 		t.Fatal(err)
-	}
-
-	if _, err = unmarshalMDSBLOB(bytes, *httpClient); err != nil {
-		t.Fail()
 	}
 }
 
