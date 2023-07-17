@@ -721,8 +721,10 @@ func PopulateMetadata(url string) error {
 	}
 
 	for _, entry := range blob.Entries {
-		aaguid, _ := uuid.Parse(entry.AaGUID)
-		Metadata[aaguid] = entry
+		if entry.AaGUID != "" {
+			aaguid, _ := uuid.Parse(entry.AaGUID)
+			Metadata[aaguid] = entry
+		}
 	}
 
 	return err
