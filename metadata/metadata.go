@@ -3,9 +3,12 @@ package metadata
 import (
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"time"
 
@@ -698,6 +701,7 @@ func (err *MetadataError) Error() string {
 	return err.Details
 }
 
+// PopulateMetadata reads a MetadataBLOBPayload from the URL supplied and populates the entries into the Metadata map
 func PopulateMetadata(url string) error {
 	c := &http.Client{
 		Timeout: time.Second * 30,
@@ -727,5 +731,37 @@ func PopulateMetadata(url string) error {
 		}
 	}
 
+	return err
+}
+
+// LoadMetadataFromFolder reads a folder of JSON formatted metadata statements into the Metadata map
+func LoadMetadataFromFolder(dirname string) error {
+	files, err := os.ReadDir(dirname)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if !file.Type().IsRegular() {
+			continue
+		}
+
+		filepath := filepath.Join(dirname, file.Name())
+		data, err := os.ReadFile(filepath)
+		if err != nil {
+			return err
+		}
+
+		var statement MetadataStatement
+		err = json.Unmarshal(data, &statement)
+		if err != nil {
+			return err
+		}
+
+		var entry MetadataBLOBPayloadEntry
+		entry.MetadataStatement = statement
+		aaguid, _ := uuid.Parse(statement.AaGUID)
+		Metadata[aaguid] = entry
+	}
 	return err
 }
