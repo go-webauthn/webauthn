@@ -36,7 +36,7 @@ supporting the storage and retrieval of the credential and authenticator structs
 The following examples show some basic use cases of the library. For consistency sake the following variables are used
 to denote specific things:
 
-- Variable `w`: the `webauthn.WebAuthn` instance you initialize elsewhere in your code
+- Variable `webAuthn`: the `webauthn.WebAuthn` instance you initialize elsewhere in your code
 - Variable `datastore`: the pseudocode backend service that stores your webauthn session data and users such as PostgreSQL 
 - Variable `session`: the webauthn.SessionData object
 - Variable `user`: your webauthn.User implementation
@@ -57,7 +57,7 @@ import (
 )
 
 var (
-	w *webauthn.WebAuthn
+	webAuthn *webauthn.WebAuthn
 	err error
 )
 
@@ -69,7 +69,7 @@ func main() {
 		RPOrigins: []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
 	}
 	
-	if w, err = webauthn.New(wconfig); err != nil {
+	if webAuthn, err = webauthn.New(wconfig); err != nil {
 		fmt.Println(err)
 	}
 }
@@ -82,7 +82,7 @@ package example
 
 func BeginRegistration(w http.ResponseWriter, r *http.Request) {
 	user := datastore.GetUser() // Find or create the new user  
-	options, session, err := web.BeginRegistration(user)
+	options, session, err := webAuthn.BeginRegistration(user)
 	// handle errors if present
 	// store the sessionData values 
 	JSONResponse(w, options, http.StatusOK) // return the options generated
@@ -102,7 +102,7 @@ func FinishRegistration(w http.ResponseWriter, r *http.Request) {
 	// Get the session data stored from the function above
 	session := datastore.GetSession()
 		
-	credential, err := w.CreateCredential(user, session, response)
+	credential, err := webAuthn.CreateCredential(user, session, response)
 	if err != nil {
 		// Handle Error and return.
 
@@ -110,11 +110,11 @@ func FinishRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// If creation was successful, store the credential object
-	JSONResponse(w, "Registration Success", http.StatusOK) // Handle next steps
-	
 	// Pseudocode to add the user credential.
 	user.AddCredential(credential)
 	datastore.SaveUser(user)
+
+	JSONResponse(w, "Registration Success", http.StatusOK) // Handle next steps
 }
 ```
 
@@ -126,7 +126,7 @@ package example
 func BeginLogin(w http.ResponseWriter, r *http.Request) {
 	user := datastore.GetUser() // Find the user
 	
-	options, session, err := w.BeginLogin(user)
+	options, session, err := webAuthn.BeginLogin(user)
 	if err != nil {
 		// Handle Error and return.
 
@@ -153,7 +153,7 @@ func FinishLogin(w http.ResponseWriter, r *http.Request) {
 	// Get the session data stored from the function above
 	session := datastore.GetSession()
 	
-	credential, err := w.ValidateLogin(user, session, response)
+	credential, err := webAuthn.ValidateLogin(user, session, response)
 	if err != nil {
 		// Handle Error and return.
 
@@ -182,7 +182,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-var w webauthn.WebAuthn // init this in your init function
+var webAuthn webauthn.WebAuthn // init this in your init function
 
 func beginRegistration() {
 	// Updating the AuthenticatorSelection options. 
@@ -198,7 +198,7 @@ func beginRegistration() {
 	conveyancePref := protocol.PreferNoAttestation
 
 	user := datastore.GetUser() // Get the user  
-	opts, session, err := w.BeginRegistration(user, webauthn.WithAuthenticatorSelection(authSelect), webauthn.WithConveyancePreference(conveyancePref))
+	opts, session, err := webAuthn.BeginRegistration(user, webauthn.WithAuthenticatorSelection(authSelect), webauthn.WithConveyancePreference(conveyancePref))
 
 	// Handle next steps
 }
@@ -216,7 +216,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-var w webauthn.WebAuthn // init this in your init function
+var webAuthn webauthn.WebAuthn // init this in your init function
 
 func beginLogin() {
 	// Updating the AuthenticatorSelection options. 
@@ -270,7 +270,7 @@ func main() {
 		},
 	}
 	
-	w, err := webauthn.New(wconfig)
+	webAuthn, err := webauthn.New(wconfig)
 	if err != nil {
 		fmt.Println(err)
 	}
