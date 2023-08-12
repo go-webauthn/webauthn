@@ -90,19 +90,12 @@ func BeginRegistration(w http.ResponseWriter, r *http.Request) {
 }
 
 func FinishRegistration(w http.ResponseWriter, r *http.Request) {
-	response, err := protocol.ParseCredentialCreationResponseBody(r.Body)
-	if err != nil {
-		// Handle Error and return.
-		
-		return
-	}
-	
 	user := datastore.GetUser() // Get the user
 	
 	// Get the session data stored from the function above
 	session := datastore.GetSession()
 		
-	credential, err := webAuthn.CreateCredential(user, session, response)
+	credential, err := webAuthn.FinishRegistration(user, session, r)
 	if err != nil {
 		// Handle Error and return.
 
@@ -141,19 +134,12 @@ func BeginLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func FinishLogin(w http.ResponseWriter, r *http.Request) {
-	response, err := protocol.ParseCredentialRequestResponseBody(r.Body)
-	if err != nil {
-		// Handle Error and return.
-
-		return
-	}
-	
 	user := datastore.GetUser() // Get the user 
 	
 	// Get the session data stored from the function above
 	session := datastore.GetSession()
 	
-	credential, err := webAuthn.ValidateLogin(user, session, response)
+	credential, err := webAuthn.FinishLogin(user, session, r)
 	if err != nil {
 		// Handle Error and return.
 
