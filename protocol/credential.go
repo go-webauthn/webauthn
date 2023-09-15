@@ -47,7 +47,11 @@ type ParsedPublicKeyCredential struct {
 type CredentialCreationResponse struct {
 	PublicKeyCredential
 	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
-	Transports          []string                         `json:"transports,omitempty"`
+
+	// Deprecated: Use the Transports field of AuthenticatorAttestationResponse
+	// instead. Transports is kept for backward compatibility, and should not
+	// be used by new clients.
+	Transports []string `json:"transports,omitempty"`
 }
 
 type ParsedCredentialCreationData struct {
