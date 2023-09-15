@@ -48,7 +48,8 @@ type CredentialCreationResponse struct {
 	PublicKeyCredential
 	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
 
-	// Deprecated: Use the Transports field of AuthenticatorAttestationResponse
+	// Deprecated: Transports is deprecated due to upstream changes to the API. 
+	// Use the Transports field of AuthenticatorAttestationResponse
 	// instead. Transports is kept for backward compatibility, and should not
 	// be used by new clients.
 	Transports []string `json:"transports,omitempty"`
