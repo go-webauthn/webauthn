@@ -167,10 +167,6 @@ func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHand
 		return nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
 	}
 
-	if parsedResponse.Response.UserHandle == nil {
-		return nil, protocol.ErrBadRequest.WithDetails("Client-side Discoverable Assertion was attempted with a blank User Handle")
-	}
-
 	user, err := handler(parsedResponse.RawID, parsedResponse.Response.UserHandle)
 	if err != nil {
 		return nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err))
