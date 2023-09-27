@@ -47,6 +47,14 @@ func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol
 	return webauthn.beginLogin(nil, nil, opts...)
 }
 
+// BeginDiscoverableLoginWithUser begins a client-side discoverable login, previously known as Resident Key logins.
+// This function is a variant on the ordinary BeginDiscoverableLogin function, but allows for the user to be provided and
+// saved in session data for later reference in VerifyDiscoverableLogin.
+// Specification reference: (https://w3c.github.io/webauthn/#user-handle)
+func (webauthn *WebAuthn) BeginDiscoverableLoginWithUser(userID []byte, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	return webauthn.beginLogin(userID, nil, opts...)
+}
+
 func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (assertion *protocol.CredentialAssertion, session *SessionData, err error) {
 	if err = webauthn.Config.validate(); err != nil {
 		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
@@ -163,11 +171,17 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 
 // ValidateDiscoverableLogin is an overloaded version of ValidateLogin that allows for discoverable credentials.
 func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
+	handle := parsedResponse.Response.UserHandle
+	if session.UserID != nil && parsedResponse.Response.UserHandle != nil {
+		if !bytes.Equal(session.UserID, parsedResponse.Response.UserHandle) {
+			return nil, protocol.ErrBadRequest.WithDetails("UserHandle in session and UserHandle in response do not match")
+		}
+	}
 	if session.UserID != nil {
-		return nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
+		handle = session.UserID
 	}
 
-	user, err := handler(parsedResponse.RawID, parsedResponse.Response.UserHandle)
+	user, err := handler(parsedResponse.RawID, handle)
 	if err != nil {
 		return nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err))
 	}
