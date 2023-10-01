@@ -33,7 +33,7 @@ type CredentialEntity struct {
 type RelyingPartyEntity struct {
 	CredentialEntity
 	// A unique identifier for the Relying Party entity, which sets the RP ID.
-	ID string `json:"id"`
+	ID string `json:"id,omitempty"`
 }
 
 // The UserEntity represents the PublicKeyCredentialUserEntity IDL and is used to supply additional user account

@@ -27,6 +27,7 @@ type WebAuthn struct {
 // Config represents the WebAuthn configuration.
 type Config struct {
 	// RPID configures the Relying Party Server ID. This should generally be the origin without a scheme and port.
+	// If absent the browser will automatically determine this using standard conventions.
 	RPID string
 
 	// RPDisplayName configures the display name for the Relying Party Server. This can be any string.
@@ -99,10 +100,6 @@ func (config *Config) validate() error {
 
 	if len(config.RPDisplayName) == 0 {
 		return fmt.Errorf(errFmtFieldEmpty, "RPDisplayName")
-	}
-
-	if len(config.RPID) == 0 {
-		return fmt.Errorf(errFmtFieldEmpty, "RPID")
 	}
 
 	var err error
