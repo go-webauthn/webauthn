@@ -148,6 +148,18 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 	return webauthn.ValidateLogin(user, session, parsedResponse)
 }
 
+// FinishDiscoverableLogin takes the response from the client and validate it against the handler and stored session data.
+// The handler helps to find out which user must be used to validate the response. This is a function defined in your
+// business code that will retrieve the user from your persistent data.
+func (webauthn *WebAuthn) FinishDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, response *http.Request) (*Credential, error) {
+	parsedResponse, err := protocol.ParseCredentialRequestResponse(response)
+	if err != nil {
+		return nil, err
+	}
+
+	return webauthn.ValidateDiscoverableLogin(handler, session, parsedResponse)
+}
+
 // ValidateLogin takes a parsed response and validates it against the user credentials and session data.
 func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
