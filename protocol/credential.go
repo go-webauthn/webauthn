@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 )
@@ -207,17 +208,23 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 // 9. Return the appid extension value from the Session data.
 func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions, credentialAttestationType string) (appID string, err error) {
 	var (
-		value, clientValue interface{}
-		enableAppID, ok    bool
+		sessionValue, clientValue     interface{}
+		sessionValueOK, clientValueOK bool
 	)
 
-	if authExt == nil {
+	if sessionValue, clientValue, sessionValueOK, clientValueOK, err = ppkc.getAppIDValues(authExt); err != nil {
 		return "", nil
 	}
 
-	if ppkc.ClientExtensionResults == nil {
-		return "", nil
-	}
+	return ppkc.getAppID(sessionValue, clientValue, sessionValueOK, clientValueOK)
+}
+
+// GetAppIDStrict is the same as GetAppID but it also ensures both the session data and the ClientExtensionResults contain appropriate values.
+func (ppkc ParsedPublicKeyCredential) GetAppIDStrict(authExt AuthenticationExtensions, credentialAttestationType string) (appID string, err error) {
+	var (
+		sessionValue, clientValue     interface{}
+		sessionValueOK, clientValueOK bool
+	)
 
 	// If the credential does not have the correct attestation type it is assumed to NOT be a fido-u2f credential.
 	// https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
@@ -225,11 +232,38 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 		return "", nil
 	}
 
-	if clientValue, ok = ppkc.ClientExtensionResults[ExtensionAppID]; !ok {
+	if sessionValue, clientValue, sessionValueOK, clientValueOK, err = ppkc.getAppIDValues(authExt); err != nil {
 		return "", nil
 	}
 
-	if enableAppID, ok = clientValue.(bool); !ok {
+	if sessionValueOK && !clientValueOK {
+		return "", ErrBadRequest.WithDetails("ClientExtensionResults should have the appid extension since it was requested but it is missing")
+	}
+
+	if !sessionValueOK && clientValueOK {
+		return "", ErrBadRequest.WithDetails("ClientExtensionResults should not have the appid extension since it was not requested but it is present")
+	}
+
+	return ppkc.getAppID(sessionValue, clientValue, sessionValueOK, clientValueOK)
+}
+
+func (ppkc ParsedPublicKeyCredential) getAppIDValues(authExt AuthenticationExtensions) (sessionValue, clientValue interface{}, sessionValueOK, clientValueOK bool, err error) {
+	if authExt == nil {
+		return nil, nil, false, false, errors.New("auth extensions nil")
+	}
+
+	sessionValue, sessionValueOK = authExt[ExtensionAppID]
+	clientValue, clientValueOK = ppkc.ClientExtensionResults[ExtensionAppID]
+
+	return
+}
+
+func (ppkc ParsedPublicKeyCredential) getAppID(sessionValue, clientValue interface{}, sessionValueOK, clientValueOK bool) (appID string, err error) {
+	var (
+		enableAppID, ok bool
+	)
+
+	if enableAppID, ok = clientValue.(bool); clientValueOK && !ok {
 		return "", ErrBadRequest.WithDetails("Client Output appid did not have the expected type")
 	}
 
@@ -237,11 +271,11 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 		return "", nil
 	}
 
-	if value, ok = authExt[ExtensionAppID]; !ok {
+	if sessionValueOK {
 		return "", ErrBadRequest.WithDetails("Session Data does not have an appid but Client Output indicates it should be set")
 	}
 
-	if appID, ok = value.(string); !ok {
+	if appID, ok = sessionValue.(string); !ok {
 		return "", ErrBadRequest.WithDetails("Session Data appid did not have the expected type")
 	}
 
