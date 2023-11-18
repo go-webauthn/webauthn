@@ -18,6 +18,24 @@ libraries.
 It is distributed under the same 3-Clause BSD license as the original fork, with the only amendment being the additional
 3-Clause BSD license attributing license rights to this repository.
 
+## Go Version Support Policy
+
+This library will officially support versions of go which are currently supported by the go maintainers (usually 3
+minor versions) with a brief transition time (usually 1 patch release of go, for example if go 1.21.0 is released, we
+will likely still support go 1.17 until go 1.21.1 is released). 
+
+This library in our opinion handles a critical element of security in a dependent project and we aim to avoid backwards
+compatability at the cost of security wherever possible. We also consider this especially important in a language like
+go where their backwards compatibility when upgrading the compile tools is usually flawless.
+
+This policy means that users who wish to build this with older versions of go may find there are features being used
+which are not available in that version. The current intentionally supported versions of go are as follows:
+
+- go 1.21
+- go 1.20
+- go 1.19
+- go 1.18
+
 ## Status
 
 This library is still version 0, as per Semantic Versioning 2.0 rules there may be breaking changes without warning. 
@@ -36,7 +54,7 @@ supporting the storage and retrieval of the credential and authenticator structs
 The following examples show some basic use cases of the library. For consistency sake the following variables are used
 to denote specific things:
 
-- Variable `w`: the `webauthn.WebAuthn` instance you initialize elsewhere in your code
+- Variable `webAuthn`: the `webauthn.WebAuthn` instance you initialize elsewhere in your code
 - Variable `datastore`: the pseudocode backend service that stores your webauthn session data and users such as PostgreSQL 
 - Variable `session`: the webauthn.SessionData object
 - Variable `user`: your webauthn.User implementation
@@ -57,7 +75,7 @@ import (
 )
 
 var (
-	w *webauthn.WebAuthn
+	webAuthn *webauthn.WebAuthn
 	err error
 )
 
@@ -69,7 +87,7 @@ func main() {
 		RPOrigins: []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
 	}
 	
-	if w, err = webauthn.New(wconfig); err != nil {
+	if webAuthn, err = webauthn.New(wconfig); err != nil {
 		fmt.Println(err)
 	}
 }
@@ -82,7 +100,7 @@ package example
 
 func BeginRegistration(w http.ResponseWriter, r *http.Request) {
 	user := datastore.GetUser() // Find or create the new user  
-	options, session, err := web.BeginRegistration(user)
+	options, session, err := webAuthn.BeginRegistration(user)
 	// handle errors if present
 	// store the sessionData values 
 	JSONResponse(w, options, http.StatusOK) // return the options generated
@@ -90,19 +108,12 @@ func BeginRegistration(w http.ResponseWriter, r *http.Request) {
 }
 
 func FinishRegistration(w http.ResponseWriter, r *http.Request) {
-	response, err := protocol.ParseCredentialCreationResponseBody(r.Body)
-	if err != nil {
-		// Handle Error and return.
-		
-		return
-	}
-	
 	user := datastore.GetUser() // Get the user
 	
 	// Get the session data stored from the function above
 	session := datastore.GetSession()
 		
-	credential, err := w.CreateCredential(user, session, response)
+	credential, err := webAuthn.FinishRegistration(user, session, r)
 	if err != nil {
 		// Handle Error and return.
 
@@ -110,11 +121,11 @@ func FinishRegistration(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// If creation was successful, store the credential object
-	JSONResponse(w, "Registration Success", http.StatusOK) // Handle next steps
-	
 	// Pseudocode to add the user credential.
 	user.AddCredential(credential)
 	datastore.SaveUser(user)
+
+	JSONResponse(w, "Registration Success", http.StatusOK) // Handle next steps
 }
 ```
 
@@ -126,7 +137,7 @@ package example
 func BeginLogin(w http.ResponseWriter, r *http.Request) {
 	user := datastore.GetUser() // Find the user
 	
-	options, session, err := w.BeginLogin(user)
+	options, session, err := webAuthn.BeginLogin(user)
 	if err != nil {
 		// Handle Error and return.
 
@@ -141,19 +152,12 @@ func BeginLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func FinishLogin(w http.ResponseWriter, r *http.Request) {
-	response, err := protocol.ParseCredentialRequestResponseBody(r.Body)
-	if err != nil {
-		// Handle Error and return.
-
-		return
-	}
-	
 	user := datastore.GetUser() // Get the user 
 	
 	// Get the session data stored from the function above
 	session := datastore.GetSession()
 	
-	credential, err := w.ValidateLogin(user, session, response)
+	credential, err := webAuthn.FinishLogin(user, session, r)
 	if err != nil {
 		// Handle Error and return.
 
@@ -182,7 +186,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-var w webauthn.WebAuthn // init this in your init function
+var webAuthn webauthn.WebAuthn // init this in your init function
 
 func beginRegistration() {
 	// Updating the AuthenticatorSelection options. 
@@ -198,7 +202,7 @@ func beginRegistration() {
 	conveyancePref := protocol.PreferNoAttestation
 
 	user := datastore.GetUser() // Get the user  
-	opts, session, err := w.BeginRegistration(user, webauthn.WithAuthenticatorSelection(authSelect), webauthn.WithConveyancePreference(conveyancePref))
+	opts, session, err := webAuthn.BeginRegistration(user, webauthn.WithAuthenticatorSelection(authSelect), webauthn.WithConveyancePreference(conveyancePref))
 
 	// Handle next steps
 }
@@ -216,7 +220,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
-var w webauthn.WebAuthn // init this in your init function
+var webAuthn webauthn.WebAuthn // init this in your init function
 
 func beginLogin() {
 	// Updating the AuthenticatorSelection options. 
@@ -270,7 +274,7 @@ func main() {
 		},
 	}
 	
-	w, err := webauthn.New(wconfig)
+	webAuthn, err := webauthn.New(wconfig)
 	if err != nil {
 		fmt.Println(err)
 	}
