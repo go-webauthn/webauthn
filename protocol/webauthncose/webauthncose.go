@@ -180,6 +180,7 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
 // ParsePublicKey figures out what kind of COSE material was provided and create the data for the new key.
 func ParsePublicKey(keyBytes []byte) (interface{}, error) {
 	pk := PublicKeyData{}
+	// TODO (james-d-elliott): investigate the ignored errors.
 	webauthncbor.Unmarshal(keyBytes, &pk)
 
 	switch COSEKeyType(pk.KeyType) {
