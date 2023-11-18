@@ -321,16 +321,14 @@ func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) (err error
 }
 
 // Unmarshall the credential's Public Key into CBOR encoding.
-func unmarshalCredentialPublicKey(keyBytes []byte) ([]byte, error) {
+func unmarshalCredentialPublicKey(keyBytes []byte) (rawBytes []byte, err error) {
 	var m interface{}
 
-	err := webauthncbor.Unmarshal(keyBytes, &m)
-	if err != nil {
+	if err = webauthncbor.Unmarshal(keyBytes, &m); err != nil {
 		return nil, err
 	}
 
-	rawBytes, err := webauthncbor.Marshal(m)
-	if err != nil {
+	if rawBytes, err = webauthncbor.Marshal(m); err != nil {
 		return nil, err
 	}
 
