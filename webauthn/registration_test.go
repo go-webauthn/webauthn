@@ -35,8 +35,8 @@ func TestEntityEncoding(t *testing.T) {
 		b64            bool
 		have, expected string
 	}{
-		{"ShouldEncodeBase64", true, "abc", "{\"name\":\"\",\"id\":\"YWJj\"}"},
-		{"ShouldEncodeString", false, "abc", "{\"name\":\"\",\"id\":\"abc\"}"},
+		{"ShouldEncodeBase64", true, "abc", `{"name":"","displayName":"","id":"YWJj"}`},
+		{"ShouldEncodeString", false, "abc", `{"name":"","displayName":"","id":"abc"}`},
 	}
 
 	for _, tc := range testCases {
