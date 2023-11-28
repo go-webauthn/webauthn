@@ -45,7 +45,7 @@ type UserEntity struct {
 	// A human-palatable name for the user account, intended only for display.
 	// For example, "Alex P. Müller" or "田中 倫". The Relying Party SHOULD let
 	// the user choose this, and SHOULD NOT restrict the choice more than necessary.
-	DisplayName string `json:"displayName,omitempty"`
+	DisplayName string `json:"displayName"`
 
 	// ID is the user handle of the user account entity. To ensure secure operation,
 	// authentication and authorization decisions MUST be made on the basis of this id
