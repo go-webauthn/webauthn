@@ -3,7 +3,6 @@ package protocol
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"io"
 	"net/http"
 )
@@ -48,7 +47,7 @@ type CredentialCreationResponse struct {
 	PublicKeyCredential
 	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
 
-	// Deprecated: Transports is deprecated due to upstream changes to the API. 
+	// Deprecated: Transports is deprecated due to upstream changes to the API.
 	// Use the Transports field of AuthenticatorAttestationResponse
 	// instead. Transports is kept for backward compatibility, and should not
 	// be used by new clients.
@@ -61,18 +60,25 @@ type ParsedCredentialCreationData struct {
 	Raw      CredentialCreationResponse
 }
 
+// ParseCredentialCreationResponse is a non-agnostic function for parsing a registration response from the http library
+// from stdlib. It handles some standard cleanup operations.
 func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialCreationData, error) {
 	if response == nil || response.Body == nil {
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
+	defer response.Body.Close()
+	defer io.Copy(io.Discard, response.Body)
+
 	return ParseCredentialCreationResponseBody(response.Body)
 }
 
+// ParseCredentialCreationResponseBody is an agnostic version of ParseCredentialCreationResponse. Implementers are
+// therefore responsible for managing cleanup.
 func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialCreationData, err error) {
 	var ccr CredentialCreationResponse
 
-	if err = json.NewDecoder(body).Decode(&ccr); err != nil {
+	if err = decodeBody(body, &ccr); err != nil {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo(err.Error())
 	}
 

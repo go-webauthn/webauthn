@@ -24,10 +24,13 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 	byteClientDataJSON, _ := base64.RawURLEncoding.DecodeString("eyJjaGFsbGVuZ2UiOiJXOEd6RlU4cEdqaG9SYldyTERsYW1BZnFfeTRTMUNaRzFWdW9lUkxBUnJFIiwib3JpZ2luIjoiaHR0cHM6Ly93ZWJhdXRobi5pbyIsInR5cGUiOiJ3ZWJhdXRobi5jcmVhdGUifQ")
 
 	testCases := []struct {
-		name      string
-		args      args
-		expected  *ParsedCredentialCreationData
-		errString string
+		name       string
+		args       args
+		expected   *ParsedCredentialCreationData
+		errString  string
+		errType    string
+		errDetails string
+		errInfo    string
 	}{
 		{
 			name: "ShouldParseCredentialRequest",
@@ -215,6 +218,17 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			},
 			errString: "",
 		},
+		{
+			name: "ShouldHandleTrailingData",
+			args: args{
+				responseName: "trailingData",
+			},
+			expected:   nil,
+			errString:  "Parse error for Registration",
+			errType:    "invalid_request",
+			errDetails: "Parse error for Registration",
+			errInfo:    "The body contains trailing data",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -225,6 +239,8 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 
 			if tc.errString != "" {
 				assert.EqualError(t, err, tc.errString)
+
+				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
 
 				return
 			}
@@ -371,6 +387,24 @@ var testCredentialRequestResponses = map[string]string{
 		"transports":["usb","nfc","fake"]
 	}
 }
+`,
+	`trailingData`: `
+{
+	"id":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
+	"rawId":"6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
+	"type":"public-key",
+	"authenticatorAttachment":"platform",
+	"clientExtensionResults":{
+		"appid":true
+	},
+	"response":{
+		"attestationObject":"o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVjEdKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAQOsa7QYSUFukFOLTmgeK6x2ktirNMgwy_6vIwwtegxI2flS1X-JAkZL5dsadg-9bEz2J7PnsbB0B08txvsyUSvKlAQIDJiABIVggLKF5xS0_BntttUIrm2Z2tgZ4uQDwllbdIfrrBMABCNciWCDHwin8Zdkr56iSIh0MrB5qZiEzYLQpEOREhMUkY6q4Vw",
+		"clientDataJSON":"eyJjaGFsbGVuZ2UiOiJXOEd6RlU4cEdqaG9SYldyTERsYW1BZnFfeTRTMUNaRzFWdW9lUkxBUnJFIiwib3JpZ2luIjoiaHR0cHM6Ly93ZWJhdXRobi5pbyIsInR5cGUiOiJ3ZWJhdXRobi5jcmVhdGUifQ",
+		"transports":["usb","nfc","fake"]
+	}
+}
+
+trailing
 `,
 	`successDeprecatedTransports`: `
 {
