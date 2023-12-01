@@ -74,7 +74,7 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 	if creation.Response.Timeout == 0 {
 		switch {
 		case creation.Response.AuthenticatorSelection.UserVerification == protocol.VerificationDiscouraged:
-			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
+			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.TimeoutUVD.Milliseconds())
 		default:
 			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
 		}
