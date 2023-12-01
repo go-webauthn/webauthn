@@ -163,8 +163,14 @@ func FinishLogin(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
+	// Handle credential.Authenticator.CloneWarning
+
+	// If login was successful, update the credential object
+	// Pseudocode to update the user credential.
+	user.UpdateCredential(credential)
+	datastore.SaveUser(user)
 	
-	// If login was successful, handle next steps
 	JSONResponse(w, "Login Success", http.StatusOK)
 }
 ```
