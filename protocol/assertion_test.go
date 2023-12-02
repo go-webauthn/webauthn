@@ -27,10 +27,13 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name      string
-		args      args
-		expected  *ParsedCredentialAssertionData
-		errString string
+		name       string
+		args       args
+		expected   *ParsedCredentialAssertionData
+		errString  string
+		errType    string
+		errDetails string
+		errInfo    string
 	}{
 		{
 			name: "ShouldParseCredentialAssertion",
@@ -91,6 +94,17 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 			},
 			errString: "",
 		},
+		{
+			name: "ShouldHandleTrailingData",
+			args: args{
+				"trailingData",
+			},
+			expected:   nil,
+			errString:  "Parse error for Assertion",
+			errType:    "invalid_request",
+			errDetails: "Parse error for Assertion",
+			errInfo:    "The body contains trailing data",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -103,6 +117,8 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 
 			if tc.errString != "" {
 				assert.EqualError(t, err, tc.errString)
+
+				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
 
 				return
 			}
@@ -184,5 +200,19 @@ var testAssertionResponses = map[string]string{
 			"signature":"MEUCIBtIVOQxzFYdyWQyxaLR0tik1TnuPhGVhXVSNgFwLmN5AiEAnxXdCq0UeAVGWxOaFcjBZ_mEZoXqNboY5IkQDdlWZYc",
 			"userHandle":"0ToAAAAAAAAAAA"}
 		}
+	`,
+	`trailingData`: `{
+		"id":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
+		"rawId":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
+		"clientExtensionResults":{"appID":"example.com"},
+		"type":"public-key",
+		"response":{
+			"authenticatorData":"dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBFXJJiGa3OAAI1vMYKZIsLJfHwVQMANwCOw-atj9C0vhWpfWU-whzNjeQS21Lpxfdk_G-omAtffWztpGoErlNOfuXWRqm9Uj9ANJck1p6lAQIDJiABIVggKAhfsdHcBIc0KPgAcRyAIK_-Vi-nCXHkRHPNaCMBZ-4iWCBxB8fGYQSBONi9uvq0gv95dGWlhJrBwCsj_a4LJQKVHQ",
+			"clientDataJSON":"eyJjaGFsbGVuZ2UiOiJFNFBUY0lIX0hmWDFwQzZTaWdrMVNDOU5BbGdlenROMDQzOXZpOHpfYzlrIiwibmV3X2tleXNfbWF5X2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgiLCJvcmlnaW4iOiJodHRwczovL3dlYmF1dGhuLmlvIiwidHlwZSI6IndlYmF1dGhuLmdldCJ9",
+			"signature":"MEUCIBtIVOQxzFYdyWQyxaLR0tik1TnuPhGVhXVSNgFwLmN5AiEAnxXdCq0UeAVGWxOaFcjBZ_mEZoXqNboY5IkQDdlWZYc",
+			"userHandle":"0ToAAAAAAAAAAA"}
+		}
+
+trailing
 	`,
 }
