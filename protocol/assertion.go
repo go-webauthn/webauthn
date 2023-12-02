@@ -51,6 +51,9 @@ func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAs
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
+	defer response.Body.Close()
+	defer io.Copy(io.Discard, response.Body)
+
 	return ParseCredentialRequestResponseBody(response.Body)
 }
 
