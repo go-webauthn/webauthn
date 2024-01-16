@@ -69,7 +69,6 @@ package example
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 )
