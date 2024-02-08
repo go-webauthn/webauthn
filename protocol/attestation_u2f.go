@@ -11,10 +11,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-var u2fAttestationKey = "fido-u2f"
-
 func init() {
-	RegisterAttestationFormat(u2fAttestationKey, verifyU2FFormat)
+	RegisterAttestationFormat(AttestationFormatFIDOU2F, verifyU2FFormat)
 }
 
 // verifyU2FFormat - Follows verification steps set out by https://www.w3.org/TR/webauthn/#fido-u2f-attestation

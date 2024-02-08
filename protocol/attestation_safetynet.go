@@ -14,10 +14,8 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-var safetyNetAttestationKey = "android-safetynet"
-
 func init() {
-	RegisterAttestationFormat(safetyNetAttestationKey, verifySafetyNetFormat)
+	RegisterAttestationFormat(AttestationFormatAndroidSafetyNet, verifySafetyNetFormat)
 }
 
 type SafetyNetResponse struct {
