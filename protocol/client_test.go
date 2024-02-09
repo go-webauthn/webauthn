@@ -26,7 +26,7 @@ func TestVerifyCollectedClientData(t *testing.T) {
 
 	var storedChallenge = newChallenge
 
-	if err = ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}); err != nil {
+	if err = ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode); err != nil {
 		t.Fatalf("error verifying challenge: expected %#v got %#v", ccd.Challenge, storedChallenge)
 	}
 }
@@ -44,7 +44,7 @@ func TestVerifyCollectedClientDataIncorrectChallenge(t *testing.T) {
 		t.Fatalf("error creating challenge: %s", err)
 	}
 
-	if err = ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}); err == nil {
+	if err = ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode); err == nil {
 		t.Fatalf("error expected but not received. expected %#v got %#v", ccd.Challenge, bogusChallenge)
 	}
 }
@@ -59,7 +59,7 @@ func TestVerifyCollectedClientDataUnexpectedOrigin(t *testing.T) {
 	storedChallenge := newChallenge
 	expectedOrigins := []string{"http://different.com"}
 
-	if err = ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins); err == nil {
+	if err = ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins, nil, TopOriginIgnoreVerificationMode); err == nil {
 		t.Fatalf("error expected but not received. expected %#v got %#v", expectedOrigins, ccd.Origin)
 	}
 }
@@ -76,7 +76,7 @@ func TestVerifyCollectedClientDataWithMultipleExpectedOrigins(t *testing.T) {
 
 	expectedOrigins := []string{"https://exmaple.com", "9C:B4:AE:EF:05:53:6E:73:0E:C4:B8:02:E7:67:F6:7D:A4:E7:BC:26:D7:42:B5:27:FF:01:7D:68:2A:EB:FA:1D", ccd.Origin}
 
-	if err = ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins); err != nil {
+	if err = ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins, nil, TopOriginIgnoreVerificationMode); err != nil {
 		t.Fatalf("error verifying challenge: expected %#v got %#v", expectedOrigins, ccd.Origin)
 	}
 }
