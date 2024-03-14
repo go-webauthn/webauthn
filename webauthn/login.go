@@ -269,6 +269,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 	rpID := webauthn.Config.RPID
 	rpOrigins := webauthn.Config.RPOrigins
+	rpTopOrigins := webauthn.Config.RPOrigins
 
 	appID, err := parsedResponse.GetAppID(session.Extensions, loginCredential.AttestationType)
 	if err != nil {
@@ -276,7 +277,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	// Handle steps 4 through 16.
-	validError := parsedResponse.Verify(session.Challenge, rpID, rpOrigins, appID, shouldVerifyUser, loginCredential.PublicKey)
+	validError := parsedResponse.Verify(session.Challenge, rpID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, appID, shouldVerifyUser, loginCredential.PublicKey)
 	if validError != nil {
 		return nil, validError
 	}

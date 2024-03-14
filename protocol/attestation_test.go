@@ -36,7 +36,7 @@ func TestAttestationVerify(t *testing.T) {
 			pcc.Response = *parsedAttestationResponse
 
 			// Test Base Verification
-			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name})
+			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode)
 			if err != nil {
 				t.Fatalf("Not valid: %+v (%s)", err, err.(*Error).DevInfo)
 			}

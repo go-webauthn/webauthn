@@ -36,6 +36,15 @@ type Config struct {
 	// qualified origins.
 	RPOrigins []string
 
+	// RPTopOrigins configures the list of Relying Party Server Top Origins that are permitted. These should be fully
+	// qualified origins.
+	RPTopOrigins []string
+
+	// RPTopOriginVerificationMode determines the verification mode for the Top Origin value. By default the
+	// TopOriginIgnoreVerificationMode is used however this is going to change at such a time as WebAuthn Level 3
+	// becomes recommended, implementers should explicitly set this value if they want stability.
+	RPTopOriginVerificationMode protocol.TopOriginVerificationMode
+
 	// AttestationPreference sets the default attestation conveyance preferences.
 	AttestationPreference protocol.ConveyancePreference
 
@@ -151,6 +160,15 @@ func (config *Config) validate() error {
 
 	if len(config.RPOrigins) == 0 {
 		return fmt.Errorf("must provide at least one value to the 'RPOrigins' field")
+	}
+
+	switch config.RPTopOriginVerificationMode {
+	case protocol.TopOriginDefaultVerificationMode:
+		config.RPTopOriginVerificationMode = protocol.TopOriginIgnoreVerificationMode
+	case protocol.TopOriginImplicitVerificationMode:
+		if len(config.RPTopOrigins) == 0 {
+			return fmt.Errorf("must provide at least one value to the 'RPTopOrigins' field when 'RPTopOriginVerificationMode' field is set to protocol.TopOriginImplicitVerificationMode")
+		}
 	}
 
 	if config.AuthenticatorSelection.RequireResidentKey == nil {
