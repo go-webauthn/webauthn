@@ -1,9 +1,11 @@
 package protocol
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -63,8 +65,20 @@ func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAs
 func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAssertionData, err error) {
 	var car CredentialAssertionResponse
 
-	if err = decodeBody(body, &car); err != nil {
-		return nil, ErrBadRequest.WithDetails("Parse error for Assertion").WithInfo(err.Error())
+	buf := &bytes.Buffer{}
+
+	tee := io.TeeReader(body, buf)
+
+	if err = decodeBody(tee, &car); err != nil {
+		data, _ := io.ReadAll(buf)
+
+		e := &Error{}
+
+		if errors.As(err, &e) {
+			return nil, ErrBadRequest.WithDetails("Parse error for Assertion").WithInfo(fmt.Sprintf("Error reading '%s': %+v", data, e.DevInfo))
+		}
+
+		return nil, ErrBadRequest.WithDetails("Parse error for Assertion").WithInfo(fmt.Sprintf("Error reading '%s': %+v", data, err))
 	}
 
 	return car.Parse()

@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"reflect"
 )
 
@@ -33,7 +34,7 @@ func (e *URLEncodedBase64) UnmarshalJSON(data []byte) error {
 
 	n, err := base64.RawURLEncoding.Decode(out, data)
 	if err != nil {
-		return err
+		return ErrAuthData.WithInfo(fmt.Sprintf("failed to decode value '%s' as base64: %+v", data, err))
 	}
 
 	v := reflect.ValueOf(e).Elem()
