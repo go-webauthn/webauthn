@@ -41,7 +41,7 @@ func TestChallenge_String(t *testing.T) {
 		return
 	}
 
-	wantChallenge := base64.RawURLEncoding.EncodeToString(newChallenge)
+	wantChallenge := base64.RawURLEncoding.Strict().EncodeToString(newChallenge)
 
 	tests := []struct {
 		name string

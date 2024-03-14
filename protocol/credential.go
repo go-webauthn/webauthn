@@ -94,7 +94,7 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Missing ID")
 	}
 
-	testB64, err := base64.RawURLEncoding.DecodeString(ccr.ID)
+	testB64, err := base64.RawURLEncoding.Strict().DecodeString(ccr.ID)
 	if err != nil || !(len(testB64) > 0) {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("ID not base64.RawURLEncoded")
 	}

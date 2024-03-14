@@ -20,7 +20,7 @@ func TestBase64UnmarshalJSON(t *testing.T) {
 		expectedTestData testData
 	}{
 		{
-			encodedMessage: "\"" + base64.RawURLEncoding.EncodeToString([]byte("test base64 data")) + "\"",
+			encodedMessage: "\"" + base64.RawURLEncoding.Strict().EncodeToString([]byte("test base64 data")) + "\"",
 			expectedTestData: testData{
 				StringData:  "test string",
 				EncodedData: URLEncodedBase64("test base64 data"),
