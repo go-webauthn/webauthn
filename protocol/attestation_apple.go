@@ -14,10 +14,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-var appleAttestationKey = "apple"
-
 func init() {
-	RegisterAttestationFormat(appleAttestationKey, verifyAppleFormat)
+	RegisterAttestationFormat(AttestationFormatApple, verifyAppleFormat)
 }
 
 // The apple attestation statement looks like:

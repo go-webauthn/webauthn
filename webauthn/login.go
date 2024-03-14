@@ -115,6 +115,22 @@ func WithUserVerification(userVerification protocol.UserVerificationRequirement)
 	}
 }
 
+// WithLoginConveyancePreference adjusts the non-default parameters regarding whether the authenticator should attest to the
+// credential.
+func WithLoginConveyancePreference(preference protocol.ConveyancePreference) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		cco.Attestation = preference
+	}
+}
+
+// WithLoginAttestationFormats adjusts the preferred attestation formats for this credential request in most to least
+// preferable. Advisory only.
+func WithLoginAttestationFormats(formats ...protocol.AttestationFormat) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		cco.AttestationFormats = formats
+	}
+}
+
 // WithAssertionExtensions adjusts the requested extensions.
 func WithAssertionExtensions(extensions protocol.AuthenticationExtensions) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {

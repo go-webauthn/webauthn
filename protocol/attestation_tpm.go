@@ -15,10 +15,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-var tpmAttestationKey = "tpm"
-
 func init() {
-	RegisterAttestationFormat(tpmAttestationKey, verifyTPMFormat)
+	RegisterAttestationFormat(AttestationFormatTPM, verifyTPMFormat)
 }
 
 func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {

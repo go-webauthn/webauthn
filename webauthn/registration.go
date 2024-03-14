@@ -101,6 +101,12 @@ func WithAuthenticatorSelection(authenticatorSelection protocol.AuthenticatorSel
 	}
 }
 
+func WithHints(hints ...protocol.PublicKeyCredentialHint) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.Hints = hints
+	}
+}
+
 // WithExclusions adjusts the non-default parameters regarding credentials to exclude from registration.
 func WithExclusions(excludeList []protocol.CredentialDescriptor) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
@@ -108,11 +114,27 @@ func WithExclusions(excludeList []protocol.CredentialDescriptor) RegistrationOpt
 	}
 }
 
-// WithConveyancePreference adjusts the non-default parameters regarding whether the authenticator should attest to the
-// credential.
+// WithConveyancePreference is a direct alias for WithRegistrationConveyancePreference.
+//
+// Deprecated: Use WithRegistrationConveyancePreference in favor of WithConveyancePreference as this function will be
+// likely be removed in a future release.
 func WithConveyancePreference(preference protocol.ConveyancePreference) RegistrationOption {
+	return WithRegistrationConveyancePreference(preference)
+}
+
+// WithRegistrationConveyancePreference adjusts the non-default parameters regarding whether the authenticator should attest to the
+// credential.
+func WithRegistrationConveyancePreference(preference protocol.ConveyancePreference) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		cco.Attestation = preference
+	}
+}
+
+// WithRegistrationAttestationFormats adjusts the preferred attestation formats for this credential creation in most to
+// least preferable. Advisory only.
+func WithRegistrationAttestationFormats(formats ...protocol.AttestationFormat) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.AttestationFormats = formats
 	}
 }
 
