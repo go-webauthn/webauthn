@@ -3,6 +3,7 @@ package protocol
 import (
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -186,11 +187,37 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 				if !hasBasicFull {
 					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
 				}
+
+				roots := x509.NewCertPool()
+
+				for _, root := range meta.MetadataStatement.AttestationRootCertificates {
+					l := make([]byte, base64.StdEncoding.DecodedLen(len(root)))
+
+					n, err := base64.StdEncoding.Decode(l, []byte(root))
+					if err != nil {
+						return ErrInvalidAttestation.WithDetails("Unable to base64 decode attestation certificate from MDS")
+					}
+
+					pub, err := x509.ParseCertificate(l[:n])
+					if err != nil {
+						return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from MDS")
+					}
+
+					roots.AddCert(pub)
+				}
+				opts := x509.VerifyOptions{
+					Roots: roots,
+				}
+
+				_, err := x5cAtt.Verify(opts)
+				if err != nil && err != err.(x509.UnhandledCriticalExtension) {
+					return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
+				}
 			}
 		}
 	} else if metadata.Conformance {
 		return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during conformance testing", aaguid.String()))
 	}
 
-	return nil
+	return err
 }
