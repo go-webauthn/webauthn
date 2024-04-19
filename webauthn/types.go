@@ -27,6 +27,7 @@ type WebAuthn struct {
 // Config represents the WebAuthn configuration.
 type Config struct {
 	// RPID configures the Relying Party Server ID. This should generally be the origin without a scheme and port.
+	// If absent the browser will automatically determine this using standard conventions.
 	RPID string
 
 	// RPDisplayName configures the display name for the Relying Party Server. This can be any string.
@@ -101,19 +102,27 @@ func (config *Config) validate() error {
 		return fmt.Errorf(errFmtFieldEmpty, "RPDisplayName")
 	}
 
-	if len(config.RPID) == 0 {
-		return fmt.Errorf(errFmtFieldEmpty, "RPID")
-	}
-
 	var err error
 
-	if _, err = url.Parse(config.RPID); err != nil {
-		return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
+	var uri *url.URL
+
+	if len(config.RPID) != 0 {
+		if uri, err = url.Parse(config.RPID); err != nil {
+			return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
+		}
+
+		if uri.IsAbs() {
+			return fmt.Errorf("field '%s' is an absolute URI but it must not be an absolute URI", "RPID")
+		}
 	}
 
-	if config.RPIcon != "" {
-		if _, err = url.Parse(config.RPIcon); err != nil {
+	if len(config.RPIcon) != 0 {
+		if uri, err = url.Parse(config.RPIcon); err != nil {
 			return fmt.Errorf(errFmtFieldNotValidURI, "RPIcon", err)
+		}
+
+		if !uri.IsAbs() {
+			return fmt.Errorf("field '%s' is not an absolute URI but it must be an absolute URI", "RPIcon")
 		}
 	}
 
@@ -141,7 +150,7 @@ func (config *Config) validate() error {
 		config.Timeouts.Registration.TimeoutUVD = defaultTimeoutUVDConfig
 	}
 
-	if len(config.RPOrigin) > 0 {
+	if len(config.RPOrigin) != 0 {
 		if len(config.RPOrigins) != 0 {
 			return fmt.Errorf("deprecated field 'RPOrigin' can't be defined at the same tme as the replacement field 'RPOrigins'")
 		}
