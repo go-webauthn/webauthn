@@ -70,11 +70,11 @@ type AttestationObject struct {
 
 type attestationFormatValidationHandler func(AttestationObject, []byte) (string, []interface{}, error)
 
-var attestationRegistry = make(map[string]attestationFormatValidationHandler)
+var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
 
 // RegisterAttestationFormat is a method to register attestation formats with the library. Generally using one of the
 // locally registered attestation formats is sufficient.
-func RegisterAttestationFormat(format string, handler attestationFormatValidationHandler) {
+func RegisterAttestationFormat(format AttestationFormat, handler attestationFormatValidationHandler) {
 	attestationRegistry[format] = handler
 }
 
@@ -135,7 +135,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 
 	// But first let's make sure attestation is present. If it isn't, we don't need to handle
 	// any of the following steps
-	if attestationObject.Format == "none" {
+	if AttestationFormat(attestationObject.Format) == AttestationFormatNone {
 		if len(attestationObject.AttStatement) != 0 {
 			return ErrAttestationFormat.WithInfo("Attestation format none with attestation present")
 		}
@@ -143,7 +143,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 		return nil
 	}
 
-	formatHandler, valid := attestationRegistry[attestationObject.Format]
+	formatHandler, valid := attestationRegistry[AttestationFormat(attestationObject.Format)]
 	if !valid {
 		return ErrAttestationFormat.WithInfo(fmt.Sprintf("Attestation format %s is unsupported", attestationObject.Format))
 	}
