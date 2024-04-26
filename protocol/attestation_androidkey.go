@@ -10,10 +10,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-var androidAttestationKey = "android-key"
-
 func init() {
-	RegisterAttestationFormat(androidAttestationKey, verifyAndroidKeyFormat)
+	RegisterAttestationFormat(AttestationFormatAndroidKey, verifyAndroidKeyFormat)
 }
 
 // The android-key attestation statement looks like:

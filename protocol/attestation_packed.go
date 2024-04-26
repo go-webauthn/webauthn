@@ -12,10 +12,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-var packedAttestationKey = "packed"
-
 func init() {
-	RegisterAttestationFormat(packedAttestationKey, verifyPackedFormat)
+	RegisterAttestationFormat(AttestationFormatPacked, verifyPackedFormat)
 }
 
 // The packed attestation statement looks like:
@@ -45,13 +43,13 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, [
 
 	alg, present := att.AttStatement["alg"].(int64)
 	if !present {
-		return packedAttestationKey, nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
+		return string(AttestationFormatPacked), nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
 	}
 
 	// Get the sig value - A byte string containing the attestation signature.
 	sig, present := att.AttStatement["sig"].([]byte)
 	if !present {
-		return packedAttestationKey, nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
+		return string(AttestationFormatPacked), nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
 	// Step 2. If x5c is present, this indicates that the attestation type is not ECDAA.
