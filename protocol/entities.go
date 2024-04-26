@@ -51,5 +51,5 @@ type UserEntity struct {
 	// authentication and authorization decisions MUST be made on the basis of this id
 	// member, not the displayName nor name members. See Section 6.1 of
 	// [RFC8266](https://www.w3.org/TR/webauthn/#biblio-rfc8266).
-	ID interface{} `json:"id"`
+	ID any `json:"id"`
 }

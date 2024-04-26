@@ -34,7 +34,7 @@ func init() {
 //	 }
 //
 // Specification: §8.2. Packed Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-packed-attestation)
-func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
+func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, []any, error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
 
@@ -53,7 +53,7 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, [
 	}
 
 	// Step 2. If x5c is present, this indicates that the attestation type is not ECDAA.
-	x5c, x509present := att.AttStatement["x5c"].([]interface{})
+	x5c, x509present := att.AttStatement["x5c"].([]any)
 	if x509present {
 		// Handle Basic Attestation steps for the x509 Certificate
 		return handleBasicAttestation(sig, clientDataHash, att.RawAuthData, att.AuthData.AttData.AAGUID, alg, x5c)
@@ -72,7 +72,7 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, [
 }
 
 // Handle the attestation steps laid out in
-func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, alg int64, x5c []interface{}) (string, []interface{}, error) {
+func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, alg int64, x5c []any) (string, []any, error) {
 	// Step 2.1. Verify that sig is a valid signature over the concatenation of authenticatorData
 	// and clientDataHash using the attestation public key in attestnCert with the algorithm specified in alg.
 	for _, c := range x5c {
@@ -199,11 +199,11 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	return string(metadata.BasicFull), x5c, nil
 }
 
-func handleECDAAAttestation(signature, clientDataHash, ecdaaKeyID []byte) (string, []interface{}, error) {
+func handleECDAAAttestation(signature, clientDataHash, ecdaaKeyID []byte) (string, []any, error) {
 	return "Packed (ECDAA)", nil, ErrNotSpecImplemented
 }
 
-func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signature []byte) (string, []interface{}, error) {
+func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signature []byte) (string, []any, error) {
 	// §4.1 Validate that alg matches the algorithm of the credentialPublicKey in authenticatorData.
 
 	// §4.2 Verify that sig is a valid signature over the concatenation of authenticatorData and

@@ -20,10 +20,13 @@ func TestAttestationVerify(t *testing.T) {
 			if err := json.Unmarshal([]byte(testAttestationOptions[i]), &options); err != nil {
 				t.Fatal(err)
 			}
+
 			ccr := CredentialCreationResponse{}
+
 			if err := json.Unmarshal([]byte(testAttestationResponses[i]), &ccr); err != nil {
 				t.Fatal(err)
 			}
+
 			var pcc ParsedCredentialCreationData
 			pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
 			pcc.Raw = ccr

@@ -115,19 +115,12 @@ func WithUserVerification(userVerification protocol.UserVerificationRequirement)
 	}
 }
 
-// WithLoginConveyancePreference adjusts the non-default parameters regarding whether the authenticator should attest to the
-// credential.
-func WithLoginConveyancePreference(preference protocol.ConveyancePreference) LoginOption {
+// WithAssertionPublicKeyCredentialHints adjusts the non-default hints for credential types to select during login.
+//
+// WebAuthn Level 3.
+func WithAssertionPublicKeyCredentialHints(hints []protocol.PublicKeyCredentialHints) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
-		cco.Attestation = preference
-	}
-}
-
-// WithLoginAttestationFormats adjusts the preferred attestation formats for this credential request in most to least
-// preferable. Advisory only.
-func WithLoginAttestationFormats(formats ...protocol.AttestationFormat) LoginOption {
-	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
-		cco.AttestationFormats = formats
+		cco.Hints = hints
 	}
 }
 
@@ -145,7 +138,7 @@ func WithAppIdExtension(appid string) LoginOption {
 		for _, credential := range cco.AllowedCredentials {
 			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
 				if cco.Extensions == nil {
-					cco.Extensions = map[string]interface{}{}
+					cco.Extensions = map[string]any{}
 				}
 
 				cco.Extensions[protocol.ExtensionAppID] = appid

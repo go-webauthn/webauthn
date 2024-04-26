@@ -29,7 +29,7 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		return nil, nil, err
 	}
 
-	var entityUserID interface{}
+	var entityUserID any
 
 	if webauthn.Config.EncodeUserIDAsString {
 		entityUserID = string(user.WebAuthnID())
@@ -93,17 +93,10 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 	return creation, session, nil
 }
 
-// WithAuthenticatorSelection adjusts the non-default parameters regarding the authenticator to select during
-// registration.
-func WithAuthenticatorSelection(authenticatorSelection protocol.AuthenticatorSelection) RegistrationOption {
+// WithCredentialParameters adjusts the credential parameters in the registration options.
+func WithCredentialParameters(credentialParams []protocol.CredentialParameter) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
-		cco.AuthenticatorSelection = authenticatorSelection
-	}
-}
-
-func WithHints(hints ...protocol.PublicKeyCredentialHint) RegistrationOption {
-	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
-		cco.Hints = hints
+		cco.Parameters = credentialParams
 	}
 }
 
@@ -114,57 +107,11 @@ func WithExclusions(excludeList []protocol.CredentialDescriptor) RegistrationOpt
 	}
 }
 
-// WithConveyancePreference is a direct alias for WithRegistrationConveyancePreference.
-//
-// Deprecated: Use WithRegistrationConveyancePreference in favor of WithConveyancePreference as this function will be
-// likely be removed in a future release.
-func WithConveyancePreference(preference protocol.ConveyancePreference) RegistrationOption {
-	return WithRegistrationConveyancePreference(preference)
-}
-
-// WithRegistrationConveyancePreference adjusts the non-default parameters regarding whether the authenticator should attest to the
-// credential.
-func WithRegistrationConveyancePreference(preference protocol.ConveyancePreference) RegistrationOption {
+// WithAuthenticatorSelection adjusts the non-default parameters regarding the authenticator to select during
+// registration.
+func WithAuthenticatorSelection(authenticatorSelection protocol.AuthenticatorSelection) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
-		cco.Attestation = preference
-	}
-}
-
-// WithRegistrationAttestationFormats adjusts the preferred attestation formats for this credential creation in most to
-// least preferable. Advisory only.
-func WithRegistrationAttestationFormats(formats ...protocol.AttestationFormat) RegistrationOption {
-	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
-		cco.AttestationFormats = formats
-	}
-}
-
-// WithExtensions adjusts the extension parameter in the registration options.
-func WithExtensions(extension protocol.AuthenticationExtensions) RegistrationOption {
-	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
-		cco.Extensions = extension
-	}
-}
-
-// WithCredentialParameters adjusts the credential parameters in the registration options.
-func WithCredentialParameters(credentialParams []protocol.CredentialParameter) RegistrationOption {
-	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
-		cco.Parameters = credentialParams
-	}
-}
-
-// WithAppIdExcludeExtension automatically includes the specified appid if the CredentialExcludeList contains a credential
-// with the type `fido-u2f`.
-func WithAppIdExcludeExtension(appid string) RegistrationOption {
-	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
-		for _, credential := range cco.CredentialExcludeList {
-			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
-				if cco.Extensions == nil {
-					cco.Extensions = map[string]interface{}{}
-				}
-
-				cco.Extensions[protocol.ExtensionAppIDExclude] = appid
-			}
-		}
+		cco.AuthenticatorSelection = authenticatorSelection
 	}
 }
 
@@ -178,6 +125,55 @@ func WithResidentKeyRequirement(requirement protocol.ResidentKeyRequirement) Reg
 			cco.AuthenticatorSelection.RequireResidentKey = protocol.ResidentKeyRequired()
 		default:
 			cco.AuthenticatorSelection.RequireResidentKey = protocol.ResidentKeyNotRequired()
+		}
+	}
+}
+
+// WithPublicKeyCredentialHints adjusts the non-default hints for credential types to select during registration.
+//
+// WebAuthn Level 3.
+func WithPublicKeyCredentialHints(hints []protocol.PublicKeyCredentialHints) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.Hints = hints
+	}
+}
+
+// WithConveyancePreference adjusts the non-default parameters regarding whether the authenticator should attest to the
+// credential.
+func WithConveyancePreference(preference protocol.ConveyancePreference) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.Attestation = preference
+	}
+}
+
+// WithAttestationFormats adjusts the non-default formats for credential types to select during registration.
+//
+// WebAuthn Level 3.
+func WithAttestationFormats(formats []protocol.AttestationFormat) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.AttestationFormats = formats
+	}
+}
+
+// WithExtensions adjusts the extension parameter in the registration options.
+func WithExtensions(extension protocol.AuthenticationExtensions) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		cco.Extensions = extension
+	}
+}
+
+// WithAppIdExcludeExtension automatically includes the specified appid if the CredentialExcludeList contains a credential
+// with the type `fido-u2f`.
+func WithAppIdExcludeExtension(appid string) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		for _, credential := range cco.CredentialExcludeList {
+			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
+				if cco.Extensions == nil {
+					cco.Extensions = map[string]any{}
+				}
+
+				cco.Extensions[protocol.ExtensionAppIDExclude] = appid
+			}
 		}
 	}
 }

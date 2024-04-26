@@ -65,10 +65,10 @@ type AttestationObject struct {
 	// The format of the Attestation data.
 	Format string `json:"fmt"`
 	// The attestation statement data sent back if attestation is requested.
-	AttStatement map[string]interface{} `json:"attStmt,omitempty"`
+	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
-type attestationFormatValidationHandler func(AttestationObject, []byte) (string, []interface{}, error)
+type attestationFormatValidationHandler func(AttestationObject, []byte) (string, []any, error)
 
 var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
 

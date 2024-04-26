@@ -31,6 +31,7 @@ type ParsedCredential struct {
 
 type PublicKeyCredential struct {
 	Credential
+
 	RawID                   URLEncodedBase64                      `json:"rawId"`
 	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
 	AuthenticatorAttachment string                                `json:"authenticatorAttachment,omitempty"`
@@ -38,6 +39,7 @@ type PublicKeyCredential struct {
 
 type ParsedPublicKeyCredential struct {
 	ParsedCredential
+
 	RawID                   []byte                                `json:"rawId"`
 	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
 	AuthenticatorAttachment AuthenticatorAttachment               `json:"authenticatorAttachment,omitempty"`
@@ -45,6 +47,7 @@ type ParsedPublicKeyCredential struct {
 
 type CredentialCreationResponse struct {
 	PublicKeyCredential
+
 	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
 
 	// Deprecated: Transports is deprecated due to upstream changes to the API.
@@ -56,6 +59,7 @@ type CredentialCreationResponse struct {
 
 type ParsedCredentialCreationData struct {
 	ParsedPublicKeyCredential
+
 	Response ParsedAttestationResponse
 	Raw      CredentialCreationResponse
 }
