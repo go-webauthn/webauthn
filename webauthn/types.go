@@ -63,21 +63,6 @@ type Config struct {
 	Timeouts TimeoutsConfig
 
 	validated bool
-
-	// RPIcon sets the icon URL for the Relying Party Server.
-	//
-	// Deprecated: this option has been removed from newer specifications due to security considerations.
-	RPIcon string
-
-	// RPOrigin configures the permitted Relying Party Server Origin.
-	//
-	// Deprecated: Use RPOrigins instead.
-	RPOrigin string
-
-	// Timeout configures the default timeout in milliseconds.
-	//
-	// Deprecated: Use Timeouts instead.
-	Timeout int
 }
 
 // TimeoutsConfig represents the WebAuthn timeouts configuration.
@@ -120,19 +105,8 @@ func (config *Config) validate() error {
 		return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
 	}
 
-	if config.RPIcon != "" {
-		if _, err = url.Parse(config.RPIcon); err != nil {
-			return fmt.Errorf(errFmtFieldNotValidURI, "RPIcon", err)
-		}
-	}
-
 	defaultTimeoutConfig := defaultTimeout
 	defaultTimeoutUVDConfig := defaultTimeoutUVD
-
-	if config.Timeout != 0 {
-		defaultTimeoutConfig = time.Millisecond * time.Duration(config.Timeout)
-		defaultTimeoutUVDConfig = defaultTimeoutConfig
-	}
 
 	if config.Timeouts.Login.Timeout.Milliseconds() == 0 {
 		config.Timeouts.Login.Timeout = defaultTimeoutConfig
@@ -148,14 +122,6 @@ func (config *Config) validate() error {
 
 	if config.Timeouts.Registration.TimeoutUVD.Milliseconds() == 0 {
 		config.Timeouts.Registration.TimeoutUVD = defaultTimeoutUVDConfig
-	}
-
-	if len(config.RPOrigin) > 0 {
-		if len(config.RPOrigins) != 0 {
-			return fmt.Errorf("deprecated field 'RPOrigin' can't be defined at the same tme as the replacement field 'RPOrigins'")
-		}
-
-		config.RPOrigins = []string{config.RPOrigin}
 	}
 
 	if len(config.RPOrigins) == 0 {
@@ -214,10 +180,6 @@ type User interface {
 
 	// WebAuthnCredentials provides the list of Credential objects owned by the user.
 	WebAuthnCredentials() []Credential
-
-	// WebAuthnIcon is a deprecated option.
-	// Deprecated: this has been removed from the specification recommendation. Suggest a blank string.
-	WebAuthnIcon() string
 }
 
 // SessionData is the data that should be stored by the Relying Party for the duration of the web authentication

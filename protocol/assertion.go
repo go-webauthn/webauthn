@@ -15,6 +15,7 @@ import (
 // credential for login/assertion.
 type CredentialAssertionResponse struct {
 	PublicKeyCredential
+
 	AssertionResponse AuthenticatorAssertionResponse `json:"response"`
 }
 
@@ -22,6 +23,7 @@ type CredentialAssertionResponse struct {
 // that allows us to verify the client and authenticator data inside the response.
 type ParsedCredentialAssertionData struct {
 	ParsedPublicKeyCredential
+
 	Response ParsedAssertionResponse
 	Raw      CredentialAssertionResponse
 }
@@ -30,6 +32,7 @@ type ParsedCredentialAssertionData struct {
 // ParsedAssertionResponse.
 type AuthenticatorAssertionResponse struct {
 	AuthenticatorResponse
+
 	AuthenticatorData URLEncodedBase64 `json:"authenticatorData"`
 	Signature         URLEncodedBase64 `json:"signature"`
 	UserHandle        URLEncodedBase64 `json:"userHandle,omitempty"`
