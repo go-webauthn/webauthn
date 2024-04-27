@@ -20,7 +20,7 @@ type CollectedClientData struct {
 	Type         CeremonyType  `json:"type"`
 	Challenge    string        `json:"challenge"`
 	Origin       string        `json:"origin"`
-	TopOrigin    string        `json:"topOrigin"`
+	TopOrigin    string        `json:"topOrigin,omitempty"`
 	CrossOrigin  bool          `json:"crossOrigin,omitempty"`
 	TokenBinding *TokenBinding `json:"tokenBinding,omitempty"`
 

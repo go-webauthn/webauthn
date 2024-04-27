@@ -12,11 +12,11 @@ import (
 )
 
 func init() {
-	RegisterAttestationFormat(AttestationFormatFIDOU2F, verifyU2FFormat)
+	RegisterAttestationFormat(AttestationFormatFIDOUniversalSecondFactor, verifyU2FFormat)
 }
 
 // verifyU2FFormat - Follows verification steps set out by https://www.w3.org/TR/webauthn/#fido-u2f-attestation
-func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
+func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []any, error) {
 	if !bytes.Equal(att.AuthData.AttData.AAGUID, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("U2F attestation format AAGUID not set to 0x00")
 	}
@@ -40,7 +40,7 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []in
 	// }
 
 	// Check for "x5c" which is a single element array containing the attestation certificate in X.509 format.
-	x5c, present := att.AttStatement["x5c"].([]interface{})
+	x5c, present := att.AttStatement["x5c"].([]any)
 	if !present {
 		return "", nil, ErrAttestationFormat.WithDetails("Missing properly formatted x5c data")
 	}

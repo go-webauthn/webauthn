@@ -161,7 +161,7 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 	sigData := append(p.Raw.AssertionResponse.AuthenticatorData, clientDataHash[:]...)
 
 	var (
-		key interface{}
+		key any
 		err error
 	)
 

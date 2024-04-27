@@ -259,7 +259,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			assert.Equal(t, tc.expected.Response.AttestationObject.Format, actual.Response.AttestationObject.Format)
 
 			// Unmarshall CredentialPublicKey
-			var pkExpected, pkActual interface{}
+			var pkExpected, pkActual any
 
 			pkBytesExpected := tc.expected.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
 			assert.NoError(t, webauthncbor.Unmarshal(pkBytesExpected, &pkExpected))

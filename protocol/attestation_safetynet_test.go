@@ -21,7 +21,7 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 		name    string
 		args    args
 		want    string
-		want1   []interface{}
+		want1   []any
 		wantErr bool
 	}{
 		{
@@ -43,9 +43,11 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 				t.Errorf("verifySafetyNetFormat() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("verifySafetyNetFormat() got = %v, want %v", got, tt.want)
 			}
+
 			if !reflect.DeepEqual(got1, tt.want1) {
 				t.Errorf("verifySafetyNetFormat() got1 = %v, want %v", got1, tt.want1)
 			}
