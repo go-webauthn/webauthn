@@ -22,6 +22,14 @@ type AuthenticatorAttestationResponse struct {
 	// The byte slice of clientDataJSON, which becomes CollectedClientData
 	AuthenticatorResponse
 
+	Transports []string `json:"transports,omitempty"`
+
+	AuthenticatorData URLEncodedBase64 `json:"authenticatorData"`
+
+	PublicKey URLEncodedBase64 `json:"publicKey"`
+
+	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm"`
+
 	// AttestationObject is the byte slice version of attestationObject.
 	// This attribute contains an attestation object, which is opaque to, and
 	// cryptographically protected against tampering by, the client. The
@@ -33,8 +41,6 @@ type AuthenticatorAttestationResponse struct {
 	// requires to validate the attestation statement, as well as to decode and
 	// validate the authenticator data along with the JSON-serialized client data.
 	AttestationObject URLEncodedBase64 `json:"attestationObject"`
-
-	Transports []string `json:"transports,omitempty"`
 }
 
 // ParsedAttestationResponse is the parsed version of AuthenticatorAttestationResponse.

@@ -49,12 +49,6 @@ type CredentialCreationResponse struct {
 	PublicKeyCredential
 
 	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
-
-	// Deprecated: Transports is deprecated due to upstream changes to the API.
-	// Use the Transports field of AuthenticatorAttestationResponse
-	// instead. Transports is kept for backward compatibility, and should not
-	// be used by new clients.
-	Transports []string `json:"transports,omitempty"`
 }
 
 type ParsedCredentialCreationData struct {
@@ -114,13 +108,6 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 	response, err := ccr.AttestationResponse.Parse()
 	if err != nil {
 		return nil, ErrParsingData.WithDetails("Error parsing attestation response")
-	}
-
-	// TODO: Remove this as it's a backwards compatibility layer.
-	if len(response.Transports) == 0 && len(ccr.Transports) != 0 {
-		for _, t := range ccr.Transports {
-			response.Transports = append(response.Transports, AuthenticatorTransport(t))
-		}
 	}
 
 	var attachment AuthenticatorAttachment

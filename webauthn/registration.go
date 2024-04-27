@@ -42,7 +42,6 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		DisplayName: user.WebAuthnDisplayName(),
 		CredentialEntity: protocol.CredentialEntity{
 			Name: user.WebAuthnName(),
-			Icon: user.WebAuthnIcon(),
 		},
 	}
 
@@ -50,7 +49,6 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 		ID: webauthn.Config.RPID,
 		CredentialEntity: protocol.CredentialEntity{
 			Name: webauthn.Config.RPDisplayName,
-			Icon: webauthn.Config.RPIcon,
 		},
 	}
 
