@@ -175,8 +175,9 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 		}
 
 		if x5c != nil {
-			x5cAtt, err := x509.ParseCertificate(x5c[0].([]byte))
-			if err != nil {
+			var x5cAtt *x509.Certificate
+
+			if x5cAtt, err = x509.ParseCertificate(x5c[0].([]byte)); err != nil {
 				return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c")
 			}
 
@@ -191,6 +192,10 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 
 				if !hasBasicFull {
 					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
+				}
+
+				if _, err = x5cAtt.Verify(meta.MetadataStatement.Verifier()); err != nil {
+					return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
 				}
 			}
 		}
