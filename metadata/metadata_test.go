@@ -9,91 +9,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func downloadBytes(url string, c http.Client) ([]byte, error) {
-	res, err := c.Get(url)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-
-	body, _ := io.ReadAll(res.Body)
-
-	return body, err
-}
-
-func getEndpoints(c http.Client) ([]string, error) {
-	jsonReq, err := json.Marshal(MDSGetEndpointsRequest{Endpoint: "https://webauthn.io"})
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := c.Post("https://mds3.fido.tools/getEndpoints", "application/json", bytes.NewBuffer(jsonReq))
-	if err != nil {
-		return nil, err
-	}
-
-	defer req.Body.Close()
-	body, _ := io.ReadAll(req.Body)
-
-	var resp MDSGetEndpointsResponse
-
-	if err = json.Unmarshal(body, &resp); err != nil {
-		return nil, err
-	}
-
-	return resp.Result, err
-}
-
-func getTestMetadata(s string, c http.Client) (MetadataStatement, error) {
-	var statement MetadataStatement
-
-	// MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint.
-	type MDSGetTestMetadata struct {
-		// The URL of the local server endpoint, e.g. https://webauthn.io/
-		Endpoint string `json:"endpoint"`
-		TestCase string `json:"testcase"`
-	}
-
-	jsonReq, err := json.Marshal(MDSGetTestMetadata{Endpoint: "https://webauthn.io", TestCase: s})
-	if err != nil {
-		return statement, err
-	}
-
-	req, err := c.Post("https://mds3.fido.tools/getTestMetadata", "application/json", bytes.NewBuffer(jsonReq))
-	if err != nil {
-		return statement, err
-	}
-
-	defer req.Body.Close()
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		return statement, err
-	}
-
-	type ConformanceResponse struct {
-		Status string            `json:"status"`
-		Result MetadataStatement `json:"result"`
-	}
-
-	var resp ConformanceResponse
-
-	if err = json.Unmarshal(body, &resp); err != nil {
-		return statement, err
-	}
-
-	statement = resp.Result
-
-	return statement, err
-}
-
 func TestProductionMetadataTOCParsing(t *testing.T) {
-	if err := PopulateMetadata(ProductionMDSURL); err != nil {
+	if err := PopulateMetadata(ProductionMDSURL, true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -105,7 +27,7 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 		Timeout: time.Second * 30,
 	}
 
-	tests := []struct {
+	testCases := []struct {
 		name string
 		pass bool
 	}{
@@ -135,49 +57,58 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 		},
 	}
 
-	endpoints, err := getEndpoints(*httpClient)
+	endpoints, err := getEndpoints(httpClient)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	decoder := NewDecoder()
+
+	metadata := make(map[uuid.UUID]MetadataBLOBPayloadEntryJSON)
+
 	for _, endpoint := range endpoints {
-		bytes, err := downloadBytes(endpoint, *httpClient)
+		bytes, err := downloadBytes(endpoint, httpClient)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		blob, err := unmarshalMDSBLOB(bytes, *httpClient)
+		blob, err := decoder.Decode(bytes)
 		if err != nil {
 			if me, ok := err.(*MetadataError); ok {
 				t.Log(me.Details)
 			}
 		}
 
-		for _, entry := range blob.Entries {
-			aaguid, _ := uuid.Parse(entry.AaGUID)
-			Metadata[aaguid] = entry
+		if blob != nil {
+			for _, entry := range blob.Entries {
+				aaguid, _ := uuid.Parse(entry.AaGUID)
+				metadata[aaguid] = entry
+			}
 		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			statement, err := getTestMetadata(tt.name, *httpClient)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			statement, err := getTestMetadata(tc.name, httpClient)
 			if err != nil {
 				t.Fatal(err)
 			}
 			aaguid, _ := uuid.Parse(statement.AaGUID)
-			if meta, ok := Metadata[aaguid]; ok {
-				if tt.pass {
-					t.Logf("Found aaguid %s in test metadata", meta.AaGUID)
-				} else {
-					if IsUndesiredAuthenticatorStatus(meta.StatusReports[0].Status) {
-						t.Logf("Found authenticator %s with bad status in test metadata, %s", meta.AaGUID, meta.StatusReports[0].Status)
-					} else {
-						t.Fail()
+			if meta, ok := metadata[aaguid]; ok {
+				pass := true
+
+				for _, report := range meta.StatusReports {
+					if IsUndesiredAuthenticatorStatus(report.Status) {
+						pass = false
 					}
 				}
+
+				assert.Equal(t, tc.pass, pass, "One or more status reports had an undesired status but this was not expected.")
+
+				_, err := meta.Parse()
+				assert.NoError(t, err, "Failed to parse metadata")
 			} else {
-				if !tt.pass {
+				if !tc.pass {
 					t.Logf("Metadata for aaguid %s not found in test metadata", statement.AaGUID)
 				} else {
 					t.Fail()
@@ -194,13 +125,11 @@ const (
 func TestExampleMetadataTOCParsing(t *testing.T) {
 	MDSRoot = ExampleMDSRoot
 
-	httpClient := &http.Client{
-		Timeout: time.Second * 30,
-	}
-
 	exampleMetadataBLOBBytes := bytes.NewBufferString(exampleMetadataBLOB)
 
-	_, err := unmarshalMDSBLOB(exampleMetadataBLOBBytes.Bytes(), *httpClient)
+	decoder := NewDecoder()
+
+	_, err := decoder.Decode(exampleMetadataBLOBBytes.Bytes())
 	if err != nil {
 		t.Fail()
 	}
@@ -346,4 +275,83 @@ func TestAlgKeyMatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func downloadBytes(url string, c *http.Client) ([]byte, error) {
+	res, err := c.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+
+	return body, err
+}
+
+func getEndpoints(c *http.Client) ([]string, error) {
+	jsonReq, err := json.Marshal(MDSGetEndpointsRequest{Endpoint: "https://webauthn.io"})
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := c.Post("https://mds3.fido.tools/getEndpoints", "application/json", bytes.NewBuffer(jsonReq))
+	if err != nil {
+		return nil, err
+	}
+
+	defer req.Body.Close()
+	body, _ := io.ReadAll(req.Body)
+
+	var resp MDSGetEndpointsResponse
+
+	if err = json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+
+	return resp.Result, err
+}
+
+func getTestMetadata(s string, c *http.Client) (MetadataStatementJSON, error) {
+	var statement MetadataStatementJSON
+
+	// MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint.
+	type MDSGetTestMetadata struct {
+		// The URL of the local server endpoint, e.g. https://webauthn.io/
+		Endpoint string `json:"endpoint"`
+		TestCase string `json:"testcase"`
+	}
+
+	jsonReq, err := json.Marshal(MDSGetTestMetadata{Endpoint: "https://webauthn.io", TestCase: s})
+	if err != nil {
+		return statement, err
+	}
+
+	req, err := c.Post("https://mds3.fido.tools/getTestMetadata", "application/json", bytes.NewBuffer(jsonReq))
+	if err != nil {
+		return statement, err
+	}
+
+	defer req.Body.Close()
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return statement, err
+	}
+
+	type ConformanceResponse struct {
+		Status string                `json:"status"`
+		Result MetadataStatementJSON `json:"result"`
+	}
+
+	var resp ConformanceResponse
+
+	if err = json.Unmarshal(body, &resp); err != nil {
+		return statement, err
+	}
+
+	statement = resp.Result
+
+	return statement, err
 }

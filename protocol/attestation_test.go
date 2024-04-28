@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
 func TestAttestationVerify(t *testing.T) {
-	if err := metadata.PopulateMetadata(metadata.ProductionMDSURL); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, metadata.PopulateMetadata(metadata.ProductionMDSURL, true))
 
 	for i := range testAttestationOptions {
 		t.Run(fmt.Sprintf("Running test %d", i), func(t *testing.T) {
@@ -44,6 +44,8 @@ func TestAttestationVerify(t *testing.T) {
 				t.Fatalf("Not valid: %+v (%s)", err, err.(*Error).DevInfo)
 			}
 		})
+
+		fmt.Println("Done")
 	}
 }
 
