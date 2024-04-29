@@ -31,6 +31,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Not valid: %+v", err)
 			}
+
 			assert.Equal(t, "attca", attestationType)
 		})
 	}
@@ -82,37 +83,37 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 		{
 			"TPM Negative Test AttStatement Ver not 2.0",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "foo.bar"}},
+			AttestationObject{AttStatement: map[string]any{"ver": "foo.bar"}},
 			"WebAuthn only supports TPM 2.0 currently",
 		},
 		{
 			"TPM Negative Test AttStatement Alg not present",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0"}},
+			AttestationObject{AttStatement: map[string]any{"ver": "2.0"}},
 			"Error retrieving alg value",
 		},
 		{
 			"TPM Negative Test AttStatement x5c not present",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0)}},
+			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0)}},
 			ErrNotImplemented.Details,
 		},
 		{
 			"TPM Negative Test AttStatement ecdaaKeyId present",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "ecdaaKeyId": []byte{}}},
+			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "ecdaaKeyId": []byte{}}},
 			ErrNotImplemented.Details,
 		},
 		{
 			"TPM Negative Test AttStatement sig not present",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}}},
+			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}}},
 			"Error retrieving sig value",
 		},
 		{
 			"TPM Negative Test AttStatement certInfo not present",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "sig": []byte{}}},
+			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "sig": []byte{}}},
 			"Error retrieving certInfo value",
 		},
 		{
 			"TPM Negative Test AttStatement pubArea not present",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "sig": []byte{}, "certInfo": []byte{}}},
+			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "sig": []byte{}, "certInfo": []byte{}}},
 			"Error retrieving pubArea value",
 		},
 		{
@@ -122,7 +123,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 		{
 			"TPM Negative Test Unsupported Public Key Type",
-			AttestationObject{AttStatement: map[string]interface{}{"ver": "2.0", "alg": int64(0), "x5c": []interface{}{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": makeDefaultRSAPublicBytes()}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
+			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": makeDefaultRSAPublicBytes()}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
 			"Unsupported Public Key Type",
 		},
 	}
@@ -169,7 +170,7 @@ var (
 	}
 )
 
-var defaultAttStatement = map[string]interface{}{"ver": "2.0", "alg": int64(-257), "x5c": []interface{}{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": []byte{}}
+var defaultAttStatement = map[string]any{"ver": "2.0", "alg": int64(-257), "x5c": []any{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": []byte{}}
 
 type CredentialPublicKey struct {
 	KeyType   int64  `cbor:"1,keyasint" json:"kty"`
@@ -332,7 +333,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		attStmt := make(map[string]interface{}, len(defaultAttStatement))
+		attStmt := make(map[string]any, len(defaultAttStatement))
 		for id, v := range defaultAttStatement {
 			attStmt[id] = v
 		}
@@ -373,7 +374,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 }
 
 func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
-	attStmt := make(map[string]interface{}, len(defaultAttStatement))
+	attStmt := make(map[string]any, len(defaultAttStatement))
 
 	for id, v := range defaultAttStatement {
 		attStmt[id] = v
@@ -487,7 +488,7 @@ var (
 )
 
 func TestTPMAttestationVerificationFailX5c(t *testing.T) {
-	attStmt := make(map[string]interface{}, len(defaultAttStatement))
+	attStmt := make(map[string]any, len(defaultAttStatement))
 
 	for id, v := range defaultAttStatement {
 		attStmt[id] = v
@@ -543,8 +544,8 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	}
 	attStmt["certInfo"], _ = certInfo.Encode()
 
-	makeX5c := func(b []byte) []interface{} {
-		q := make([]interface{}, 1)
+	makeX5c := func(b []byte) []any {
+		q := make([]any, 1)
 		q[0] = b
 
 		return q
@@ -552,12 +553,12 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		x5c     []interface{}
+		x5c     []any
 		wantErr string
 	}{
 		{
 			"TPM Negative Test x5c empty",
-			make([]interface{}, 1),
+			make([]any, 1),
 			"Error getting certificate from x5c cert chain",
 		},
 		{

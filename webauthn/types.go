@@ -36,6 +36,15 @@ type Config struct {
 	// qualified origins.
 	RPOrigins []string
 
+	// RPTopOrigins configures the list of Relying Party Server Top Origins that are permitted. These should be fully
+	// qualified origins.
+	RPTopOrigins []string
+
+	// RPTopOriginVerificationMode determines the verification mode for the Top Origin value. By default the
+	// TopOriginIgnoreVerificationMode is used however this is going to change at such a time as WebAuthn Level 3
+	// becomes recommended, implementers should explicitly set this value if they want stability.
+	RPTopOriginVerificationMode protocol.TopOriginVerificationMode
+
 	// AttestationPreference sets the default attestation conveyance preferences.
 	AttestationPreference protocol.ConveyancePreference
 
@@ -54,21 +63,6 @@ type Config struct {
 	Timeouts TimeoutsConfig
 
 	validated bool
-
-	// RPIcon sets the icon URL for the Relying Party Server.
-	//
-	// Deprecated: this option has been removed from newer specifications due to security considerations.
-	RPIcon string
-
-	// RPOrigin configures the permitted Relying Party Server Origin.
-	//
-	// Deprecated: Use RPOrigins instead.
-	RPOrigin string
-
-	// Timeout configures the default timeout in milliseconds.
-	//
-	// Deprecated: Use Timeouts instead.
-	Timeout int
 }
 
 // TimeoutsConfig represents the WebAuthn timeouts configuration.
@@ -97,33 +91,16 @@ func (config *Config) validate() error {
 		return nil
 	}
 
-	if len(config.RPDisplayName) == 0 {
-		return fmt.Errorf(errFmtFieldEmpty, "RPDisplayName")
-	}
-
-	if len(config.RPID) == 0 {
-		return fmt.Errorf(errFmtFieldEmpty, "RPID")
-	}
-
 	var err error
 
-	if _, err = url.Parse(config.RPID); err != nil {
-		return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
-	}
-
-	if config.RPIcon != "" {
-		if _, err = url.Parse(config.RPIcon); err != nil {
-			return fmt.Errorf(errFmtFieldNotValidURI, "RPIcon", err)
+	if len(config.RPID) != 0 {
+		if _, err = url.Parse(config.RPID); err != nil {
+			return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
 		}
 	}
 
 	defaultTimeoutConfig := defaultTimeout
 	defaultTimeoutUVDConfig := defaultTimeoutUVD
-
-	if config.Timeout != 0 {
-		defaultTimeoutConfig = time.Millisecond * time.Duration(config.Timeout)
-		defaultTimeoutUVDConfig = defaultTimeoutConfig
-	}
 
 	if config.Timeouts.Login.Timeout.Milliseconds() == 0 {
 		config.Timeouts.Login.Timeout = defaultTimeoutConfig
@@ -141,16 +118,17 @@ func (config *Config) validate() error {
 		config.Timeouts.Registration.TimeoutUVD = defaultTimeoutUVDConfig
 	}
 
-	if len(config.RPOrigin) > 0 {
-		if len(config.RPOrigins) != 0 {
-			return fmt.Errorf("deprecated field 'RPOrigin' can't be defined at the same tme as the replacement field 'RPOrigins'")
-		}
-
-		config.RPOrigins = []string{config.RPOrigin}
-	}
-
 	if len(config.RPOrigins) == 0 {
 		return fmt.Errorf("must provide at least one value to the 'RPOrigins' field")
+	}
+
+	switch config.RPTopOriginVerificationMode {
+	case protocol.TopOriginDefaultVerificationMode:
+		config.RPTopOriginVerificationMode = protocol.TopOriginIgnoreVerificationMode
+	case protocol.TopOriginImplicitVerificationMode:
+		if len(config.RPTopOrigins) == 0 {
+			return fmt.Errorf("must provide at least one value to the 'RPTopOrigins' field when 'RPTopOriginVerificationMode' field is set to protocol.TopOriginImplicitVerificationMode")
+		}
 	}
 
 	if config.AuthenticatorSelection.RequireResidentKey == nil {
@@ -196,10 +174,6 @@ type User interface {
 
 	// WebAuthnCredentials provides the list of Credential objects owned by the user.
 	WebAuthnCredentials() []Credential
-
-	// WebAuthnIcon is a deprecated option.
-	// Deprecated: this has been removed from the specification recommendation. Suggest a blank string.
-	WebAuthnIcon() string
 }
 
 // SessionData is the data that should be stored by the Relying Party for the duration of the web authentication

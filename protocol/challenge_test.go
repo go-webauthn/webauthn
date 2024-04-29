@@ -26,7 +26,9 @@ func TestCreateChallenge(t *testing.T) {
 				t.Errorf("CreateChallenge() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			tt.want = got
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("CreateChallenge() = %v, want %v", got, tt.want)
 			}

@@ -25,16 +25,15 @@ minor versions) with a brief transition time (usually 1 patch release of go, for
 will likely still support go 1.17 until go 1.21.1 is released). 
 
 This library in our opinion handles a critical element of security in a dependent project and we aim to avoid backwards
-compatability at the cost of security wherever possible. We also consider this especially important in a language like
+compatibility at the cost of security wherever possible. We also consider this especially important in a language like
 go where their backwards compatibility when upgrading the compile tools is usually flawless.
 
 This policy means that users who wish to build this with older versions of go may find there are features being used
 which are not available in that version. The current intentionally supported versions of go are as follows:
 
+- go 1.22
 - go 1.21
 - go 1.20
-- go 1.19
-- go 1.18
 
 ## Status
 
@@ -69,7 +68,6 @@ package example
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
 )

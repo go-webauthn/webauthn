@@ -20,10 +20,13 @@ func TestAttestationVerify(t *testing.T) {
 			if err := json.Unmarshal([]byte(testAttestationOptions[i]), &options); err != nil {
 				t.Fatal(err)
 			}
+
 			ccr := CredentialCreationResponse{}
+
 			if err := json.Unmarshal([]byte(testAttestationResponses[i]), &ccr); err != nil {
 				t.Fatal(err)
 			}
+
 			var pcc ParsedCredentialCreationData
 			pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
 			pcc.Raw = ccr
@@ -36,7 +39,7 @@ func TestAttestationVerify(t *testing.T) {
 			pcc.Response = *parsedAttestationResponse
 
 			// Test Base Verification
-			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name})
+			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode)
 			if err != nil {
 				t.Fatalf("Not valid: %+v (%s)", err, err.(*Error).DevInfo)
 			}

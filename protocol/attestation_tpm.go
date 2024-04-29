@@ -15,13 +15,11 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-var tpmAttestationKey = "tpm"
-
 func init() {
-	RegisterAttestationFormat(tpmAttestationKey, verifyTPMFormat)
+	RegisterAttestationFormat(AttestationFormatTPM, verifyTPMFormat)
 }
 
-func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
+func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []any, error) {
 	// Given the verification procedure inputs attStmt, authenticatorData
 	// and clientDataHash, the verification procedure is as follows
 
@@ -44,7 +42,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte) (string, []in
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 
-	x5c, x509present := att.AttStatement["x5c"].([]interface{})
+	x5c, x509present := att.AttStatement["x5c"].([]any)
 	if !x509present {
 		// Handle Basic Attestation steps for the x509 Certificate
 		return "", nil, ErrNotImplemented

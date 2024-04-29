@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -70,6 +71,12 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		opt(&assertion.Response)
 	}
 
+	if len(assertion.Response.RelyingPartyID) == 0 {
+		return nil, nil, fmt.Errorf("error generating assertion: the relying party id must be provided via the configuration or a functional option for a login")
+	} else if _, err = url.Parse(assertion.Response.RelyingPartyID); err != nil {
+		return nil, nil, fmt.Errorf("error generating assertion: the relying party id failed to validate as it's not a valid uri with error: %w", err)
+	}
+
 	if assertion.Response.Timeout == 0 {
 		switch {
 		case assertion.Response.UserVerification == protocol.VerificationDiscouraged:
@@ -115,6 +122,15 @@ func WithUserVerification(userVerification protocol.UserVerificationRequirement)
 	}
 }
 
+// WithAssertionPublicKeyCredentialHints adjusts the non-default hints for credential types to select during login.
+//
+// WebAuthn Level 3.
+func WithAssertionPublicKeyCredentialHints(hints []protocol.PublicKeyCredentialHints) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		cco.Hints = hints
+	}
+}
+
 // WithAssertionExtensions adjusts the requested extensions.
 func WithAssertionExtensions(extensions protocol.AuthenticationExtensions) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
@@ -129,12 +145,19 @@ func WithAppIdExtension(appid string) LoginOption {
 		for _, credential := range cco.AllowedCredentials {
 			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
 				if cco.Extensions == nil {
-					cco.Extensions = map[string]interface{}{}
+					cco.Extensions = map[string]any{}
 				}
 
 				cco.Extensions[protocol.ExtensionAppID] = appid
 			}
 		}
+	}
+}
+
+// WithLoginRelyingPartyID sets the Relying Party ID for this particular login.
+func WithLoginRelyingPartyID(id string) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		cco.RelyingPartyID = id
 	}
 }
 
@@ -269,6 +292,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 	rpID := webauthn.Config.RPID
 	rpOrigins := webauthn.Config.RPOrigins
+	rpTopOrigins := webauthn.Config.RPTopOrigins
 
 	appID, err := parsedResponse.GetAppID(session.Extensions, loginCredential.AttestationType)
 	if err != nil {
@@ -276,7 +300,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	// Handle steps 4 through 16.
-	validError := parsedResponse.Verify(session.Challenge, rpID, rpOrigins, appID, shouldVerifyUser, loginCredential.PublicKey)
+	validError := parsedResponse.Verify(session.Challenge, rpID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, appID, shouldVerifyUser, loginCredential.PublicKey)
 	if validError != nil {
 		return nil, validError
 	}

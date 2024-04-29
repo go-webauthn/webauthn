@@ -548,16 +548,16 @@ type MDSGetEndpointsResponse struct {
 func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 	var payload MetadataBLOBPayload
 
-	token, err := jwt.Parse(string(body), func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(string(body), func(token *jwt.Token) (any, error) {
 		// 2. If the x5u attribute is present in the JWT Header, then
-		if _, ok := token.Header["x5u"].([]interface{}); ok {
+		if _, ok := token.Header["x5u"].(any); ok {
 			// never seen an x5u here, although it is in the spec
 			return nil, errors.New("x5u encountered in header of metadata TOC payload")
 		}
-		var chain []interface{}
+		var chain []any
 		// 3. If the x5u attribute is missing, the chain should be retrieved from the x5c attribute.
 
-		if x5c, ok := token.Header["x5c"].([]interface{}); !ok {
+		if x5c, ok := token.Header["x5c"].([]any); !ok {
 			// If that attribute is missing as well, Metadata TOC signing trust anchor is considered the TOC signing certificate chain.
 			chain[0] = MDSRoot
 		} else {
@@ -600,7 +600,7 @@ func unmarshalMDSBLOB(body []byte, c http.Client) (MetadataBLOBPayload, error) {
 	return payload, err
 }
 
-func validateChain(chain []interface{}, c http.Client) (bool, error) {
+func validateChain(chain []any, c http.Client) (bool, error) {
 	oRoot := make([]byte, base64.StdEncoding.DecodedLen(len(MDSRoot)))
 
 	nRoot, err := base64.StdEncoding.Decode(oRoot, []byte(MDSRoot))

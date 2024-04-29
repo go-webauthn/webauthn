@@ -47,7 +47,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 						Type: "public-key",
 					},
 					RawID: byteID,
-					ClientExtensionResults: map[string]interface{}{
+					ClientExtensionResults: map[string]any{
 						"appID": "example.com",
 					},
 				},
@@ -78,7 +78,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 							ID:   "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
 						},
 						RawID: byteID,
-						ClientExtensionResults: map[string]interface{}{
+						ClientExtensionResults: map[string]any{
 							"appID": "example.com",
 						},
 					},
@@ -135,7 +135,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 			assert.Equal(t, tc.expected.Response.CollectedClientData, actual.Response.CollectedClientData)
 
 			var (
-				pkExpected, pkActual interface{}
+				pkExpected, pkActual any
 			)
 
 			assert.NoError(t, webauthncbor.Unmarshal(tc.expected.Response.AuthenticatorData.AttData.CredentialPublicKey, &pkExpected))
@@ -180,7 +180,7 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 				Raw:                       tt.fields.Raw,
 			}
 
-			if err := p.Verify(tt.args.storedChallenge.String(), tt.args.relyingPartyID, tt.args.relyingPartyOrigin, "", tt.args.verifyUser, tt.args.credentialBytes); (err != nil) != tt.wantErr {
+			if err := p.Verify(tt.args.storedChallenge.String(), tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, "", tt.args.verifyUser, tt.args.credentialBytes); (err != nil) != tt.wantErr {
 				t.Errorf("ParsedCredentialAssertionData.Verify() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

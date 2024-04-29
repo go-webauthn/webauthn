@@ -22,6 +22,14 @@ type AuthenticatorAttestationResponse struct {
 	// The byte slice of clientDataJSON, which becomes CollectedClientData
 	AuthenticatorResponse
 
+	Transports []string `json:"transports,omitempty"`
+
+	AuthenticatorData URLEncodedBase64 `json:"authenticatorData"`
+
+	PublicKey URLEncodedBase64 `json:"publicKey"`
+
+	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm"`
+
 	// AttestationObject is the byte slice version of attestationObject.
 	// This attribute contains an attestation object, which is opaque to, and
 	// cryptographically protected against tampering by, the client. The
@@ -33,8 +41,6 @@ type AuthenticatorAttestationResponse struct {
 	// requires to validate the attestation statement, as well as to decode and
 	// validate the authenticator data along with the JSON-serialized client data.
 	AttestationObject URLEncodedBase64 `json:"attestationObject"`
-
-	Transports []string `json:"transports,omitempty"`
 }
 
 // ParsedAttestationResponse is the parsed version of AuthenticatorAttestationResponse.
@@ -65,16 +71,16 @@ type AttestationObject struct {
 	// The format of the Attestation data.
 	Format string `json:"fmt"`
 	// The attestation statement data sent back if attestation is requested.
-	AttStatement map[string]interface{} `json:"attStmt,omitempty"`
+	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
-type attestationFormatValidationHandler func(AttestationObject, []byte) (string, []interface{}, error)
+type attestationFormatValidationHandler func(AttestationObject, []byte) (string, []any, error)
 
-var attestationRegistry = make(map[string]attestationFormatValidationHandler)
+var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
 
 // RegisterAttestationFormat is a method to register attestation formats with the library. Generally using one of the
 // locally registered attestation formats is sufficient.
-func RegisterAttestationFormat(format string, handler attestationFormatValidationHandler) {
+func RegisterAttestationFormat(format AttestationFormat, handler attestationFormatValidationHandler) {
 	attestationRegistry[format] = handler
 }
 
@@ -135,7 +141,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 
 	// But first let's make sure attestation is present. If it isn't, we don't need to handle
 	// any of the following steps
-	if attestationObject.Format == "none" {
+	if AttestationFormat(attestationObject.Format) == AttestationFormatNone {
 		if len(attestationObject.AttStatement) != 0 {
 			return ErrAttestationFormat.WithInfo("Attestation format none with attestation present")
 		}
@@ -143,7 +149,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 		return nil
 	}
 
-	formatHandler, valid := attestationRegistry[attestationObject.Format]
+	formatHandler, valid := attestationRegistry[AttestationFormat(attestationObject.Format)]
 	if !valid {
 		return ErrAttestationFormat.WithInfo(fmt.Sprintf("Attestation format %s is unsupported", attestationObject.Format))
 	}

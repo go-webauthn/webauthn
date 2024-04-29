@@ -17,6 +17,7 @@ import (
 // credential for login/assertion.
 type CredentialAssertionResponse struct {
 	PublicKeyCredential
+
 	AssertionResponse AuthenticatorAssertionResponse `json:"response"`
 }
 
@@ -24,6 +25,7 @@ type CredentialAssertionResponse struct {
 // that allows us to verify the client and authenticator data inside the response.
 type ParsedCredentialAssertionData struct {
 	ParsedPublicKeyCredential
+
 	Response ParsedAssertionResponse
 	Raw      CredentialAssertionResponse
 }
@@ -32,6 +34,7 @@ type ParsedCredentialAssertionData struct {
 // ParsedAssertionResponse.
 type AuthenticatorAssertionResponse struct {
 	AuthenticatorResponse
+
 	AuthenticatorData URLEncodedBase64 `json:"authenticatorData"`
 	Signature         URLEncodedBase64 `json:"signature"`
 	UserHandle        URLEncodedBase64 `json:"userHandle,omitempty"`
@@ -138,14 +141,14 @@ func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionDa
 // documentation.
 //
 // Specification: §7.2 Verifying an Authentication Assertion (https://www.w3.org/TR/webauthn/#sctn-verifying-assertion)
-func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID string, relyingPartyOrigins []string, appID string, verifyUser bool, credentialBytes []byte) error {
+func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, appID string, verifyUser bool, credentialBytes []byte) error {
 	// Steps 4 through 6 in verifying the assertion data (https://www.w3.org/TR/webauthn/#verifying-assertion) are
 	// "assertive" steps, i.e "Let JSONtext be the result of running UTF-8 decode on the value of cData."
 	// We handle these steps in part as we verify but also beforehand
 
 	// Handle steps 7 through 10 of assertion by verifying stored data against the Collected Client Data
 	// returned by the authenticator
-	validError := p.Response.CollectedClientData.Verify(storedChallenge, AssertCeremony, relyingPartyOrigins)
+	validError := p.Response.CollectedClientData.Verify(storedChallenge, AssertCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify)
 	if validError != nil {
 		return validError
 	}
@@ -175,7 +178,7 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 	sigData := append(p.Raw.AssertionResponse.AuthenticatorData, clientDataHash[:]...)
 
 	var (
-		key interface{}
+		key any
 		err error
 	)
 
