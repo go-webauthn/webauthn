@@ -1,8 +1,8 @@
 package webauthn
 
-// TODO: move this to a _test.go file.
 type defaultUser struct {
-	id []byte
+	id          []byte
+	credentials []Credential
 }
 
 var _ User = (*defaultUser)(nil)
@@ -19,10 +19,6 @@ func (user *defaultUser) WebAuthnDisplayName() string {
 	return "New User"
 }
 
-func (user *defaultUser) WebAuthnIcon() string {
-	return "https://pics.com/avatar.png"
-}
-
 func (user *defaultUser) WebAuthnCredentials() []Credential {
-	return []Credential{}
+	return user.credentials
 }

@@ -4,9 +4,99 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/go-webauthn/webauthn/protocol"
 )
+
+func TestWithRegistrationRelyingPartyID(t *testing.T) {
+	testCases := []struct {
+		name         string
+		have         *Config
+		opts         []RegistrationOption
+		expectedID   string
+		expectedName string
+		err          string
+	}{
+		{
+			name: "OptionDefinedInConfig",
+			have: &Config{
+				RPID:          "https://example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			opts:         nil,
+			expectedID:   "https://example.com",
+			expectedName: "Test Display Name",
+		},
+		{
+			name: "OptionDefinedInConfigAndOpts",
+			have: &Config{
+				RPID:          "https://example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			opts:         []RegistrationOption{WithRegistrationRelyingPartyID("https://a.example.com"), WithRegistrationRelyingPartyName("Test Display Name2")},
+			expectedID:   "https://a.example.com",
+			expectedName: "Test Display Name2",
+		},
+		{
+			name: "OptionDefinedInConfigWithNoErrAndInOptsWithError",
+			have: &Config{
+				RPID:          "https://example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			opts: []RegistrationOption{WithRegistrationRelyingPartyID("---::~!!~@#M!@OIK#N!@IOK@@@@@@@@@@"), WithRegistrationRelyingPartyName("Test Display Name2")},
+			err:  "error generating credential creation: the relying party id failed to validate as it's not a valid uri with error: parse \"---::~!!~@\": first path segment in URL cannot contain colon",
+		},
+		{
+			name: "OptionDefinedInOpts",
+			have: &Config{
+				RPOrigins: []string{"https://example.com"},
+			},
+			opts:         []RegistrationOption{WithRegistrationRelyingPartyID("https://example.com"), WithRegistrationRelyingPartyName("Test Display Name")},
+			expectedID:   "https://example.com",
+			expectedName: "Test Display Name",
+		},
+		{
+			name: "OptionDisplayNameNotDefined",
+			have: &Config{
+				RPOrigins: []string{"https://example.com"},
+			},
+			opts: []RegistrationOption{WithRegistrationRelyingPartyID("https://example.com")},
+			err:  "error generating credential creation: the relying party display name must be provided via the configuration or a functional option for a creation",
+		},
+		{
+			name: "OptionIDNotDefined",
+			have: &Config{
+				RPOrigins: []string{"https://example.com"},
+			},
+			opts: []RegistrationOption{WithRegistrationRelyingPartyName("Test Display Name")},
+			err:  "error generating credential creation: the relying party id must be provided via the configuration or a functional option for a creation",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(tc.have)
+			assert.NoError(t, err)
+
+			user := &defaultUser{}
+
+			creation, _, err := w.BeginRegistration(user, tc.opts...)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+				require.NotNil(t, creation)
+				assert.Equal(t, tc.expectedID, creation.Response.RelyingParty.ID)
+				assert.Equal(t, tc.expectedName, creation.Response.RelyingParty.Name)
+			}
+		})
+	}
+}
 
 func TestRegistration_FinishRegistrationFailure(t *testing.T) {
 	user := &defaultUser{
