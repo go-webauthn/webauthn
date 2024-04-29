@@ -91,18 +91,12 @@ func (config *Config) validate() error {
 		return nil
 	}
 
-	if len(config.RPDisplayName) == 0 {
-		return fmt.Errorf(errFmtFieldEmpty, "RPDisplayName")
-	}
-
-	if len(config.RPID) == 0 {
-		return fmt.Errorf(errFmtFieldEmpty, "RPID")
-	}
-
 	var err error
 
-	if _, err = url.Parse(config.RPID); err != nil {
-		return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
+	if len(config.RPID) != 0 {
+		if _, err = url.Parse(config.RPID); err != nil {
+			return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
+		}
 	}
 
 	defaultTimeoutConfig := defaultTimeout

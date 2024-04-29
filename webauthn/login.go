@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -68,6 +69,12 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 
 	for _, opt := range opts {
 		opt(&assertion.Response)
+	}
+
+	if len(assertion.Response.RelyingPartyID) == 0 {
+		return nil, nil, fmt.Errorf("error generating assertion: the relying party id must be provided via the configuration or a functional option for a login")
+	} else if _, err = url.Parse(assertion.Response.RelyingPartyID); err != nil {
+		return nil, nil, fmt.Errorf("error generating assertion: the relying party id failed to validate as it's not a valid uri with error: %w", err)
 	}
 
 	if assertion.Response.Timeout == 0 {
@@ -144,6 +151,13 @@ func WithAppIdExtension(appid string) LoginOption {
 				cco.Extensions[protocol.ExtensionAppID] = appid
 			}
 		}
+	}
+}
+
+// WithLoginRelyingPartyID sets the Relying Party ID for this particular login.
+func WithLoginRelyingPartyID(id string) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		cco.RelyingPartyID = id
 	}
 }
 
