@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
@@ -120,7 +121,7 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 //
 // Steps 9 through 12 are verified against the auth data. These steps are identical to 11 through 14 for assertion so we
 // handle them with AuthData.
-func (attestationObject *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, verificationRequired bool) error {
+func (attestationObject *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, verificationRequired bool, mds metadata.Provider) error {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
 	// Begin Step 9 through 12. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
@@ -157,50 +158,68 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 	// Step 14. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
-	attestationType, x5c, err := formatHandler(*attestationObject, clientDataHash)
+	attestationType, x5cs, err := formatHandler(*attestationObject, clientDataHash)
 	if err != nil {
 		return err.(*Error).WithInfo(attestationType)
 	}
 
-	aaguid, err := uuid.FromBytes(attestationObject.AuthData.AttData.AAGUID)
-	if err != nil {
+	var (
+		aaguid uuid.UUID
+		entry  *metadata.MetadataBLOBPayloadEntry
+	)
+
+	if aaguid, err = uuid.FromBytes(attestationObject.AuthData.AttData.AAGUID); err != nil {
 		return err
 	}
 
-	if meta, ok := metadata.Metadata[aaguid]; ok {
-		for _, s := range meta.StatusReports {
-			if metadata.IsUndesiredAuthenticatorStatus(s.Status) {
-				return ErrInvalidAttestation.WithDetails("Authenticator with undesirable status encountered")
-			}
+	if mds == nil {
+		return nil
+	}
+
+	ctx := context.Background()
+
+	if entry, err = mds.GetEntry(ctx, aaguid); err != nil {
+		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred: %+v", err)).WithDetails(fmt.Sprintf("Error occurred looking up entry for AAGUID %s", aaguid.String()))
+	}
+
+	if entry == nil {
+		if mds.GetRequireConformance(ctx) {
+			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during conformance testing", aaguid.String()))
 		}
 
-		if x5c != nil {
-			var x5cAtt *x509.Certificate
+		return nil
+	}
 
-			if x5cAtt, err = x509.ParseCertificate(x5c[0].([]byte)); err != nil {
-				return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c")
+	for _, s := range entry.StatusReports {
+		if mds.GetIsUndesiredAuthenticatorStatus(ctx, s.Status) {
+			return ErrInvalidAttestation.WithDetails("Authenticator with undesirable status encountered")
+		}
+	}
+
+	if x5cs != nil {
+		var (
+			x5c *x509.Certificate
+			raw []byte
+			ok  bool
+		)
+
+		if raw, ok = x5cs[0].([]byte); !ok {
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c")
+		}
+
+		if x5c, err = x509.ParseCertificate(raw); err != nil {
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c")
+		}
+
+		if x5c.Subject.CommonName != x5c.Issuer.CommonName {
+			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
+				return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
 			}
 
-			if x5cAtt.Subject.CommonName != x5cAtt.Issuer.CommonName {
-				var hasBasicFull = false
-
-				for _, a := range meta.MetadataStatement.AttestationTypes {
-					if a == metadata.BasicFull || a == metadata.AttCA {
-						hasBasicFull = true
-					}
-				}
-
-				if !hasBasicFull {
-					return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
-				}
-
-				if _, err = x5cAtt.Verify(meta.MetadataStatement.Verifier()); err != nil {
-					return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
-				}
+			if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
+				return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
 			}
 		}
-	} else if metadata.Conformance {
-		return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during conformance testing", aaguid.String()))
 	}
 
 	return nil

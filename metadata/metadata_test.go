@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"testing"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
@@ -34,12 +34,6 @@ func TestProductionMetadataTOCParsing(t *testing.T) {
 
 	for _, perr := range metadata.Unparsed {
 		fmt.Println(perr.Error)
-	}
-}
-
-func TestProductionMetadataTOCParsingx(t *testing.T) {
-	if err := PopulateMetadata(ProductionMDSURL, true); err != nil {
-		t.Fatal(err)
 	}
 }
 

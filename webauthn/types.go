@@ -2,6 +2,7 @@ package webauthn
 
 import (
 	"fmt"
+	"github.com/go-webauthn/webauthn/metadata"
 	"net/url"
 	"time"
 
@@ -61,6 +62,8 @@ type Config struct {
 
 	// Timeouts configures various timeouts.
 	Timeouts TimeoutsConfig
+
+	MetaData metadata.Provider
 
 	validated bool
 }
@@ -134,6 +137,34 @@ func (config *Config) validate() error {
 	config.validated = true
 
 	return nil
+}
+
+func (c *Config) GetRPID() string {
+	return c.RPID
+}
+
+func (c *Config) GetOrigins() []string {
+	return c.RPOrigins
+}
+
+func (c *Config) GetTopOrigins() []string {
+	return c.RPTopOrigins
+}
+
+func (c *Config) GetTopOriginVerificationMode() protocol.TopOriginVerificationMode {
+	return c.RPTopOriginVerificationMode
+}
+
+func (c *Config) GetMetaDataProvider() metadata.Provider {
+	return c.MetaData
+}
+
+type ConfigProvider interface {
+	GetRPID() string
+	GetOrigins() []string
+	GetTopOrigins() []string
+	GetTopOriginVerificationMode() protocol.TopOriginVerificationMode
+	GetMetaDataProvider() metadata.Provider
 }
 
 // User is an interface with the Relying Party's User entry and provides the fields and methods needed for WebAuthn

@@ -2,10 +2,8 @@ package metadata
 
 import (
 	"context"
-	"io"
-	"net/http"
+	"errors"
 	"reflect"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -13,12 +11,35 @@ import (
 )
 
 type Provider interface {
-	GetMetaData(ctx context.Context, aaguid uuid.UUID) (entry *MetadataBLOBPayloadEntry, err error)
+	// GetRequireConformance returns true if this provider requires conformance.
+	GetRequireConformance(ctx context.Context) (require bool)
+
+	// GetEntry returns a MDS3 payload entry given a AAGUID. This
+	GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *MetadataBLOBPayloadEntry, err error)
+
+	// GetIsUndesiredAuthenticatorStatus returns true if the provided AuthenticatorStatus is not desired.
+	GetIsUndesiredAuthenticatorStatus(ctx context.Context, status AuthenticatorStatus) (isUndesiredAuthenticatorStatus bool)
 }
+
+var (
+	ErrNotInitialized = errors.New("metadata: not initialized")
+)
 
 type PublicKeyCredentialParameters struct {
 	Type string                               `json:"type"`
 	Alg  webauthncose.COSEAlgorithmIdentifier `json:"alg"`
+}
+
+type AuthenticatorAttestationTypes []AuthenticatorAttestationType
+
+func (t AuthenticatorAttestationTypes) HasBasicFull() bool {
+	for _, a := range t {
+		if a == BasicFull || a == AttCA {
+			return true
+		}
+	}
+
+	return false
 }
 
 // AuthenticatorAttestationType - The ATTESTATION constants are 16 bit long integers indicating the specific attestation that authenticator supports.
@@ -77,8 +98,8 @@ const (
 	FidoCertifiedL3plus AuthenticatorStatus = "FIDO_CERTIFIED_L3plus"
 )
 
-// UndesiredAuthenticatorStatus is an array of undesirable authenticator statuses
-var UndesiredAuthenticatorStatus = [...]AuthenticatorStatus{
+// defaultUndesiredAuthenticatorStatus is an array of undesirable authenticator statuses
+var defaultUndesiredAuthenticatorStatus = [...]AuthenticatorStatus{
 	AttestationKeyCompromise,
 	UserVerificationBypass,
 	UserKeyRemoteCompromise,
@@ -88,7 +109,7 @@ var UndesiredAuthenticatorStatus = [...]AuthenticatorStatus{
 
 // IsUndesiredAuthenticatorStatus returns whether the supplied authenticator status is desirable or not
 func IsUndesiredAuthenticatorStatus(status AuthenticatorStatus) bool {
-	for _, s := range UndesiredAuthenticatorStatus {
+	for _, s := range defaultUndesiredAuthenticatorStatus {
 		if s == status {
 			return true
 		}
@@ -223,42 +244,4 @@ var (
 
 func (err *MetadataError) Error() string {
 	return err.Details
-}
-
-func PopulateMetadata(url string, skipInvalid bool) error {
-	c := &http.Client{
-		Timeout: time.Second * 30,
-	}
-
-	res, err := c.Get(url)
-	if err != nil {
-		return err
-	}
-
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return err
-	}
-
-	blob, err := unmarshalMDSBLOB(body)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range blob.Entries {
-		parsed, err := entry.Parse()
-		if err != nil {
-			if skipInvalid {
-				continue
-			}
-
-			return err
-		}
-
-		Metadatas[parsed.AaGUID] = parsed
-	}
-
-	return err
 }
