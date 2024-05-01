@@ -15,12 +15,12 @@ type Metadata struct {
 	Unparsed []MetadataBLOBPayloadEntryError
 }
 
-func (m *Metadata) ToMap() (metadata map[uuid.UUID]MetadataBLOBPayloadEntry) {
-	metadata = make(map[uuid.UUID]MetadataBLOBPayloadEntry)
+func (m *Metadata) ToMap() (metadata map[uuid.UUID]*MetadataBLOBPayloadEntry) {
+	metadata = make(map[uuid.UUID]*MetadataBLOBPayloadEntry)
 
 	for _, entry := range m.Parsed.Entries {
 		if entry.AaGUID.ID() != 0 {
-			metadata[entry.AaGUID] = entry
+			metadata[entry.AaGUID] = &entry
 		}
 	}
 
@@ -240,7 +240,7 @@ type MetadataStatement struct {
 	PublicKeyAlgAndEncodings []PublicKeyAlgAndEncoding
 
 	// The supported attestation type(s).
-	AttestationTypes []AuthenticatorAttestationType
+	AttestationTypes AuthenticatorAttestationTypes
 
 	// A list of alternative VerificationMethodANDCombinations.
 	UserVerificationDetails [][]VerificationMethodDescriptor

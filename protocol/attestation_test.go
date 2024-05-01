@@ -5,14 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-
-	"github.com/go-webauthn/webauthn/metadata"
 )
 
 func TestAttestationVerify(t *testing.T) {
-	assert.NoError(t, metadata.PopulateMetadata(metadata.ProductionMDSURL, true))
+	//assert.NoError(t, metadata.PopulateMetadata(metadata.ProductionMDSURL, true))
 
 	for i := range testAttestationOptions {
 		t.Run(fmt.Sprintf("Running test %d", i), func(t *testing.T) {
@@ -39,7 +35,7 @@ func TestAttestationVerify(t *testing.T) {
 			pcc.Response = *parsedAttestationResponse
 
 			// Test Base Verification
-			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode)
+			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, nil)
 			if err != nil {
 				t.Fatalf("Not valid: %+v (%s)", err, err.(*Error).DevInfo)
 			}
