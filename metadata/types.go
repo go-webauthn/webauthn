@@ -2,7 +2,6 @@ package metadata
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"reflect"
@@ -14,7 +13,7 @@ import (
 )
 
 type Provider interface {
-	GetMetadataBLOBPayloadEntry(ctx context.Context, aaguid uuid.UUID) (entry *MetadataBLOBPayloadEntry, err error)
+	GetMetaData(ctx context.Context, aaguid uuid.UUID) (entry *MetadataBLOBPayloadEntry, err error)
 }
 
 type PublicKeyCredentialParameters struct {
@@ -249,8 +248,6 @@ func PopulateMetadata(url string, skipInvalid bool) error {
 	}
 
 	for _, entry := range blob.Entries {
-		fmt.Println("parsing", entry.AaGUID, entry.MetadataStatement.Description)
-
 		parsed, err := entry.Parse()
 		if err != nil {
 			if skipInvalid {
@@ -260,7 +257,7 @@ func PopulateMetadata(url string, skipInvalid bool) error {
 			return err
 		}
 
-		Metadata[parsed.AaGUID] = parsed
+		Metadatas[parsed.AaGUID] = parsed
 	}
 
 	return err

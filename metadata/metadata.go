@@ -4,10 +4,33 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+type Metadata struct {
+	Parsed   MetadataBLOBPayload
+	Unparsed []MetadataBLOBPayloadEntryError
+}
+
+func (m *Metadata) ToMap() (metadata map[uuid.UUID]MetadataBLOBPayloadEntry) {
+	metadata = make(map[uuid.UUID]MetadataBLOBPayloadEntry)
+
+	for _, entry := range m.Parsed.Entries {
+		if entry.AaGUID.ID() != 0 {
+			metadata[entry.AaGUID] = entry
+		}
+	}
+
+	return metadata
+}
+
+type MetadataBLOBPayloadEntryError struct {
+	Error error
+	MetadataBLOBPayloadEntryJSON
+}
 
 // MetadataBLOBPayload is a structure representing the MetadataBLOBPayload MDS3 dictionary.
 //
@@ -338,8 +361,10 @@ func (j MetadataStatementJSON) Parse() (statement MetadataStatement, err error) 
 
 	var icon *url.URL
 
-	if icon, err = url.ParseRequestURI(j.Icon); err != nil {
-		return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing icon value: %w", j.Description, err)
+	if len(j.Icon) != 0 {
+		if icon, err = url.ParseRequestURI(j.Icon); err != nil {
+			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing icon value: %w", j.Description, err)
+		}
 	}
 
 	var info AuthenticatorGetInfo
@@ -505,7 +530,13 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 
 	if len(j.URL) != 0 {
 		if uri, err = url.ParseRequestURI(j.URL); err != nil {
-			return report, fmt.Errorf("error occurred parsing URL value: %w", err)
+			if !strings.HasPrefix(j.URL, "http") {
+				var e error
+
+				if uri, e = url.ParseRequestURI(fmt.Sprintf("https://%s", j.URL)); e != nil {
+					return report, fmt.Errorf("error occurred parsing URL value: %w", err)
+				}
+			}
 		}
 	}
 

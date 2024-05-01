@@ -3,6 +3,8 @@ package metadata
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"testing"
@@ -15,6 +17,27 @@ import (
 )
 
 func TestProductionMetadataTOCParsing(t *testing.T) {
+	decoder := NewDecoder(WithSkipParserErrors())
+
+	client := &http.Client{}
+
+	res, err := client.Get(ProductionMDSURL)
+	require.NoError(t, err)
+
+	payload, err := decoder.Decode(res.Body)
+	require.NoError(t, err)
+
+	var metadata *Metadata
+
+	metadata, err = decoder.Parse(payload)
+	require.NoError(t, err)
+
+	for _, perr := range metadata.Unparsed {
+		fmt.Println(perr.Error)
+	}
+}
+
+func TestProductionMetadataTOCParsingx(t *testing.T) {
 	if err := PopulateMetadata(ProductionMDSURL, true); err != nil {
 		t.Fatal(err)
 	}
@@ -67,12 +90,12 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 	metadata := make(map[uuid.UUID]MetadataBLOBPayloadEntryJSON)
 
 	for _, endpoint := range endpoints {
-		bytes, err := downloadBytes(endpoint, httpClient)
+		res, err := httpClient.Get(endpoint)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		blob, err := decoder.Decode(bytes)
+		blob, err := decoder.Decode(res.Body)
 		if err != nil {
 			if me, ok := err.(*MetadataError); ok {
 				t.Log(me.Details)
@@ -127,12 +150,14 @@ func TestExampleMetadataTOCParsing(t *testing.T) {
 
 	exampleMetadataBLOBBytes := bytes.NewBufferString(exampleMetadataBLOB)
 
-	decoder := NewDecoder()
+	decoder := NewDecoder(WithSkipParserErrors())
 
-	_, err := decoder.Decode(exampleMetadataBLOBBytes.Bytes())
-	if err != nil {
-		t.Fail()
-	}
+	payload, err := decoder.DecodeBytes(exampleMetadataBLOBBytes.Bytes())
+	require.NoError(t, err)
+
+	_, err = decoder.Parse(payload)
+
+	require.NoError(t, err)
 }
 
 func TestIsUndesiredAuthenticatorStatus(t *testing.T) {
@@ -275,6 +300,10 @@ func TestAlgKeyMatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func download(url string, c *http.Client) {
+
 }
 
 func downloadBytes(url string, c *http.Client) ([]byte, error) {

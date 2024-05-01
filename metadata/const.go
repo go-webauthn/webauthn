@@ -29,4 +29,4 @@ const (
 )
 
 // Metadata is a map of authenticator AAGUIDs to corresponding metadata statements
-var Metadata = make(map[uuid.UUID]MetadataBLOBPayloadEntry)
+var Metadatas = make(map[uuid.UUID]MetadataBLOBPayloadEntry)
