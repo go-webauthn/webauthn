@@ -242,7 +242,7 @@ func PopulateMetadata(url string, skipInvalid bool) error {
 		return err
 	}
 
-	blob, err := unmarshalMDSBLOB(body, c)
+	blob, err := unmarshalMDSBLOB(body)
 	if err != nil {
 		return err
 	}

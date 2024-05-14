@@ -5,13 +5,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/go-webauthn/x/revoke"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/mitchellh/mapstructure"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/go-webauthn/x/revoke"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/mitchellh/mapstructure"
 )
 
 // NewDecoder returns a new metadata decoder.
@@ -30,10 +31,10 @@ func NewDecoder(opts ...DecoderOption) (decoder *Decoder) {
 }
 
 type Decoder struct {
-	client           *http.Client
-	parser           *jwt.Parser
-	hook             mapstructure.DecodeHookFunc
-	skipParserErrors bool
+	client                   *http.Client
+	parser                   *jwt.Parser
+	hook                     mapstructure.DecodeHookFunc
+	ignoreEntryParsingErrors bool
 }
 
 func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, err error) {
@@ -63,7 +64,7 @@ func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, e
 		metadata.Parsed.Entries = append(metadata.Parsed.Entries, parsed)
 	}
 
-	if n := len(metadata.Unparsed); n != 0 && !d.skipParserErrors {
+	if n := len(metadata.Unparsed); n != 0 && !d.ignoreEntryParsingErrors {
 		return metadata, fmt.Errorf("error occured parsing metadata: %d entries had errors during parsing", n)
 	}
 
@@ -107,7 +108,7 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *MetadataBLOBPayloadJSON, e
 		}
 
 		// The certificate chain MUST be verified to properly chain to the metadata TOC signing trust anchor.
-		if valid, err = validateChain(chain, d.client); !valid || err != nil {
+		if valid, err = validateChain(chain); !valid || err != nil {
 			return nil, err
 		}
 
@@ -154,7 +155,7 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *MetadataBLOBPayloadJSON, e
 	return payload, nil
 }
 
-func unmarshalMDSBLOB(body []byte, c *http.Client) (MetadataBLOBPayloadJSON, error) {
+func unmarshalMDSBLOB(body []byte) (MetadataBLOBPayloadJSON, error) {
 	var payload MetadataBLOBPayloadJSON
 
 	token, err := jwt.Parse(string(body), func(token *jwt.Token) (any, error) {
@@ -174,7 +175,7 @@ func unmarshalMDSBLOB(body []byte, c *http.Client) (MetadataBLOBPayloadJSON, err
 		}
 
 		// The certificate chain MUST be verified to properly chain to the metadata TOC signing trust anchor.
-		valid, err := validateChain(chain, c)
+		valid, err := validateChain(chain)
 		if !valid || err != nil {
 			return nil, err
 		}
@@ -209,7 +210,7 @@ func unmarshalMDSBLOB(body []byte, c *http.Client) (MetadataBLOBPayloadJSON, err
 	return payload, err
 }
 
-func validateChain(chain []any, c *http.Client) (bool, error) {
+func validateChain(chain []any) (bool, error) {
 	oRoot := make([]byte, base64.StdEncoding.DecodedLen(len(MDSRoot)))
 
 	nRoot, err := base64.StdEncoding.Decode(oRoot, []byte(MDSRoot))
@@ -367,7 +368,6 @@ func ParseMetadataX509Certificate(value string) (certificate *x509.Certificate, 
 	}
 
 	if certificate, err = x509.ParseCertificate(raw[:n]); err != nil {
-		fmt.Println("failed to parse cert", value)
 		return nil, err
 	}
 
@@ -376,8 +376,10 @@ func ParseMetadataX509Certificate(value string) (certificate *x509.Certificate, 
 
 type DecoderOption func(decoder *Decoder)
 
-func WithSkipParserErrors() DecoderOption {
+// WithIgnoreEntryParsingErrors is a DecoderOption which ignores errors when parsing individual entries. The values for
+// these entries will exist as an unparsed entry.
+func WithIgnoreEntryParsingErrors() DecoderOption {
 	return func(decoder *Decoder) {
-		decoder.skipParserErrors = true
+		decoder.ignoreEntryParsingErrors = true
 	}
 }
