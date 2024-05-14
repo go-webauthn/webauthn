@@ -17,7 +17,7 @@ import (
 )
 
 func TestProductionMetadataTOCParsing(t *testing.T) {
-	decoder := NewDecoder(WithSkipParserErrors())
+	decoder := NewDecoder(WithIgnoreEntryParsingErrors())
 
 	client := &http.Client{}
 
@@ -150,7 +150,7 @@ func TestExampleMetadataTOCParsing(t *testing.T) {
 
 	exampleMetadataBLOBBytes := bytes.NewBufferString(exampleMetadataBLOB)
 
-	decoder := NewDecoder(WithSkipParserErrors())
+	decoder := NewDecoder(WithIgnoreEntryParsingErrors())
 
 	payload, err := decoder.DecodeBytes(exampleMetadataBLOBBytes.Bytes())
 	require.NoError(t, err)
