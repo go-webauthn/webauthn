@@ -3,6 +3,7 @@ package metadata
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +18,8 @@ import (
 )
 
 func TestProductionMetadataTOCParsing(t *testing.T) {
-	decoder := NewDecoder(WithIgnoreEntryParsingErrors())
+	decoder, err := NewDecoder(WithIgnoreEntryParsingErrors())
+	require.NoError(t, err)
 
 	client := &http.Client{}
 
@@ -38,9 +40,7 @@ func TestProductionMetadataTOCParsing(t *testing.T) {
 }
 
 func TestConformanceMetadataTOCParsing(t *testing.T) {
-	MDSRoot = ConformanceMDSRoot
-	Conformance = true
-	httpClient := &http.Client{
+	client := &http.Client{
 		Timeout: time.Second * 30,
 	}
 
@@ -74,24 +74,27 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 		},
 	}
 
-	endpoints, err := getEndpoints(httpClient)
-	if err != nil {
-		t.Fatal(err)
-	}
+	endpoints, err := getEndpoints(client)
+	require.NoError(t, err)
 
-	decoder := NewDecoder()
+	decoder, err := NewDecoder(WithRootCertificate(ConformanceMDSRoot))
+
+	require.NoError(t, err)
 
 	metadata := make(map[uuid.UUID]MetadataBLOBPayloadEntryJSON)
 
-	for _, endpoint := range endpoints {
-		res, err := httpClient.Get(endpoint)
-		if err != nil {
-			t.Fatal(err)
-		}
+	var (
+		res  *http.Response
+		blob *MetadataBLOBPayloadJSON
+		me   *MetadataError
+	)
 
-		blob, err := decoder.Decode(res.Body)
-		if err != nil {
-			if me, ok := err.(*MetadataError); ok {
+	for _, endpoint := range endpoints {
+		res, err = client.Get(endpoint)
+		require.NoError(t, err)
+
+		if blob, err = decoder.Decode(res.Body); err != nil {
+			if errors.As(err, &me) {
 				t.Log(me.Details)
 			}
 		}
@@ -106,10 +109,9 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			statement, err := getTestMetadata(tc.name, httpClient)
-			if err != nil {
-				t.Fatal(err)
-			}
+			statement, err := getTestMetadata(tc.name, client)
+			require.NoError(t, err)
+
 			aaguid, _ := uuid.Parse(statement.AaGUID)
 			if meta, ok := metadata[aaguid]; ok {
 				pass := true
@@ -125,11 +127,7 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 				_, err := meta.Parse()
 				assert.NoError(t, err, "Failed to parse metadata")
 			} else {
-				if !tc.pass {
-					t.Logf("Metadata for aaguid %s not found in test metadata", statement.AaGUID)
-				} else {
-					t.Fail()
-				}
+				assert.False(t, tc.pass)
 			}
 		})
 	}
@@ -140,11 +138,11 @@ const (
 )
 
 func TestExampleMetadataTOCParsing(t *testing.T) {
-	MDSRoot = ExampleMDSRoot
-
 	exampleMetadataBLOBBytes := bytes.NewBufferString(exampleMetadataBLOB)
 
-	decoder := NewDecoder(WithIgnoreEntryParsingErrors())
+	decoder, err := NewDecoder(WithIgnoreEntryParsingErrors(), WithRootCertificate(ExampleMDSRoot))
+
+	require.NoError(t, err)
 
 	payload, err := decoder.DecodeBytes(exampleMetadataBLOBBytes.Bytes())
 	require.NoError(t, err)

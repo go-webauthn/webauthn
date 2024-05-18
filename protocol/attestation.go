@@ -121,11 +121,11 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 //
 // Steps 9 through 12 are verified against the auth data. These steps are identical to 11 through 14 for assertion so we
 // handle them with AuthData.
-func (attestationObject *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, verificationRequired bool, mds metadata.Provider) error {
+func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, verificationRequired bool, mds metadata.Provider) error {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
 	// Begin Step 9 through 12. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
-	authDataVerificationError := attestationObject.AuthData.Verify(rpIDHash[:], nil, verificationRequired)
+	authDataVerificationError := a.AuthData.Verify(rpIDHash[:], nil, verificationRequired)
 	if authDataVerificationError != nil {
 		return authDataVerificationError
 	}
@@ -142,23 +142,23 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 
 	// But first let's make sure attestation is present. If it isn't, we don't need to handle
 	// any of the following steps
-	if AttestationFormat(attestationObject.Format) == AttestationFormatNone {
-		if len(attestationObject.AttStatement) != 0 {
+	if AttestationFormat(a.Format) == AttestationFormatNone {
+		if len(a.AttStatement) != 0 {
 			return ErrAttestationFormat.WithInfo("Attestation format none with attestation present")
 		}
 
 		return nil
 	}
 
-	formatHandler, valid := attestationRegistry[AttestationFormat(attestationObject.Format)]
+	formatHandler, valid := attestationRegistry[AttestationFormat(a.Format)]
 	if !valid {
-		return ErrAttestationFormat.WithInfo(fmt.Sprintf("Attestation format %s is unsupported", attestationObject.Format))
+		return ErrAttestationFormat.WithInfo(fmt.Sprintf("Attestation format %s is unsupported", a.Format))
 	}
 
 	// Step 14. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
-	attestationType, x5cs, err := formatHandler(*attestationObject, clientDataHash, mds)
+	attestationType, x5cs, err := formatHandler(*a, clientDataHash, mds)
 	if err != nil {
 		return err.(*Error).WithInfo(attestationType)
 	}
@@ -168,7 +168,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 		entry  *metadata.MetadataBLOBPayloadEntry
 	)
 
-	if aaguid, err = uuid.FromBytes(attestationObject.AuthData.AttData.AAGUID); err != nil {
+	if aaguid, err = uuid.FromBytes(a.AuthData.AttData.AAGUID); err != nil {
 		return err
 	}
 
@@ -196,29 +196,35 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 		}
 	}
 
-	if x5cs != nil {
-		var (
-			x5c *x509.Certificate
-			raw []byte
-			ok  bool
-		)
+	if x5cs == nil {
+		return nil
+	}
 
-		if raw, ok = x5cs[0].([]byte); !ok {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c")
+	var (
+		x5c *x509.Certificate
+		raw []byte
+		ok  bool
+	)
+
+	if len(x5cs) == 0 {
+		return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo("The attestation had no certificates")
+	}
+
+	if raw, ok = x5cs[0].([]byte); !ok {
+		return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
+	}
+
+	if x5c, err = x509.ParseCertificate(raw); err != nil {
+		return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
+	}
+
+	if x5c.Subject.CommonName != x5c.Issuer.CommonName {
+		if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
+			return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
 		}
 
-		if x5c, err = x509.ParseCertificate(raw); err != nil {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c")
-		}
-
-		if x5c.Subject.CommonName != x5c.Issuer.CommonName {
-			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
-				return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
-			}
-
-			if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
-				return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
-			}
+		if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
+			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
 		}
 	}
 
