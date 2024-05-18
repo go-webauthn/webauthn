@@ -35,6 +35,7 @@ type PublicKeyData struct {
 	// A COSEAlgorithmIdentifier for the algorithm used to derive the key signature.
 	Algorithm int64 `cbor:"3,keyasint" json:"alg"`
 }
+
 type EC2PublicKeyData struct {
 	PublicKeyData
 

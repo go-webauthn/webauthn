@@ -27,7 +27,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-			attestationType, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:])
+			attestationType, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:], nil)
 			if err != nil {
 				t.Fatalf("Not valid: %+v", err)
 			}
@@ -83,37 +83,37 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 		{
 			"TPM Negative Test AttStatement Ver not 2.0",
-			AttestationObject{AttStatement: map[string]any{"ver": "foo.bar"}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "foo.bar"}},
 			"WebAuthn only supports TPM 2.0 currently",
 		},
 		{
 			"TPM Negative Test AttStatement Alg not present",
-			AttestationObject{AttStatement: map[string]any{"ver": "2.0"}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0"}},
 			"Error retrieving alg value",
 		},
 		{
 			"TPM Negative Test AttStatement x5c not present",
-			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0)}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0)}},
 			ErrNotImplemented.Details,
 		},
 		{
 			"TPM Negative Test AttStatement ecdaaKeyId present",
-			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "ecdaaKeyId": []byte{}}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtECDAAKID: []byte{}}},
 			ErrNotImplemented.Details,
 		},
 		{
 			"TPM Negative Test AttStatement sig not present",
-			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}}},
 			"Error retrieving sig value",
 		},
 		{
 			"TPM Negative Test AttStatement certInfo not present",
-			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "sig": []byte{}}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}}},
 			"Error retrieving certInfo value",
 		},
 		{
 			"TPM Negative Test AttStatement pubArea not present",
-			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "sig": []byte{}, "certInfo": []byte{}}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}}},
 			"Error retrieving pubArea value",
 		},
 		{
@@ -123,12 +123,12 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 		{
 			"TPM Negative Test Unsupported Public Key Type",
-			AttestationObject{AttStatement: map[string]any{"ver": "2.0", "alg": int64(0), "x5c": []any{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": makeDefaultRSAPublicBytes()}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: makeDefaultRSAPublicBytes()}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
 			"Unsupported Public Key Type",
 		},
 	}
 	for _, tt := range tests {
-		attestationType, _, err := verifyTPMFormat(tt.att, nil)
+		attestationType, _, err := verifyTPMFormat(tt.att, nil, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
@@ -170,7 +170,7 @@ var (
 	}
 )
 
-var defaultAttStatement = map[string]any{"ver": "2.0", "alg": int64(-257), "x5c": []any{}, "sig": []byte{}, "certInfo": []byte{}, "pubArea": []byte{}}
+var defaultAttStatement = map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(-257), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}
 
 type CredentialPublicKey struct {
 	KeyType   int64  `cbor:"1,keyasint" json:"kty"`
@@ -354,7 +354,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			public = defaultECCPublic
 		}
 
-		attStmt["pubArea"], _ = public.Encode()
+		attStmt[stmtPubArea], _ = public.Encode()
 		att := AttestationObject{
 			AttStatement: attStmt,
 			AuthData: AuthenticatorData{
@@ -364,7 +364,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			},
 		}
 
-		attestationType, _, err := verifyTPMFormat(att, nil)
+		attestationType, _, err := verifyTPMFormat(att, nil, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
@@ -394,7 +394,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 	public := defaultRSAPublic
 	public.RSAParameters.ExponentRaw = uint32(rsaKey.E)
 	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
-	attStmt["pubArea"], _ = public.Encode()
+	attStmt[stmtPubArea], _ = public.Encode()
 	rpk, _ := webauthncbor.Marshal(r)
 	att := AttestationObject{
 		AttStatement: attStmt,
@@ -452,8 +452,8 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		att.AttStatement["certInfo"] = certInfo
-		attestationType, _, err := verifyTPMFormat(att, nil)
+		att.AttStatement[stmtCertInfo] = certInfo
+		attestationType, _, err := verifyTPMFormat(att, nil, nil)
 
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -509,7 +509,7 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	public.RSAParameters.ExponentRaw = uint32(rsaKey.E)
 	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
 	pubBytes, _ := public.Encode()
-	attStmt["pubArea"] = pubBytes
+	attStmt[stmtPubArea] = pubBytes
 	rpk, _ := webauthncbor.Marshal(r)
 	att := AttestationObject{
 		AttStatement: attStmt,
@@ -542,7 +542,7 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 		},
 		ExtraData: extraData,
 	}
-	attStmt["certInfo"], _ = certInfo.Encode()
+	attStmt[stmtCertInfo], _ = certInfo.Encode()
 
 	makeX5c := func(b []byte) []any {
 		q := make([]any, 1)
@@ -569,8 +569,8 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		att.AttStatement["x5c"] = tt.x5c
-		attestationType, _, err := verifyTPMFormat(att, nil)
+		att.AttStatement[stmtX5C] = tt.x5c
+		attestationType, _, err := verifyTPMFormat(att, nil, nil)
 
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)

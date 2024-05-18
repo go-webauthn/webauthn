@@ -37,7 +37,7 @@ func TestVerifyU2FFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := verifyU2FFormat(tt.args.att, tt.args.clientDataHash)
+			got, _, err := verifyU2FFormat(tt.args.att, tt.args.clientDataHash, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("verifyU2FFormat() error = %v, wantErr %v", err, tt.wantErr)
 				return

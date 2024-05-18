@@ -16,7 +16,7 @@ func init() {
 }
 
 // verifyU2FFormat - Follows verification steps set out by https://www.w3.org/TR/webauthn/#fido-u2f-attestation
-func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []any, error) {
+func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
 	if !bytes.Equal(att.AuthData.AttData.AAGUID, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("U2F attestation format AAGUID not set to 0x00")
 	}
@@ -40,7 +40,7 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []an
 	// }
 
 	// Check for "x5c" which is a single element array containing the attestation certificate in X.509 format.
-	x5c, present := att.AttStatement["x5c"].([]any)
+	x5c, present := att.AttStatement[stmtX5C].([]any)
 	if !present {
 		return "", nil, ErrAttestationFormat.WithDetails("Missing properly formatted x5c data")
 	}
@@ -48,7 +48,7 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte) (string, []an
 	// Check for "sig" which is The attestation signature. The signature was calculated over the (raw) U2F
 	// registration response message https://www.w3.org/TR/webauthn/#biblio-fido-u2f-message-formats]
 	// received by the client from the authenticator.
-	signature, present := att.AttStatement["sig"].([]byte)
+	signature, present := att.AttStatement[stmtSignature].([]byte)
 	if !present {
 		return "", nil, ErrAttestationFormat.WithDetails("Missing sig data")
 	}
