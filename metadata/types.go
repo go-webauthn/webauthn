@@ -227,21 +227,6 @@ type MetadataError struct {
 	DevInfo string `json:"debug"`
 }
 
-var (
-	errIntermediateCertRevoked = &MetadataError{
-		Type:    "intermediate_revoked",
-		Details: "Intermediate certificate is on issuers revocation list",
-	}
-	errLeafCertRevoked = &MetadataError{
-		Type:    "leaf_revoked",
-		Details: "Leaf certificate is on issuers revocation list",
-	}
-	errCRLUnavailable = &MetadataError{
-		Type:    "crl_unavailable",
-		Details: "Certificate revocation list is unavailable",
-	}
-)
-
 func (err *MetadataError) Error() string {
 	return err.Details
 }

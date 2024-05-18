@@ -354,7 +354,7 @@ func (j MetadataStatementJSON) Parse() (statement MetadataStatement, err error) 
 	certificates := make([]*x509.Certificate, n)
 
 	for i := 0; i < n; i++ {
-		if certificates[i], err = ParseMetadataX509Certificate(j.AttestationRootCertificates[i]); err != nil {
+		if certificates[i], err = mdsParseX509Certificate(j.AttestationRootCertificates[i]); err != nil {
 			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing attestation root certificate %d value: %w", j.Description, i, err)
 		}
 	}
@@ -515,7 +515,7 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 	var certificate *x509.Certificate
 
 	if len(j.Certificate) != 0 {
-		if certificate, err = ParseMetadataX509Certificate(j.Certificate); err != nil {
+		if certificate, err = mdsParseX509Certificate(j.Certificate); err != nil {
 			return report, fmt.Errorf("error occurred parsing certificate value: %w", err)
 		}
 	}
