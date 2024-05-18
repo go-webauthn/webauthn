@@ -11,14 +11,22 @@ import (
 )
 
 type Provider interface {
-	// GetRequireConformance returns true if this provider requires conformance.
-	GetRequireConformance(ctx context.Context) (require bool)
-
 	// GetEntry returns a MDS3 payload entry given a AAGUID. This
 	GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *MetadataBLOBPayloadEntry, err error)
 
-	// GetIsUndesiredAuthenticatorStatus returns true if the provided AuthenticatorStatus is not desired.
-	GetIsUndesiredAuthenticatorStatus(ctx context.Context, status AuthenticatorStatus) (isUndesiredAuthenticatorStatus bool)
+	// GetRequireEntry returns true if this provider requires an entry to exist with a AAGUID matching the attestation
+	// statement during registration.
+	GetRequireEntry(ctx context.Context) (require bool)
+
+	// GetTrustAnchorValidation returns true if trust anchor validation of attestation statements is enforced during
+	// registration.
+	GetTrustAnchorValidation(ctx context.Context) (validate bool)
+
+	// GetAuthenticatorStatusValidation returns true if this provider should validate the authenticator status reports.
+	GetAuthenticatorStatusValidation(ctx context.Context) (validate bool)
+
+	// GetAuthenticatorStatusIsUndesired returns true if the provided AuthenticatorStatus is not desired.
+	GetAuthenticatorStatusIsUndesired(ctx context.Context, status AuthenticatorStatus) (undesired bool)
 }
 
 var (
