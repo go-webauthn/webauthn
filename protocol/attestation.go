@@ -183,48 +183,52 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 	}
 
 	if entry == nil {
-		if mds.GetRequireConformance(ctx) {
+		if mds.GetRequireEntry(ctx) {
 			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during conformance testing", aaguid.String()))
 		}
 
 		return nil
 	}
 
-	for _, s := range entry.StatusReports {
-		if mds.GetIsUndesiredAuthenticatorStatus(ctx, s.Status) {
-			return ErrInvalidAttestation.WithDetails("Authenticator with undesirable status encountered")
+	if mds.GetAuthenticatorStatusValidation(ctx) {
+		for _, s := range entry.StatusReports {
+			if mds.GetAuthenticatorStatusIsUndesired(ctx, s.Status) {
+				return ErrInvalidAttestation.WithDetails("Authenticator with undesirable status encountered")
+			}
 		}
 	}
 
-	if x5cs == nil {
-		return nil
-	}
-
-	var (
-		x5c *x509.Certificate
-		raw []byte
-		ok  bool
-	)
-
-	if len(x5cs) == 0 {
-		return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo("The attestation had no certificates")
-	}
-
-	if raw, ok = x5cs[0].([]byte); !ok {
-		return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
-	}
-
-	if x5c, err = x509.ParseCertificate(raw); err != nil {
-		return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
-	}
-
-	if x5c.Subject.CommonName != x5c.Issuer.CommonName {
-		if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
-			return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
+	if mds.GetTrustAnchorValidation(ctx) {
+		if x5cs == nil {
+			return nil
 		}
 
-		if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
-			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
+		var (
+			x5c *x509.Certificate
+			raw []byte
+			ok  bool
+		)
+
+		if len(x5cs) == 0 {
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo("The attestation had no certificates")
+		}
+
+		if raw, ok = x5cs[0].([]byte); !ok {
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
+		}
+
+		if x5c, err = x509.ParseCertificate(raw); err != nil {
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
+		}
+
+		if x5c.Subject.CommonName != x5c.Issuer.CommonName {
+			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
+				return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
+			}
+
+			if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
+				return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
+			}
 		}
 	}
 
