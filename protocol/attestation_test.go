@@ -82,7 +82,7 @@ func TestPackedAttestationVerification(t *testing.T) {
 		// Test Packed Verification. Unpack args.
 		clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-		_, _, err := verifyPackedFormat(pcc.Response.AttestationObject, clientDataHash[:])
+		_, _, err := verifyPackedFormat(pcc.Response.AttestationObject, clientDataHash[:], nil)
 		if err != nil {
 			t.Fatalf("Not valid: %+v", err)
 		}

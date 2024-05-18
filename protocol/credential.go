@@ -3,9 +3,10 @@ package protocol
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"github.com/go-webauthn/webauthn/metadata"
 	"io"
 	"net/http"
+
+	"github.com/go-webauthn/webauthn/metadata"
 )
 
 // Credential is the basic credential type from the Credential Management specification that is inherited by WebAuthn's

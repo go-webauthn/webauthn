@@ -75,7 +75,7 @@ type AttestationObject struct {
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
-type attestationFormatValidationHandler func(AttestationObject, []byte) (string, []any, error)
+type attestationFormatValidationHandler func(AttestationObject, []byte, metadata.Provider) (string, []any, error)
 
 var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
 
@@ -158,7 +158,7 @@ func (attestationObject *AttestationObject) Verify(relyingPartyID string, client
 	// Step 14. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
-	attestationType, x5cs, err := formatHandler(*attestationObject, clientDataHash)
+	attestationType, x5cs, err := formatHandler(*attestationObject, clientDataHash, mds)
 	if err != nil {
 		return err.(*Error).WithInfo(attestationType)
 	}

@@ -2,10 +2,10 @@ package webauthn
 
 import (
 	"fmt"
-	"github.com/go-webauthn/webauthn/metadata"
 	"net/url"
 	"time"
 
+	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
 )
 

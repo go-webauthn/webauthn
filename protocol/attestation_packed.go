@@ -34,26 +34,26 @@ func init() {
 //	 }
 //
 // Specification: §8.2. Packed Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-packed-attestation)
-func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, []any, error) {
+func verifyPackedFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
 
 	// Get the alg value - A COSEAlgorithmIdentifier containing the identifier of the algorithm
 	// used to generate the attestation signature.
 
-	alg, present := att.AttStatement["alg"].(int64)
+	alg, present := att.AttStatement[stmtAlgorithm].(int64)
 	if !present {
 		return string(AttestationFormatPacked), nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
 	}
 
 	// Get the sig value - A byte string containing the attestation signature.
-	sig, present := att.AttStatement["sig"].([]byte)
+	sig, present := att.AttStatement[stmtSignature].([]byte)
 	if !present {
 		return string(AttestationFormatPacked), nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
 	// Step 2. If x5c is present, this indicates that the attestation type is not ECDAA.
-	x5c, x509present := att.AttStatement["x5c"].([]any)
+	x5c, x509present := att.AttStatement[stmtX5C].([]any)
 	if x509present {
 		// Handle Basic Attestation steps for the x509 Certificate
 		return handleBasicAttestation(sig, clientDataHash, att.RawAuthData, att.AuthData.AttData.AAGUID, alg, x5c)
@@ -61,7 +61,7 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte) (string, [
 
 	// Step 3. If ecdaaKeyId is present, then the attestation type is ECDAA.
 	// Also make sure the we did not have an x509 then
-	ecdaaKeyID, ecdaaKeyPresent := att.AttStatement["ecdaaKeyId"].([]byte)
+	ecdaaKeyID, ecdaaKeyPresent := att.AttStatement[stmtECDAAKID].([]byte)
 	if ecdaaKeyPresent {
 		// Handle ECDAA Attestation steps for the x509 Certificate
 		return handleECDAAAttestation(sig, clientDataHash, ecdaaKeyID)
