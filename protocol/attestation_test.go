@@ -29,7 +29,9 @@ func TestAttestationVerify(t *testing.T) {
 
 			pcc.Response = *parsedAttestationResponse
 
-			require.NoError(t, pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, nil))
+			_, err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, nil)
+
+			require.NoError(t, err)
 		})
 	}
 }

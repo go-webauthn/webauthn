@@ -203,6 +203,7 @@ type User interface {
 // ceremony.
 type SessionData struct {
 	Challenge            string    `json:"challenge"`
+	RelyingPartyID       string    `json:"rpId"`
 	UserID               []byte    `json:"user_id"`
 	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty"`
 	Expires              time.Time `json:"expires"`

@@ -21,7 +21,7 @@ func TestMakeNewCredential(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeNewCredential(tt.args.c)
+			got, err := MakeNewCredential(nil, nil, tt.args.c)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeNewCredential() error = %v, wantErr %v", err, tt.wantErr)
 				return

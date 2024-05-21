@@ -133,15 +133,15 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 // Verify the Client and Attestation data.
 //
 // Specification: §7.1. Registering a New Credential (https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential)
-func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, mds metadata.Provider) error {
+func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, mds metadata.Provider) (clientDataHash []byte, err error) {
 	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data
-	verifyError := pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify)
-	if verifyError != nil {
-		return verifyError
+	if err = pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify); err != nil {
+		return nil, err
 	}
 
 	// Step 7. Compute the hash of response.clientDataJSON using SHA-256.
-	clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+	sum := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+	clientDataHash = sum[:]
 
 	// Step 8. Perform CBOR decoding on the attestationObject field of the AuthenticatorAttestationResponse
 	// structure to obtain the attestation statement format fmt, the authenticator data authData, and the
@@ -149,9 +149,8 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 
 	// We do the above step while parsing and decoding the CredentialCreationResponse
 	// Handle steps 9 through 14 - This verifies the attestation object.
-	verifyError = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash[:], verifyUser, mds)
-	if verifyError != nil {
-		return verifyError
+	if err = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash, verifyUser, mds); err != nil {
+		return clientDataHash, err
 	}
 
 	// Step 15. If validation is successful, obtain a list of acceptable trust anchors (attestation root
@@ -190,7 +189,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 
 	// TODO: Not implemented for the reasons mentioned under Step 16
 
-	return nil
+	return clientDataHash, nil
 }
 
 // GetAppID takes a AuthenticationExtensions object or nil. It then performs the following checks in order:

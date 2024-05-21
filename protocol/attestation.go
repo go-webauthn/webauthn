@@ -67,10 +67,13 @@ type ParsedAttestationResponse struct {
 type AttestationObject struct {
 	// The authenticator data, including the newly created public key. See AuthenticatorData for more info
 	AuthData AuthenticatorData
+
 	// The byteform version of the authenticator data, used in part for signature validation
 	RawAuthData []byte `json:"authData"`
+
 	// The format of the Attestation data.
 	Format string `json:"fmt"`
+
 	// The attestation statement data sent back if attestation is requested.
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
@@ -121,13 +124,12 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 //
 // Steps 9 through 12 are verified against the auth data. These steps are identical to 11 through 14 for assertion so we
 // handle them with AuthData.
-func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, verificationRequired bool, mds metadata.Provider) error {
+func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, mds metadata.Provider) (err error) {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
 	// Begin Step 9 through 12. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
-	authDataVerificationError := a.AuthData.Verify(rpIDHash[:], nil, verificationRequired)
-	if authDataVerificationError != nil {
-		return authDataVerificationError
+	if err = a.AuthData.Verify(rpIDHash[:], nil, userVerificationRequired); err != nil {
+		return err
 	}
 
 	// Step 13. Determine the attestation statement format by performing a
