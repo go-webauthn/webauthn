@@ -88,6 +88,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 
 	session = &SessionData{
 		Challenge:            challenge.String(),
+		RelyingPartyID:       assertion.Response.RelyingPartyID,
 		UserID:               userID,
 		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
 		UserVerification:     assertion.Response.UserVerification,

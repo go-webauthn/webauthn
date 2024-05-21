@@ -1,6 +1,7 @@
 package webauthn
 
 import (
+	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
@@ -26,6 +27,9 @@ type Credential struct {
 
 	// The Authenticator information for a given certificate.
 	Authenticator Authenticator `json:"authenticator"`
+
+	// The attestation values that can be used to validate this credential via the MDS3 at a later date.
+	Attestation VerifiableAttestation `json:"attestation"`
 }
 
 type CredentialFlags struct {
@@ -54,8 +58,8 @@ func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 }
 
 // MakeNewCredential will return a credential pointer on successful validation of a registration response.
-func MakeNewCredential(c *protocol.ParsedCredentialCreationData) (*Credential, error) {
-	newCredential := &Credential{
+func MakeNewCredential(clientDataHash []byte, s *SessionData, c *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
+	credential = &Credential{
 		ID:              c.Response.AttestationObject.AuthData.AttData.CredentialID,
 		PublicKey:       c.Response.AttestationObject.AuthData.AttData.CredentialPublicKey,
 		AttestationType: c.Response.AttestationObject.Format,
@@ -71,7 +75,39 @@ func MakeNewCredential(c *protocol.ParsedCredentialCreationData) (*Credential, e
 			SignCount:  c.Response.AttestationObject.AuthData.Counter,
 			Attachment: c.AuthenticatorAttachment,
 		},
+		Attestation: VerifiableAttestation{
+			RPID:                     s.RelyingPartyID,
+			ClientDataHash:           clientDataHash,
+			UserVerificationRequired: s.UserVerification == protocol.VerificationRequired,
+			RawAuthData:              c.Response.AttestationObject.RawAuthData,
+			AuthData:                 c.Response.AttestationObject.AuthData,
+			Format:                   c.Response.AttestationObject.Format,
+			AttStatement:             c.Response.AttestationObject.AttStatement,
+		},
 	}
 
-	return newCredential, nil
+	return credential, nil
+}
+
+// VerifiableAttestation is a self-contained attestation from an authenticator that can later be validated against the
+// MDS3.
+type VerifiableAttestation struct {
+	RPID                     string                     `json:"rpId"`
+	ClientDataHash           []byte                     `json:"clientDataHash"`
+	UserVerificationRequired bool                       `json:"uv"`
+	RawAuthData              []byte                     `json:"rawAuthData,omitempty"`
+	AuthData                 protocol.AuthenticatorData `json:"authData"`
+	Format                   string                     `json:"fmt"`
+	AttStatement             map[string]any             `json:"attStmt,omitempty"`
+}
+
+func (a *VerifiableAttestation) Verify(mds metadata.Provider) (err error) {
+	object := &protocol.AttestationObject{
+		AuthData:     a.AuthData,
+		RawAuthData:  a.RawAuthData,
+		Format:       a.Format,
+		AttStatement: a.AttStatement,
+	}
+
+	return object.Verify(a.RPID, a.ClientDataHash, a.UserVerificationRequired, mds)
 }
