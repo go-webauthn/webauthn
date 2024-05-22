@@ -132,6 +132,12 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 		return err
 	}
 
+	return a.VerifyAttestation(clientDataHash, mds)
+}
+
+// VerifyAttestation only verifies the attestation object excluding the AuthData values. If you wish to also verify the
+// AuthData values you should use Verify.
+func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider) (err error) {
 	// Step 13. Determine the attestation statement format by performing a
 	// USASCII case-sensitive match on fmt against the set of supported
 	// WebAuthn Attestation Statement Format Identifier values. The up-to-date

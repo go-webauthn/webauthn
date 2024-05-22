@@ -231,7 +231,7 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, err
 	}
 
-	return MakeNewCredential(clientDataHash, &session, parsedResponse)
+	return NewCredential(clientDataHash, parsedResponse)
 }
 
 func defaultRegistrationCredentialParameters() []protocol.CredentialParameter {
