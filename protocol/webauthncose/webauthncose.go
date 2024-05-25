@@ -178,7 +178,7 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
 }
 
 // ParsePublicKey figures out what kind of COSE material was provided and create the data for the new key.
-func ParsePublicKey(keyBytes []byte) (interface{}, error) {
+func ParsePublicKey(keyBytes []byte) (any, error) {
 	pk := PublicKeyData{}
 	// TODO (james-d-elliott): investigate the ignored errors.
 	webauthncbor.Unmarshal(keyBytes, &pk)
@@ -342,7 +342,7 @@ func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
 	}
 }
 
-func VerifySignature(key interface{}, data []byte, sig []byte) (bool, error) {
+func VerifySignature(key any, data []byte, sig []byte) (bool, error) {
 	switch k := key.(type) {
 	case OKPPublicKeyData:
 		return k.Verify(data, sig)

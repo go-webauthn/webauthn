@@ -20,7 +20,7 @@ func Test_verifyAppleFormat(t *testing.T) {
 		name    string
 		args    args
 		want    string
-		want1   []interface{}
+		want1   []any
 		wantErr bool
 	}{
 		{
@@ -42,12 +42,10 @@ func Test_verifyAppleFormat(t *testing.T) {
 				t.Errorf("verifyAppleFormat() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("verifyAppleFormat() got = %v, want %v", got, tt.want)
 			}
-			//if !reflect.DeepEqual(got1, tt.want1) {
-			//	t.Errorf("verifyPackedFormat() got1 = %v, want %v", got1, tt.want1)
-			//}
 		})
 	}
 }

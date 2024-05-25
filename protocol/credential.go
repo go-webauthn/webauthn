@@ -31,6 +31,7 @@ type ParsedCredential struct {
 
 type PublicKeyCredential struct {
 	Credential
+
 	RawID                   URLEncodedBase64                      `json:"rawId"`
 	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
 	AuthenticatorAttachment string                                `json:"authenticatorAttachment,omitempty"`
@@ -38,6 +39,7 @@ type PublicKeyCredential struct {
 
 type ParsedPublicKeyCredential struct {
 	ParsedCredential
+
 	RawID                   []byte                                `json:"rawId"`
 	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
 	AuthenticatorAttachment AuthenticatorAttachment               `json:"authenticatorAttachment,omitempty"`
@@ -45,17 +47,13 @@ type ParsedPublicKeyCredential struct {
 
 type CredentialCreationResponse struct {
 	PublicKeyCredential
-	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
 
-	// Deprecated: Transports is deprecated due to upstream changes to the API.
-	// Use the Transports field of AuthenticatorAttestationResponse
-	// instead. Transports is kept for backward compatibility, and should not
-	// be used by new clients.
-	Transports []string `json:"transports,omitempty"`
+	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
 }
 
 type ParsedCredentialCreationData struct {
 	ParsedPublicKeyCredential
+
 	Response ParsedAttestationResponse
 	Raw      CredentialCreationResponse
 }
@@ -112,13 +110,6 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 		return nil, ErrParsingData.WithDetails("Error parsing attestation response")
 	}
 
-	// TODO: Remove this as it's a backwards compatibility layer.
-	if len(response.Transports) == 0 && len(ccr.Transports) != 0 {
-		for _, t := range ccr.Transports {
-			response.Transports = append(response.Transports, AuthenticatorTransport(t))
-		}
-	}
-
 	var attachment AuthenticatorAttachment
 
 	switch ccr.AuthenticatorAttachment {
@@ -140,9 +131,9 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 // Verify the Client and Attestation data.
 //
 // Specification: §7.1. Registering a New Credential (https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential)
-func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, relyingPartyID string, relyingPartyOrigins []string) error {
+func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode) error {
 	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data
-	verifyError := pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, relyingPartyOrigins)
+	verifyError := pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify)
 	if verifyError != nil {
 		return verifyError
 	}

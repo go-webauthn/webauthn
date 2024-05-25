@@ -95,130 +95,6 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			errString: "",
 		},
 		{
-			name: "ShouldParseCredentialRequestDeprecatedTransports",
-			args: args{
-				responseName: "successDeprecatedTransports",
-			},
-			expected: &ParsedCredentialCreationData{
-				ParsedPublicKeyCredential: ParsedPublicKeyCredential{
-					ParsedCredential: ParsedCredential{
-						ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
-						Type: "public-key",
-					},
-					RawID: byteID,
-					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-						"appid": true,
-					},
-				},
-				Response: ParsedAttestationResponse{
-					CollectedClientData: CollectedClientData{
-						Type:      CeremonyType("webauthn.create"),
-						Challenge: "W8GzFU8pGjhoRbWrLDlamAfq_y4S1CZG1VuoeRLARrE",
-						Origin:    "https://webauthn.io",
-					},
-					AttestationObject: AttestationObject{
-						Format:      "none",
-						RawAuthData: byteAuthData,
-						AuthData: AuthenticatorData{
-							RPIDHash: byteRPIDHash,
-							Counter:  0,
-							Flags:    0x041,
-							AttData: AttestedCredentialData{
-								AAGUID:              make([]byte, 16),
-								CredentialID:        byteID,
-								CredentialPublicKey: byteCredentialPubKey,
-							},
-						},
-					},
-					Transports: []AuthenticatorTransport{USB, NFC, "fake"},
-				},
-				Raw: CredentialCreationResponse{
-					PublicKeyCredential: PublicKeyCredential{
-						Credential: Credential{
-							Type: "public-key",
-							ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
-						},
-						RawID: byteID,
-						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-							"appid": true,
-						},
-						AuthenticatorAttachment: "not-valid",
-					},
-					AttestationResponse: AuthenticatorAttestationResponse{
-						AuthenticatorResponse: AuthenticatorResponse{
-							ClientDataJSON: byteClientDataJSON,
-						},
-						AttestationObject: byteAttObject,
-					},
-					Transports: []string{"usb", "nfc", "fake"},
-				},
-			},
-			errString: "",
-		},
-		{
-			name: "ShouldParseCredentialRequestDeprecatedTransportsShouldNotOverride",
-			args: args{
-				responseName: "successDeprecatedTransportsAndNew",
-			},
-			expected: &ParsedCredentialCreationData{
-				ParsedPublicKeyCredential: ParsedPublicKeyCredential{
-					ParsedCredential: ParsedCredential{
-						ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
-						Type: "public-key",
-					},
-					RawID: byteID,
-					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-						"appid": true,
-					},
-					AuthenticatorAttachment: CrossPlatform,
-				},
-				Response: ParsedAttestationResponse{
-					CollectedClientData: CollectedClientData{
-						Type:      CeremonyType("webauthn.create"),
-						Challenge: "W8GzFU8pGjhoRbWrLDlamAfq_y4S1CZG1VuoeRLARrE",
-						Origin:    "https://webauthn.io",
-					},
-					AttestationObject: AttestationObject{
-						Format:      "none",
-						RawAuthData: byteAuthData,
-						AuthData: AuthenticatorData{
-							RPIDHash: byteRPIDHash,
-							Counter:  0,
-							Flags:    0x041,
-							AttData: AttestedCredentialData{
-								AAGUID:              make([]byte, 16),
-								CredentialID:        byteID,
-								CredentialPublicKey: byteCredentialPubKey,
-							},
-						},
-					},
-					Transports: []AuthenticatorTransport{USB, NFC},
-				},
-				Raw: CredentialCreationResponse{
-					PublicKeyCredential: PublicKeyCredential{
-						Credential: Credential{
-							Type: "public-key",
-							ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
-						},
-						RawID: byteID,
-						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-							"appid": true,
-						},
-						AuthenticatorAttachment: "cross-platform",
-					},
-					AttestationResponse: AuthenticatorAttestationResponse{
-						AuthenticatorResponse: AuthenticatorResponse{
-							ClientDataJSON: byteClientDataJSON,
-						},
-						AttestationObject: byteAttObject,
-						Transports:        []string{"usb", "nfc"},
-					},
-					Transports: []string{"usb", "nfc", "fake"},
-				},
-			},
-			errString: "",
-		},
-		{
 			name: "ShouldHandleTrailingData",
 			args: args{
 				responseName: "trailingData",
@@ -259,7 +135,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			assert.Equal(t, tc.expected.Response.AttestationObject.Format, actual.Response.AttestationObject.Format)
 
 			// Unmarshall CredentialPublicKey
-			var pkExpected, pkActual interface{}
+			var pkExpected, pkActual any
 
 			pkBytesExpected := tc.expected.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
 			assert.NoError(t, webauthncbor.Unmarshal(pkBytesExpected, &pkExpected))
@@ -364,7 +240,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				Response:                  tt.fields.Response,
 				Raw:                       tt.fields.Raw,
 			}
-			if err := pcc.Verify(tt.args.storedChallenge.String(), tt.args.verifyUser, tt.args.relyingPartyID, tt.args.relyingPartyOrigin); (err != nil) != tt.wantErr {
+			if err := pcc.Verify(tt.args.storedChallenge.String(), tt.args.verifyUser, tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode); (err != nil) != tt.wantErr {
 				t.Errorf("ParsedCredentialCreationData.Verify() error = %+v, wantErr %v", err, tt.wantErr)
 			}
 		})

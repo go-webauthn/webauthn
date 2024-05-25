@@ -14,20 +14,18 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-var safetyNetAttestationKey = "android-safetynet"
-
 func init() {
-	RegisterAttestationFormat(safetyNetAttestationKey, verifySafetyNetFormat)
+	RegisterAttestationFormat(AttestationFormatAndroidSafetyNet, verifySafetyNetFormat)
 }
 
 type SafetyNetResponse struct {
-	Nonce                      string        `json:"nonce"`
-	TimestampMs                int64         `json:"timestampMs"`
-	ApkPackageName             string        `json:"apkPackageName"`
-	ApkDigestSha256            string        `json:"apkDigestSha256"`
-	CtsProfileMatch            bool          `json:"ctsProfileMatch"`
-	ApkCertificateDigestSha256 []interface{} `json:"apkCertificateDigestSha256"`
-	BasicIntegrity             bool          `json:"basicIntegrity"`
+	Nonce                      string `json:"nonce"`
+	TimestampMs                int64  `json:"timestampMs"`
+	ApkPackageName             string `json:"apkPackageName"`
+	ApkDigestSha256            string `json:"apkDigestSha256"`
+	CtsProfileMatch            bool   `json:"ctsProfileMatch"`
+	ApkCertificateDigestSha256 []any  `json:"apkCertificateDigestSha256"`
+	BasicIntegrity             bool   `json:"basicIntegrity"`
 }
 
 // Thanks to @koesie10 and @herrjemand for outlining how to support this type really well
@@ -42,7 +40,7 @@ type SafetyNetResponse struct {
 // authenticators SHOULD make use of the Android Key Attestation when available, even if the SafetyNet API is also present.
 //
 // Specification: §8.5. Android SafetyNet Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation)
-func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string, []interface{}, error) {
+func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string, []any, error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
 	//                           fmt: "android-safetynet",
@@ -75,8 +73,8 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to find the SafetyNet response")
 	}
 
-	token, err := jwt.Parse(string(response), func(token *jwt.Token) (interface{}, error) {
-		chain := token.Header["x5c"].([]interface{})
+	token, err := jwt.Parse(string(response), func(token *jwt.Token) (any, error) {
+		chain := token.Header["x5c"].([]any)
 
 		o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
 
@@ -110,7 +108,7 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte) (string
 	}
 
 	// §8.5.4 Let attestationCert be the attestation certificate (https://www.w3.org/TR/webauthn/#attestation-certificate)
-	certChain := token.Header["x5c"].([]interface{})
+	certChain := token.Header["x5c"].([]any)
 	l := make([]byte, base64.StdEncoding.DecodedLen(len(certChain[0].(string))))
 
 	n, err := base64.StdEncoding.Decode(l, []byte(certChain[0].(string)))

@@ -24,7 +24,7 @@ func Test_verifyPackedFormat(t *testing.T) {
 		name    string
 		args    args
 		want    string
-		want1   []interface{}
+		want1   []any
 		wantErr bool
 	}{
 		{
