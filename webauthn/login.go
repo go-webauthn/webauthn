@@ -285,7 +285,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	loginCredential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
 	// Check if the BackupEligible flag has changed.
 	if loginCredential.Flags.BackupEligible != parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible() {
-		return nil, protocol.ErrBadRequest.WithDetails("BackupEligible flag should not change")
+		return nil, protocol.ErrBadRequest.WithDetails("BackupEligible flag inconsistency detected during login validation")
 	}
 
 	// Update flags from response data.
