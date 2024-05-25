@@ -283,8 +283,11 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 	// Handle step 17.
 	loginCredential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
+	// Check if the BackupEligible flag has changed.
+	if loginCredential.Flags.BackupEligible != parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible() {
+		return nil, protocol.ErrBadRequest.WithDetails("BackupEligible flag should not change")
+	}
 
-	// TODO: The backup eligible flag shouldn't change. Should decide if we want to error if it does.
 	// Update flags from response data.
 	loginCredential.Flags.UserPresent = parsedResponse.Response.AuthenticatorData.Flags.HasUserPresent()
 	loginCredential.Flags.UserVerified = parsedResponse.Response.AuthenticatorData.Flags.HasUserVerified()
