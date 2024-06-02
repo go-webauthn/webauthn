@@ -198,12 +198,8 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		return nil
 	}
 
-	if mds.GetAuthenticatorStatusValidation(ctx) {
-		for _, s := range entry.StatusReports {
-			if mds.GetAuthenticatorStatusIsUndesired(ctx, s.Status) {
-				return ErrInvalidAttestation.WithDetails("Authenticator with undesirable status encountered")
-			}
-		}
+	if err = mds.ValidateAuthenticatorStatusReports(ctx, entry.StatusReports); err != nil {
+		return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Authenticator with invalid status encountered. %s", err.Error()))
 	}
 
 	if mds.GetTrustAnchorValidation(ctx) {
