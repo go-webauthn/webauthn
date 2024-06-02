@@ -22,11 +22,8 @@ type Provider interface {
 	// registration.
 	GetTrustAnchorValidation(ctx context.Context) (validate bool)
 
-	// GetAuthenticatorStatusValidation returns true if this provider should validate the authenticator status reports.
-	GetAuthenticatorStatusValidation(ctx context.Context) (validate bool)
-
-	// GetAuthenticatorStatusIsUndesired returns true if the provided AuthenticatorStatus is not desired.
-	GetAuthenticatorStatusIsUndesired(ctx context.Context, status AuthenticatorStatus) (undesired bool)
+	// ValidateAuthenticatorStatusReports returns nil if the provided authenticator status reports are desired.
+	ValidateAuthenticatorStatusReports(ctx context.Context, reports []StatusReport) (err error)
 }
 
 var (
