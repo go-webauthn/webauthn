@@ -138,7 +138,7 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds met
 		return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp after current time")
 	} else if t.Before(time.Now().Add(-time.Minute)) {
 		// Small tolerance for pre-dated timestamps.
-		if mds != nil && mds.GetRequireEntry(context.Background()) {
+		if mds != nil && mds.GetValidateEntry(context.Background()) {
 			return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp before one minute ago")
 		}
 	}

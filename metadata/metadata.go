@@ -19,7 +19,7 @@ func (m *Metadata) ToMap() (metadata map[uuid.UUID]*MetadataBLOBPayloadEntry) {
 	metadata = make(map[uuid.UUID]*MetadataBLOBPayloadEntry)
 
 	for _, entry := range m.Parsed.Entries {
-		if entry.AaGUID.ID() != 0 {
+		if entry.AaGUID != uuid.Nil {
 			metadata[entry.AaGUID] = &entry
 		}
 	}
@@ -874,4 +874,15 @@ type MDSGetEndpointsResponse struct {
 
 	// An array of urls, each pointing to a MetadataTOCPayload.
 	Result []string `json:"result"`
+}
+
+// DefaultUndesiredAuthenticatorStatuses returns a copy of the defaultUndesiredAuthenticatorStatus slice.
+func DefaultUndesiredAuthenticatorStatuses() []AuthenticatorStatus {
+	undesired := make([]AuthenticatorStatus, len(defaultUndesiredAuthenticatorStatus))
+
+	for i := range defaultUndesiredAuthenticatorStatus {
+		undesired[i] = defaultUndesiredAuthenticatorStatus[i]
+	}
+
+	return undesired
 }
