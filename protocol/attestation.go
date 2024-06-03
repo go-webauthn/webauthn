@@ -176,8 +176,10 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		entry  *metadata.MetadataBLOBPayloadEntry
 	)
 
-	if aaguid, err = uuid.FromBytes(a.AuthData.AttData.AAGUID); err != nil {
-		return err
+	if len(a.AuthData.AttData.AAGUID) != 0 {
+		if aaguid, err = uuid.FromBytes(a.AuthData.AttData.AAGUID); err != nil {
+			return ErrInvalidAttestation.WithInfo("Error occurred parsing AAGUID during attestation validation").WithDetails(err.Error())
+		}
 	}
 
 	if mds == nil {
@@ -187,22 +189,28 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	ctx := context.Background()
 
 	if entry, err = mds.GetEntry(ctx, aaguid); err != nil {
-		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred: %+v", err)).WithDetails(fmt.Sprintf("Error occurred looking up entry for AAGUID %s", aaguid.String()))
+		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred retrieving metadata entry during attestation validation: %+v", err)).WithDetails(fmt.Sprintf("Error occurred looking up entry for AAGUID %s", aaguid.String()))
 	}
 
 	if entry == nil {
-		if mds.GetRequireEntry(ctx) {
-			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during conformance testing", aaguid.String()))
+		if aaguid == uuid.Nil && mds.GetValidateEntryPermitZeroAAGUID(ctx) {
+			return nil
+		}
+
+		if mds.GetValidateEntry(ctx) {
+			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during attestation validation", aaguid.String()))
 		}
 
 		return nil
 	}
 
-	if err = mds.ValidateAuthenticatorStatusReports(ctx, entry.StatusReports); err != nil {
-		return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Authenticator with invalid status encountered. %s", err.Error()))
+	if mds.GetValidateStatus(ctx) {
+		if err = mds.ValidateStatusReports(ctx, entry.StatusReports); err != nil {
+			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Authenticator with invalid status encountered during attestation validation. %s", err.Error()))
+		}
 	}
 
-	if mds.GetTrustAnchorValidation(ctx) {
+	if mds.GetValidateTrustAnchor(ctx) {
 		if x5cs == nil {
 			return nil
 		}
@@ -214,24 +222,24 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		)
 
 		if len(x5cs) == 0 {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo("The attestation had no certificates")
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo("The attestation had no certificates")
 		}
 
 		if raw, ok = x5cs[0].([]byte); !ok {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
 		}
 
 		if x5c, err = x509.ParseCertificate(raw); err != nil {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
+			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
 		}
 
 		if x5c.Subject.CommonName != x5c.Issuer.CommonName {
 			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
-				return ErrInvalidAttestation.WithDetails("Attestation with full attestation from authenticator that does not support full attestation")
+				return ErrInvalidAttestation.WithDetails("Unable to validate attestation statement signature during attestation validation: attestation with full attestation from authenticator that does not support full attestation")
 			}
 
 			if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
-				return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Invalid certificate chain from MDS: %v", err))
+				return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unable to validate attestation signature statement during attestation validation: invalid certificate chain from MDS: %v", err))
 			}
 		}
 	}

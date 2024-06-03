@@ -14,16 +14,25 @@ type Provider interface {
 	// GetEntry returns a MDS3 payload entry given a AAGUID. This
 	GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *MetadataBLOBPayloadEntry, err error)
 
-	// GetRequireEntry returns true if this provider requires an entry to exist with a AAGUID matching the attestation
+	// GetValidateEntry returns true if this provider requires an entry to exist with a AAGUID matching the attestation
 	// statement during registration.
-	GetRequireEntry(ctx context.Context) (require bool)
+	GetValidateEntry(ctx context.Context) (validate bool)
 
-	// GetTrustAnchorValidation returns true if trust anchor validation of attestation statements is enforced during
+	// GetValidateEntryPermitZeroAAGUID returns true if attestation statements with zerod AAGUID should be permitted
+	// when considering the result from GetValidateEntry. i.e. if the AAGUID is zeroed, and GetValidateEntry returns
+	// true, and this implementation returns true, the attestation statement will pass validation.
+	GetValidateEntryPermitZeroAAGUID(ctx context.Context) (skip bool)
+
+	// GetValidateTrustAnchor returns true if trust anchor validation of attestation statements is enforced during
 	// registration.
-	GetTrustAnchorValidation(ctx context.Context) (validate bool)
+	GetValidateTrustAnchor(ctx context.Context) (validate bool)
 
-	// ValidateAuthenticatorStatusReports returns nil if the provided authenticator status reports are desired.
-	ValidateAuthenticatorStatusReports(ctx context.Context, reports []StatusReport) (err error)
+	// GetValidateStatus returns true if the status reports for an authenticator should be validated against desired and
+	// undesired statuses.
+	GetValidateStatus(ctx context.Context) (validate bool)
+
+	// ValidateStatusReports returns nil if the provided authenticator status reports are desired.
+	ValidateStatusReports(ctx context.Context, reports []StatusReport) (err error)
 }
 
 var (

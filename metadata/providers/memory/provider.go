@@ -8,49 +8,31 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-// New returns a new memory provider given a map, list of undesired AuthenticatorStatus types, a
-// required boolean which if true will cause registrations to fail if no metadata entry is found for the attestation
-// statement, and a validate boolean which determines if trust anchors should be validated by this provider during
-// registration.
-//
-// If the undesired status slice is nil it will use a default value. You must explicitly use an empty slice to disable
-// this functionality.
-func New(mds map[uuid.UUID]*metadata.MetadataBLOBPayloadEntry, undesired []metadata.AuthenticatorStatus, required, validate bool) *Provider {
-	if undesired == nil {
-		undesired = make([]metadata.AuthenticatorStatus, len(defaultUndesiredAuthenticatorStatus))
+// New returns a new memory provider given a set of functional Option's.
+func New(opts ...Option) (provider *Provider) {
 
-		for i := range defaultUndesiredAuthenticatorStatus {
-			undesired[i] = defaultUndesiredAuthenticatorStatus[i]
-		}
+	provider = &Provider{
+		undesired: metadata.DefaultUndesiredAuthenticatorStatuses(),
 	}
 
-	return &Provider{
-		mds:       mds,
-		undesired: undesired,
-		require:   required,
-		validate:  validate,
+	for _, opt := range opts {
+		opt(provider)
 	}
+
+	return provider
 }
 
+// Provider is a concrete implementation of the metadata.Provider that utilizes memory for validation. This provider is
+// a simple one-shot that doesn't perform any locking, provide dynamic functionality, or download the metadata at any
+// stage (it expects it's provided via one of the Option's).
 type Provider struct {
-	mds       map[uuid.UUID]*metadata.MetadataBLOBPayloadEntry
-	desired   []metadata.AuthenticatorStatus
-	undesired []metadata.AuthenticatorStatus
-	require   bool
-	validate  bool
-	status    bool
-}
-
-func (p *Provider) GetTrustAnchorValidation(ctx context.Context) (validate bool) {
-	return p.validate
-}
-
-func (p *Provider) GetAuthenticatorStatusValidation(ctx context.Context) (validate bool) {
-	return len(p.undesired) > 0
-}
-
-func (p *Provider) GetRequireEntry(ctx context.Context) (require bool) {
-	return p.require
+	mds             map[uuid.UUID]*metadata.MetadataBLOBPayloadEntry
+	desired         []metadata.AuthenticatorStatus
+	undesired       []metadata.AuthenticatorStatus
+	entry           bool
+	entryPermitZero bool
+	anchors         bool
+	status          bool
 }
 
 func (p *Provider) GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *metadata.MetadataBLOBPayloadEntry, err error) {
@@ -67,20 +49,26 @@ func (p *Provider) GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *metad
 	return nil, nil
 }
 
-func (p *Provider) ValidateAuthenticatorStatusReports(ctx context.Context, reports []metadata.StatusReport) (err error) {
+func (p *Provider) GetValidateEntry(ctx context.Context) (require bool) {
+	return p.entry
+}
+
+func (p *Provider) GetValidateEntryPermitZeroAAGUID(ctx context.Context) (skip bool) {
+	return p.entryPermitZero
+}
+
+func (p *Provider) GetValidateTrustAnchor(ctx context.Context) (validate bool) {
+	return p.anchors
+}
+
+func (p *Provider) GetValidateStatus(ctx context.Context) (validate bool) {
+	return p.status
+}
+
+func (p *Provider) ValidateStatusReports(ctx context.Context, reports []metadata.StatusReport) (err error) {
 	if !p.status {
 		return nil
 	}
 
 	return metadata.ValidateStatusReports(reports, p.desired, p.undesired)
-}
-
-func (p *Provider) GetAuthenticatorStatusIsUndesired(ctx context.Context, status metadata.AuthenticatorStatus) (undesired bool) {
-	for _, s := range p.undesired {
-		if s == status {
-			return true
-		}
-	}
-
-	return false
 }
