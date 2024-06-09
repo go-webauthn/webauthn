@@ -2,24 +2,29 @@ package memory
 
 import (
 	"context"
-
+	"fmt"
 	"github.com/google/uuid"
 
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-// New returns a new memory provider given a set of functional Option's.
-func New(opts ...Option) (provider *Provider) {
-
-	provider = &Provider{
+// New returns a new memory Provider given a set of functional Option's.
+func New(opts ...Option) (provider metadata.Provider, err error) {
+	p := &Provider{
 		undesired: metadata.DefaultUndesiredAuthenticatorStatuses(),
 	}
 
 	for _, opt := range opts {
-		opt(provider)
+		if err = opt(p); err != nil {
+			return nil, err
+		}
 	}
 
-	return provider
+	if p.mds == nil {
+		return nil, fmt.Errorf("memory metadata provider has not been initialized with metadata")
+	}
+
+	return p, nil
 }
 
 // Provider is a concrete implementation of the metadata.Provider that utilizes memory for validation. This provider is

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -306,4 +307,18 @@ type MetadataError struct {
 
 func (err *MetadataError) Error() string {
 	return err.Details
+}
+
+// Clock is an interface used to implement clock functionality in various metadata areas.
+type Clock interface {
+	// Now returns the current time.
+	Now() time.Time
+}
+
+// RealClock is just a real clock.
+type RealClock struct{}
+
+// Now returns the current time.
+func (RealClock) Now() time.Time {
+	return time.Now()
 }

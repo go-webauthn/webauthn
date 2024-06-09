@@ -21,7 +21,7 @@ func Fetch() (metadata *Metadata, err error) {
 		res     *http.Response
 	)
 
-	if decoder, err = NewDecoder(); err != nil {
+	if decoder, err = NewDecoder(WithIgnoreEntryParsingErrors()); err != nil {
 		return nil, err
 	}
 
