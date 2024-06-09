@@ -1,10 +1,11 @@
 package cached
 
 import (
-	"github.com/go-webauthn/webauthn/metadata"
-	"github.com/go-webauthn/webauthn/metadata/providers/memory"
 	"io"
 	"os"
+
+	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/metadata/providers/memory"
 )
 
 func doTruncateCopyAndSeekStart(f *os.File, rc io.ReadCloser) (err error) {
