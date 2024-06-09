@@ -74,7 +74,7 @@ func (d *Decoder) Parse(payload *PayloadJSON) (metadata *Metadata, err error) {
 	}
 
 	if n := len(metadata.Unparsed); n != 0 && !d.ignoreEntryParsingErrors {
-		return metadata, fmt.Errorf("error occured parsing metadata: %d entries had errors during parsing", n)
+		return metadata, fmt.Errorf("error occurred parsing metadata: %d entries had errors during parsing", n)
 	}
 
 	return metadata, nil

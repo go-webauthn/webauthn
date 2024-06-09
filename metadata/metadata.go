@@ -368,7 +368,7 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 
 	if len(j.AaGUID) != 0 {
 		if aaguid, err = uuid.Parse(j.AaGUID); err != nil {
-			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occured parsing AAGUID value: %w", j.Description, err)
+			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing AAGUID value: %w", j.Description, err)
 		}
 	}
 

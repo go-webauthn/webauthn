@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+
 	"github.com/google/uuid"
 
 	"github.com/go-webauthn/webauthn/metadata"

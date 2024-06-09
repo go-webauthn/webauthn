@@ -11,12 +11,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/binary"
-	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 
 	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
