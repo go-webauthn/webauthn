@@ -81,11 +81,11 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 
 	require.NoError(t, err)
 
-	metadata := make(map[uuid.UUID]MetadataBLOBPayloadEntryJSON)
+	metadata := make(map[uuid.UUID]EntryJSON)
 
 	var (
 		res  *http.Response
-		blob *MetadataBLOBPayloadJSON
+		blob *PayloadJSON
 		me   *MetadataError
 	)
 
@@ -317,8 +317,8 @@ func getEndpoints(c *http.Client) ([]string, error) {
 	return resp.Result, err
 }
 
-func getTestMetadata(s string, c *http.Client) (MetadataStatementJSON, error) {
-	var statement MetadataStatementJSON
+func getTestMetadata(s string, c *http.Client) (StatementJSON, error) {
+	var statement StatementJSON
 
 	// MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint.
 	type MDSGetTestMetadata struct {
@@ -345,8 +345,8 @@ func getTestMetadata(s string, c *http.Client) (MetadataStatementJSON, error) {
 	}
 
 	type ConformanceResponse struct {
-		Status string                `json:"status"`
-		Result MetadataStatementJSON `json:"result"`
+		Status string        `json:"status"`
+		Result StatementJSON `json:"result"`
 	}
 
 	var resp ConformanceResponse

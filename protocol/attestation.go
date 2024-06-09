@@ -173,7 +173,7 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 
 	var (
 		aaguid uuid.UUID
-		entry  *metadata.MetadataBLOBPayloadEntry
+		entry  *metadata.Entry
 	)
 
 	if len(a.AuthData.AttData.AAGUID) != 0 {
