@@ -294,23 +294,6 @@ func TestAlgKeyMatch(t *testing.T) {
 	}
 }
 
-func download(url string, c *http.Client) {
-
-}
-
-func downloadBytes(url string, c *http.Client) ([]byte, error) {
-	res, err := c.Get(url)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-
-	body, _ := io.ReadAll(res.Body)
-
-	return body, err
-}
-
 func getEndpoints(c *http.Client) ([]string, error) {
 	jsonReq, err := json.Marshal(MDSGetEndpointsRequest{Endpoint: "https://webauthn.io"})
 	if err != nil {

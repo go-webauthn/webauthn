@@ -90,7 +90,7 @@ func (j MetadataBLOBPayloadJSON) Parse() (payload MetadataBLOBPayload, err error
 	var update time.Time
 
 	if update, err = time.Parse(time.DateOnly, j.NextUpdate); err != nil {
-		return payload, fmt.Errorf("error occurred parsing next update value: %w", err)
+		return payload, fmt.Errorf("error occurred parsing next update value '%s': %w", j.NextUpdate, err)
 	}
 
 	n := len(j.Entries)
