@@ -36,6 +36,7 @@ func NewDecoder(opts ...DecoderOption) (decoder *Decoder, err error) {
 	return decoder, nil
 }
 
+// Decoder handles decoding and specialized parsing of the metadata blob.
 type Decoder struct {
 	client                   *http.Client
 	parser                   *jwt.Parser
@@ -44,6 +45,7 @@ type Decoder struct {
 	ignoreEntryParsingErrors bool
 }
 
+// Parse handles parsing of the raw JSON values of the metadata blob. Should be used after using Decode or DecodeBytes.
 func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, err error) {
 	metadata = &Metadata{
 		Parsed: MetadataBLOBPayload{
@@ -53,7 +55,7 @@ func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, e
 	}
 
 	if metadata.Parsed.NextUpdate, err = time.Parse(time.DateOnly, payload.NextUpdate); err != nil {
-		return nil, fmt.Errorf("error occurred parsing next update value: %w", err)
+		return nil, fmt.Errorf("error occurred parsing next update value '%s': %w", payload.NextUpdate, err)
 	}
 
 	var parsed MetadataBLOBPayloadEntry
@@ -78,6 +80,7 @@ func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, e
 	return metadata, nil
 }
 
+// Decode the blob from an io.ReadCloser. This function will close the io.ReadCloser after completing.
 func (d *Decoder) Decode(r io.ReadCloser) (payload *MetadataBLOBPayloadJSON, err error) {
 	defer r.Close()
 
@@ -89,6 +92,7 @@ func (d *Decoder) Decode(r io.ReadCloser) (payload *MetadataBLOBPayloadJSON, err
 	return d.DecodeBytes(bytes)
 }
 
+// DecodeBytes handles decoding raw bytes. If you have a read closer it's suggested to use Decode.
 func (d *Decoder) DecodeBytes(bytes []byte) (payload *MetadataBLOBPayloadJSON, err error) {
 	payload = &MetadataBLOBPayloadJSON{}
 
@@ -160,6 +164,28 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *MetadataBLOBPayloadJSON, e
 	}
 
 	return payload, nil
+}
+
+// DecoderOption is a representation of a function that can set options within a decoder.
+type DecoderOption func(decoder *Decoder) (err error)
+
+// WithIgnoreEntryParsingErrors is a DecoderOption which ignores errors when parsing individual entries. The values for
+// these entries will exist as an unparsed entry.
+func WithIgnoreEntryParsingErrors() DecoderOption {
+	return func(decoder *Decoder) (err error) {
+		decoder.ignoreEntryParsingErrors = true
+
+		return nil
+	}
+}
+
+// WithRootCertificate overrides the root certificate used to validate the authenticity of the metadata payload.
+func WithRootCertificate(value string) DecoderOption {
+	return func(decoder *Decoder) (err error) {
+		decoder.root = value
+
+		return nil
+	}
 }
 
 func validateChain(root string, chain []any) (bool, error) {
@@ -246,26 +272,4 @@ func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err e
 	}
 
 	return certificate, nil
-}
-
-// DecoderOption is a representation of a function that can set options within a decoder.
-type DecoderOption func(decoder *Decoder) (err error)
-
-// WithIgnoreEntryParsingErrors is a DecoderOption which ignores errors when parsing individual entries. The values for
-// these entries will exist as an unparsed entry.
-func WithIgnoreEntryParsingErrors() DecoderOption {
-	return func(decoder *Decoder) (err error) {
-		decoder.ignoreEntryParsingErrors = true
-
-		return nil
-	}
-}
-
-// WithRootCertificate overrides the root certificate used to validate the authenticity of the metadata payload.
-func WithRootCertificate(value string) DecoderOption {
-	return func(decoder *Decoder) (err error) {
-		decoder.root = value
-
-		return nil
-	}
 }
