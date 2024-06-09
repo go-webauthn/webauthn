@@ -248,6 +248,7 @@ func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err e
 	return certificate, nil
 }
 
+// DecoderOption is a representation of a function that can set options within a decoder.
 type DecoderOption func(decoder *Decoder) (err error)
 
 // WithIgnoreEntryParsingErrors is a DecoderOption which ignores errors when parsing individual entries. The values for
@@ -260,6 +261,7 @@ func WithIgnoreEntryParsingErrors() DecoderOption {
 	}
 }
 
+// WithRootCertificate overrides the root certificate used to validate the authenticity of the metadata payload.
 func WithRootCertificate(value string) DecoderOption {
 	return func(decoder *Decoder) (err error) {
 		decoder.root = value
