@@ -13,7 +13,7 @@ import (
 
 type Provider interface {
 	// GetEntry returns a MDS3 payload entry given a AAGUID. This
-	GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *MetadataBLOBPayloadEntry, err error)
+	GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *Entry, err error)
 
 	// GetValidateEntry returns true if this provider requires an entry to exist with a AAGUID matching the attestation
 	// statement during registration.

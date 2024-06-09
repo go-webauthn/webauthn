@@ -46,9 +46,9 @@ type Decoder struct {
 }
 
 // Parse handles parsing of the raw JSON values of the metadata blob. Should be used after using Decode or DecodeBytes.
-func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, err error) {
+func (d *Decoder) Parse(payload *PayloadJSON) (metadata *Metadata, err error) {
 	metadata = &Metadata{
-		Parsed: MetadataBLOBPayload{
+		Parsed: Parsed{
 			LegalHeader: payload.LegalHeader,
 			Number:      payload.Number,
 		},
@@ -58,13 +58,13 @@ func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, e
 		return nil, fmt.Errorf("error occurred parsing next update value '%s': %w", payload.NextUpdate, err)
 	}
 
-	var parsed MetadataBLOBPayloadEntry
+	var parsed Entry
 
 	for _, entry := range payload.Entries {
 		if parsed, err = entry.Parse(); err != nil {
-			metadata.Unparsed = append(metadata.Unparsed, MetadataBLOBPayloadEntryError{
-				Error:                        err,
-				MetadataBLOBPayloadEntryJSON: entry,
+			metadata.Unparsed = append(metadata.Unparsed, EntryError{
+				Error:     err,
+				EntryJSON: entry,
 			})
 
 			continue
@@ -81,7 +81,7 @@ func (d *Decoder) Parse(payload *MetadataBLOBPayloadJSON) (metadata *Metadata, e
 }
 
 // Decode the blob from an io.ReadCloser. This function will close the io.ReadCloser after completing.
-func (d *Decoder) Decode(r io.ReadCloser) (payload *MetadataBLOBPayloadJSON, err error) {
+func (d *Decoder) Decode(r io.ReadCloser) (payload *PayloadJSON, err error) {
 	defer r.Close()
 
 	bytes, err := io.ReadAll(r)
@@ -93,8 +93,8 @@ func (d *Decoder) Decode(r io.ReadCloser) (payload *MetadataBLOBPayloadJSON, err
 }
 
 // DecodeBytes handles decoding raw bytes. If you have a read closer it's suggested to use Decode.
-func (d *Decoder) DecodeBytes(bytes []byte) (payload *MetadataBLOBPayloadJSON, err error) {
-	payload = &MetadataBLOBPayloadJSON{}
+func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
+	payload = &PayloadJSON{}
 
 	var token *jwt.Token
 

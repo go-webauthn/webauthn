@@ -17,7 +17,7 @@ import (
 func Fetch() (metadata *Metadata, err error) {
 	var (
 		decoder *Decoder
-		payload *MetadataBLOBPayloadJSON
+		payload *PayloadJSON
 		res     *http.Response
 	)
 
@@ -39,12 +39,12 @@ func Fetch() (metadata *Metadata, err error) {
 }
 
 type Metadata struct {
-	Parsed   MetadataBLOBPayload
-	Unparsed []MetadataBLOBPayloadEntryError
+	Parsed   Parsed
+	Unparsed []EntryError
 }
 
-func (m *Metadata) ToMap() (metadata map[uuid.UUID]*MetadataBLOBPayloadEntry) {
-	metadata = make(map[uuid.UUID]*MetadataBLOBPayloadEntry)
+func (m *Metadata) ToMap() (metadata map[uuid.UUID]*Entry) {
+	metadata = make(map[uuid.UUID]*Entry)
 
 	for _, entry := range m.Parsed.Entries {
 		if entry.AaGUID != uuid.Nil {
@@ -55,15 +55,10 @@ func (m *Metadata) ToMap() (metadata map[uuid.UUID]*MetadataBLOBPayloadEntry) {
 	return metadata
 }
 
-type MetadataBLOBPayloadEntryError struct {
-	Error error
-	MetadataBLOBPayloadEntryJSON
-}
-
-// MetadataBLOBPayload is a structure representing the MetadataBLOBPayload MDS3 dictionary.
+// Parsed is a structure representing the Parsed MDS3 dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#metadata-blob-payload-entry-dictionary
-type MetadataBLOBPayload struct {
+type Parsed struct {
 	// The legalHeader, if present, contains a legal guide for accessing and using metadata, which itself MAY contain URL(s) pointing to further information, such as a full Terms and Conditions statement.
 	LegalHeader string
 
@@ -74,19 +69,19 @@ type MetadataBLOBPayload struct {
 	NextUpdate time.Time
 
 	// List of zero or more MetadataTOCPayloadEntry objects.
-	Entries []MetadataBLOBPayloadEntry
+	Entries []Entry
 }
 
-// MetadataBLOBPayloadJSON is an intermediary JSON/JWT representation of the MetadataBLOBPayload.
-type MetadataBLOBPayloadJSON struct {
+// PayloadJSON is an intermediary JSON/JWT representation of the Parsed.
+type PayloadJSON struct {
 	LegalHeader string `json:"legalHeader"`
 	Number      int    `json:"no"`
 	NextUpdate  string `json:"nextUpdate"`
 
-	Entries []MetadataBLOBPayloadEntryJSON `json:"entries"`
+	Entries []EntryJSON `json:"entries"`
 }
 
-func (j MetadataBLOBPayloadJSON) Parse() (payload MetadataBLOBPayload, err error) {
+func (j PayloadJSON) Parse() (payload Parsed, err error) {
 	var update time.Time
 
 	if update, err = time.Parse(time.DateOnly, j.NextUpdate); err != nil {
@@ -95,7 +90,7 @@ func (j MetadataBLOBPayloadJSON) Parse() (payload MetadataBLOBPayload, err error
 
 	n := len(j.Entries)
 
-	entries := make([]MetadataBLOBPayloadEntry, n)
+	entries := make([]Entry, n)
 
 	for i := 0; i < n; i++ {
 		if entries[i], err = j.Entries[i].Parse(); err != nil {
@@ -103,7 +98,7 @@ func (j MetadataBLOBPayloadJSON) Parse() (payload MetadataBLOBPayload, err error
 		}
 	}
 
-	return MetadataBLOBPayload{
+	return Parsed{
 		LegalHeader: j.LegalHeader,
 		Number:      j.Number,
 		NextUpdate:  update,
@@ -111,10 +106,10 @@ func (j MetadataBLOBPayloadJSON) Parse() (payload MetadataBLOBPayload, err error
 	}, nil
 }
 
-// MetadataBLOBPayloadEntry is a structure representing the MetadataBLOBPayloadEntry MDS3 dictionary.
+// Entry is a structure representing the Entry MDS3 dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#metadata-blob-payload-entry-dictionary
-type MetadataBLOBPayloadEntry struct {
+type Entry struct {
 	// The Authenticator Attestation ID.
 	Aaid string `json:"aaid"`
 
@@ -125,7 +120,7 @@ type MetadataBLOBPayloadEntry struct {
 	AttestationCertificateKeyIdentifiers []string `json:"attestationCertificateKeyIdentifiers"`
 
 	// The metadataStatement JSON object as defined in FIDOMetadataStatement.
-	MetadataStatement MetadataStatement `json:"metadataStatement"`
+	MetadataStatement Statement `json:"metadataStatement"`
 
 	// Status of the FIDO Biometric Certification of one or more biometric components of the Authenticator
 	BiometricStatusReports []BiometricStatusReport `json:"biometricStatusReports"`
@@ -143,15 +138,15 @@ type MetadataBLOBPayloadEntry struct {
 	RogueListHash string
 }
 
-// MetadataBLOBPayloadEntryJSON is an intermediary JSON/JWT structure representing the MetadataBLOBPayloadEntry MDS3 dictionary.
+// EntryJSON is an intermediary JSON/JWT structure representing the Entry MDS3 dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#metadata-blob-payload-entry-dictionary
-type MetadataBLOBPayloadEntryJSON struct {
+type EntryJSON struct {
 	Aaid                                 string   `json:"aaid"`
 	AaGUID                               string   `json:"aaguid"`
 	AttestationCertificateKeyIdentifiers []string `json:"attestationCertificateKeyIdentifiers"`
 
-	MetadataStatement      MetadataStatementJSON       `json:"metadataStatement"`
+	MetadataStatement      StatementJSON               `json:"metadataStatement"`
 	BiometricStatusReports []BiometricStatusReportJSON `json:"biometricStatusReports"`
 	StatusReports          []StatusReportJSON          `json:"statusReports"`
 
@@ -160,7 +155,7 @@ type MetadataBLOBPayloadEntryJSON struct {
 	RogueListHash          string `json:"rogueListHash"`
 }
 
-func (j MetadataBLOBPayloadEntryJSON) Parse() (entry MetadataBLOBPayloadEntry, err error) {
+func (j EntryJSON) Parse() (entry Entry, err error) {
 	var aaguid uuid.UUID
 
 	if len(j.AaGUID) != 0 {
@@ -169,7 +164,7 @@ func (j MetadataBLOBPayloadEntryJSON) Parse() (entry MetadataBLOBPayloadEntry, e
 		}
 	}
 
-	var statement MetadataStatement
+	var statement Statement
 
 	if statement, err = j.MetadataStatement.Parse(); err != nil {
 		return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': %w", j.AaGUID, err)
@@ -215,7 +210,7 @@ func (j MetadataBLOBPayloadEntryJSON) Parse() (entry MetadataBLOBPayloadEntry, e
 		}
 	}
 
-	return MetadataBLOBPayloadEntry{
+	return Entry{
 		Aaid:                                 j.Aaid,
 		AaGUID:                               aaguid,
 		AttestationCertificateKeyIdentifiers: j.AttestationCertificateKeyIdentifiers,
@@ -228,12 +223,12 @@ func (j MetadataBLOBPayloadEntryJSON) Parse() (entry MetadataBLOBPayloadEntry, e
 	}, nil
 }
 
-// MetadataStatement is a structure representing the MetadataStatement MDS3 dictionary.
+// Statement is a structure representing the Statement MDS3 dictionary.
 // Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
 // contained in the authoritative statement is used in several other places.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#metadata-keys
-type MetadataStatement struct {
+type Statement struct {
 	// The legalHeader, if present, contains a legal guide for accessing and using metadata, which itself MAY contain URL(s) pointing to further information, such as a full Terms and Conditions statement.
 	LegalHeader string
 
@@ -321,7 +316,7 @@ type MetadataStatement struct {
 	AuthenticatorGetInfo AuthenticatorGetInfo
 }
 
-func (s *MetadataStatement) Verifier() (opts x509.VerifyOptions) {
+func (s *Statement) Verifier() (opts x509.VerifyOptions) {
 	roots := x509.NewCertPool()
 
 	for _, root := range s.AttestationRootCertificates {
@@ -333,12 +328,12 @@ func (s *MetadataStatement) Verifier() (opts x509.VerifyOptions) {
 	}
 }
 
-// MetadataStatementJSON is an intermediary JSON/JWT structure representing the MetadataStatement MDS3 dictionary.
+// StatementJSON is an intermediary JSON/JWT structure representing the Statement MDS3 dictionary.
 // Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
 // contained in the authoritative statement is used in several other places.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#metadata-keys
-type MetadataStatementJSON struct {
+type StatementJSON struct {
 	LegalHeader                          string                                `json:"legalHeader"`
 	Aaid                                 string                                `json:"aaid"`
 	AaGUID                               string                                `json:"aaguid"`
@@ -368,7 +363,7 @@ type MetadataStatementJSON struct {
 	AuthenticatorGetInfo                 AuthenticatorGetInfoJSON              `json:"authenticatorGetInfo"`
 }
 
-func (j MetadataStatementJSON) Parse() (statement MetadataStatement, err error) {
+func (j StatementJSON) Parse() (statement Statement, err error) {
 	var aaguid uuid.UUID
 
 	if len(j.AaGUID) != 0 {
@@ -401,7 +396,7 @@ func (j MetadataStatementJSON) Parse() (statement MetadataStatement, err error) 
 		return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing authenticator get info value: %w", j.Description, err)
 	}
 
-	return MetadataStatement{
+	return Statement{
 		LegalHeader:                          j.LegalHeader,
 		Aaid:                                 j.Aaid,
 		AaGUID:                               aaguid,
@@ -913,4 +908,9 @@ func DefaultUndesiredAuthenticatorStatuses() []AuthenticatorStatus {
 	}
 
 	return undesired
+}
+
+type EntryError struct {
+	Error error
+	EntryJSON
 }

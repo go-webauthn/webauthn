@@ -31,7 +31,7 @@ func New(opts ...Option) (provider metadata.Provider, err error) {
 // a simple one-shot that doesn't perform any locking, provide dynamic functionality, or download the metadata at any
 // stage (it expects it's provided via one of the Option's).
 type Provider struct {
-	mds             map[uuid.UUID]*metadata.MetadataBLOBPayloadEntry
+	mds             map[uuid.UUID]*metadata.Entry
 	desired         []metadata.AuthenticatorStatus
 	undesired       []metadata.AuthenticatorStatus
 	entry           bool
@@ -40,7 +40,7 @@ type Provider struct {
 	status          bool
 }
 
-func (p *Provider) GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *metadata.MetadataBLOBPayloadEntry, err error) {
+func (p *Provider) GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *metadata.Entry, err error) {
 	if p.mds == nil {
 		return nil, metadata.ErrNotInitialized
 	}

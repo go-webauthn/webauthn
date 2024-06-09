@@ -2,10 +2,13 @@ package webauthn
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -222,16 +225,19 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	// allowCredentials.
 
 	// NON-NORMATIVE Prior Step: Verify that the allowCredentials for the session are owned by the user provided.
-	userCredentials := user.WebAuthnCredentials()
+	credentials := user.WebAuthnCredentials()
 
-	var credentialFound bool
+	var (
+		found      bool
+		credential Credential
+	)
 
 	if len(session.AllowedCredentialIDs) > 0 {
 		var credentialsOwned bool
 
 		for _, allowedCredentialID := range session.AllowedCredentialIDs {
-			for _, userCredential := range userCredentials {
-				if bytes.Equal(userCredential.ID, allowedCredentialID) {
+			for _, credential = range credentials {
+				if bytes.Equal(credential.ID, allowedCredentialID) {
 					credentialsOwned = true
 
 					break
@@ -247,13 +253,13 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 		for _, allowedCredentialID := range session.AllowedCredentialIDs {
 			if bytes.Equal(parsedResponse.RawID, allowedCredentialID) {
-				credentialFound = true
+				found = true
 
 				break
 			}
 		}
 
-		if !credentialFound {
+		if !found {
 			return nil, protocol.ErrBadRequest.WithDetails("User does not own the credential returned")
 		}
 	}
@@ -272,21 +278,36 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 	// Step 3. Using credential’s id attribute (or the corresponding rawId, if base64url encoding is inappropriate
 	// for your use case), look up the corresponding credential public key.
-	var loginCredential Credential
-
-	for _, cred := range userCredentials {
-		if bytes.Equal(cred.ID, parsedResponse.RawID) {
-			loginCredential = cred
-			credentialFound = true
+	for _, credential = range credentials {
+		if bytes.Equal(credential.ID, parsedResponse.RawID) {
+			found = true
 
 			break
 		}
 
-		credentialFound = false
+		found = false
 	}
 
-	if !credentialFound {
+	if !found {
 		return nil, protocol.ErrBadRequest.WithDetails("Unable to find the credential for the returned credential ID")
+	}
+
+	var (
+		appID string
+		err   error
+	)
+
+	// Ensure authenticators with a bad status is not used.
+	if webauthn.Config.MDS != nil {
+		var aaguid uuid.UUID
+
+		if aaguid, err = uuid.FromBytes(credential.Authenticator.AAGUID); err != nil {
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err))
+		}
+
+		if err = protocol.ValidateMetadata(context.Background(), aaguid, webauthn.Config.MDS); err != nil {
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(fmt.Sprintf("Error occurred validating authenticator metadata from the credential record: %s", err))
+		}
 	}
 
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
@@ -295,21 +316,19 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	rpOrigins := webauthn.Config.RPOrigins
 	rpTopOrigins := webauthn.Config.RPTopOrigins
 
-	appID, err := parsedResponse.GetAppID(session.Extensions, loginCredential.AttestationType)
-	if err != nil {
+	if appID, err = parsedResponse.GetAppID(session.Extensions, credential.AttestationType); err != nil {
 		return nil, err
 	}
 
 	// Handle steps 4 through 16.
-	validError := parsedResponse.Verify(session.Challenge, rpID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, appID, shouldVerifyUser, loginCredential.PublicKey)
-	if validError != nil {
-		return nil, validError
+	if err = parsedResponse.Verify(session.Challenge, rpID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, appID, shouldVerifyUser, credential.PublicKey); err != nil {
+		return nil, err
 	}
 
 	// Handle step 17.
-	loginCredential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
+	credential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
 	// Check if the BackupEligible flag has changed.
-	if loginCredential.Flags.BackupEligible != parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible() {
+	if credential.Flags.BackupEligible != parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible() {
 		return nil, protocol.ErrBadRequest.WithDetails("BackupEligible flag inconsistency detected during login validation")
 	}
 
@@ -319,10 +338,10 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	// Update flags from response data.
-	loginCredential.Flags.UserPresent = parsedResponse.Response.AuthenticatorData.Flags.HasUserPresent()
-	loginCredential.Flags.UserVerified = parsedResponse.Response.AuthenticatorData.Flags.HasUserVerified()
-	loginCredential.Flags.BackupEligible = parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible()
-	loginCredential.Flags.BackupState = parsedResponse.Response.AuthenticatorData.Flags.HasBackupState()
+	credential.Flags.UserPresent = parsedResponse.Response.AuthenticatorData.Flags.HasUserPresent()
+	credential.Flags.UserVerified = parsedResponse.Response.AuthenticatorData.Flags.HasUserVerified()
+	credential.Flags.BackupEligible = parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible()
+	credential.Flags.BackupState = parsedResponse.Response.AuthenticatorData.Flags.HasBackupState()
 
-	return &loginCredential, nil
+	return &credential, nil
 }

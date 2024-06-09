@@ -63,7 +63,8 @@ type Config struct {
 	// Timeouts configures various timeouts.
 	Timeouts TimeoutsConfig
 
-	MetaData metadata.Provider
+	// MDS is a metadata.Provider and enables various metadata validations if configured.
+	MDS metadata.Provider
 
 	validated bool
 }
@@ -156,7 +157,7 @@ func (c *Config) GetTopOriginVerificationMode() protocol.TopOriginVerificationMo
 }
 
 func (c *Config) GetMetaDataProvider() metadata.Provider {
-	return c.MetaData
+	return c.MDS
 }
 
 type ConfigProvider interface {

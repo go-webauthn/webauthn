@@ -10,7 +10,7 @@ import (
 type Option func(provider *Provider) (err error)
 
 // WithMetadata provides the required metadata for the memory provider.
-func WithMetadata(mds map[uuid.UUID]*metadata.MetadataBLOBPayloadEntry) Option {
+func WithMetadata(mds map[uuid.UUID]*metadata.Entry) Option {
 	return func(provider *Provider) (err error) {
 		provider.mds = mds
 

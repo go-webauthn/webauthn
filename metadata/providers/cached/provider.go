@@ -114,7 +114,7 @@ func (p *Provider) init() (err error) {
 }
 
 func (p *Provider) parse(rc io.ReadCloser) (data *metadata.Metadata, err error) {
-	var payload *metadata.MetadataBLOBPayloadJSON
+	var payload *metadata.PayloadJSON
 
 	if payload, err = p.decoder.Decode(rc); err != nil {
 		return nil, err
