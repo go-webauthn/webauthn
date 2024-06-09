@@ -72,3 +72,7 @@ func (p *Provider) ValidateStatusReports(ctx context.Context, reports []metadata
 
 	return metadata.ValidateStatusReports(reports, p.desired, p.undesired)
 }
+
+var (
+	_ metadata.Provider = (*Provider)(nil)
+)

@@ -3,12 +3,40 @@ package metadata
 import (
 	"crypto/x509"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+// Fetch creates a new HTTP client and gets the production metadata, decodes it, and parses it. This is an
+// instrumentation simplification that makes it easier to either just grab the latest metadata or for implementers to
+// see the rough process of retrieving it to implement any of their own logic.
+func Fetch() (metadata *Metadata, err error) {
+	var (
+		decoder *Decoder
+		payload *MetadataBLOBPayloadJSON
+		res     *http.Response
+	)
+
+	if decoder, err = NewDecoder(); err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{}
+
+	if res, err = client.Get(ProductionMDSURL); err != nil {
+		return nil, err
+	}
+
+	if payload, err = decoder.Decode(res.Body); err != nil {
+		return nil, err
+	}
+
+	return decoder.Parse(payload)
+}
 
 type Metadata struct {
 	Parsed   MetadataBLOBPayload
