@@ -20,9 +20,10 @@ It is distributed under the same 3-Clause BSD license as the original fork, with
 
 ## Go Version Support Policy
 
-This library will officially support versions of go which are currently supported by the go maintainers (usually 3
-minor versions) with a brief transition time (usually 1 patch release of go, for example if go 1.21.0 is released, we
-will likely still support go 1.17 until go 1.21.1 is released). 
+This library; unless otherwise explicitly expressed; will officially support versions of go which are currently
+supported by the go maintainers (usually 3 minor versions) with a brief transition time (usually 1 patch release of go,
+for example if go 1.21.0 is released, we will likely still support go 1.17 until go 1.21.1 is released). These specific
+rules apply at the time of a published release.
 
 This library in our opinion handles a critical element of security in a dependent project and we aim to avoid backwards
 compatibility at the cost of security wherever possible. We also consider this especially important in a language like
@@ -33,7 +34,11 @@ which are not available in that version. The current intentionally supported ver
 
 - go 1.22
 - go 1.21
-- go 1.20
+- ~~go 1.20~~:
+  - Go 1.20 support has been removed due to the new toolchain directive and lack of support in Go 1.20. This directive
+    is unfortunately being used in dependent libraries and we'd opt for ensuring we can easily obtain potential fixes
+    to CVE's rather than backwards compatibility. A such we have lifted the version requirement and implemented the
+    toolchain directive in our module to reflect the intended toolchain.
 
 ## Status
 
