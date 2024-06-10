@@ -201,21 +201,33 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 }
 
 // ValidateDiscoverableLogin is an overloaded version of ValidateLogin that allows for discoverable credentials.
-func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
+//
+// Note: this is just a backwards compatability layer over ValidatePasskeyLogin which returns more information.
+func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (credential *Credential, err error) {
+	_, credential, err = webauthn.ValidatePasskeyLogin(handler, session, parsedResponse)
+
+	return credential, err
+}
+
+// ValidatePasskeyLogin is an overloaded version of ValidateLogin that allows for passkey credentials.
+func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (user User, credential *Credential, err error) {
 	if session.UserID != nil {
-		return nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
+		return nil, nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
 	}
 
 	if parsedResponse.Response.UserHandle == nil {
-		return nil, protocol.ErrBadRequest.WithDetails("Client-side Discoverable Assertion was attempted with a blank User Handle")
+		return nil, nil, protocol.ErrBadRequest.WithDetails("Client-side Discoverable Assertion was attempted with a blank User Handle")
 	}
 
-	user, err := handler(parsedResponse.RawID, parsedResponse.Response.UserHandle)
-	if err != nil {
-		return nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err))
+	if user, err = handler(parsedResponse.RawID, parsedResponse.Response.UserHandle); err != nil {
+		return nil, nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err))
 	}
 
-	return webauthn.validateLogin(user, session, parsedResponse)
+	if credential, err = webauthn.validateLogin(user, session, parsedResponse); err != nil {
+		return nil, nil, err
+	}
+
+	return user, credential, nil
 }
 
 // ValidateLogin takes a parsed response and validates it against the user credentials and session data.
