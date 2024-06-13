@@ -1,8 +1,10 @@
 package webauthn
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -12,22 +14,22 @@ func TestMakeNewCredential(t *testing.T) {
 		c *protocol.ParsedCredentialCreationData
 	}
 
-	var tests []struct {
-		name    string
-		args    args
-		want    *Credential
-		wantErr bool
+	var testCases []struct {
+		name     string
+		args     args
+		expected *Credential
+		err      string
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeNewCredential(tt.args.c)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("MakeNewCredential() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("MakeNewCredential() = %v, want %v", got, tt.want)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := NewCredential(nil, tc.args.c)
+			if len(tc.err) > 0 {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+
+				assert.EqualValues(t, tc.expected, actual)
 			}
 		})
 	}

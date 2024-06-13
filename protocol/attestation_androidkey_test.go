@@ -49,7 +49,7 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := verifyAndroidKeyFormat(tt.args.att, tt.args.clientDataHash)
+			got, _, err := verifyAndroidKeyFormat(tt.args.att, tt.args.clientDataHash, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("verifyAndroidKeyFormat() error = %v, wantErr %v", err, tt.wantErr)
 				return
