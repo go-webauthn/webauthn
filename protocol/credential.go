@@ -3,8 +3,7 @@ package protocol
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"io"
-	"net/http"
+	"encoding/json"
 )
 
 // Credential is the basic credential type from the Credential Management specification that is inherited by WebAuthn's
@@ -60,23 +59,20 @@ type ParsedCredentialCreationData struct {
 
 // ParseCredentialCreationResponse is a non-agnostic function for parsing a registration response from the http library
 // from stdlib. It handles some standard cleanup operations.
-func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialCreationData, error) {
-	if response == nil || response.Body == nil {
+func ParseCredentialCreationResponse(creationResponse []byte) (*ParsedCredentialCreationData, error) {
+	if creationResponse == nil {
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
-	defer response.Body.Close()
-	defer io.Copy(io.Discard, response.Body)
-
-	return ParseCredentialCreationResponseBody(response.Body)
+	return ParseCredentialCreationResponseBody(creationResponse)
 }
 
 // ParseCredentialCreationResponseBody is an agnostic version of ParseCredentialCreationResponse. Implementers are
 // therefore responsible for managing cleanup.
-func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialCreationData, err error) {
+func ParseCredentialCreationResponseBody(creationResponse []byte) (pcc *ParsedCredentialCreationData, err error) {
 	var ccr CredentialCreationResponse
 
-	if err = decodeBody(body, &ccr); err != nil {
+	if err = json.Unmarshal(creationResponse, &ccr); err != nil {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo(err.Error())
 	}
 
@@ -204,7 +200,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 // 9. Return the appid extension value from the Session data.
 func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions, credentialAttestationType string) (appID string, err error) {
 	var (
-		value, clientValue interface{}
+		value, clientValue any
 		enableAppID, ok    bool
 	)
 

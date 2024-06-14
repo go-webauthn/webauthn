@@ -3,6 +3,7 @@ package webauthn
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -162,8 +163,13 @@ func WithLoginRelyingPartyID(id string) LoginOption {
 }
 
 // FinishLogin takes the response from the client and validate it against the user credentials and stored session data.
-func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *http.Request) (*Credential, error) {
-	parsedResponse, err := protocol.ParseCredentialRequestResponse(response)
+func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, clientResponse any) (*Credential, error) {
+	body, err := webauthn.processResponse(clientResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedResponse, err := protocol.ParseCredentialRequestResponse(body)
 	if err != nil {
 		return nil, err
 	}
@@ -171,11 +177,39 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 	return webauthn.ValidateLogin(user, session, parsedResponse)
 }
 
+func (webauthn *WebAuthn) processResponse(data any) ([]byte, error) {
+	var (
+		body []byte
+		err  error
+	)
+
+	switch cl := data.(type) {
+	case *http.Request:
+		body, err = io.ReadAll(cl.Body)
+		_ = cl.Body.Close()
+
+	case io.Reader:
+		body, err = io.ReadAll(cl)
+
+	case []byte:
+		body = cl
+
+	default:
+		return nil, protocol.ErrBadRequest.WithDetails("Invalid client response type")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
+}
+
 // FinishDiscoverableLogin takes the response from the client and validate it against the handler and stored session data.
 // The handler helps to find out which user must be used to validate the response. This is a function defined in your
 // business code that will retrieve the user from your persistent data.
-func (webauthn *WebAuthn) FinishDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, response *http.Request) (*Credential, error) {
-	parsedResponse, err := protocol.ParseCredentialRequestResponse(response)
+func (webauthn *WebAuthn) FinishDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, clientResponse []byte) (*Credential, error) {
+	parsedResponse, err := protocol.ParseCredentialRequestResponse(clientResponse)
 	if err != nil {
 		return nil, err
 	}
