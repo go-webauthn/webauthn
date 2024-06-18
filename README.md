@@ -49,7 +49,7 @@ While we strive to avoid such changes and strive to notify users they may be una
 
 `go get github.com/go-webauthn/webauthn` and initialize it in your application with basic configuration values. 
 
-Make sure your `user` model is able to handle the interface functions laid out in `webauthn/user.go`. This means also 
+Make sure your `user` model is able to handle the interface functions laid out in `webauthn/types.go`. This means also 
 supporting the storage and retrieval of the credential and authenticator structs in `webauthn/credential.go` and 
 `webauthn/authenticator.go`, respectively.
 
