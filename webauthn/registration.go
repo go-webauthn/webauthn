@@ -3,7 +3,6 @@ package webauthn
 import (
 	"bytes"
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -203,7 +202,12 @@ func WithRegistrationRelyingPartyName(name string) RegistrationOption {
 
 // FinishRegistration takes the response from the authenticator and client and verify the credential against the user's
 // credentials and session data.
-func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, response *http.Request) (*Credential, error) {
+func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, authenticatorResponse any) (*Credential, error) {
+	response, err := webauthn.processResponse(authenticatorResponse)
+	if err != nil {
+		return nil, err
+	}
+
 	parsedResponse, err := protocol.ParseCredentialCreationResponse(response)
 	if err != nil {
 		return nil, err

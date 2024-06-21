@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
@@ -49,24 +47,21 @@ type ParsedAssertionResponse struct {
 // ParseCredentialRequestResponse parses the credential request response into a format that is either required by the
 // specification or makes the assertion verification steps easier to complete. This takes a http.Request that contains
 // the assertion response data in a raw, mostly base64 encoded format, and parses the data into manageable structures.
-func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAssertionData, error) {
-	if response == nil || response.Body == nil {
+func ParseCredentialRequestResponse(credentialResponse []byte) (*ParsedCredentialAssertionData, error) {
+	if credentialResponse == nil {
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
-	defer response.Body.Close()
-	defer io.Copy(io.Discard, response.Body)
-
-	return ParseCredentialRequestResponseBody(response.Body)
+	return ParseCredentialRequestResponseBody(credentialResponse)
 }
 
 // ParseCredentialRequestResponseBody parses the credential request response into a format that is either required by
 // the specification or makes the assertion verification steps easier to complete. This takes an io.Reader that contains
 // the assertion response data in a raw, mostly base64 encoded format, and parses the data into manageable structures.
-func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAssertionData, err error) {
+func ParseCredentialRequestResponseBody(credentialResponse []byte) (par *ParsedCredentialAssertionData, err error) {
 	var car CredentialAssertionResponse
 
-	if err = decodeBody(body, &car); err != nil {
+	if err = json.Unmarshal(credentialResponse, &car); err != nil {
 		return nil, ErrBadRequest.WithDetails("Parse error for Assertion").WithInfo(err.Error())
 	}
 

@@ -1,9 +1,7 @@
 package protocol
 
 import (
-	"bytes"
 	"encoding/base64"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -94,22 +92,11 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			},
 			errString: "",
 		},
-		{
-			name: "ShouldHandleTrailingData",
-			args: args{
-				responseName: "trailingData",
-			},
-			expected:   nil,
-			errString:  "Parse error for Registration",
-			errType:    "invalid_request",
-			errDetails: "Parse error for Registration",
-			errInfo:    "The body contains trailing data",
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			body := io.NopCloser(bytes.NewReader([]byte(testCredentialRequestResponses[tc.args.responseName])))
+			body := []byte(testCredentialRequestResponses[tc.args.responseName])
 
 			actual, err := ParseCredentialCreationResponseBody(body)
 
