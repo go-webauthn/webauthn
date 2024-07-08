@@ -155,6 +155,7 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 		Metadata:   nil,
 		Result:     payload,
 		DecodeHook: d.hook,
+		TagName:    "json",
 	}); err != nil {
 		return nil, err
 	}
