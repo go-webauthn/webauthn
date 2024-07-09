@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -273,4 +275,61 @@ func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err e
 	}
 
 	return certificate, nil
+}
+
+// StringToMailAddressHookFunc decodes a string into a mail.Address or *mail.Address.
+func hookDecodeUnsignedInt32() mapstructure.DecodeHookFuncType {
+	return func(f reflect.Type, t reflect.Type, data any) (value any, err error) {
+		switch f.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			break
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			break
+		case reflect.Float32, reflect.Float64:
+			break
+		default:
+			return data, nil
+		}
+
+		if t.Kind() != reflect.Uint32 {
+			return data, nil
+		}
+
+		var result uint64
+
+		switch i := data.(type) {
+		case int:
+			result = uint64(i)
+		case int8:
+			result = uint64(i)
+		case int16:
+			result = uint64(i)
+		case int32:
+			result = uint64(i)
+		case int64:
+			result = uint64(i)
+		case uint:
+			result = uint64(i)
+		case uint8:
+			result = uint64(i)
+		case uint16:
+			result = uint64(i)
+		case uint32:
+			result = uint64(i)
+		case uint64:
+			result = i
+		case float32:
+			result = uint64(i)
+		case float64:
+			result = uint64(i)
+		default:
+			return data, nil
+		}
+
+		if result > math.MaxUint32 {
+			return 0, nil
+		}
+
+		return uint32(result), nil
+	}
 }

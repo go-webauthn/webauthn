@@ -653,7 +653,7 @@ type PatternAccuracyDescriptor struct {
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#verificationmethoddescriptor-dictionary
 type VerificationMethodDescriptor struct {
 	// a single USER_VERIFY constant (see [FIDORegistry]), not a bit flag combination. This value MUST be non-zero.
-	UserVerificationMethod string `json:"userVerification"`
+	UserVerificationMethod string `json:"userVerificationMethod"`
 
 	// May optionally be used in the case of method USER_VERIFY_PASSCODE.
 	CaDesc CodeAccuracyDescriptor `json:"caDesc"`

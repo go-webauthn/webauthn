@@ -12,7 +12,11 @@ import (
 // New returns a new memory Provider given a set of functional Option's.
 func New(opts ...Option) (provider metadata.Provider, err error) {
 	p := &Provider{
-		undesired: metadata.DefaultUndesiredAuthenticatorStatuses(),
+		undesired:   metadata.DefaultUndesiredAuthenticatorStatuses(),
+		entry:       true,
+		anchors:     true,
+		status:      true,
+		attestation: true,
 	}
 
 	for _, opt := range opts {
@@ -39,6 +43,7 @@ type Provider struct {
 	entryPermitZero bool
 	anchors         bool
 	status          bool
+	attestation     bool
 }
 
 func (p *Provider) GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *metadata.Entry, err error) {
@@ -69,6 +74,10 @@ func (p *Provider) GetValidateTrustAnchor(ctx context.Context) (validate bool) {
 
 func (p *Provider) GetValidateStatus(ctx context.Context) (validate bool) {
 	return p.status
+}
+
+func (p *Provider) GetValidateAttestationTypes(ctx context.Context) (validate bool) {
+	return p.attestation
 }
 
 func (p *Provider) ValidateStatusReports(ctx context.Context, reports []metadata.StatusReport) (err error) {

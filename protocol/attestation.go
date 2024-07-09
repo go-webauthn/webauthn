@@ -204,6 +204,22 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		return nil
 	}
 
+	if mds.GetValidateAttestationTypes(ctx) {
+		found := false
+
+		for _, atype := range entry.MetadataStatement.AttestationTypes {
+			if string(atype) == attestationType {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Authenticator with invalid attestation type encountered during attestation validation. The attestation type '%s' is not known to be used by AAGUID '%s'", attestationType, aaguid.String()))
+		}
+	}
+
 	if mds.GetValidateStatus(ctx) {
 		if err = mds.ValidateStatusReports(ctx, entry.StatusReports); err != nil {
 			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Authenticator with invalid status encountered during attestation validation. %s", err.Error()))

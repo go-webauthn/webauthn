@@ -20,7 +20,7 @@ func WithMetadata(mds map[uuid.UUID]*metadata.Entry) Option {
 
 // WithValidateEntry requires that the provided metadata has an entry for the given authenticator to be considered
 // valid. By default an AAGUID which has a zero value should fail validation if WithValidateEntryPermitZeroAAGUID is not
-// provided with the value of true.
+// provided with the value of true. Default is true.
 func WithValidateEntry(require bool) Option {
 	return func(provider *Provider) (err error) {
 		provider.entry = require
@@ -30,7 +30,7 @@ func WithValidateEntry(require bool) Option {
 }
 
 // WithValidateEntryPermitZeroAAGUID is an option that permits a zero'd AAGUID from an attestation statement to
-// automatically pass metadata validations. Generally helpful to use with WithValidateEntry.
+// automatically pass metadata validations. Generally helpful to use with WithValidateEntry. Default is false.
 func WithValidateEntryPermitZeroAAGUID(permit bool) Option {
 	return func(provider *Provider) (err error) {
 		provider.entryPermitZero = permit
@@ -40,7 +40,7 @@ func WithValidateEntryPermitZeroAAGUID(permit bool) Option {
 }
 
 // WithValidateTrustAnchor when set to true enables the validation of the attestation statement against the trust anchor
-// from the metadata.
+// from the metadata. Default is true.
 func WithValidateTrustAnchor(validate bool) Option {
 	return func(provider *Provider) (err error) {
 		provider.anchors = validate
@@ -49,9 +49,19 @@ func WithValidateTrustAnchor(validate bool) Option {
 	}
 }
 
-// WithValidateStatus when set to true enables the validation of the attestation statments AAGUID against the desired
-// and undesired metadata.AuthenticatorStatus lists.
+// WithValidateStatus when set to true enables the validation of the attestation statements AAGUID against the desired
+// and undesired metadata.AuthenticatorStatus lists. Default is true.
 func WithValidateStatus(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.status = validate
+
+		return nil
+	}
+}
+
+// WithValidateAttestationTypes when set to true enables the validation of the attestation statements type against the
+// known types the authenticator can produce. Default is true.
+func WithValidateAttestationTypes(validate bool) Option {
 	return func(provider *Provider) (err error) {
 		provider.status = validate
 

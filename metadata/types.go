@@ -32,6 +32,10 @@ type Provider interface {
 	// undesired statuses.
 	GetValidateStatus(ctx context.Context) (validate bool)
 
+	// GetValidateAttestationTypes if true will enforce checking that the provided attestation is possible with the
+	// given authenticator.
+	GetValidateAttestationTypes(ctx context.Context) (validate bool)
+
 	// ValidateStatusReports returns nil if the provided authenticator status reports are desired.
 	ValidateStatusReports(ctx context.Context, reports []StatusReport) (err error)
 }
