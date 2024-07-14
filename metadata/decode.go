@@ -96,8 +96,6 @@ func (d *Decoder) Decode(r io.ReadCloser) (payload *PayloadJSON, err error) {
 
 // DecodeBytes handles decoding raw bytes. If you have a read closer it's suggested to use Decode.
 func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
-	payload = &PayloadJSON{}
-
 	var token *jwt.Token
 
 	if token, err = d.parser.Parse(string(bytes), func(token *jwt.Token) (any, error) {
@@ -152,6 +150,8 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 	}
 
 	var decoder *mapstructure.Decoder
+
+	payload = &PayloadJSON{}
 
 	if decoder, err = mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Metadata:   nil,

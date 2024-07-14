@@ -253,6 +253,9 @@ type Statement struct {
 	// The FIDO protocol family. The values "uaf", "u2f", and "fido2" are supported.
 	ProtocolFamily string
 
+	// he Metadata Schema version.
+	Schema uint16
+
 	// The FIDO unified protocol version(s) (related to the specific protocol family) supported by this authenticator.
 	Upv []Version
 
@@ -342,6 +345,7 @@ type StatementJSON struct {
 	AlternativeDescriptions              map[string]string                     `json:"alternativeDescriptions"`
 	AuthenticatorVersion                 uint32                                `json:"authenticatorVersion"`
 	ProtocolFamily                       string                                `json:"protocolFamily"`
+	Schema                               uint16                                `json:"schema"`
 	Upv                                  []Version                             `json:"upv"`
 	AuthenticationAlgorithms             []AuthenticationAlgorithm             `json:"authenticationAlgorithms"`
 	PublicKeyAlgAndEncodings             []PublicKeyAlgAndEncoding             `json:"publicKeyAlgAndEncodings"`
@@ -405,6 +409,7 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 		AlternativeDescriptions:              j.AlternativeDescriptions,
 		AuthenticatorVersion:                 j.AuthenticatorVersion,
 		ProtocolFamily:                       j.ProtocolFamily,
+		Schema:                               j.Schema,
 		Upv:                                  j.Upv,
 		AuthenticationAlgorithms:             j.AuthenticationAlgorithms,
 		PublicKeyAlgAndEncodings:             j.PublicKeyAlgAndEncodings,
@@ -834,7 +839,7 @@ type AuthenticatorGetInfoJSON struct {
 	MaxMsgSize                       uint                            `json:"maxMsgSize"`
 	PivUvAuthProtocols               []uint                          `json:"pinUvAuthProtocols"`
 	MaxCredentialCountInList         uint                            `json:"maxCredentialCountInList"`
-	MaxCredentialIdLength            uint                            `json:"maxCredentialLength"`
+	MaxCredentialIdLength            uint                            `json:"maxCredentialIdLength"`
 	Transports                       []string                        `json:"transports"`
 	Algorithms                       []PublicKeyCredentialParameters `json:"algorithms"`
 	MaxSerializedLargeBlobArray      uint                            `json:"maxSerializedLargeBlobArray"`
