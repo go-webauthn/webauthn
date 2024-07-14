@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"testing"
 	"time"
@@ -34,22 +32,7 @@ func TestProductionMetadataTOCParsing(t *testing.T) {
 
 	metadata, err = decoder.Parse(payload)
 	require.NoError(t, err)
-
-	fmt.Println(payload.Number)
-
-	for i, entry := range metadata.Parsed.Entries {
-		for _, items := range entry.MetadataStatement.UserVerificationDetails {
-			for _, item := range items {
-				if item.PaDesc.MinComplexity > math.MaxUint32 {
-					fmt.Printf("item %d pa complexity for %s is too large with value %d\n", i, item.UserVerificationMethod, item.PaDesc.MinComplexity)
-				}
-			}
-		}
-	}
-
-	for _, perr := range metadata.Unparsed {
-		fmt.Println(perr.Error)
-	}
+	require.NotNil(t, metadata)
 }
 
 func TestConformanceMetadataTOCParsing(t *testing.T) {
