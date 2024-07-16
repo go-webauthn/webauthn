@@ -103,7 +103,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 			errString:  "Parse error for Assertion",
 			errType:    "invalid_request",
 			errDetails: "Parse error for Assertion",
-			errInfo:    "The body contains trailing data",
+			errInfo:    "the body contains trailing data",
 		},
 	}
 
