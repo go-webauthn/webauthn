@@ -77,7 +77,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte) (string, []
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to parse apple attestation certificate extensions")
 	}
 
-	if !bytes.Equal(decoded.Nonce, nonce[:]) || err != nil {
+	if !bytes.Equal(decoded.Nonce, nonce[:]) {
 		return "", nil, ErrInvalidAttestation.WithDetails("Attestation certificate does not contain expected nonce")
 	}
 
