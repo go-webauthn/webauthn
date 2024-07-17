@@ -908,9 +908,7 @@ type MDSGetEndpointsResponse struct {
 func DefaultUndesiredAuthenticatorStatuses() []AuthenticatorStatus {
 	undesired := make([]AuthenticatorStatus, len(defaultUndesiredAuthenticatorStatus))
 
-	for i := range defaultUndesiredAuthenticatorStatus {
-		undesired[i] = defaultUndesiredAuthenticatorStatus[i]
-	}
+	copy(undesired, defaultUndesiredAuthenticatorStatus[:])
 
 	return undesired
 }
