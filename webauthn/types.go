@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
@@ -61,6 +62,9 @@ type Config struct {
 
 	// Timeouts configures various timeouts.
 	Timeouts TimeoutsConfig
+
+	// MDS is a metadata.Provider and enables various metadata validations if configured.
+	MDS metadata.Provider
 
 	validated bool
 }
@@ -136,6 +140,34 @@ func (config *Config) validate() error {
 	return nil
 }
 
+func (c *Config) GetRPID() string {
+	return c.RPID
+}
+
+func (c *Config) GetOrigins() []string {
+	return c.RPOrigins
+}
+
+func (c *Config) GetTopOrigins() []string {
+	return c.RPTopOrigins
+}
+
+func (c *Config) GetTopOriginVerificationMode() protocol.TopOriginVerificationMode {
+	return c.RPTopOriginVerificationMode
+}
+
+func (c *Config) GetMetaDataProvider() metadata.Provider {
+	return c.MDS
+}
+
+type ConfigProvider interface {
+	GetRPID() string
+	GetOrigins() []string
+	GetTopOrigins() []string
+	GetTopOriginVerificationMode() protocol.TopOriginVerificationMode
+	GetMetaDataProvider() metadata.Provider
+}
+
 // User is an interface with the Relying Party's User entry and provides the fields and methods needed for WebAuthn
 // registration operations.
 type User interface {
@@ -172,6 +204,7 @@ type User interface {
 // ceremony.
 type SessionData struct {
 	Challenge            string    `json:"challenge"`
+	RelyingPartyID       string    `json:"rpId"`
 	UserID               []byte    `json:"user_id"`
 	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty"`
 	Expires              time.Time `json:"expires"`

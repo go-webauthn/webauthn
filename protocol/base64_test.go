@@ -1,12 +1,14 @@
 package protocol
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBase64UnmarshalJSON(t *testing.T) {
@@ -41,17 +43,9 @@ func TestBase64UnmarshalJSON(t *testing.T) {
 
 		t.Logf("%s\n", raw)
 
-		err := json.NewDecoder(strings.NewReader(raw)).Decode(&got)
-		if err != nil {
-			t.Fatalf("error decoding JSON: %v", err)
-		}
+		require.NoError(t, json.NewDecoder(strings.NewReader(raw)).Decode(&got))
 
-		if !bytes.Equal(test.expectedTestData.EncodedData, got.EncodedData) {
-			t.Fatalf("invalid URLEncodedBase64 data received: expected %s got %s", test.expectedTestData.EncodedData, got.EncodedData)
-		}
-
-		if test.expectedTestData.StringData != got.StringData {
-			t.Fatalf("invalid string data received: expected %s got %s", test.expectedTestData.StringData, got.StringData)
-		}
+		assert.Equal(t, test.expectedTestData.EncodedData, got.EncodedData)
+		assert.Equal(t, test.expectedTestData.StringData, got.StringData)
 	}
 }

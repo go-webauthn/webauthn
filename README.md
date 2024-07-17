@@ -290,6 +290,49 @@ func main() {
 }
 ```
 
+## Credential Record
+
+The WebAuthn Level 3 specification describes the Credential Record which includes several required and optional elements
+that you should store for. See [§ 4 Terminology](https://www.w3.org/TR/webauthn-3/#credential-record) for details.
+
+This section describes this element. 
+
+The fields listed in the specification have corresponding fields in the [webauthn.Credential] struct. See the below
+table for more information. We also include JSON mappings for those that wish to just store these values as JSON.
+
+|    Specification Field    |       Library Field        |         JSON Field         |                                           Notes                                           |
+|:-------------------------:|:--------------------------:|:--------------------------:|:-----------------------------------------------------------------------------------------:|
+|           type            |            N/A             |            N/A             |                       This field is always `publicKey` for WebAuthn                       |
+|            id             |             ID             |             id             |                                                                                           |
+|         publicKey         |         PublicKey          |         publicKey          |                                                                                           |
+|         signCount         |  Authenticator.SignCount   |  authenticator.signCount   |                                                                                           |
+|        transports         |         Transport          |         transport          |                                                                                           |
+|       uvInitialized       |     Flags.UserVerified     |     flags.userVerified     |                                                                                           |
+|      backupEligible       |    Flags.BackupEligible    |    flags.backupEligible    |                                                                                           |
+|        backupState        |     Flags.BackupState      |     flags.backupState      |                                                                                           |
+|     attestationObject     |     Attestation.Object     |     attestation.object     | This field is a composite of the attestationObject and the relevant values to validate it |
+| attestationClientDataJSON | Attestation.ClientDataJSON | attestation.clientDataJSON |                                                                                           |
+
+### Storage
+
+It is also important to note that restoring the [webauthn.Credential] with the correct values will likely affect the
+validity of the [webauthn.Credential], i.e. if some values are not restored the [webauthn.Credential] may fail
+validation in this scenario.
+
+### Verification
+
+As long as the [webauthn.Credential] struct has exactly the same values when restored the [Credential Verify] function 
+can be leveraged to verify the credential against the [metadata.Provider]. This can be either done during registration,
+on every login, or with a audit schedule.
+
+In addition to using the [Credential Verify] function the 
+[webauthn.Config](https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Config) can contain a provider which will
+process all registrations automatically.
+
+At this time no tooling exists to verify the credential automatically outside the registration flow. Implementation of
+this is considered domain logic and beyond the scope of what we provide documentation for; we just provide the necessary
+tooling to implement this yourself.
+
 ## Acknowledgements
 
 We graciously acknowledge the original authors of this library [github.com/duo-labs/webauthn] for their amazing
@@ -297,3 +340,6 @@ implementation. Without their amazing work this library could not exist.
 
 
 [github.com/duo-labs/webauthn]: https://github.com/duo-labs/webauthn
+[webauthn.Credential]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential
+[metadata.Provider]: https://pkg.go.dev/github.com/go-webauthn/webauthn/metadata#Provider
+[Credential Verify]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential.Verify

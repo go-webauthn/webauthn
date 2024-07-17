@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupCollectedClientData(challenge URLEncodedBase64, origin string) *CollectedClientData {
@@ -18,17 +19,13 @@ func setupCollectedClientData(challenge URLEncodedBase64, origin string) *Collec
 
 func TestVerifyCollectedClientData(t *testing.T) {
 	newChallenge, err := CreateChallenge()
-	if err != nil {
-		t.Fatalf("error creating challenge: %s", err)
-	}
+	require.NoError(t, err)
 
 	ccd := setupCollectedClientData(newChallenge, "http://example.com")
 
 	var storedChallenge = newChallenge
 
-	if err = ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode); err != nil {
-		t.Fatalf("error verifying challenge: expected %#v got %#v", ccd.Challenge, storedChallenge)
-	}
+	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode))
 }
 
 func TestVerifyCollectedClientDataIncorrectChallenge(t *testing.T) {
@@ -40,13 +37,9 @@ func TestVerifyCollectedClientDataIncorrectChallenge(t *testing.T) {
 	ccd := setupCollectedClientData(newChallenge, "http://example.com")
 
 	bogusChallenge, err := CreateChallenge()
-	if err != nil {
-		t.Fatalf("error creating challenge: %s", err)
-	}
+	require.NoError(t, err)
 
-	if err = ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode); err == nil {
-		t.Fatalf("error expected but not received. expected %#v got %#v", ccd.Challenge, bogusChallenge)
-	}
+	assert.EqualError(t, ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode), "Error validating challenge")
 }
 
 func TestVerifyCollectedClientDataUnexpectedOrigin(t *testing.T) {

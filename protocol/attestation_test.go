@@ -6,70 +6,46 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAttestationVerify(t *testing.T) {
-	if err := metadata.PopulateMetadata(metadata.ProductionMDSURL); err != nil {
-		t.Fatal(err)
-	}
-
 	for i := range testAttestationOptions {
 		t.Run(fmt.Sprintf("Running test %d", i), func(t *testing.T) {
 			options := CredentialCreation{}
-			if err := json.Unmarshal([]byte(testAttestationOptions[i]), &options); err != nil {
-				t.Fatal(err)
-			}
+
+			require.NoError(t, json.Unmarshal([]byte(testAttestationOptions[i]), &options))
 
 			ccr := CredentialCreationResponse{}
 
-			if err := json.Unmarshal([]byte(testAttestationResponses[i]), &ccr); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, json.Unmarshal([]byte(testAttestationResponses[i]), &ccr))
 
 			var pcc ParsedCredentialCreationData
 			pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
 			pcc.Raw = ccr
 
 			parsedAttestationResponse, err := ccr.AttestationResponse.Parse()
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
 
 			pcc.Response = *parsedAttestationResponse
 
-			// Test Base Verification
-			err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode)
-			if err != nil {
-				t.Fatalf("Not valid: %+v (%s)", err, err.(*Error).DevInfo)
-			}
+			_, err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, nil)
+
+			require.NoError(t, err)
 		})
 	}
 }
 
-func attestationTestUnpackRequest(t *testing.T, request string) CredentialCreation {
-	options := CredentialCreation{}
-
-	if err := json.Unmarshal([]byte(request), &options); err != nil {
-		t.Fatal(err)
-	}
-
-	return options
-}
-
 func attestationTestUnpackResponse(t *testing.T, response string) (pcc ParsedCredentialCreationData) {
 	ccr := CredentialCreationResponse{}
-	if err := json.Unmarshal([]byte(response), &ccr); err != nil {
-		t.Fatal(err)
-	}
+
+	require.NoError(t, json.Unmarshal([]byte(response), &ccr))
 
 	pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
 	pcc.Raw = ccr
 
 	parsedAttestationResponse, err := ccr.AttestationResponse.Parse()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	pcc.Response = *parsedAttestationResponse
 
@@ -77,17 +53,14 @@ func attestationTestUnpackResponse(t *testing.T, response string) (pcc ParsedCre
 }
 
 func TestPackedAttestationVerification(t *testing.T) {
-
 	t.Run("Testing Self Packed", func(t *testing.T) {
 		pcc := attestationTestUnpackResponse(t, testAttestationResponses[0])
 
 		// Test Packed Verification. Unpack args.
 		clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-		_, _, err := verifyPackedFormat(pcc.Response.AttestationObject, clientDataHash[:])
-		if err != nil {
-			t.Fatalf("Not valid: %+v", err)
-		}
+		_, _, err := verifyPackedFormat(pcc.Response.AttestationObject, clientDataHash[:], nil)
+		require.NoError(t, err)
 	})
 }
 
