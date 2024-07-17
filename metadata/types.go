@@ -11,6 +11,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
+// The Provider is an interface which describes the elements required to satisfy validation of metadata.
 type Provider interface {
 	// GetEntry returns a MDS3 payload entry given a AAGUID. This
 	GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *Entry, err error)
