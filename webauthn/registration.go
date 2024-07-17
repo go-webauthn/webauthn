@@ -91,6 +91,7 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 
 	session = &SessionData{
 		Challenge:        challenge.String(),
+		RelyingPartyID:   creation.Response.RelyingParty.ID,
 		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
 	}
@@ -213,7 +214,7 @@ func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, res
 }
 
 // CreateCredential verifies a parsed response against the user's credentials and session data.
-func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parsedResponse *protocol.ParsedCredentialCreationData) (*Credential, error) {
+func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parsedResponse *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
 	}
@@ -224,12 +225,13 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
 
-	invalidErr := parsedResponse.Verify(session.Challenge, shouldVerifyUser, webauthn.Config.RPID, webauthn.Config.RPOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode)
-	if invalidErr != nil {
-		return nil, invalidErr
+	var clientDataHash []byte
+
+	if clientDataHash, err = parsedResponse.Verify(session.Challenge, shouldVerifyUser, webauthn.Config.RPID, webauthn.Config.RPOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.MDS); err != nil {
+		return nil, err
 	}
 
-	return MakeNewCredential(parsedResponse)
+	return NewCredential(clientDataHash, parsedResponse)
 }
 
 func defaultRegistrationCredentialParameters() []protocol.CredentialParameter {
