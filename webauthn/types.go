@@ -131,14 +131,6 @@ func (config *Config) validate() error {
 		}
 	}
 
-	if config.AuthenticatorSelection.RequireResidentKey == nil {
-		config.AuthenticatorSelection.RequireResidentKey = protocol.ResidentKeyNotRequired()
-	}
-
-	if config.AuthenticatorSelection.UserVerification == "" {
-		config.AuthenticatorSelection.UserVerification = protocol.VerificationPreferred
-	}
-
 	config.validated = true
 
 	return nil
