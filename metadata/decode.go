@@ -27,7 +27,7 @@ func NewDecoder(opts ...DecoderOption) (decoder *Decoder, err error) {
 
 	for _, opt := range opts {
 		if err = opt(decoder); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to apply decoder option: %w", err)
 		}
 	}
 

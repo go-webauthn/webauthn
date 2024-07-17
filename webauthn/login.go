@@ -202,7 +202,7 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 
 // ValidateDiscoverableLogin is an overloaded version of ValidateLogin that allows for discoverable credentials.
 //
-// Note: this is just a backwards compatability layer over ValidatePasskeyLogin which returns more information.
+// Note: this is just a backwards compatibility layer over ValidatePasskeyLogin which returns more information.
 func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (credential *Credential, err error) {
 	_, credential, err = webauthn.ValidatePasskeyLogin(handler, session, parsedResponse)
 
