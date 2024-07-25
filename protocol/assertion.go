@@ -73,6 +73,18 @@ func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAs
 	return car.Parse()
 }
 
+// ParseCredentialRequestResponseBytes is an alternative version of ParseCredentialRequestResponseBody that just takes
+// a byte slice.
+func ParseCredentialRequestResponseBytes(data []byte) (par *ParsedCredentialAssertionData, err error) {
+	var car CredentialAssertionResponse
+
+	if err = decodeBytes(data, &car); err != nil {
+		return nil, ErrBadRequest.WithDetails("Parse error for Assertion").WithInfo(err.Error())
+	}
+
+	return car.Parse()
+}
+
 // Parse validates and parses the CredentialAssertionResponse into a ParseCredentialCreationResponseBody. This receiver
 // is unlikely to be expressly guaranteed under the versioning policy. Users looking for this guarantee should see
 // ParseCredentialRequestResponseBody instead, and this receiver should only be used if that function is inadequate
