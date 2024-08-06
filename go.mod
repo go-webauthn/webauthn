@@ -2,7 +2,7 @@ module github.com/go-webauthn/webauthn
 
 go 1.22
 
-toolchain go1.22.5
+toolchain go1.22.6
 
 require (
 	github.com/fxamacker/cbor/v2 v2.7.0
