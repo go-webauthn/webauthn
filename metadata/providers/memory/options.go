@@ -63,7 +63,7 @@ func WithValidateStatus(validate bool) Option {
 // known types the authenticator can produce. Default is true.
 func WithValidateAttestationTypes(validate bool) Option {
 	return func(provider *Provider) (err error) {
-		provider.status = validate
+		provider.attestation = validate
 
 		return nil
 	}
