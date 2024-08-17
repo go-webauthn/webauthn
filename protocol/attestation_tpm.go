@@ -145,13 +145,13 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 			return "", nil, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
 		}
 
-		aikCert, err := x509.ParseCertificate(aikCertBytes)
-		if err != nil {
+		var aikCert *x509.Certificate
+
+		if aikCert, err = x509.ParseCertificate(aikCertBytes); err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1")
 		}
 
-		err = aikCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), certInfoBytes, sigBytes)
-		if err != nil {
+		if err = aikCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), certInfoBytes, sigBytes); err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 		}
 		// Verify that aikCert meets the requirements in §8.3.1 TPM Attestation Statement Certificate Requirements
@@ -160,23 +160,41 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		if aikCert.Version != 3 {
 			return "", nil, ErrAttestationFormat.WithDetails("AIK certificate version must be 3")
 		}
+
 		// 2/6 Subject field MUST be set to empty.
 		if aikCert.Subject.String() != "" {
 			return "", nil, ErrAttestationFormat.WithDetails("AIK certificate subject must be empty")
 		}
 
-		// 3/6 The Subject Alternative Name extension MUST be set as defined in [TPMv2-EK-Profile] section 3.2.9{}
-		var manufacturer, model, version string
+		var (
+			manufacturer, model, version string
+			ekuValid                     = false
+			eku                          []asn1.ObjectIdentifier
+			constraints                  tpmBasicConstraints
+			rest                         []byte
+		)
 
 		for _, ext := range aikCert.Extensions {
-			if ext.Id.Equal([]int{2, 5, 29, 17}) {
-				manufacturer, model, version, err = parseSANExtension(ext.Value)
-				if err != nil {
+			if ext.Id.Equal(oidExtensionSubjectAltName) {
+				if manufacturer, model, version, err = parseSANExtension(ext.Value); err != nil {
 					return "", nil, err
+				}
+			} else if ext.Id.Equal(oidExtensionExtendedKeyUsage) {
+				if rest, err = asn1.Unmarshal(ext.Value, &eku); len(rest) != 0 || err != nil || !eku[0].Equal(tcgKpAIKCertificate) {
+					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU missing 2.23.133.8.3")
+				}
+
+				ekuValid = true
+			} else if ext.Id.Equal(oidExtensionBasicConstraints) {
+				if rest, err = asn1.Unmarshal(ext.Value, &constraints); err != nil {
+					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints malformed")
+				} else if len(rest) != 0 {
+					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints contains extra data")
 				}
 			}
 		}
 
+		// 3/6 The Subject Alternative Name extension MUST be set as defined in [TPMv2-EK-Profile] section 3.2.9{}
 		if manufacturer == "" || model == "" || version == "" {
 			return "", nil, ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate")
 		}
@@ -186,42 +204,8 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		}
 
 		// 4/6 The Extended Key Usage extension MUST contain the "joint-iso-itu-t(2) internationalorganizations(23) 133 tcg-kp(8) tcg-kp-AIKCertificate(3)" OID.
-		var (
-			ekuValid = false
-			eku      []asn1.ObjectIdentifier
-		)
-
-		for _, ext := range aikCert.Extensions {
-			if ext.Id.Equal([]int{2, 5, 29, 37}) {
-				rest, err := asn1.Unmarshal(ext.Value, &eku)
-				if len(rest) != 0 || err != nil || !eku[0].Equal(tcgKpAIKCertificate) {
-					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU missing 2.23.133.8.3")
-				}
-
-				ekuValid = true
-			}
-		}
-
 		if !ekuValid {
 			return "", nil, ErrAttestationFormat.WithDetails("AIK certificate missing EKU")
-		}
-
-		// 5/6 The Basic Constraints extension MUST have the CA component set to false.
-		type basicConstraints struct {
-			IsCA       bool `asn1:"optional"`
-			MaxPathLen int  `asn1:"optional,default:-1"`
-		}
-
-		var constraints basicConstraints
-
-		for _, ext := range aikCert.Extensions {
-			if ext.Id.Equal([]int{2, 5, 29, 19}) {
-				if rest, err := asn1.Unmarshal(ext.Value, &constraints); err != nil {
-					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints malformed")
-				} else if len(rest) != 0 {
-					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints contains extra data")
-				}
-			}
 		}
 
 		// 6/6 An Authority Information Access (AIA) extension with entry id-ad-ocsp and a CRL Distribution Point
@@ -373,4 +357,47 @@ func isValidTPMManufacturer(id string) bool {
 	}
 
 	return false
+}
+
+func tpmParseSANExtension(attestation *x509.Certificate) (err error) {
+	var (
+		manufacturer, model, version string
+	)
+
+	for _, ext := range attestation.Extensions {
+		if ext.Id.Equal(oidExtensionSubjectAltName) {
+			if manufacturer, model, version, err = parseSANExtension(ext.Value); err != nil {
+				return ErrInvalidAttestation.WithDetails("Authenticator with invalid AIK SAN data encountered during attestation validation.").WithInfo(fmt.Sprintf("Error occurred parsing SAN extension: %s", err.Error()))
+			}
+		}
+	}
+
+	if manufacturer == "" || model == "" || version == "" {
+		return ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate")
+	}
+
+	var unhandled []asn1.ObjectIdentifier
+
+	for _, uce := range attestation.UnhandledCriticalExtensions {
+		if uce.Equal(oidExtensionSubjectAltName) {
+			continue
+		}
+
+		unhandled = append(unhandled, uce)
+	}
+
+	attestation.UnhandledCriticalExtensions = unhandled
+
+	return nil
+}
+
+var (
+	oidExtensionSubjectAltName   = []int{2, 5, 29, 17}
+	oidExtensionExtendedKeyUsage = []int{2, 5, 29, 37}
+	oidExtensionBasicConstraints = []int{2, 5, 29, 19}
+)
+
+type tpmBasicConstraints struct {
+	IsCA       bool `asn1:"optional"`
+	MaxPathLen int  `asn1:"optional,default:-1"`
 }
