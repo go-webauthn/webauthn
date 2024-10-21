@@ -2,8 +2,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/fxamacker/cbor/v2 v2.7.0 h1:iM5WgngdRBanHcxugY4JySA0nk1wZorNOpTgCMedv5E=
 github.com/fxamacker/cbor/v2 v2.7.0/go.mod h1:pxXPTn3joSm21Gbwsv0w9OSA2y1HFR9qXEeXQVeNoDQ=
-github.com/go-webauthn/x v0.1.15 h1:eG1OhggBJTkDE8gUeOlGRbRe8E/PSVG26YG4AyFbwkU=
-github.com/go-webauthn/x v0.1.15/go.mod h1:pf7VI23raFLHPO9VVIs9/u1etqwAOP0S2KoHGL6WbZ8=
+github.com/go-webauthn/x v0.1.16-0.20241021220532-6614dba72e53 h1:PZSwxj3EHnO7qua21Dhf3M2XddvfXoSNBjnqqXf5df4=
+github.com/go-webauthn/x v0.1.16-0.20241021220532-6614dba72e53/go.mod h1:IZVdVHhFnU78ax9fWmaOx/quGTInpRslykh61mg/5hM=
 github.com/golang-jwt/jwt/v5 v5.2.1 h1:OuVbFODueb089Lh128TAcimifWaLhJwVflnrgM17wHk=
 github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
 github.com/google/go-tpm v0.9.1 h1:0pGc4X//bAlmZzMKf8iz6IsDo1nYTbYJ6FZN/rg4zdM=
