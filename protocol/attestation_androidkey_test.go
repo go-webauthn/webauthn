@@ -57,9 +57,11 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("verifyAndroidKeyFormat() got = %v, want %v", got, tt.want)
 			}
-			//if !reflect.DeepEqual(got1, tt.want1) {
-			//	t.Errorf("verifySafetyNetFormat() got1 = %v, want %v", got1, tt.want1)
-			//}
+			/*
+			if !reflect.DeepEqual(got1, tt.want1) {
+				t.Errorf("verifySafetyNetFormat() got1 = %v, want %v", got1, tt.want1)
+			}
+			*/
 		})
 	}
 }

@@ -194,7 +194,7 @@ type AttestationFormat string
 const (
 	// AttestationFormatPacked is the "packed" attestation statement format is a WebAuthn-optimized format for
 	// attestation. It uses a very compact but still extensible encoding method. This format is implementable by
-	//authenticators with limited resources (e.g., secure elements).
+	// authenticators with limited resources (e.g., secure elements).
 	AttestationFormatPacked AttestationFormat = "packed"
 
 	// AttestationFormatTPM is the TPM attestation statement format returns an attestation statement in the same format
