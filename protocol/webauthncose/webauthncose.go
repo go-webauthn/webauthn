@@ -156,28 +156,6 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	}
 }
 
-// SigAlgFromCOSEAlg return which signature algorithm is being used from the COSE Key.
-func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) SignatureAlgorithm {
-	for _, details := range SignatureAlgorithmDetails {
-		if details.coseAlg == coseAlg {
-			return details.algo
-		}
-	}
-
-	return UnknownSignatureAlgorithm
-}
-
-// HasherFromCOSEAlg returns the Hashing interface to be used for a given COSE Algorithm.
-func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
-	for _, details := range SignatureAlgorithmDetails {
-		if details.coseAlg == coseAlg {
-			return details.hasher
-		}
-	}
-	// default to SHA256?  Why not.
-	return crypto.SHA256.New
-}
-
 // ParsePublicKey figures out what kind of COSE material was provided and create the data for the new key.
 func ParsePublicKey(keyBytes []byte) (any, error) {
 	pk := PublicKeyData{}
@@ -226,121 +204,6 @@ func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 		XCoord: x.Bytes(),
 		YCoord: y.Bytes(),
 	}, nil
-}
-
-// COSEAlgorithmIdentifier is a number identifying a cryptographic algorithm. The algorithm identifiers SHOULD be values
-// registered in the IANA COSE Algorithms registry [https://www.w3.org/TR/webauthn/#biblio-iana-cose-algs-reg], for
-// instance, -7 for "ES256" and -257 for "RS256".
-//
-// Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn/#sctn-alg-identifier)
-type COSEAlgorithmIdentifier int
-
-const (
-	// AlgES256 ECDSA with SHA-256.
-	AlgES256 COSEAlgorithmIdentifier = -7
-
-	// AlgES384 ECDSA with SHA-384.
-	AlgES384 COSEAlgorithmIdentifier = -35
-
-	// AlgES512 ECDSA with SHA-512.
-	AlgES512 COSEAlgorithmIdentifier = -36
-
-	// AlgRS1 RSASSA-PKCS1-v1_5 with SHA-1.
-	AlgRS1 COSEAlgorithmIdentifier = -65535
-
-	// AlgRS256 RSASSA-PKCS1-v1_5 with SHA-256.
-	AlgRS256 COSEAlgorithmIdentifier = -257
-
-	// AlgRS384 RSASSA-PKCS1-v1_5 with SHA-384.
-	AlgRS384 COSEAlgorithmIdentifier = -258
-
-	// AlgRS512 RSASSA-PKCS1-v1_5 with SHA-512.
-	AlgRS512 COSEAlgorithmIdentifier = -259
-
-	// AlgPS256 RSASSA-PSS with SHA-256.
-	AlgPS256 COSEAlgorithmIdentifier = -37
-
-	// AlgPS384 RSASSA-PSS with SHA-384.
-	AlgPS384 COSEAlgorithmIdentifier = -38
-
-	// AlgPS512 RSASSA-PSS with SHA-512.
-	AlgPS512 COSEAlgorithmIdentifier = -39
-
-	// AlgEdDSA EdDSA.
-	AlgEdDSA COSEAlgorithmIdentifier = -8
-
-	// AlgES256K is ECDSA using secp256k1 curve and SHA-256.
-	AlgES256K COSEAlgorithmIdentifier = -47
-)
-
-// COSEKeyType is The Key type derived from the IANA COSE AuthData.
-type COSEKeyType int
-
-const (
-	// KeyTypeReserved is a reserved value.
-	KeyTypeReserved COSEKeyType = iota
-
-	// OctetKey is an Octet Key.
-	OctetKey
-
-	// EllipticKey is an Elliptic Curve Public Key.
-	EllipticKey
-
-	// RSAKey is an RSA Public Key.
-	RSAKey
-
-	// Symmetric Keys.
-	Symmetric
-
-	// HSSLMS is the public key for HSS/LMS hash-based digital signature.
-	HSSLMS
-)
-
-// COSEEllipticCurve is an enumerator that represents the COSE Elliptic Curves.
-//
-// Specification: https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves
-type COSEEllipticCurve int
-
-const (
-	// EllipticCurveReserved is the COSE EC Reserved value.
-	EllipticCurveReserved COSEEllipticCurve = iota
-
-	// P256 represents NIST P-256 also known as secp256r1.
-	P256
-
-	// P384 represents NIST P-384 also known as secp384r1.
-	P384
-
-	// P521 represents NIST P-521 also known as secp521r1.
-	P521
-
-	// X25519 for use w/ ECDH only.
-	X25519
-
-	// X448 for use w/ ECDH only.
-	X448
-
-	// Ed25519 for use w/ EdDSA only.
-	Ed25519
-
-	// Ed448 for use w/ EdDSA only.
-	Ed448
-
-	// Secp256k1 is the SECG secp256k1 curve.
-	Secp256k1
-)
-
-func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
-	switch COSEEllipticCurve(k.Curve) {
-	case P256:
-		return tpm2.CurveNISTP256 // TPM_ECC_NIST_P256.
-	case P384:
-		return tpm2.CurveNISTP384 // TPM_ECC_NIST_P384.
-	case P521:
-		return tpm2.CurveNISTP521 // TPM_ECC_NIST_P521.
-	default:
-		return tpm2.EllipticCurve(0) // TPM_ECC_NONE.
-	}
 }
 
 func VerifySignature(key any, data []byte, sig []byte) (bool, error) {
@@ -435,6 +298,143 @@ func DisplayPublicKey(cpk []byte) string {
 	default:
 		return "Cannot display key of this type"
 	}
+}
+
+// COSEAlgorithmIdentifier is a number identifying a cryptographic algorithm. The algorithm identifiers SHOULD be values
+// registered in the IANA COSE Algorithms registry [https://www.w3.org/TR/webauthn/#biblio-iana-cose-algs-reg], for
+// instance, -7 for "ES256" and -257 for "RS256".
+//
+// Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn/#sctn-alg-identifier)
+type COSEAlgorithmIdentifier int
+
+const (
+	// AlgES256 ECDSA with SHA-256.
+	AlgES256 COSEAlgorithmIdentifier = -7
+
+	// AlgEdDSA EdDSA.
+	AlgEdDSA COSEAlgorithmIdentifier = -8
+
+	// AlgES384 ECDSA with SHA-384.
+	AlgES384 COSEAlgorithmIdentifier = -35
+
+	// AlgES512 ECDSA with SHA-512.
+	AlgES512 COSEAlgorithmIdentifier = -36
+
+	// AlgPS256 RSASSA-PSS with SHA-256.
+	AlgPS256 COSEAlgorithmIdentifier = -37
+
+	// AlgPS384 RSASSA-PSS with SHA-384.
+	AlgPS384 COSEAlgorithmIdentifier = -38
+
+	// AlgPS512 RSASSA-PSS with SHA-512.
+	AlgPS512 COSEAlgorithmIdentifier = -39
+
+	// AlgES256K is ECDSA using secp256k1 curve and SHA-256.
+	AlgES256K COSEAlgorithmIdentifier = -47
+
+	// AlgRS256 RSASSA-PKCS1-v1_5 with SHA-256.
+	AlgRS256 COSEAlgorithmIdentifier = -257
+
+	// AlgRS384 RSASSA-PKCS1-v1_5 with SHA-384.
+	AlgRS384 COSEAlgorithmIdentifier = -258
+
+	// AlgRS512 RSASSA-PKCS1-v1_5 with SHA-512.
+	AlgRS512 COSEAlgorithmIdentifier = -259
+
+	// AlgRS1 RSASSA-PKCS1-v1_5 with SHA-1.
+	AlgRS1 COSEAlgorithmIdentifier = -65535
+)
+
+// COSEKeyType is The Key type derived from the IANA COSE AuthData.
+type COSEKeyType int
+
+const (
+	// KeyTypeReserved is a reserved value.
+	KeyTypeReserved COSEKeyType = iota
+
+	// OctetKey is an Octet Key.
+	OctetKey
+
+	// EllipticKey is an Elliptic Curve Public Key.
+	EllipticKey
+
+	// RSAKey is an RSA Public Key.
+	RSAKey
+
+	// Symmetric Keys.
+	Symmetric
+
+	// HSSLMS is the public key for HSS/LMS hash-based digital signature.
+	HSSLMS
+)
+
+// COSEEllipticCurve is an enumerator that represents the COSE Elliptic Curves.
+//
+// Specification: https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves
+type COSEEllipticCurve int
+
+const (
+	// EllipticCurveReserved is the COSE EC Reserved value.
+	EllipticCurveReserved COSEEllipticCurve = iota
+
+	// P256 represents NIST P-256 also known as secp256r1.
+	P256
+
+	// P384 represents NIST P-384 also known as secp384r1.
+	P384
+
+	// P521 represents NIST P-521 also known as secp521r1.
+	P521
+
+	// X25519 for use w/ ECDH only.
+	X25519
+
+	// X448 for use w/ ECDH only.
+	X448
+
+	// Ed25519 for use w/ EdDSA only.
+	Ed25519
+
+	// Ed448 for use w/ EdDSA only.
+	Ed448
+
+	// Secp256k1 is the SECG secp256k1 curve.
+	Secp256k1
+)
+
+func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
+	switch COSEEllipticCurve(k.Curve) {
+	case P256:
+		return tpm2.CurveNISTP256 // TPM_ECC_NIST_P256.
+	case P384:
+		return tpm2.CurveNISTP384 // TPM_ECC_NIST_P384.
+	case P521:
+		return tpm2.CurveNISTP521 // TPM_ECC_NIST_P521.
+	default:
+		return tpm2.EllipticCurve(0) // TPM_ECC_NONE.
+	}
+}
+
+// SigAlgFromCOSEAlg return which signature algorithm is being used from the COSE Key.
+func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) SignatureAlgorithm {
+	for _, details := range SignatureAlgorithmDetails {
+		if details.coseAlg == coseAlg {
+			return details.algo
+		}
+	}
+
+	return UnknownSignatureAlgorithm
+}
+
+// HasherFromCOSEAlg returns the Hashing interface to be used for a given COSE Algorithm.
+func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
+	for _, details := range SignatureAlgorithmDetails {
+		if details.coseAlg == coseAlg {
+			return details.hasher
+		}
+	}
+	// default to SHA256?  Why not.
+	return crypto.SHA256.New
 }
 
 // SignatureAlgorithm represents algorithm enumerations used for COSE signatures.
