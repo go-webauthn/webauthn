@@ -79,16 +79,8 @@ func (k *OKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 
 // Verify Elliptic Curve Public Key Signature.
 func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
-	var curve elliptic.Curve
-
-	switch COSEAlgorithmIdentifier(k.Algorithm) {
-	case AlgES512: // IANA COSE code for ECDSA w/ SHA-512.
-		curve = elliptic.P521()
-	case AlgES384: // IANA COSE code for ECDSA w/ SHA-384.
-		curve = elliptic.P384()
-	case AlgES256: // IANA COSE code for ECDSA w/ SHA-256.
-		curve = elliptic.P256()
-	default:
+	curve := ec2AlgCurve(k.Algorithm)
+	if curve == nil {
 		return false, ErrUnsupportedAlgorithm
 	}
 
@@ -244,16 +236,8 @@ func DisplayPublicKey(cpk []byte) string {
 
 		return string(pemBytes)
 	case EC2PublicKeyData:
-		var curve elliptic.Curve
-
-		switch COSEAlgorithmIdentifier(k.Algorithm) {
-		case AlgES256:
-			curve = elliptic.P256()
-		case AlgES384:
-			curve = elliptic.P384()
-		case AlgES512:
-			curve = elliptic.P521()
-		default:
+		curve := ec2AlgCurve(k.Algorithm)
+		if curve == nil {
 			return keyCannotDisplay
 		}
 
@@ -412,6 +396,19 @@ func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
 		return tpm2.CurveNISTP521 // TPM_ECC_NIST_P521.
 	default:
 		return tpm2.EllipticCurve(0) // TPM_ECC_NONE.
+	}
+}
+
+func ec2AlgCurve(coseAlg int64) elliptic.Curve {
+	switch COSEAlgorithmIdentifier(coseAlg) {
+	case AlgES512: // IANA COSE code for ECDSA w/ SHA-512.
+		return elliptic.P521()
+	case AlgES384: // IANA COSE code for ECDSA w/ SHA-384.
+		return elliptic.P384()
+	case AlgES256: // IANA COSE code for ECDSA w/ SHA-256.
+		return elliptic.P256()
+	default:
+		return nil
 	}
 }
 
