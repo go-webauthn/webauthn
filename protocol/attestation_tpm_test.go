@@ -407,8 +407,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 		},
 	}
 
-	f := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
-	h := f()
+	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
 	h.Write(att.RawAuthData)
 	extraData := h.Sum(nil)
 
@@ -522,8 +521,7 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 		},
 	}
 
-	f := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
-	h := f()
+	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
 	h.Write(att.RawAuthData)
 	extraData := h.Sum(nil)
 

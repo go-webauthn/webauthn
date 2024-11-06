@@ -90,16 +90,13 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 		Y:     big.NewInt(0).SetBytes(k.YCoord),
 	}
 
+	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
+	h.Write(data)
+
 	type ECDSASignature struct {
 		R, S *big.Int
 	}
-
 	e := &ECDSASignature{}
-	f := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
-	h := f()
-
-	h.Write(data)
-
 	_, err := asn1.Unmarshal(sig, e)
 	if err != nil {
 		return false, ErrSigNotProvidedOrInvalid
@@ -115,8 +112,7 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 		E: int(uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16),
 	}
 
-	f := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
-	h := f()
+	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
 	h.Write(data)
 
 	var hash crypto.Hash
@@ -424,14 +420,14 @@ func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) SignatureAlgorithm {
 }
 
 // HasherFromCOSEAlg returns the Hashing interface to be used for a given COSE Algorithm.
-func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) func() hash.Hash {
+func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) hash.Hash {
 	for _, details := range SignatureAlgorithmDetails {
 		if details.coseAlg == coseAlg {
-			return details.hasher
+			return details.hash.New()
 		}
 	}
 	// default to SHA256?  Why not.
-	return crypto.SHA256.New
+	return crypto.SHA256.New()
 }
 
 // SignatureAlgorithm represents algorithm enumerations used for COSE signatures.
@@ -460,19 +456,19 @@ var SignatureAlgorithmDetails = []struct {
 	algo    SignatureAlgorithm
 	coseAlg COSEAlgorithmIdentifier
 	name    string
-	hasher  func() hash.Hash
+	hash    crypto.Hash
 }{
-	{SHA1WithRSA, AlgRS1, "SHA1-RSA", crypto.SHA1.New},
-	{SHA256WithRSA, AlgRS256, "SHA256-RSA", crypto.SHA256.New},
-	{SHA384WithRSA, AlgRS384, "SHA384-RSA", crypto.SHA384.New},
-	{SHA512WithRSA, AlgRS512, "SHA512-RSA", crypto.SHA512.New},
-	{SHA256WithRSAPSS, AlgPS256, "SHA256-RSAPSS", crypto.SHA256.New},
-	{SHA384WithRSAPSS, AlgPS384, "SHA384-RSAPSS", crypto.SHA384.New},
-	{SHA512WithRSAPSS, AlgPS512, "SHA512-RSAPSS", crypto.SHA512.New},
-	{ECDSAWithSHA256, AlgES256, "ECDSA-SHA256", crypto.SHA256.New},
-	{ECDSAWithSHA384, AlgES384, "ECDSA-SHA384", crypto.SHA384.New},
-	{ECDSAWithSHA512, AlgES512, "ECDSA-SHA512", crypto.SHA512.New},
-	{UnknownSignatureAlgorithm, AlgEdDSA, "EdDSA", crypto.SHA512.New},
+	{SHA1WithRSA, AlgRS1, "SHA1-RSA", crypto.SHA1},
+	{SHA256WithRSA, AlgRS256, "SHA256-RSA", crypto.SHA256},
+	{SHA384WithRSA, AlgRS384, "SHA384-RSA", crypto.SHA384},
+	{SHA512WithRSA, AlgRS512, "SHA512-RSA", crypto.SHA512},
+	{SHA256WithRSAPSS, AlgPS256, "SHA256-RSAPSS", crypto.SHA256},
+	{SHA384WithRSAPSS, AlgPS384, "SHA384-RSAPSS", crypto.SHA384},
+	{SHA512WithRSAPSS, AlgPS512, "SHA512-RSAPSS", crypto.SHA512},
+	{ECDSAWithSHA256, AlgES256, "ECDSA-SHA256", crypto.SHA256},
+	{ECDSAWithSHA384, AlgES384, "ECDSA-SHA384", crypto.SHA384},
+	{ECDSAWithSHA512, AlgES512, "ECDSA-SHA512", crypto.SHA512},
+	{UnknownSignatureAlgorithm, AlgEdDSA, "EdDSA", crypto.SHA512},
 }
 
 type Error struct {

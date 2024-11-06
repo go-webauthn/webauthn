@@ -113,9 +113,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	}
 
 	// 3/4 Verify that extraData is set to the hash of attToBeSigned using the hash algorithm employed in "alg".
-	f := webauthncose.HasherFromCOSEAlg(coseAlg)
-	h := f()
-
+	h := webauthncose.HasherFromCOSEAlg(coseAlg)
 	h.Write(attToBeSigned)
 	if !bytes.Equal(certInfo.ExtraData, h.Sum(nil)) {
 		return "", nil, ErrAttestationFormat.WithDetails("ExtraData is not set to hash of attToBeSigned")
