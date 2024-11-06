@@ -112,25 +112,16 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 		E: int(uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16),
 	}
 
-	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
-	h.Write(data)
-
-	var hash crypto.Hash
-
-	switch COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm) {
-	case AlgRS1:
-		hash = crypto.SHA1
-	case AlgPS256, AlgRS256:
-		hash = crypto.SHA256
-	case AlgPS384, AlgRS384:
-		hash = crypto.SHA384
-	case AlgPS512, AlgRS512:
-		hash = crypto.SHA512
-	default:
+	coseAlg := COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm)
+	algDetail, ok := COSESignatureAlgorithmDetails[coseAlg]
+	if !ok {
 		return false, ErrUnsupportedAlgorithm
 	}
+	hash := algDetail.hash
+	h := hash.New()
+	h.Write(data)
 
-	switch COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm) {
+	switch coseAlg {
 	case AlgPS256, AlgPS384, AlgPS512:
 		err := rsa.VerifyPSS(pubkey, hash, h.Sum(nil), sig, nil)
 
@@ -410,24 +401,21 @@ func ec2AlgCurve(coseAlg int64) elliptic.Curve {
 
 // SigAlgFromCOSEAlg return which signature algorithm is being used from the COSE Key.
 func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) SignatureAlgorithm {
-	for _, details := range SignatureAlgorithmDetails {
-		if details.coseAlg == coseAlg {
-			return details.algo
-		}
+	d, ok := COSESignatureAlgorithmDetails[coseAlg]
+	if !ok {
+		return UnknownSignatureAlgorithm
 	}
-
-	return UnknownSignatureAlgorithm
+	return d.sigAlg
 }
 
 // HasherFromCOSEAlg returns the Hashing interface to be used for a given COSE Algorithm.
 func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) hash.Hash {
-	for _, details := range SignatureAlgorithmDetails {
-		if details.coseAlg == coseAlg {
-			return details.hash.New()
-		}
+	d, ok := COSESignatureAlgorithmDetails[coseAlg]
+	if !ok {
+		// default to SHA256?  Why not.
+		return crypto.SHA256.New()
 	}
-	// default to SHA256?  Why not.
-	return crypto.SHA256.New()
+	return d.hash.New()
 }
 
 // SignatureAlgorithm represents algorithm enumerations used for COSE signatures.
@@ -452,23 +440,22 @@ const (
 	SHA512WithRSAPSS
 )
 
-var SignatureAlgorithmDetails = []struct {
-	algo    SignatureAlgorithm
-	coseAlg COSEAlgorithmIdentifier
-	name    string
-	hash    crypto.Hash
+var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
+	name   string
+	hash   crypto.Hash
+	sigAlg SignatureAlgorithm
 }{
-	{SHA1WithRSA, AlgRS1, "SHA1-RSA", crypto.SHA1},
-	{SHA256WithRSA, AlgRS256, "SHA256-RSA", crypto.SHA256},
-	{SHA384WithRSA, AlgRS384, "SHA384-RSA", crypto.SHA384},
-	{SHA512WithRSA, AlgRS512, "SHA512-RSA", crypto.SHA512},
-	{SHA256WithRSAPSS, AlgPS256, "SHA256-RSAPSS", crypto.SHA256},
-	{SHA384WithRSAPSS, AlgPS384, "SHA384-RSAPSS", crypto.SHA384},
-	{SHA512WithRSAPSS, AlgPS512, "SHA512-RSAPSS", crypto.SHA512},
-	{ECDSAWithSHA256, AlgES256, "ECDSA-SHA256", crypto.SHA256},
-	{ECDSAWithSHA384, AlgES384, "ECDSA-SHA384", crypto.SHA384},
-	{ECDSAWithSHA512, AlgES512, "ECDSA-SHA512", crypto.SHA512},
-	{UnknownSignatureAlgorithm, AlgEdDSA, "EdDSA", crypto.SHA512},
+	AlgRS1:   {"SHA1-RSA", crypto.SHA1, SHA1WithRSA},
+	AlgRS256: {"SHA256-RSA", crypto.SHA256, SHA256WithRSA},
+	AlgRS384: {"SHA384-RSA", crypto.SHA384, SHA384WithRSA},
+	AlgRS512: {"SHA512-RSA", crypto.SHA512, SHA512WithRSA},
+	AlgPS256: {"SHA256-RSAPSS", crypto.SHA256, SHA256WithRSAPSS},
+	AlgPS384: {"SHA384-RSAPSS", crypto.SHA384, SHA384WithRSAPSS},
+	AlgPS512: {"SHA512-RSAPSS", crypto.SHA512, SHA512WithRSAPSS},
+	AlgES256: {"ECDSA-SHA256", crypto.SHA256, ECDSAWithSHA256},
+	AlgES384: {"ECDSA-SHA384", crypto.SHA384, ECDSAWithSHA384},
+	AlgES512: {"ECDSA-SHA512", crypto.SHA512, ECDSAWithSHA512},
+	AlgEdDSA: {"EdDSA", crypto.SHA512, UnknownSignatureAlgorithm},
 }
 
 type Error struct {
