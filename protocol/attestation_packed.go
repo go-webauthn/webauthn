@@ -104,9 +104,7 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	}
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
-	sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-
-	if err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, signature); err != nil {
+	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, signature); err != nil {
 		return "", x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 	}
 

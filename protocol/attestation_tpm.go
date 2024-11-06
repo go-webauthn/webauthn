@@ -150,9 +150,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 			return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1")
 		}
 
-		sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-
-		err = aikCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), certInfoBytes, sigBytes)
+		err = aikCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), certInfoBytes, sigBytes)
 		if err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 		}

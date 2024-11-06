@@ -400,10 +400,10 @@ func ec2AlgCurve(coseAlg int64) elliptic.Curve {
 }
 
 // SigAlgFromCOSEAlg return which signature algorithm is being used from the COSE Key.
-func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) SignatureAlgorithm {
+func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) x509.SignatureAlgorithm {
 	d, ok := COSESignatureAlgorithmDetails[coseAlg]
 	if !ok {
-		return UnknownSignatureAlgorithm
+		return x509.UnknownSignatureAlgorithm
 	}
 	return d.sigAlg
 }
@@ -418,44 +418,22 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) hash.Hash {
 	return d.hash.New()
 }
 
-// SignatureAlgorithm represents algorithm enumerations used for COSE signatures.
-type SignatureAlgorithm int
-
-const (
-	UnknownSignatureAlgorithm SignatureAlgorithm = iota
-	MD2WithRSA
-	MD5WithRSA
-	SHA1WithRSA
-	SHA256WithRSA
-	SHA384WithRSA
-	SHA512WithRSA
-	DSAWithSHA1
-	DSAWithSHA256
-	ECDSAWithSHA1
-	ECDSAWithSHA256
-	ECDSAWithSHA384
-	ECDSAWithSHA512
-	SHA256WithRSAPSS
-	SHA384WithRSAPSS
-	SHA512WithRSAPSS
-)
-
 var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
 	name   string
 	hash   crypto.Hash
-	sigAlg SignatureAlgorithm
+	sigAlg x509.SignatureAlgorithm
 }{
-	AlgRS1:   {"SHA1-RSA", crypto.SHA1, SHA1WithRSA},
-	AlgRS256: {"SHA256-RSA", crypto.SHA256, SHA256WithRSA},
-	AlgRS384: {"SHA384-RSA", crypto.SHA384, SHA384WithRSA},
-	AlgRS512: {"SHA512-RSA", crypto.SHA512, SHA512WithRSA},
-	AlgPS256: {"SHA256-RSAPSS", crypto.SHA256, SHA256WithRSAPSS},
-	AlgPS384: {"SHA384-RSAPSS", crypto.SHA384, SHA384WithRSAPSS},
-	AlgPS512: {"SHA512-RSAPSS", crypto.SHA512, SHA512WithRSAPSS},
-	AlgES256: {"ECDSA-SHA256", crypto.SHA256, ECDSAWithSHA256},
-	AlgES384: {"ECDSA-SHA384", crypto.SHA384, ECDSAWithSHA384},
-	AlgES512: {"ECDSA-SHA512", crypto.SHA512, ECDSAWithSHA512},
-	AlgEdDSA: {"EdDSA", crypto.SHA512, UnknownSignatureAlgorithm},
+	AlgRS1:   {"SHA1-RSA", crypto.SHA1, x509.SHA1WithRSA},
+	AlgRS256: {"SHA256-RSA", crypto.SHA256, x509.SHA256WithRSA},
+	AlgRS384: {"SHA384-RSA", crypto.SHA384, x509.SHA384WithRSA},
+	AlgRS512: {"SHA512-RSA", crypto.SHA512, x509.SHA512WithRSA},
+	AlgPS256: {"SHA256-RSAPSS", crypto.SHA256, x509.SHA256WithRSAPSS},
+	AlgPS384: {"SHA384-RSAPSS", crypto.SHA384, x509.SHA384WithRSAPSS},
+	AlgPS512: {"SHA512-RSAPSS", crypto.SHA512, x509.SHA512WithRSAPSS},
+	AlgES256: {"ECDSA-SHA256", crypto.SHA256, x509.ECDSAWithSHA256},
+	AlgES384: {"ECDSA-SHA384", crypto.SHA384, x509.ECDSAWithSHA384},
+	AlgES512: {"ECDSA-SHA512", crypto.SHA512, x509.ECDSAWithSHA512},
+	AlgEdDSA: {"EdDSA", crypto.SHA512, x509.PureEd25519},
 }
 
 type Error struct {
