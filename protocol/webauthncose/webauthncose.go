@@ -36,6 +36,8 @@ type PublicKeyData struct {
 	Algorithm int64 `cbor:"3,keyasint" json:"alg"`
 }
 
+const ecCoordSize = 32
+
 type EC2PublicKeyData struct {
 	PublicKeyData
 
@@ -180,8 +182,8 @@ func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 		PublicKeyData: PublicKeyData{
 			Algorithm: int64(AlgES256),
 		},
-		XCoord: x.Bytes(),
-		YCoord: y.Bytes(),
+		XCoord: x.FillBytes(make([]byte, ecCoordSize)),
+		YCoord: y.FillBytes(make([]byte, ecCoordSize)),
 	}, nil
 }
 
