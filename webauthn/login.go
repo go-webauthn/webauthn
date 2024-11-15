@@ -211,11 +211,11 @@ func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHand
 
 // ValidatePasskeyLogin is an overloaded version of ValidateLogin that allows for passkey credentials.
 func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (user User, credential *Credential, err error) {
-	if session.UserID != nil {
+	if len(session.UserID) != 0 {
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
 	}
 
-	if parsedResponse.Response.UserHandle == nil {
+	if len(parsedResponse.Response.UserHandle) == 0 {
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Client-side Discoverable Assertion was attempted with a blank User Handle")
 	}
 
