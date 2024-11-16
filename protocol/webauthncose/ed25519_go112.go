@@ -3,10 +3,9 @@
 package webauthncose
 
 import (
+	"crypto/ed25519"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-
-	"golang.org/x/crypto/ed25519"
 )
 
 var oidSignatureEd25519 = asn1.ObjectIdentifier{1, 3, 101, 112}

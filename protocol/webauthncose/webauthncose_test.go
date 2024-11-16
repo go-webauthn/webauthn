@@ -1,12 +1,12 @@
 package webauthncose
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/ed25519"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
