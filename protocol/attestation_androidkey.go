@@ -69,9 +69,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	}
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
-	sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-
-	if err = attCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), signatureData, sig); err != nil {
+	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 	}
 

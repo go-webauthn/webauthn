@@ -113,9 +113,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	}
 
 	// 3/4 Verify that extraData is set to the hash of attToBeSigned using the hash algorithm employed in "alg".
-	f := webauthncose.HasherFromCOSEAlg(coseAlg)
-	h := f()
-
+	h := webauthncose.HasherFromCOSEAlg(coseAlg)
 	h.Write(attToBeSigned)
 	if !bytes.Equal(certInfo.ExtraData, h.Sum(nil)) {
 		return "", nil, ErrAttestationFormat.WithDetails("ExtraData is not set to hash of attToBeSigned")
@@ -152,9 +150,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 			return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1")
 		}
 
-		sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
-
-		err = aikCert.CheckSignature(x509.SignatureAlgorithm(sigAlg), certInfoBytes, sigBytes)
+		err = aikCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), certInfoBytes, sigBytes)
 		if err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 		}
