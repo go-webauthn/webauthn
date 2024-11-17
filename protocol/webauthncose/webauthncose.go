@@ -3,6 +3,7 @@ package webauthncose
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/x509"
@@ -13,7 +14,6 @@ import (
 	"math/big"
 
 	"github.com/google/go-tpm/legacy/tpm2"
-	"golang.org/x/crypto/ed25519"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
