@@ -9,36 +9,52 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-func ValidateMetadata(ctx context.Context, aaguid uuid.UUID, mds metadata.Provider) (err error) {
+func ValidateMetadata(ctx context.Context, aaguid uuid.UUID, attestationType string, mds metadata.Provider) (entry *metadata.Entry, protoErr *Error) {
 	if mds == nil {
-		return nil
+		return nil, nil
 	}
 
 	var (
-		entry *metadata.Entry
+		err error
 	)
 
 	if entry, err = mds.GetEntry(ctx, aaguid); err != nil {
-		return err
+		return nil, ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. Error occurred retreiving the metadata entry: %+v", aaguid, err))
 	}
 
 	if entry == nil {
 		if aaguid == uuid.Nil && mds.GetValidateEntryPermitZeroAAGUID(ctx) {
-			return nil
+			return nil, nil
 		}
 
 		if mds.GetValidateEntry(ctx) {
-			return fmt.Errorf("error occurred performing authenticator entry validation: AAGUID entry has not been registered with the metadata service")
+			return nil, ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. The authenticator has no registered metadata.", aaguid))
 		}
 
-		return nil
+		return nil, nil
+	}
+
+	if mds.GetValidateAttestationTypes(ctx) {
+		found := false
+
+		for _, atype := range entry.MetadataStatement.AttestationTypes {
+			if string(atype) == attestationType {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			return entry, ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. The attestation type '%s' is not known to be used by this authenticator.", aaguid.String(), attestationType))
+		}
 	}
 
 	if mds.GetValidateStatus(ctx) {
 		if err = mds.ValidateStatusReports(ctx, entry.StatusReports); err != nil {
-			return fmt.Errorf("error occurred performing authenticator status validation: %w", err)
+			return entry, ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. Error occurred validating the authenticator status: %+v", aaguid, err))
 		}
 	}
 
-	return nil
+	return entry, nil
 }
