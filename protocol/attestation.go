@@ -186,44 +186,16 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		return nil
 	}
 
+	var protoErr *Error
+
 	ctx := context.Background()
 
-	if entry, err = mds.GetEntry(ctx, aaguid); err != nil {
-		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred retrieving metadata entry during attestation validation: %+v", err)).WithDetails(fmt.Sprintf("Error occurred looking up entry for AAGUID %s", aaguid.String()))
+	if entry, protoErr = ValidateMetadata(context.Background(), aaguid, attestationType, mds); protoErr != nil {
+		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", err)).WithDetails(protoErr.DevInfo)
 	}
 
 	if entry == nil {
-		if aaguid == uuid.Nil && mds.GetValidateEntryPermitZeroAAGUID(ctx) {
-			return nil
-		}
-
-		if mds.GetValidateEntry(ctx) {
-			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("AAGUID %s not found in metadata during attestation validation", aaguid.String()))
-		}
-
 		return nil
-	}
-
-	if mds.GetValidateAttestationTypes(ctx) {
-		found := false
-
-		for _, atype := range entry.MetadataStatement.AttestationTypes {
-			if string(atype) == attestationType {
-				found = true
-
-				break
-			}
-		}
-
-		if !found {
-			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Authenticator with invalid attestation type encountered during attestation validation. The attestation type '%s' is not known to be used by AAGUID '%s'", attestationType, aaguid.String()))
-		}
-	}
-
-	if mds.GetValidateStatus(ctx) {
-		if err = mds.ValidateStatusReports(ctx, entry.StatusReports); err != nil {
-			return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Authenticator with invalid status encountered during attestation validation. %s", err.Error()))
-		}
 	}
 
 	if mds.GetValidateTrustAnchor(ctx) {

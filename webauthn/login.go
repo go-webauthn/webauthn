@@ -347,8 +347,10 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err))
 		}
 
-		if err = protocol.ValidateMetadata(context.Background(), aaguid, webauthn.Config.MDS); err != nil {
-			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(fmt.Sprintf("Error occurred validating authenticator metadata from the credential record: %s", err))
+		var protoErr *protocol.Error
+
+		if _, protoErr = protocol.ValidateMetadata(context.Background(), aaguid, credential.AttestationType, webauthn.Config.MDS); protoErr != nil {
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(protoErr.DevInfo)
 		}
 	}
 
