@@ -257,6 +257,9 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 				credentialsOwned = false
 			}
+			if credentialsOwned {
+				break
+			}
 		}
 
 		if !credentialsOwned {
