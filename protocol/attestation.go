@@ -3,7 +3,6 @@ package protocol
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 
@@ -173,7 +172,6 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 
 	var (
 		aaguid uuid.UUID
-		entry  *metadata.Entry
 	)
 
 	if len(a.AuthData.AttData.AAGUID) != 0 {
@@ -188,54 +186,8 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 
 	var protoErr *Error
 
-	ctx := context.Background()
-
-	if entry, protoErr = ValidateMetadata(context.Background(), aaguid, attestationType, mds); protoErr != nil {
-		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", err)).WithDetails(protoErr.DevInfo)
-	}
-
-	if entry == nil {
-		return nil
-	}
-
-	if mds.GetValidateTrustAnchor(ctx) {
-		if x5cs == nil {
-			return nil
-		}
-
-		var (
-			x5c *x509.Certificate
-			raw []byte
-			ok  bool
-		)
-
-		if len(x5cs) == 0 {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo("The attestation had no certificates")
-		}
-
-		if raw, ok = x5cs[0].([]byte); !ok {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
-		}
-
-		if x5c, err = x509.ParseCertificate(raw); err != nil {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
-		}
-
-		if attestationType == string(metadata.AttCA) {
-			if err = tpmParseSANExtension(x5c); err != nil {
-				return err
-			}
-		}
-
-		if x5c.Subject.CommonName != x5c.Issuer.CommonName {
-			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
-				return ErrInvalidAttestation.WithDetails("Unable to validate attestation statement signature during attestation validation: attestation with full attestation from authenticator that does not support full attestation")
-			}
-
-			if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
-				return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unable to validate attestation signature statement during attestation validation: invalid certificate chain from MDS: %v", err))
-			}
-		}
+	if protoErr = ValidateMetadata(context.Background(), mds, aaguid, attestationType, x5cs); protoErr != nil {
+		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", protoErr)).WithDetails(protoErr.DevInfo)
 	}
 
 	return nil

@@ -319,7 +319,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 		var protoErr *protocol.Error
 
-		if _, protoErr = protocol.ValidateMetadata(context.Background(), aaguid, credential.AttestationType, webauthn.Config.MDS); protoErr != nil {
+		if protoErr = protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, credential.AttestationType, nil); protoErr != nil {
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(protoErr.DevInfo)
 		}
 	}
