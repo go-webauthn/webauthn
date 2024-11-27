@@ -313,6 +313,65 @@ table for more information. We also include JSON mappings for those that wish to
 |     attestationObject     |     Attestation.Object     |     attestation.object     | This field is a composite of the attestationObject and the relevant values to validate it |
 | attestationClientDataJSON | Attestation.ClientDataJSON | attestation.clientDataJSON |                                                                                           |
 
+### Flags
+
+It's important to note that the recommendations and requirements for flag storage have changed over the course of the
+evolution of the WebAuthn specification. We at the present time only make the flags classified like this available for
+easy storage however we also make the Protocol Value available. At such a time as these recommendations or requirements
+change we will adapt accordingly. The Protocol Value is a raw representation of the flags and as such is resistant to
+breaking changes whereas the other flags or lack thereof may not be. 
+
+Implementers are therefore encouraged to use
+[func (CredentialFlags) ProtocolValue](https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#CredentialFlags.ProtocolValue)
+to retrieve the raw value and 
+[webauthn.NewCredentialFlags](https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#NewCredentialFlags) to 
+restore it; and instead of using the individual flags to store the value store the Protocol Value, and only store the
+individual flags as a means to perform compliance related decisions.
+
+#### Notable Changes
+
+This contains some notable changes to the flags over the life of the library.
+
+##### v0.11.0
+
+In v0.11.0 we started validating the backup related flags to ensure that they were in a valid state as per the
+requirements in the spec. This introduced issues for some users as they had not been storing them and at least at one
+point the flag values were difficult to obtain.
+
+This has lead to an effective breaking change and a state where some credentials cannot be validated. The resolution to
+this particular issue is to adapt current storage methods so that the values of the flags or each individual flag default
+to a null-like value and manually perform an update to the storage and struct when a credential with null-like values is
+observed.
+
+The values can be obtained prior to validating the parsed response similar to the example below:
+
+```go
+package example
+
+import (
+	"net/http"
+	
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
+)
+
+func FinishLogin(w http.ResponseWriter, r *http.Request) {
+  // Abstract Business Logic: Get the WebAuthn User. 
+  user := datastore.GetUser()
+
+  // Abstract Business Logic: Get the WebAuthn Session Data. 
+  session := datastore.GetSession()
+
+  parsedResponse, err := protocol.ParseCredentialRequestResponse(r)
+  if err != nil {
+    // Handle Error and return.
+    return
+  }
+
+  // Handle updating the appropriate credential using the flags value.
+  flags := webauthn.NewCredentialFlags(parsedResponse.Response.AuthenticatorData.Flags)
+}
+```
 ### Storage
 
 It is also important to note that restoring the [webauthn.Credential] with the correct values will likely affect the
