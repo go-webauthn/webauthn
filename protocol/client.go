@@ -43,13 +43,15 @@ type TokenBinding struct {
 type TokenBindingStatus string
 
 const (
-	// Indicates token binding was used when communicating with the
+	// Present indicates token binding was used when communicating with the
 	// Relying Party. In this case, the id member MUST be present.
 	Present TokenBindingStatus = "present"
-	// Indicates token binding was used when communicating with the
+
+	// Supported indicates token binding was used when communicating with the
 	// negotiated when communicating with the Relying Party.
 	Supported TokenBindingStatus = "supported"
-	// Indicates token binding not supported
+
+	// NotSupported indicates token binding not supported
 	// when communicating with the Relying Party.
 	NotSupported TokenBindingStatus = "not-supported"
 )
