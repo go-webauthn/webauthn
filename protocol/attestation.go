@@ -249,6 +249,12 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
 		}
 
+		if attestationType == string(metadata.AttCA) {
+			if err = tpmParseSANExtension(x5c); err != nil {
+				return err
+			}
+		}
+
 		if x5c.Subject.CommonName != x5c.Issuer.CommonName {
 			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
 				return ErrInvalidAttestation.WithDetails("Unable to validate attestation statement signature during attestation validation: attestation with full attestation from authenticator that does not support full attestation")
