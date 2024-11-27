@@ -85,6 +85,7 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds met
 		}
 
 		cert, err := x509.ParseCertificate(o[:n])
+
 		return cert.PublicKey, err
 	})
 

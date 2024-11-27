@@ -67,10 +67,10 @@ func Test_verifyPackedFormat(t *testing.T) {
 				return
 			}
 
+			// TODO: Consider doing something with the second return value from verifyPackedFormat, x5c.
 			if got != tt.want {
 				t.Errorf("verifyPackedFormat() got = %v, want %v", got, tt.want)
 			}
-			// TODO: Consider doing something with the second return value from verifyPackedFormat, x5c.
 		})
 	}
 }

@@ -186,7 +186,7 @@ func WithLoginRelyingPartyID(id string) LoginOption {
 // WithChallenge overrides the default random challenge with a user supplied value.
 // In order to prevent replay attacks, the challenges MUST contain enough entropy to make guessing them infeasible.
 // Challenges SHOULD therefore be at least 16 bytes long.
-// This function is EXPERIMENTAL and can be removed without warning. 
+// This function is EXPERIMENTAL and can be removed without warning.
 //
 // Specification: §13.4.3. Cryptographic Challenges (https://www.w3.org/TR/webauthn/#sctn-cryptographic-challenges)
 func WithChallenge(challenge []byte) LoginOption {
@@ -349,7 +349,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 		var protoErr *protocol.Error
 
-		if _, protoErr = protocol.ValidateMetadata(context.Background(), aaguid, credential.AttestationType, webauthn.Config.MDS); protoErr != nil {
+		if protoErr = protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, credential.AttestationType, nil); protoErr != nil {
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(protoErr.DevInfo)
 		}
 	}
