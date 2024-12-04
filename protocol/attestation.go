@@ -241,6 +241,12 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo("The attestation had no certificates")
 		}
 
+		for i, x := range x5cs {
+			if raw, ok = x.([]byte); ok {
+				fmt.Println(fmt.Sprintf("Certificate %d:\n\n%s", i, string(raw)))
+			}
+		}
+
 		if raw, ok = x5cs[0].([]byte); !ok {
 			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
 		}
