@@ -40,6 +40,10 @@ var (
 		Type:    "invalid_attestation",
 		Details: "Invalid attestation data",
 	}
+	ErrMetadata = &Error{
+		Type:    "invalid_metadata",
+		Details: "",
+	}
 	ErrAttestationFormat = &Error{
 		Type:    "invalid_attestation",
 		Details: "Invalid attestation format",
