@@ -232,26 +232,41 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		}
 
 		var (
-			x5c *x509.Certificate
-			raw []byte
-			ok  bool
+			x5c     *x509.Certificate
+			parents []*x509.Certificate
 		)
 
 		if len(x5cs) == 0 {
 			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo("The attestation had no certificates")
 		}
 
-		if raw, ok = x5cs[0].([]byte); !ok {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
-		}
-
-		if x5c, err = x509.ParseCertificate(raw); err != nil {
-			return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
+		for _, x5cAny := range x5cs {
+			x5cRaw, ok := x5cAny.([]byte)
+			if !ok {
+				return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("The first certificate in the attestation was type '%T' but '[]byte' was expected", x5cs[0]))
+			}
+			x5cParsed, err := x509.ParseCertificate(x5cRaw)
+			if err != nil {
+				return ErrInvalidAttestation.WithDetails("Unable to parse attestation certificate from x5c during attestation validation").WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
+			}
+			if x5c == nil {
+				x5c = x5cParsed
+			} else {
+				parents = append(parents, x5cParsed)
+			}
 		}
 
 		if attestationType == string(metadata.AttCA) {
 			if err = tpmParseSANExtension(x5c); err != nil {
 				return err
+			}
+			if err = tpmRemoveEKU(x5c); err != nil {
+				return err
+			}
+			for _, parent := range parents {
+				if err = tpmRemoveEKU(parent); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -259,8 +274,14 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
 				return ErrInvalidAttestation.WithDetails("Unable to validate attestation statement signature during attestation validation: attestation with full attestation from authenticator that does not support full attestation")
 			}
-
-			if _, err = x5c.Verify(entry.MetadataStatement.Verifier()); err != nil {
+			verifier := entry.MetadataStatement.Verifier()
+			if len(parents) != 0 {
+				verifier.Intermediates = x509.NewCertPool()
+				for _, parent := range parents {
+					verifier.Intermediates.AddCert(parent)
+				}
+			}
+			if _, err = x5c.Verify(verifier); err != nil {
 				return ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unable to validate attestation signature statement during attestation validation: invalid certificate chain from MDS: %v", err))
 			}
 		}
