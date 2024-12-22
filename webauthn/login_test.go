@@ -32,11 +32,12 @@ func TestLogin_FinishLoginFailure(t *testing.T) {
 
 func TestWithLoginRelyingPartyID(t *testing.T) {
 	testCases := []struct {
-		name       string
-		have       *Config
-		opts       []LoginOption
-		expectedID string
-		err        string
+		name              string
+		have              *Config
+		opts              []LoginOption
+		expectedID        string
+		expectedChallenge []byte
+		err               string
 	}{
 		{
 			name: "OptionDefinedInConfig",
@@ -84,6 +85,27 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 			opts: nil,
 			err:  "error generating assertion: the relying party id must be provided via the configuration or a functional option for a login",
 		},
+		{
+			name: "TooShortWithChallengeOption",
+			have: &Config{
+				RPID:          "https://example.com",
+				RPOrigins:     []string{"https://example.com"},
+				RPDisplayName: "Test Display Name",
+			},
+			opts: []LoginOption{WithChallenge([]byte("1234567890"))},
+			err:  "error generating assertion: the challenge must be at least 16 bytes",
+		},
+		{
+			name: "WithChallengeOption",
+			have: &Config{
+				RPID:          "https://example.com",
+				RPOrigins:     []string{"https://example.com"},
+				RPDisplayName: "Test Display Name",
+			},
+			opts:              []LoginOption{WithChallenge([]byte("00000000000000000000000000000000"))},
+			expectedID:        "https://example.com",
+			expectedChallenge: []byte("00000000000000000000000000000000"),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -104,6 +126,9 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 				assert.NoError(t, err)
 				require.NotNil(t, creation)
 				assert.Equal(t, tc.expectedID, creation.Response.RelyingPartyID)
+				if len(tc.expectedChallenge) > 0 {
+					assert.Equal(t, protocol.URLEncodedBase64(tc.expectedChallenge).String(), creation.Response.Challenge.String())
+				}
 			}
 		})
 	}
