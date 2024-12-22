@@ -56,14 +56,8 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
 	}
 
-	challenge, err := protocol.CreateChallenge()
-	if err != nil {
-		return nil, nil, err
-	}
-
 	assertion = &protocol.CredentialAssertion{
 		Response: protocol.PublicKeyCredentialRequestOptions{
-			Challenge:          challenge,
 			RelyingPartyID:     webauthn.Config.RPID,
 			UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
 			AllowedCredentials: allowedCredentials,
@@ -72,6 +66,18 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 
 	for _, opt := range opts {
 		opt(&assertion.Response)
+	}
+
+	if len(assertion.Response.Challenge) == 0 {
+		challenge, err := protocol.CreateChallenge()
+		if err != nil {
+			return nil, nil, err
+		}
+		assertion.Response.Challenge = challenge
+	}
+
+	if len(assertion.Response.Challenge) < 16 {
+		return nil, nil, fmt.Errorf("error generating assertion: the challenge must be at least 16 bytes")
 	}
 
 	if len(assertion.Response.RelyingPartyID) == 0 {
@@ -90,7 +96,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	session = &SessionData{
-		Challenge:            challenge.String(),
+		Challenge:            assertion.Response.Challenge.String(),
 		RelyingPartyID:       assertion.Response.RelyingPartyID,
 		UserID:               userID,
 		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
@@ -162,6 +168,18 @@ func WithAppIdExtension(appid string) LoginOption {
 func WithLoginRelyingPartyID(id string) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
 		cco.RelyingPartyID = id
+	}
+}
+
+// WithChallenge overrides the default random challenge with a user supplied value.
+// In order to prevent replay attacks, the challenges MUST contain enough entropy to make guessing them infeasible.
+// Challenges SHOULD therefore be at least 16 bytes long.
+// This function is EXPERIMENTAL and can be removed without warning. 
+//
+// Specification: §13.4.3. Cryptographic Challenges (https://www.w3.org/TR/webauthn/#sctn-cryptographic-challenges)
+func WithChallenge(challenge []byte) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
+		cco.Challenge = challenge
 	}
 }
 
