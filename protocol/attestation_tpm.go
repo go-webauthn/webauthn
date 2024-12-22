@@ -395,10 +395,7 @@ var (
 	oidExtensionSubjectAltName   = []int{2, 5, 29, 17}
 	oidExtensionExtendedKeyUsage = []int{2, 5, 29, 37}
 	oidExtensionBasicConstraints = []int{2, 5, 29, 19}
-
-	// From wincrypt.h of Windows SDK.
-	// Enhanced Key Usage for Privacy CA encryption certificate
-	oidKpPrivacyCA = []int{1, 3, 6, 1, 4, 1, 311, 21, 36}
+	oidKpPrivacyCA               = []int{1, 3, 6, 1, 4, 1, 311, 21, 36}
 )
 
 type tpmBasicConstraints struct {
@@ -406,24 +403,32 @@ type tpmBasicConstraints struct {
 	MaxPathLen int  `asn1:"optional,default:-1"`
 }
 
-// remove extension key usage to avoid ExtKeyUsage check failure
-// see also https://github.com/go-webauthn/webauthn/issues/342
+// Remove extension key usage to avoid ExtKeyUsage check failure.
 func tpmRemoveEKU(x5c *x509.Certificate) error {
-	var unknown []asn1.ObjectIdentifier
-	hasAiK := false
+	var (
+		unknown []asn1.ObjectIdentifier
+		hasAiK  bool
+	)
+
 	for _, eku := range x5c.UnknownExtKeyUsage {
 		if eku.Equal(tcgKpAIKCertificate) {
 			hasAiK = true
+
 			continue
 		}
+
 		if eku.Equal(oidKpPrivacyCA) {
 			continue
 		}
+
 		unknown = append(unknown, eku)
 	}
+
 	if !hasAiK {
 		return ErrAttestationFormat.WithDetails("AIK certificate missing EKU")
 	}
+
 	x5c.UnknownExtKeyUsage = unknown
+
 	return nil
 }
