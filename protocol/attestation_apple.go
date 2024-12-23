@@ -34,8 +34,7 @@ func init() {
 func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
-
-	// If x5c is not present, return an error
+	// If x5c is not present, return an error.
 	x5c, x509present := att.AttStatement[stmtX5C].([]any)
 	if !x509present {
 		// Handle Basic Attestation steps for the x509 Certificate
@@ -104,7 +103,8 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	return string(metadata.AnonCA), x5c, nil
 }
 
-// Apple has not yet publish schema for the extension(as of JULY 2021.)
+// AppleAnonymousAttestation represents the attestation format for Apple, who have not yet published a schema for the
+// extension (as of JULY 2021.)
 type AppleAnonymousAttestation struct {
 	Nonce []byte `asn1:"tag:1,explicit"`
 }

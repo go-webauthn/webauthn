@@ -54,8 +54,10 @@ func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAs
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
-	defer response.Body.Close()
-	defer io.Copy(io.Discard, response.Body)
+	defer func(request *http.Request) {
+		_, _ = io.Copy(io.Discard, request.Body)
+		_ = request.Body.Close()
+	}(response)
 
 	return ParseCredentialRequestResponseBody(response.Body)
 }
@@ -98,17 +100,15 @@ func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionDa
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID not base64url encoded")
 	}
 
-	if car.Type != "public-key" {
+	if car.Type != string(PublicKeyCredentialType) {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with bad type")
 	}
 
 	var attachment AuthenticatorAttachment
 
-	switch car.AuthenticatorAttachment {
-	case "platform":
-		attachment = Platform
-	case "cross-platform":
-		attachment = CrossPlatform
+	switch att := AuthenticatorAttachment(car.AuthenticatorAttachment); att {
+	case Platform, CrossPlatform:
+		attachment = att
 	}
 
 	par = &ParsedCredentialAssertionData{
@@ -143,9 +143,9 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 	// Steps 4 through 6 in verifying the assertion data (https://www.w3.org/TR/webauthn/#verifying-assertion) are
 	// "assertive" steps, i.e. "Let JSONtext be the result of running UTF-8 decode on the value of cData."
 	// We handle these steps in part as we verify but also beforehand
-
+	//
 	// Handle steps 7 through 10 of assertion by verifying stored data against the Collected Client Data
-	// returned by the authenticator
+	// returned by the authenticator.
 	validError := p.Response.CollectedClientData.Verify(storedChallenge, AssertCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify)
 	if validError != nil {
 		return validError

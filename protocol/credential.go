@@ -115,7 +115,7 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Missing type")
 	}
 
-	if ccr.PublicKeyCredential.Credential.Type != "public-key" {
+	if ccr.PublicKeyCredential.Credential.Type != string(PublicKeyCredentialType) {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Type not public-key")
 	}
 
