@@ -5,11 +5,13 @@ import (
 )
 
 type CredentialCreation struct {
-	Response PublicKeyCredentialCreationOptions `json:"publicKey"`
+	Response  PublicKeyCredentialCreationOptions `json:"publicKey"`
+	Mediation CredentialMediationRequirement     `json:"mediation,omitempty"`
 }
 
 type CredentialAssertion struct {
-	Response PublicKeyCredentialRequestOptions `json:"publicKey"`
+	Response  PublicKeyCredentialRequestOptions `json:"publicKey"`
+	Mediation CredentialMediationRequirement    `json:"mediation,omitempty"`
 }
 
 // PublicKeyCredentialCreationOptions represents the IDL of the same name.

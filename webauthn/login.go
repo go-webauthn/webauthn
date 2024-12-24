@@ -31,6 +31,16 @@ type DiscoverableUserHandler func(rawID, userHandle []byte) (user User, err erro
 //
 // Specification: §5.5. Options for Assertion Generation (https://www.w3.org/TR/webauthn/#dictionary-assertion-options)
 func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	return webauthn.BeginMediatedLogin(user, "", opts...)
+}
+
+// BeginDiscoverableLogin begins a client-side discoverable login, previously known as Resident Key logins.
+func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	return webauthn.beginLogin(nil, nil, "", opts...)
+}
+
+// BeginMediatedLogin is similar to BeginLogin however it also allows specifying a credential mediation requirement.
+func (webauthn *WebAuthn) BeginMediatedLogin(user User, mediation protocol.CredentialMediationRequirement, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
 	credentials := user.WebAuthnCredentials()
 
 	if len(credentials) == 0 { // If the user does not have any credentials, we cannot perform an assertion.
@@ -43,15 +53,16 @@ func (webauthn *WebAuthn) BeginLogin(user User, opts ...LoginOption) (*protocol.
 		allowedCredentials[i] = credential.Descriptor()
 	}
 
-	return webauthn.beginLogin(user.WebAuthnID(), allowedCredentials, opts...)
+	return webauthn.beginLogin(user.WebAuthnID(), allowedCredentials, mediation, opts...)
 }
 
-// BeginDiscoverableLogin begins a client-side discoverable login, previously known as Resident Key logins.
-func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
-	return webauthn.beginLogin(nil, nil, opts...)
+// BeginDiscoverableMediatedLogin begins a client-side discoverable login with a mediation requirement, previously known
+// as Resident Key logins.
+func (webauthn *WebAuthn) BeginDiscoverableMediatedLogin(mediation protocol.CredentialMediationRequirement, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	return webauthn.beginLogin(nil, nil, mediation, opts...)
 }
 
-func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, opts ...LoginOption) (assertion *protocol.CredentialAssertion, session *SessionData, err error) {
+func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, mediation protocol.CredentialMediationRequirement, opts ...LoginOption) (assertion *protocol.CredentialAssertion, session *SessionData, err error) {
 	if err = webauthn.Config.validate(); err != nil {
 		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
 	}
@@ -62,6 +73,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 			UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
 			AllowedCredentials: allowedCredentials,
 		},
+		Mediation: mediation,
 	}
 
 	for _, opt := range opts {
