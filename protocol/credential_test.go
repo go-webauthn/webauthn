@@ -41,7 +41,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 				ParsedPublicKeyCredential: ParsedPublicKeyCredential{
 					ParsedCredential: ParsedCredential{
 						ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
-						Type: "public-key",
+						Type: string(PublicKeyCredentialType),
 					},
 					RawID: byteID,
 					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
@@ -74,7 +74,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 				Raw: CredentialCreationResponse{
 					PublicKeyCredential: PublicKeyCredential{
 						Credential: Credential{
-							Type: "public-key",
+							Type: string(PublicKeyCredentialType),
 							ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 						},
 						RawID: byteID,
@@ -182,7 +182,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				ParsedPublicKeyCredential: ParsedPublicKeyCredential{
 					ParsedCredential: ParsedCredential{
 						ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
-						Type: "public-key",
+						Type: string(PublicKeyCredentialType),
 					},
 					RawID: byteID,
 				},
@@ -210,7 +210,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				Raw: CredentialCreationResponse{
 					PublicKeyCredential: PublicKeyCredential{
 						Credential: Credential{
-							Type: "public-key",
+							Type: string(PublicKeyCredentialType),
 							ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 						},
 						RawID: byteID,

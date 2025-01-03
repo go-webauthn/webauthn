@@ -237,7 +237,7 @@ func beginLogin() {
 	allowList := make([]protocol.CredentialDescriptor, 1)
 	allowList[0] = protocol.CredentialDescriptor{
 		CredentialID: credentialToAllowID,
-		Type: protocol.CredentialType("public-key"),
+		Type: protocol.PublicKeyCredentialType,
 	}
 
 	user := datastore.GetUser() // Get the user  

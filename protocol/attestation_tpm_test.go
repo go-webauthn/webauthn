@@ -30,6 +30,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 
 			attestationType, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:], nil)
 			require.NoError(t, err)
+
 			if err != nil {
 				t.Fatalf("Not valid: %+v", err)
 			}
