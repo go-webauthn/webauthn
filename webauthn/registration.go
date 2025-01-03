@@ -21,6 +21,11 @@ type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
 
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator.
 func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOption) (creation *protocol.CredentialCreation, session *SessionData, err error) {
+	return webauthn.BeginMediatedRegistration(user, "", opts...)
+}
+
+// BeginMediatedRegistration is similar to BeginRegistration however it also allows specifying a credential mediation requirement.
+func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protocol.CredentialMediationRequirement, opts ...RegistrationOption) (creation *protocol.CredentialCreation, session *SessionData, err error) {
 	if err = webauthn.Config.validate(); err != nil {
 		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
 	}
@@ -64,6 +69,7 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 			AuthenticatorSelection: webauthn.Config.AuthenticatorSelection,
 			Attestation:            webauthn.Config.AttestationPreference,
 		},
+		Mediation: mediation,
 	}
 
 	for _, opt := range opts {
