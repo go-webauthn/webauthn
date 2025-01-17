@@ -109,7 +109,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	}
 
 	// Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
-	if 0 != bytes.Compare(decoded.AttestationChallenge, clientDataHash) {
+	if !bytes.Equal(decoded.AttestationChallenge, clientDataHash) {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation challenge not equal to clientDataHash")
 	}
 
