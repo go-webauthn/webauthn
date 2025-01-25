@@ -82,7 +82,7 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 	var (
 		res  *http.Response
 		blob *PayloadJSON
-		me   *MetadataError
+		me   *Error
 	)
 
 	for _, endpoint := range endpoints {

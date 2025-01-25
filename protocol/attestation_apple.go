@@ -48,7 +48,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 
 	credCert, err := x509.ParseCertificate(credCertBytes)
 	if err != nil {
-		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err))
+		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err)).WithError(err)
 	}
 
 	// Step 2. Concatenate authenticatorData and clientDataHash to form nonceToHash.
@@ -73,7 +73,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	decoded := AppleAnonymousAttestation{}
 
 	if _, err = asn1.Unmarshal(attExtBytes, &decoded); err != nil {
-		return "", nil, ErrAttestationFormat.WithDetails("Unable to parse apple attestation certificate extensions")
+		return "", nil, ErrAttestationFormat.WithDetails("Unable to parse apple attestation certificate extensions").WithError(err)
 	}
 
 	if !bytes.Equal(decoded.Nonce, nonce[:]) {
@@ -84,7 +84,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	// TODO: Probably move this part to webauthncose.go
 	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
 	if err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err))
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err)).WithError(err)
 	}
 
 	credPK := pubKey.(webauthncose.EC2PublicKeyData)

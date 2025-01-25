@@ -81,7 +81,7 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 
 		ct, err := x509.ParseCertificate(cb)
 		if err != nil {
-			return "", x5c, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err))
+			return "", x5c, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err)).WithError(err)
 		}
 
 		if ct.NotBefore.After(time.Now()) || ct.NotAfter.Before(time.Now()) {
@@ -98,12 +98,12 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 
 	attCert, err := x509.ParseCertificate(attCertBytes)
 	if err != nil {
-		return "", x5c, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err))
+		return "", x5c, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err)).WithError(err)
 	}
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, signature); err != nil {
-		return "", x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
+		return "", x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err)).WithError(err)
 	}
 
 	// Step 2.2 Verify that attestnCert meets the requirements in §8.2.1 Packed attestation statement certificate requirements.

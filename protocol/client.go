@@ -111,7 +111,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 	var fqOrigin string
 
 	if fqOrigin, err = FullyQualifiedOrigin(c.Origin); err != nil {
-		return ErrParsingData.WithDetails("Error decoding clientData origin as URL")
+		return ErrParsingData.WithDetails("Error decoding clientData origin as URL").WithError(err)
 	}
 
 	found := false
@@ -146,7 +146,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 			)
 
 			if fqTopOrigin, err = FullyQualifiedOrigin(c.TopOrigin); err != nil {
-				return ErrParsingData.WithDetails("Error decoding clientData topOrigin as URL")
+				return ErrParsingData.WithDetails("Error decoding clientData topOrigin as URL").WithError(err)
 			}
 
 			switch rpTopOriginsVerify {

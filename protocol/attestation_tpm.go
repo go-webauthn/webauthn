@@ -72,7 +72,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	// is identical to the credentialPublicKey in the attestedCredentialData in authenticatorData.
 	pubArea, err := tpm2.DecodePublic(pubAreaBytes)
 	if err != nil {
-		return "", nil, ErrAttestationFormat.WithDetails("Unable to decode TPMT_PUBLIC in attestation statement")
+		return "", nil, ErrAttestationFormat.WithDetails("Unable to decode TPMT_PUBLIC in attestation statement").WithError(err)
 	}
 
 	key, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
@@ -394,7 +394,7 @@ func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
 	for _, ext := range attestation.Extensions {
 		if ext.Id.Equal(oidExtensionSubjectAltName) {
 			if manufacturer, model, version, err = parseSANExtension(ext.Value); err != nil {
-				return ErrInvalidAttestation.WithDetails("Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.").WithInfo(fmt.Sprintf("Error occurred parsing SAN extension: %s", err.Error()))
+				return ErrInvalidAttestation.WithDetails("Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.").WithInfo(fmt.Sprintf("Error occurred parsing SAN extension: %s", err.Error())).WithError(err)
 			}
 		}
 	}

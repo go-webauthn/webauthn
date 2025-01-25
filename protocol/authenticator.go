@@ -349,7 +349,7 @@ func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) (err error
 
 	a.AttData.CredentialPublicKey, err = unmarshalCredentialPublicKey(rawAuthData[55+idLength:])
 	if err != nil {
-		return ErrBadRequest.WithDetails(fmt.Sprintf("Could not unmarshal Credential Public Key: %v", err))
+		return ErrBadRequest.WithDetails(fmt.Sprintf("Could not unmarshal Credential Public Key: %v", err)).WithError(err)
 	}
 
 	return nil

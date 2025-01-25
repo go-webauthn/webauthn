@@ -76,7 +76,7 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 			}
 
 			if parsed, err = x509.ParseCertificate(raw); err != nil {
-				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to parse attestation certificate from x5c during attestation validation for Authenticator Attestation GUID '%s'.", aaguid)).WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err))
+				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to parse attestation certificate from x5c during attestation validation for Authenticator Attestation GUID '%s'.", aaguid)).WithInfo(fmt.Sprintf("Error returned from x509.ParseCertificate: %+v", err)).WithError(err)
 			}
 
 			if x5c == nil {
@@ -88,7 +88,7 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 
 		if attestationType == string(metadata.AttCA) {
 			if protoErr = tpmParseAIKAttCA(x5c, x5cis); protoErr != nil {
-				return ErrMetadata.WithDetails(protoErr.Details).WithInfo(protoErr.DevInfo)
+				return ErrMetadata.WithDetails(protoErr.Details).WithInfo(protoErr.DevInfo).WithError(protoErr)
 			}
 		}
 
@@ -98,7 +98,7 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 			}
 
 			if _, err = x5c.Verify(entry.MetadataStatement.Verifier(x5cis)); err != nil {
-				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. The attestation certificate could not be verified due to an error validating the trust chain agaisnt the Metadata Service.", aaguid))
+				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. The attestation certificate could not be verified due to an error validating the trust chain agaisnt the Metadata Service.", aaguid)).WithError(err)
 			}
 		}
 	}

@@ -94,18 +94,18 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 	p = &ParsedAttestationResponse{}
 
 	if err = json.Unmarshal(ccr.ClientDataJSON, &p.CollectedClientData); err != nil {
-		return nil, ErrParsingData.WithInfo(err.Error())
+		return nil, ErrParsingData.WithInfo(err.Error()).WithError(err)
 	}
 
 	if err = webauthncbor.Unmarshal(ccr.AttestationObject, &p.AttestationObject); err != nil {
-		return nil, ErrParsingData.WithInfo(err.Error())
+		return nil, ErrParsingData.WithInfo(err.Error()).WithError(err)
 	}
 
 	// Step 8. Perform CBOR decoding on the attestationObject field of the AuthenticatorAttestationResponse
 	// structure to obtain the attestation statement format fmt, the authenticator data authData, and
 	// the attestation statement attStmt.
 	if err = p.AttestationObject.AuthData.Unmarshal(p.AttestationObject.RawAuthData); err != nil {
-		return nil, fmt.Errorf("error decoding auth data: %v", err)
+		return nil, err
 	}
 
 	if !p.AttestationObject.AuthData.Flags.HasAttestedCredentialData() {
@@ -176,7 +176,7 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 
 	if len(a.AuthData.AttData.AAGUID) != 0 {
 		if aaguid, err = uuid.FromBytes(a.AuthData.AttData.AAGUID); err != nil {
-			return ErrInvalidAttestation.WithInfo("Error occurred parsing AAGUID during attestation validation").WithDetails(err.Error())
+			return ErrInvalidAttestation.WithInfo("Error occurred parsing AAGUID during attestation validation").WithDetails(err.Error()).WithError(err)
 		}
 	}
 
@@ -187,7 +187,7 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	var protoErr *Error
 
 	if protoErr = ValidateMetadata(context.Background(), mds, aaguid, attestationType, x5cs); protoErr != nil {
-		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", protoErr)).WithDetails(protoErr.DevInfo)
+		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", protoErr)).WithDetails(protoErr.DevInfo).WithError(protoErr)
 	}
 
 	return nil

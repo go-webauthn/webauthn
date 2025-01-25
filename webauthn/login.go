@@ -250,7 +250,7 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 	}
 
 	if user, err = handler(parsedResponse.RawID, parsedResponse.Response.UserHandle); err != nil {
-		return nil, nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err))
+		return nil, nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err)).WithError(err)
 	}
 
 	if credential, err = webauthn.validateLogin(user, session, parsedResponse); err != nil {
@@ -344,13 +344,13 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 		var aaguid uuid.UUID
 
 		if aaguid, err = uuid.FromBytes(credential.Authenticator.AAGUID); err != nil {
-			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err))
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err)).WithError(err)
 		}
 
 		var protoErr *protocol.Error
 
 		if protoErr = protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, credential.AttestationType, nil); protoErr != nil {
-			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(protoErr.DevInfo)
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(protoErr.DevInfo).WithError(protoErr)
 		}
 	}
 
