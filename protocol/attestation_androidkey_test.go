@@ -26,7 +26,7 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			"success",
+			"ShouldHandleSuccessfulAttestationResponse0",
 			args{
 				successAttResponse0,
 				successClientDataHash0[:],
@@ -36,7 +36,7 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 			false,
 		},
 		{
-			"success",
+			"ShouldHandleSuccessfulAttestationResponse1",
 			args{
 				successAttResponse1,
 				successClientDataHash1[:],
