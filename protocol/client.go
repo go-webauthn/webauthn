@@ -43,13 +43,15 @@ type TokenBinding struct {
 type TokenBindingStatus string
 
 const (
-	// Indicates token binding was used when communicating with the
+	// Present indicates token binding was used when communicating with the
 	// Relying Party. In this case, the id member MUST be present.
 	Present TokenBindingStatus = "present"
-	// Indicates token binding was used when communicating with the
+
+	// Supported indicates token binding was used when communicating with the
 	// negotiated when communicating with the Relying Party.
 	Supported TokenBindingStatus = "supported"
-	// Indicates token binding not supported
+
+	// NotSupported indicates token binding not supported
 	// when communicating with the Relying Party.
 	NotSupported TokenBindingStatus = "not-supported"
 )
@@ -109,7 +111,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 	var fqOrigin string
 
 	if fqOrigin, err = FullyQualifiedOrigin(c.Origin); err != nil {
-		return ErrParsingData.WithDetails("Error decoding clientData origin as URL")
+		return ErrParsingData.WithDetails("Error decoding clientData origin as URL").WithError(err)
 	}
 
 	found := false
@@ -144,7 +146,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 			)
 
 			if fqTopOrigin, err = FullyQualifiedOrigin(c.TopOrigin); err != nil {
-				return ErrParsingData.WithDetails("Error decoding clientData topOrigin as URL")
+				return ErrParsingData.WithDetails("Error decoding clientData topOrigin as URL").WithError(err)
 			}
 
 			switch rpTopOriginsVerify {

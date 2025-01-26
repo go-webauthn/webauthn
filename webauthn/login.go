@@ -186,7 +186,7 @@ func WithLoginRelyingPartyID(id string) LoginOption {
 // WithChallenge overrides the default random challenge with a user supplied value.
 // In order to prevent replay attacks, the challenges MUST contain enough entropy to make guessing them infeasible.
 // Challenges SHOULD therefore be at least 16 bytes long.
-// This function is EXPERIMENTAL and can be removed without warning. 
+// This function is EXPERIMENTAL and can be removed without warning.
 //
 // Specification: §13.4.3. Cryptographic Challenges (https://www.w3.org/TR/webauthn/#sctn-cryptographic-challenges)
 func WithChallenge(challenge []byte) LoginOption {
@@ -250,7 +250,7 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 	}
 
 	if user, err = handler(parsedResponse.RawID, parsedResponse.Response.UserHandle); err != nil {
-		return nil, nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err))
+		return nil, nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err)).WithError(err)
 	}
 
 	if credential, err = webauthn.validateLogin(user, session, parsedResponse); err != nil {
@@ -344,11 +344,13 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 		var aaguid uuid.UUID
 
 		if aaguid, err = uuid.FromBytes(credential.Authenticator.AAGUID); err != nil {
-			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err))
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err)).WithError(err)
 		}
 
-		if err = protocol.ValidateMetadata(context.Background(), aaguid, webauthn.Config.MDS); err != nil {
-			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(fmt.Sprintf("Error occurred validating authenticator metadata from the credential record: %s", err))
+		var protoErr *protocol.Error
+
+		if protoErr = protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, credential.AttestationType, nil); protoErr != nil {
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(protoErr.DevInfo).WithError(protoErr)
 		}
 	}
 

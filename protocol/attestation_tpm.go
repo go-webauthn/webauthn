@@ -72,7 +72,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	// is identical to the credentialPublicKey in the attestedCredentialData in authenticatorData.
 	pubArea, err := tpm2.DecodePublic(pubAreaBytes)
 	if err != nil {
-		return "", nil, ErrAttestationFormat.WithDetails("Unable to decode TPMT_PUBLIC in attestation statement")
+		return "", nil, ErrAttestationFormat.WithDetails("Unable to decode TPMT_PUBLIC in attestation statement").WithError(err)
 	}
 
 	key, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
@@ -115,6 +115,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	// 3/4 Verify that extraData is set to the hash of attToBeSigned using the hash algorithm employed in "alg".
 	h := webauthncose.HasherFromCOSEAlg(coseAlg)
 	h.Write(attToBeSigned)
+
 	if !bytes.Equal(certInfo.ExtraData, h.Sum(nil)) {
 		return "", nil, ErrAttestationFormat.WithDetails("ExtraData is not set to hash of attToBeSigned")
 	}
@@ -219,23 +220,24 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	return string(metadata.AttCA), x5c, err
 }
 
+// forEachSAN loops through the TPM SAN extension.
+//
+// RFC 5280, 4.2.1.6
+// SubjectAltName ::= GeneralNames
+//
+// GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
+//
+//	GeneralName ::= CHOICE {
+//	     otherName                       [0]     OtherName,
+//	     rfc822Name                      [1]     IA5String,
+//	     dNSName                         [2]     IA5String,
+//	     x400Address                     [3]     ORAddress,
+//	     directoryName                   [4]     Name,
+//	     ediPartyName                    [5]     EDIPartyName,
+//	     uniformResourceIdentifier       [6]     IA5String,
+//	     iPAddress                       [7]     OCTET STRING,
+//	     registeredID                    [8]     OBJECT IDENTIFIER }
 func forEachSAN(extension []byte, callback func(tag int, data []byte) error) error {
-	// RFC 5280, 4.2.1.6
-
-	// SubjectAltName ::= GeneralNames
-	//
-	// GeneralNames ::= SEQUENCE SIZE (1..MAX) OF GeneralName
-	//
-	// GeneralName ::= CHOICE {
-	//      otherName                       [0]     OtherName,
-	//      rfc822Name                      [1]     IA5String,
-	//      dNSName                         [2]     IA5String,
-	//      x400Address                     [3]     ORAddress,
-	//      directoryName                   [4]     Name,
-	//      ediPartyName                    [5]     EDIPartyName,
-	//      uniformResourceIdentifier       [6]     IA5String,
-	//      iPAddress                       [7]     OCTET STRING,
-	//      registeredID                    [8]     OBJECT IDENTIFIER }
 	var seq asn1.RawValue
 
 	rest, err := asn1.Unmarshal(extension, &seq)
@@ -284,13 +286,16 @@ func parseSANExtension(value []byte) (manufacturer string, model string, version
 		case nameTypeDN:
 			tpmDeviceAttributes := pkix.RDNSequence{}
 			_, err := asn1.Unmarshal(data, &tpmDeviceAttributes)
+
 			if err != nil {
 				return err
 			}
+
 			for _, rdn := range tpmDeviceAttributes {
 				if len(rdn) == 0 {
 					continue
 				}
+
 				for _, atv := range rdn {
 					value, ok := atv.Value.(string)
 					if !ok {
@@ -300,15 +305,18 @@ func parseSANExtension(value []byte) (manufacturer string, model string, version
 					if atv.Type.Equal(tcgAtTpmManufacturer) {
 						manufacturer = strings.TrimPrefix(value, "id:")
 					}
+
 					if atv.Type.Equal(tcgAtTpmModel) {
 						model = value
 					}
+
 					if atv.Type.Equal(tcgAtTpmVersion) {
 						version = strings.TrimPrefix(value, "id:")
 					}
 				}
 			}
 		}
+
 		return nil
 	})
 
@@ -359,21 +367,40 @@ func isValidTPMManufacturer(id string) bool {
 	return false
 }
 
-func tpmParseSANExtension(attestation *x509.Certificate) (err error) {
+func tpmParseAIKAttCA(x5c *x509.Certificate, x5cis []*x509.Certificate) (err *Error) {
+	if err = tpmParseSANExtension(x5c); err != nil {
+		return err
+	}
+
+	if err = tpmRemoveEKU(x5c); err != nil {
+		return err
+	}
+
+	for _, parent := range x5cis {
+		if err = tpmRemoveEKU(parent); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
 	var (
 		manufacturer, model, version string
+		err                          error
 	)
 
 	for _, ext := range attestation.Extensions {
 		if ext.Id.Equal(oidExtensionSubjectAltName) {
 			if manufacturer, model, version, err = parseSANExtension(ext.Value); err != nil {
-				return ErrInvalidAttestation.WithDetails("Authenticator with invalid AIK SAN data encountered during attestation validation.").WithInfo(fmt.Sprintf("Error occurred parsing SAN extension: %s", err.Error()))
+				return ErrInvalidAttestation.WithDetails("Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.").WithInfo(fmt.Sprintf("Error occurred parsing SAN extension: %s", err.Error())).WithError(err)
 			}
 		}
 	}
 
 	if manufacturer == "" || model == "" || version == "" {
-		return ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate")
+		return ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate.")
 	}
 
 	var unhandled []asn1.ObjectIdentifier
@@ -404,7 +431,7 @@ type tpmBasicConstraints struct {
 }
 
 // Remove extension key usage to avoid ExtKeyUsage check failure.
-func tpmRemoveEKU(x5c *x509.Certificate) error {
+func tpmRemoveEKU(x5c *x509.Certificate) *Error {
 	var (
 		unknown []asn1.ObjectIdentifier
 		hasAiK  bool
@@ -425,7 +452,7 @@ func tpmRemoveEKU(x5c *x509.Certificate) error {
 	}
 
 	if !hasAiK {
-		return ErrAttestationFormat.WithDetails("AIK certificate missing EKU")
+		return ErrAttestationFormat.WithDetails("Attestation Identity Key certificate missing required Extended Key Usage.")
 	}
 
 	x5c.UnknownExtKeyUsage = unknown
