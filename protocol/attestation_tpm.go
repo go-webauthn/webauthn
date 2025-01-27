@@ -340,6 +340,7 @@ var tpmManufacturers = []struct {
 	{"48504500", "HPE", "HPE"},
 	{"48495349", "Huawei", "HISI"},
 	{"49424d00", "IBM", "IBM"},
+	{"49424D00", "IBM", "IBM"},
 	{"49465800", "Infineon", "IFX"},
 	{"494E5443", "Intel", "INTC"},
 	{"4C454E00", "Lenovo", "LEN"},
@@ -348,12 +349,14 @@ var tpmManufacturers = []struct {
 	{"4E545A00", "Nationz", "NTZ"},
 	{"4E544300", "Nuvoton Technology", "NTC"},
 	{"51434F4D", "Qualcomm", "QCOM"},
-	{"534D534E", "Samsung", "SMSN"},
+	{"534D534E", "Samsung", "SECE"},
+	{"53454345", "SecEdge", "SecEdge"},
 	{"534E5300", "Sinosun", "SNS"},
 	{"534D5343", "SMSC", "SMSC"},
 	{"53544D20", "ST Microelectronics", "STM"},
 	{"54584E00", "Texas Instruments", "TXN"},
 	{"57454300", "Winbond", "WEC"},
+	{"5345414C", "Wisekey", "SEAL"},
 	{"FFFFF1D0", "FIDO Alliance Conformance Testing", "FIDO"},
 }
 
