@@ -32,13 +32,9 @@ go where their backwards compatibility when upgrading the compile tools is usual
 This policy means that users who wish to build this with older versions of go may find there are features being used
 which are not available in that version. The current intentionally supported versions of go are as follows:
 
+- go 1.24
+- go 1.23
 - go 1.22
-- go 1.21
-- ~~go 1.20~~:
-  - Go 1.20 support has been removed due to the new toolchain directive and lack of support in Go 1.20. This directive
-    is unfortunately being used in dependent libraries and we'd opt for ensuring we can easily obtain potential fixes
-    to CVE's rather than backwards compatibility. A such we have lifted the version requirement and implemented the
-    toolchain directive in our module to reflect the intended toolchain.
 
 ## Status
 
