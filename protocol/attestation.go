@@ -157,22 +157,27 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		return nil
 	}
 
-	formatHandler, valid := attestationRegistry[AttestationFormat(a.Format)]
-	if !valid {
+	var (
+		handler attestationFormatValidationHandler
+		valid   bool
+	)
+
+	if handler, valid = attestationRegistry[AttestationFormat(a.Format)]; !valid {
 		return ErrAttestationFormat.WithInfo(fmt.Sprintf("Attestation format %s is unsupported", a.Format))
 	}
+
+	var (
+		aaguid          uuid.UUID
+		attestationType string
+		x5cs            []any
+	)
 
 	// Step 14. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
-	attestationType, x5cs, err := formatHandler(*a, clientDataHash, mds)
-	if err != nil {
+	if attestationType, x5cs, err = handler(*a, clientDataHash, mds); err != nil {
 		return err.(*Error).WithInfo(attestationType)
 	}
-
-	var (
-		aaguid uuid.UUID
-	)
 
 	if len(a.AuthData.AttData.AAGUID) != 0 {
 		if aaguid, err = uuid.FromBytes(a.AuthData.AttData.AAGUID); err != nil {

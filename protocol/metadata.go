@@ -36,7 +36,7 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 		return nil
 	}
 
-	if mds.GetValidateAttestationTypes(ctx) {
+	if mds.GetValidateAttestationTypes(ctx) && attestationType != "" {
 		found := false
 
 		for _, atype := range entry.MetadataStatement.AttestationTypes {
