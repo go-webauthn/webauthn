@@ -25,7 +25,7 @@ func doTruncateCopyAndSeekStart(f *os.File, rc io.ReadCloser) (err error) {
 }
 
 func doOpenOrCreate(name string) (f *os.File, created bool, err error) {
-	if f, err = os.Open(name); err == nil {
+	if f, err = os.OpenFile(name, os.O_RDWR, 0); err == nil {
 		return f, false, nil
 	}
 
