@@ -343,7 +343,9 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	if webauthn.Config.MDS != nil {
 		var aaguid uuid.UUID
 
-		if aaguid, err = uuid.FromBytes(credential.Authenticator.AAGUID); err != nil {
+		if len(credential.Authenticator.AAGUID) == 0 {
+			aaguid = uuid.Nil
+		} else if aaguid, err = uuid.FromBytes(credential.Authenticator.AAGUID); err != nil {
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err)).WithError(err)
 		}
 
