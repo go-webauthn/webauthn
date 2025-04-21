@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
 func TestParseCredentialCreationResponse(t *testing.T) {
@@ -168,6 +169,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 		verifyUser         bool
 		relyingPartyID     string
 		relyingPartyOrigin []string
+		credParams         []CredentialParameter
 	}
 
 	tests := []struct {
@@ -228,6 +230,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				verifyUser:         false,
 				relyingPartyID:     `webauthn.io`,
 				relyingPartyOrigin: []string{`https://webauthn.io`},
+				credParams:         []CredentialParameter{{Type: "public-key", Algorithm: webauthncose.AlgES256}},
 			},
 			wantErr: false,
 		},
@@ -240,7 +243,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				Response:                  tt.fields.Response,
 				Raw:                       tt.fields.Raw,
 			}
-			if _, err := pcc.Verify(tt.args.storedChallenge.String(), tt.args.verifyUser, tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, nil); (err != nil) != tt.wantErr {
+			if _, err := pcc.Verify(tt.args.storedChallenge.String(), tt.args.verifyUser, tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, nil, tt.args.credParams); (err != nil) != tt.wantErr {
 				t.Errorf("ParsedCredentialCreationData.Verify() error = %+v, wantErr %v", err, tt.wantErr)
 			}
 		})
