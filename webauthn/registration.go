@@ -100,6 +100,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		RelyingPartyID:   creation.Response.RelyingParty.ID,
 		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
+		CredParams:       creation.Response.Parameters,
 	}
 
 	if webauthn.Config.Timeouts.Registration.Enforce {
@@ -233,7 +234,7 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 
 	var clientDataHash []byte
 
-	if clientDataHash, err = parsedResponse.Verify(session.Challenge, shouldVerifyUser, webauthn.Config.RPID, webauthn.Config.RPOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.MDS); err != nil {
+	if clientDataHash, err = parsedResponse.Verify(session.Challenge, shouldVerifyUser, webauthn.Config.RPID, webauthn.Config.RPOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.MDS, session.CredParams); err != nil {
 		return nil, err
 	}
 

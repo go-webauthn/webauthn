@@ -211,4 +211,5 @@ type SessionData struct {
 
 	UserVerification protocol.UserVerificationRequirement `json:"userVerification"`
 	Extensions       protocol.AuthenticationExtensions    `json:"extensions,omitempty"`
+	CredParams       []protocol.CredentialParameter       `json:"credParams,omitempty"`
 }

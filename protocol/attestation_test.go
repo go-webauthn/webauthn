@@ -29,7 +29,7 @@ func TestAttestationVerify(t *testing.T) {
 
 			pcc.Response = *parsedAttestationResponse
 
-			_, err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, nil)
+			_, err = pcc.Verify(options.Response.Challenge.String(), false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, nil, options.Response.Parameters)
 
 			require.NoError(t, err)
 		})

@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
 // AuthenticatorAttestationResponse is the initial unpacked 'response' object received by the relying party. This
@@ -119,16 +120,33 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 	return p, nil
 }
 
-// Verify performs Steps 9 through 14 of registration verification.
+// Verify performs Steps 13 through 19 of registration verification.
 //
-// Steps 9 through 12 are verified against the auth data. These steps are identical to 11 through 14 for assertion so we
+// Steps 13 through 15 are verified against the auth data. These steps are identical to 15 through 18 for assertion so we
 // handle them with AuthData.
-func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, mds metadata.Provider) (err error) {
+func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, mds metadata.Provider, credParams []CredentialParameter) (err error) {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
-	// Begin Step 9 through 12. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
+	// Begin Step 13 through 15. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
 	if err = a.AuthData.Verify(rpIDHash[:], nil, userVerificationRequired); err != nil {
 		return err
+	}
+
+	// Step 16. Verify that the "alg" parameter in the credential public key in
+	// authData matches the alg attribute of one of the items in options.pubKeyCredParams.
+	pk := webauthncose.PublicKeyData{}
+	if err = webauthncbor.Unmarshal(a.AuthData.AttData.CredentialPublicKey, &pk); err != nil {
+		return err
+	}
+	found := false
+	for _, credParam := range credParams {
+		if int(pk.Algorithm) == int(credParam.Algorithm) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ErrAttestationFormat.WithInfo("Credential public key algorithm not supported")
 	}
 
 	return a.VerifyAttestation(clientDataHash, mds)
@@ -137,7 +155,7 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 // VerifyAttestation only verifies the attestation object excluding the AuthData values. If you wish to also verify the
 // AuthData values you should use Verify.
 func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider) (err error) {
-	// Step 13. Determine the attestation statement format by performing a
+	// Step 18. Determine the attestation statement format by performing a
 	// USASCII case-sensitive match on fmt against the set of supported
 	// WebAuthn Attestation Statement Format Identifier values. The up-to-date
 	// list of registered WebAuthn Attestation Statement Format Identifier
@@ -172,7 +190,7 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		x5cs            []any
 	)
 
-	// Step 14. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
+	// Step 19. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
 	if attestationType, x5cs, err = handler(*a, clientDataHash, mds); err != nil {
