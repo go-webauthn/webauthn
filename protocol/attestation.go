@@ -114,7 +114,11 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 	}
 
 	for _, t := range ccr.Transports {
-		p.Transports = append(p.Transports, AuthenticatorTransport(t))
+		if transport, ok := internalRemappedAuthenticatorTransport[t]; ok {
+			p.Transports = append(p.Transports, transport)
+		} else {
+			p.Transports = append(p.Transports, AuthenticatorTransport(t))
+		}
 	}
 
 	return p, nil
