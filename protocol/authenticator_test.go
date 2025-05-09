@@ -478,7 +478,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			errString:  "Error validating the authenticator response",
 			errType:    "verification_error",
 			errDetails: "Error validating the authenticator response",
-			errInfo:    "User presence flag not set by authenticator\n",
+			errInfo:    "User presence flag not set by authenticator",
 		},
 		{
 			name: "User verification required",
@@ -493,7 +493,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			errString:  "Error validating the authenticator response",
 			errType:    "verification_error",
 			errDetails: "Error validating the authenticator response",
-			errInfo:    "User verification required but flag not set by authenticator\n",
+			errInfo:    "User verification required but flag not set by authenticator",
 		},
 	}
 
