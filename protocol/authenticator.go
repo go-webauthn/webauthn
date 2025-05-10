@@ -397,14 +397,14 @@ func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerifi
 	// Registration Step 14 & Assertion Step 16
 	// Verify that the User Present bit of the flags in authData is set.
 	if !a.Flags.UserPresent() {
-		return ErrVerification.WithInfo(fmt.Sprintln("User presence flag not set by authenticator"))
+		return ErrVerification.WithInfo(fmt.Sprintf("User presence flag not set by authenticator"))
 	}
 
 	// Registration Step 15 & Assertion Step 17
 	// If user verification is required for this assertion, verify that
 	// the User Verified bit of the flags in authData is set.
 	if userVerificationRequired && !a.Flags.UserVerified() {
-		return ErrVerification.WithInfo(fmt.Sprintln("User verification required but flag not set by authenticator"))
+		return ErrVerification.WithInfo(fmt.Sprintf("User verification required but flag not set by authenticator"))
 	}
 
 	// Registration Step 17 & Assertion Step 18
