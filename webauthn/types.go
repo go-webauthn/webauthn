@@ -199,17 +199,3 @@ type User interface {
 	// WebAuthnCredentials provides the list of Credential objects owned by the user.
 	WebAuthnCredentials() []Credential
 }
-
-// SessionData is the data that should be stored by the Relying Party for the duration of the web authentication
-// ceremony.
-type SessionData struct {
-	Challenge            string    `json:"challenge"`
-	RelyingPartyID       string    `json:"rpId"`
-	UserID               []byte    `json:"user_id"`
-	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty"`
-	Expires              time.Time `json:"expires"`
-
-	UserVerification protocol.UserVerificationRequirement `json:"userVerification"`
-	Extensions       protocol.AuthenticationExtensions    `json:"extensions,omitempty"`
-	CredParams       []protocol.CredentialParameter       `json:"credParams,omitempty"`
-}
