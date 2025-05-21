@@ -13,6 +13,13 @@ import (
 //
 // See: §4. Terminology: Credential Record (https://www.w3.org/TR/webauthn-3/#credential-record)
 type Credential struct {
+	CredentialBase
+
+	// The commonly stored flags.
+	Flags CredentialFlags `json:"flags"`
+}
+
+type CredentialBase struct {
 	// The Credential ID of the public key credential source. Described by the Credential Record 'id' field.
 	ID []byte `json:"id"`
 
@@ -25,14 +32,29 @@ type Credential struct {
 	// The transport types the authenticator supports.
 	Transport []protocol.AuthenticatorTransport `json:"transport"`
 
-	// The commonly stored flags.
-	Flags CredentialFlags `json:"flags"`
-
 	// The Authenticator information for a given certificate.
 	Authenticator Authenticator `json:"authenticator"`
 
 	// The attestation values that can be used to validate this credential via the MDS3 at a later date.
 	Attestation CredentialAttestation `json:"attestation"`
+}
+
+type CredentialStrict struct {
+	ID []byte `json:"id"`
+}
+
+// Credentials is a decorator type which allows easily converting a []Credential to []protocol.CredentialDescriptor.
+type Credentials []Credential
+
+// CredentialDescriptors returns the []protocol.CredentialDescriptor for this Credentials type.
+func (c Credentials) CredentialDescriptors() (descriptors []protocol.CredentialDescriptor) {
+	descriptors = make([]protocol.CredentialDescriptor, len(c))
+
+	for i, credential := range c {
+		descriptors[i] = credential.Descriptor()
+	}
+
+	return descriptors
 }
 
 // NewCredentialFlags is a utility function that is used to derive the Credential's Flags field. This allows
@@ -92,23 +114,25 @@ func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 // NewCredential will return a credential pointer on successful validation of a registration response.
 func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
 	credential = &Credential{
-		ID:              c.Response.AttestationObject.AuthData.AttData.CredentialID,
-		PublicKey:       c.Response.AttestationObject.AuthData.AttData.CredentialPublicKey,
-		AttestationType: c.Response.AttestationObject.Format,
-		Transport:       c.Response.Transports,
-		Flags:           NewCredentialFlags(c.Response.AttestationObject.AuthData.Flags),
-		Authenticator: Authenticator{
-			AAGUID:     c.Response.AttestationObject.AuthData.AttData.AAGUID,
-			SignCount:  c.Response.AttestationObject.AuthData.Counter,
-			Attachment: c.AuthenticatorAttachment,
+		CredentialBase: CredentialBase{
+			ID:              c.Response.AttestationObject.AuthData.AttData.CredentialID,
+			PublicKey:       c.Response.AttestationObject.AuthData.AttData.CredentialPublicKey,
+			AttestationType: c.Response.AttestationObject.Format,
+			Transport:       c.Response.Transports,
+			Authenticator: Authenticator{
+				AAGUID:     c.Response.AttestationObject.AuthData.AttData.AAGUID,
+				SignCount:  c.Response.AttestationObject.AuthData.Counter,
+				Attachment: c.AuthenticatorAttachment,
+			},
+			Attestation: CredentialAttestation{
+				ClientDataJSON:     c.Raw.AttestationResponse.ClientDataJSON,
+				ClientDataHash:     clientDataHash,
+				AuthenticatorData:  c.Raw.AttestationResponse.AuthenticatorData,
+				PublicKeyAlgorithm: c.Raw.AttestationResponse.PublicKeyAlgorithm,
+				Object:             c.Raw.AttestationResponse.AttestationObject,
+			},
 		},
-		Attestation: CredentialAttestation{
-			ClientDataJSON:     c.Raw.AttestationResponse.ClientDataJSON,
-			ClientDataHash:     clientDataHash,
-			AuthenticatorData:  c.Raw.AttestationResponse.AuthenticatorData,
-			PublicKeyAlgorithm: c.Raw.AttestationResponse.PublicKeyAlgorithm,
-			Object:             c.Raw.AttestationResponse.AttestationObject,
-		},
+		Flags: NewCredentialFlags(c.Response.AttestationObject.AuthData.Flags),
 	}
 
 	return credential, nil

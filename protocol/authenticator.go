@@ -65,6 +65,9 @@ type AttestedCredentialData struct {
 type CredentialMediationRequirement string
 
 const (
+	// MediationDefault lets the browser choose the mediation flow completely as if it wasn't specified at all.
+	MediationDefault CredentialMediationRequirement = ""
+
 	// MediationSilent indicates user mediation is suppressed for the given operation. If the operation can be performed
 	// without user involvement, wonderful. If user involvement is necessary, then the operation will return null rather
 	// than involving the user.

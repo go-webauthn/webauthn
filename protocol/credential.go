@@ -62,15 +62,15 @@ type ParsedCredentialCreationData struct {
 
 // ParseCredentialCreationResponse is a non-agnostic function for parsing a registration response from the http library
 // from stdlib. It handles some standard cleanup operations.
-func ParseCredentialCreationResponse(response *http.Request) (*ParsedCredentialCreationData, error) {
-	if response == nil || response.Body == nil {
+func ParseCredentialCreationResponse(request *http.Request) (*ParsedCredentialCreationData, error) {
+	if request == nil || request.Body == nil {
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
-	defer response.Body.Close()
-	defer io.Copy(io.Discard, response.Body)
+	defer request.Body.Close()
+	defer io.Copy(io.Discard, request.Body)
 
-	return ParseCredentialCreationResponseBody(response.Body)
+	return ParseCredentialCreationResponseBody(request.Body)
 }
 
 // ParseCredentialCreationResponseBody is an agnostic version of ParseCredentialCreationResponse. Implementers are
