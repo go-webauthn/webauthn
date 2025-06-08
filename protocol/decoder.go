@@ -17,7 +17,7 @@ func decodeBody(body io.Reader, v any) (err error) {
 	_, err = decoder.Token()
 
 	if !errors.Is(err, io.EOF) {
-		return errors.New("The body contains trailing data")
+		return errors.New("the body contains trailing data")
 	}
 
 	return nil

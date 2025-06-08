@@ -104,7 +104,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			errString:  "Parse error for Registration",
 			errType:    "invalid_request",
 			errDetails: "Parse error for Registration",
-			errInfo:    "The body contains trailing data",
+			errInfo:    "the body contains trailing data",
 		},
 	}
 
