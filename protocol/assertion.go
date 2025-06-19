@@ -139,7 +139,7 @@ func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionDa
 // documentation.
 //
 // Specification: §7.2 Verifying an Authentication Assertion (https://www.w3.org/TR/webauthn/#sctn-verifying-assertion)
-func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, appID string, verifyUser bool, credentialBytes []byte) error {
+func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, appID string, verifyUser bool, verifyUserPresence bool, credentialBytes []byte) error {
 	// Steps 4 through 6 in verifying the assertion data (https://www.w3.org/TR/webauthn/#verifying-assertion) are
 	// "assertive" steps, i.e. "Let JSONtext be the result of running UTF-8 decode on the value of cData."
 	// We handle these steps in part as we verify but also beforehand
@@ -160,7 +160,7 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 	}
 
 	// Handle steps 11 through 14, verifying the authenticator data.
-	validError = p.Response.AuthenticatorData.Verify(rpIDHash[:], appIDHash[:], verifyUser)
+	validError = p.Response.AuthenticatorData.Verify(rpIDHash[:], appIDHash[:], verifyUser, verifyUserPresence)
 	if validError != nil {
 		return validError
 	}

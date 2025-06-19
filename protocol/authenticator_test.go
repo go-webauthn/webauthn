@@ -431,6 +431,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 	type args struct {
 		rpIdHash                 []byte
 		userVerificationRequired bool
+		userPresenceRequired     bool
 	}
 
 	tests := []struct {
@@ -473,12 +474,13 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 				Flags:    AuthenticatorFlags(0x04),
 			},
 			args: args{
-				rpIdHash: []byte{1, 2, 3},
+				rpIdHash:             []byte{1, 2, 3},
+				userPresenceRequired: true,
 			},
 			errString:  "Error validating the authenticator response",
 			errType:    "verification_error",
 			errDetails: "Error validating the authenticator response",
-			errInfo:    "User presence flag not set by authenticator",
+			errInfo:    "User presence required but flag not set by authenticator",
 		},
 		{
 			name: "User verification required",
@@ -489,6 +491,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			args: args{
 				rpIdHash:                 []byte{1, 2, 3},
 				userVerificationRequired: true,
+				userPresenceRequired:     true,
 			},
 			errString:  "Error validating the authenticator response",
 			errType:    "verification_error",
@@ -506,7 +509,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 				AttData:  tt.fields.AttData,
 				ExtData:  tt.fields.ExtData,
 			}
-			err := a.Verify(tt.args.rpIdHash, nil, tt.args.userVerificationRequired)
+			err := a.Verify(tt.args.rpIdHash, nil, tt.args.userVerificationRequired, tt.args.userPresenceRequired)
 			if tt.errString != "" {
 				assert.EqualError(t, err, tt.errString)
 
