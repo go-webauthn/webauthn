@@ -180,7 +180,7 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 				Raw:                       tt.fields.Raw,
 			}
 
-			if err := p.Verify(tt.args.storedChallenge.String(), tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, "", tt.args.verifyUser, tt.args.credentialBytes); (err != nil) != tt.wantErr {
+			if err := p.Verify(tt.args.storedChallenge.String(), tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, "", tt.args.verifyUser, false, tt.args.credentialBytes); (err != nil) != tt.wantErr {
 				t.Errorf("ParsedCredentialAssertionData.Verify() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

@@ -145,7 +145,7 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 // Verify the Client and Attestation data.
 //
 // Specification: §7.1. Registering a New Credential (https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential)
-func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, mds metadata.Provider, credParams []CredentialParameter) (clientDataHash []byte, err error) {
+func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, verifyUserPresence bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, mds metadata.Provider, credParams []CredentialParameter) (clientDataHash []byte, err error) {
 	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data
 	if err = pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify); err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 
 	// We do the above step while parsing and decoding the CredentialCreationResponse
 	// Handle steps 9 through 14 - This verifies the attestation object.
-	if err = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash, verifyUser, mds, credParams); err != nil {
+	if err = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash, verifyUser, verifyUserPresence, mds, credParams); err != nil {
 		return clientDataHash, err
 	}
 

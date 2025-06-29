@@ -128,11 +128,11 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 //
 // Steps 13 through 15 are verified against the auth data. These steps are identical to 15 through 18 for assertion so we
 // handle them with AuthData.
-func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, mds metadata.Provider, credParams []CredentialParameter) (err error) {
+func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, userPresenceRequired bool, mds metadata.Provider, credParams []CredentialParameter) (err error) {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
 	// Begin Step 13 through 15. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
-	if err = a.AuthData.Verify(rpIDHash[:], nil, userVerificationRequired); err != nil {
+	if err = a.AuthData.Verify(rpIDHash[:], nil, userVerificationRequired, userPresenceRequired); err != nil {
 		return err
 	}
 
