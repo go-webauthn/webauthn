@@ -35,6 +35,21 @@ type Credential struct {
 	Attestation CredentialAttestation `json:"attestation"`
 }
 
+// Credentials is a decorator type which allows easily converting a []Credential to []protocol.CredentialDescriptor.
+// This will be the type used globally for the library in a future release.
+type Credentials []Credential
+
+// CredentialDescriptors returns the []protocol.CredentialDescriptor for this Credentials type.
+func (c Credentials) CredentialDescriptors() (descriptors []protocol.CredentialDescriptor) {
+	descriptors = make([]protocol.CredentialDescriptor, len(c))
+
+	for i, credential := range c {
+		descriptors[i] = credential.Descriptor()
+	}
+
+	return descriptors
+}
+
 // NewCredentialFlags is a utility function that is used to derive the Credential's Flags field. This allows
 // implementers to solely save the Raw field of the CredentialFlags to restore them appropriately for appropriate
 // processing without concern that changes forced upon implementers by the W3C will introduce breaking changes.
