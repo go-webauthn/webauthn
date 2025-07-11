@@ -209,6 +209,12 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 // FinishDiscoverableLogin takes the response from the client and validate it against the handler and stored session data.
 // The handler helps to find out which user must be used to validate the response. This is a function defined in your
 // business code that will retrieve the user from your persistent data.
+//
+// As with all Finish functions this function requires a *http.Request but you can perform the same steps with the
+// protocol.ParseCredentialRequestResponseBody or protocol.ParseCredentialRequestResponseBytes which require an
+// io.Reader or byte array respectively, you can also use an arbitrary *protocol.ParsedCredentialAssertionData which is
+// returned from all of these functions i.e. by implementing a custom parser. The DiscoverableUserHandler, *SessionData,
+// and *protocol.ParsedCredentialAssertionData can then be used with the ValidatePasskeyLogin function.
 func (webauthn *WebAuthn) FinishDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, response *http.Request) (credential *Credential, err error) {
 	var parsedResponse *protocol.ParsedCredentialAssertionData
 
@@ -222,6 +228,12 @@ func (webauthn *WebAuthn) FinishDiscoverableLogin(handler DiscoverableUserHandle
 // FinishPasskeyLogin takes the response from the client and validate it against the handler and stored session data.
 // The handler helps to find out which user must be used to validate the response. This is a function defined in your
 // business code that will retrieve the user from your persistent data.
+//
+// As with all Finish functions this function requires a *http.Request but you can perform the same steps with the
+// protocol.ParseCredentialRequestResponseBody or protocol.ParseCredentialRequestResponseBytes which require an
+// io.Reader or byte array respectively, you can also use an arbitrary *protocol.ParsedCredentialAssertionData which is
+// returned from all of these functions i.e. by implementing a custom parser. The DiscoverableUserHandler, *SessionData,
+// and *protocol.ParsedCredentialAssertionData can then be used with the ValidatePasskeyLogin function.
 func (webauthn *WebAuthn) FinishPasskeyLogin(handler DiscoverableUserHandler, session SessionData, response *http.Request) (user User, credential *Credential, err error) {
 	var parsedResponse *protocol.ParsedCredentialAssertionData
 
@@ -233,6 +245,9 @@ func (webauthn *WebAuthn) FinishPasskeyLogin(handler DiscoverableUserHandler, se
 }
 
 // ValidateLogin takes a parsed response and validates it against the user credentials and session data.
+//
+// If you wish to skip performing the step required to parse the *protocol.ParsedCredentialAssertionData and
+// you're using net/http then you can use FinishLogin instead.
 func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (credential *Credential, err error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
@@ -247,6 +262,9 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 
 // ValidateDiscoverableLogin is an overloaded version of ValidateLogin that allows for discoverable credentials.
 //
+// If you wish to skip performing the step required to parse the *protocol.ParsedCredentialAssertionData and
+// you're using net/http then you can use FinishDiscoverableLogin instead.
+//
 // Note: this is just a backwards compatibility layer over ValidatePasskeyLogin which returns more information.
 func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (credential *Credential, err error) {
 	_, credential, err = webauthn.ValidatePasskeyLogin(handler, session, parsedResponse)
@@ -255,6 +273,9 @@ func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHand
 }
 
 // ValidatePasskeyLogin is an overloaded version of ValidateLogin that allows for passkey credentials.
+//
+// If you wish to skip performing the step required to parse the *protocol.ParsedCredentialAssertionData and
+// you're using net/http then you can use FinishPasskeyLogin instead.
 func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (user User, credential *Credential, err error) {
 	if len(session.UserID) != 0 {
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
@@ -275,7 +296,7 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 	return user, credential, nil
 }
 
-// ValidateLogin takes a parsed response and validates it against the user credentials and session data.
+// validateLogin takes a parsed response and validates it against the user credentials and session data.
 func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	// Step 1. If the allowCredentials option was given when this authentication ceremony was initiated,
 	// verify that credential.id identifies one of the public key credentials that were listed in
