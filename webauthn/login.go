@@ -196,9 +196,10 @@ func WithChallenge(challenge []byte) LoginOption {
 }
 
 // FinishLogin takes the response from the client and validate it against the user credentials and stored session data.
-func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *http.Request) (*Credential, error) {
-	parsedResponse, err := protocol.ParseCredentialRequestResponse(response)
-	if err != nil {
+func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *http.Request) (credential *Credential, err error) {
+	var parsedResponse *protocol.ParsedCredentialAssertionData
+
+	if parsedResponse, err = protocol.ParseCredentialRequestResponse(response); err != nil {
 		return nil, err
 	}
 
@@ -208,17 +209,31 @@ func (webauthn *WebAuthn) FinishLogin(user User, session SessionData, response *
 // FinishDiscoverableLogin takes the response from the client and validate it against the handler and stored session data.
 // The handler helps to find out which user must be used to validate the response. This is a function defined in your
 // business code that will retrieve the user from your persistent data.
-func (webauthn *WebAuthn) FinishDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, response *http.Request) (*Credential, error) {
-	parsedResponse, err := protocol.ParseCredentialRequestResponse(response)
-	if err != nil {
+func (webauthn *WebAuthn) FinishDiscoverableLogin(handler DiscoverableUserHandler, session SessionData, response *http.Request) (credential *Credential, err error) {
+	var parsedResponse *protocol.ParsedCredentialAssertionData
+
+	if parsedResponse, err = protocol.ParseCredentialRequestResponse(response); err != nil {
 		return nil, err
 	}
 
 	return webauthn.ValidateDiscoverableLogin(handler, session, parsedResponse)
 }
 
+// FinishPasskeyLogin takes the response from the client and validate it against the handler and stored session data.
+// The handler helps to find out which user must be used to validate the response. This is a function defined in your
+// business code that will retrieve the user from your persistent data.
+func (webauthn *WebAuthn) FinishPasskeyLogin(handler DiscoverableUserHandler, session SessionData, response *http.Request) (user User, credential *Credential, err error) {
+	var parsedResponse *protocol.ParsedCredentialAssertionData
+
+	if parsedResponse, err = protocol.ParseCredentialRequestResponse(response); err != nil {
+		return nil, nil, err
+	}
+
+	return webauthn.ValidatePasskeyLogin(handler, session, parsedResponse)
+}
+
 // ValidateLogin takes a parsed response and validates it against the user credentials and session data.
-func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
+func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (credential *Credential, err error) {
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
 	}
@@ -372,17 +387,18 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 		return nil, err
 	}
 
-	// Handle step 17.
-	credential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
 	// Check if the BackupEligible flag has changed.
 	if credential.Flags.BackupEligible != parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible() {
-		return nil, protocol.ErrBadRequest.WithDetails("BackupEligible flag inconsistency detected during login validation")
+		return nil, protocol.ErrBadRequest.WithDetails("Backup Eligible flag inconsistency detected during login validation")
 	}
 
 	// Check for the invalid combination BE=0 and BS=1.
 	if !parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible() && parsedResponse.Response.AuthenticatorData.Flags.HasBackupState() {
-		return nil, protocol.ErrBadRequest.WithDetails("Invalid flag combination: BE=0 and BS=1")
+		return nil, protocol.ErrBadRequest.WithDetails("Backup State Flag is true but Backup Eligible flag is false which is invalid")
 	}
+
+	// Handle step 17.
+	credential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
 
 	// Update flags from response data.
 	credential.Flags.UserPresent = parsedResponse.Response.AuthenticatorData.Flags.HasUserPresent()
