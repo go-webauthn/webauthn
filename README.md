@@ -5,18 +5,9 @@
 
 
 This library is meant to handle [Web Authentication](https://www.w3.org/TR/webauthn) for Go apps that wish to implement 
-a passwordless solution for users. This library conforms as much as possible to the guidelines and implementation
-procedures outlined by the document.
-
-## Fork
-
-This library is a hard fork of [github.com/duo-labs/webauthn] and is the natural successor to that library.
-
-See the [migration](MIGRATION.md) guide for more information about how to migrate and the differences between the
-libraries.
-
-It is distributed under the same 3-Clause BSD license as the original fork, with the only amendment being the additional
-3-Clause BSD license attributing license rights to this repository.
+a multi-factor authentication, passwordless, or usernameless solution for users. This library conforms as much as
+possible to the guidelines and implementation procedures outlined by the relevant specifications and is conformance
+tested against the conformance tools.
 
 ## Go Version Support Policy
 
@@ -49,249 +40,24 @@ Make sure your `user` model is able to handle the interface functions laid out i
 supporting the storage and retrieval of the credential and authenticator structs in `webauthn/credential.go` and 
 `webauthn/authenticator.go`, respectively.
 
+## Notable Changes
+
+The notable breaking changes made by this library are documented in the [breaking changes](BREAKING.md) documentation.
+
+## Documentation
+
+The intent is to move all documentation into the [go docs], and this is the location we'd recommend checking.
+
 ## Examples
 
-The following examples show some basic use cases of the library. For consistency sake the following variables are used
-to denote specific things:
-
-- Variable `webAuthn`: the `webauthn.WebAuthn` instance you initialize elsewhere in your code
-- Variable `datastore`: the pseudocode backend service that stores your webauthn session data and users such as PostgreSQL 
-- Variable `session`: the webauthn.SessionData object
-- Variable `user`: your webauthn.User implementation
-
-We try to avoid using specific external libraries (excluding stdlib) where possible, and you'll need to adapt these
-examples with this in mind.
-
-### Initialize the request handler
-
-```go
-package example
-
-import (
-	"fmt"
-
-	"github.com/go-webauthn/webauthn/webauthn"
-)
-
-var (
-	webAuthn *webauthn.WebAuthn
-	err error
-)
-
-// Your initialization function
-func main() {
-	wconfig := &webauthn.Config{
-		RPDisplayName: "Go Webauthn", // Display Name for your site
-		RPID: "go-webauthn.local", // Generally the FQDN for your site
-		RPOrigins: []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
-	}
-	
-	if webAuthn, err = webauthn.New(wconfig); err != nil {
-		fmt.Println(err)
-	}
-}
-```
-
-### Registering an account
-
-```go
-package example
-
-func BeginRegistration(w http.ResponseWriter, r *http.Request) {
-	user := datastore.GetUser() // Find or create the new user  
-	options, session, err := webAuthn.BeginRegistration(user)
-	// handle errors if present
-	// store the sessionData values 
-	JSONResponse(w, options, http.StatusOK) // return the options generated
-	// options.publicKey contain our registration options
-}
-
-func FinishRegistration(w http.ResponseWriter, r *http.Request) {
-	user := datastore.GetUser() // Get the user
-	
-	// Get the session data stored from the function above
-	session := datastore.GetSession()
-		
-	credential, err := webAuthn.FinishRegistration(user, session, r)
-	if err != nil {
-		// Handle Error and return.
-
-		return
-	}
-	
-	// If creation was successful, store the credential object
-	// Pseudocode to add the user credential.
-	user.AddCredential(credential)
-	datastore.SaveUser(user)
-
-	JSONResponse(w, "Registration Success", http.StatusOK) // Handle next steps
-}
-```
-
-### Logging into an account
-
-```go
-package example
-
-func BeginLogin(w http.ResponseWriter, r *http.Request) {
-	user := datastore.GetUser() // Find the user
-	
-	options, session, err := webAuthn.BeginLogin(user)
-	if err != nil {
-		// Handle Error and return.
-
-		return
-	}
-	
-	// store the session values
-	datastore.SaveSession(session)
-	
-	JSONResponse(w, options, http.StatusOK) // return the options generated
-	// options.publicKey contain our registration options
-}
-
-func FinishLogin(w http.ResponseWriter, r *http.Request) {
-	user := datastore.GetUser() // Get the user 
-	
-	// Get the session data stored from the function above
-	session := datastore.GetSession()
-	
-	credential, err := webAuthn.FinishLogin(user, session, r)
-	if err != nil {
-		// Handle Error and return.
-
-		return
-	}
-
-	// Handle credential.Authenticator.CloneWarning
-
-	// If login was successful, update the credential object
-	// Pseudocode to update the user credential.
-	user.UpdateCredential(credential)
-	datastore.SaveUser(user)
-	
-	JSONResponse(w, "Login Success", http.StatusOK)
-}
-```
-
-## Modifying Credential Options
-
-You can modify the default credential creation options for registration and login by providing optional structs to the 
-`BeginRegistration` and `BeginLogin` functions. 
-
-### Registration modifiers
-
-You can modify the registration options in the following ways:
-
-```go
-package example
-
-import (
-	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/go-webauthn/webauthn/webauthn"
-)
-
-var webAuthn webauthn.WebAuthn // init this in your init function
-
-func beginRegistration() {
-	// Updating the AuthenticatorSelection options. 
-	// See the struct declarations for values
-	authSelect := protocol.AuthenticatorSelection{
-		AuthenticatorAttachment: protocol.AuthenticatorAttachment("platform"),
-		RequireResidentKey: protocol.ResidentKeyNotRequired(),
-		UserVerification: protocol.VerificationRequired,
-	}
-
-	// Updating the ConveyencePreference options. 
-	// See the struct declarations for values
-	conveyancePref := protocol.PreferNoAttestation
-
-	user := datastore.GetUser() // Get the user  
-	opts, session, err := webAuthn.BeginRegistration(user, webauthn.WithAuthenticatorSelection(authSelect), webauthn.WithConveyancePreference(conveyancePref))
-
-	// Handle next steps
-}
-```
-
-### Login modifiers
-
-You can modify the login options to allow only certain credentials:
-
-```go
-package example
-
-import (
-	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/go-webauthn/webauthn/webauthn"
-)
-
-var webAuthn webauthn.WebAuthn // init this in your init function
-
-func beginLogin() {
-	// Updating the AuthenticatorSelection options. 
-	// See the struct declarations for values
-	allowList := make([]protocol.CredentialDescriptor, 1)
-	allowList[0] = protocol.CredentialDescriptor{
-		CredentialID: credentialToAllowID,
-		Type: protocol.PublicKeyCredentialType,
-	}
-
-	user := datastore.GetUser() // Get the user  
-
-	opts, session, err := w.BeginLogin(user, webauthn.WithAllowedCredentials(allowList))
-
-	// Handle next steps
-}
-```
-
-## Timeout Mechanics
-
-The library by default does not enforce timeouts. However the default timeouts sent to the browser are taken from the
-specification. You can override both of these behaviours however.
-
-```go
-package example
-
-import (
-	"fmt"
-	"time"
-	
-	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/go-webauthn/webauthn/webauthn"
-)
-
-func main() {
-	wconfig := &webauthn.Config{
-		RPDisplayName: "Go Webauthn",                               // Display Name for your site
-		RPID:          "go-webauthn.local",                         // Generally the FQDN for your site
-		RPOrigins:     []string{"https://login.go-webauthn.local"}, // The origin URLs allowed for WebAuthn requests
-		Timeouts: webauthn.TimeoutsConfig{
-			Login: webauthn.TimeoutConfig{
-				Enforce:    true, // Require the response from the client comes before the end of the timeout.
-				Timeout:    time.Second * 60, // Standard timeout for login sessions.
-				TimeoutUVD: time.Second * 60, // Timeout for login sessions which have user verification set to discouraged.
-			},
-			Registration: webauthn.TimeoutConfig{
-				Enforce:    true, // Require the response from the client comes before the end of the timeout.
-				Timeout:    time.Second * 60, // Standard timeout for registration sessions.
-				TimeoutUVD: time.Second * 60, // Timeout for login sessions which have user verification set to discouraged.
-			},
-		},
-	}
-	
-	webAuthn, err := webauthn.New(wconfig)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-```
+The examples are documented in the [go docs]. 
 
 ## Credential Record
 
 The WebAuthn Level 3 specification describes the Credential Record which includes several required and optional elements
 that you should store for. See [§ 4 Terminology](https://www.w3.org/TR/webauthn-3/#credential-record) for details.
 
-This section describes this element. 
+This section describes this element.
 
 The fields listed in the specification have corresponding fields in the [webauthn.Credential] struct. See the below
 table for more information. We also include JSON mappings for those that wish to just store these values as JSON.
@@ -324,50 +90,6 @@ to retrieve the raw value and
 restore it; and instead of using the individual flags to store the value store the Protocol Value, and only store the
 individual flags as a means to perform compliance related decisions.
 
-#### Notable Changes
-
-This contains some notable changes to the flags over the life of the library.
-
-##### v0.11.0
-
-In v0.11.0 we started validating the backup related flags to ensure that they were in a valid state as per the
-requirements in the spec. This introduced issues for some users as they had not been storing them and at least at one
-point the flag values were difficult to obtain.
-
-This has lead to an effective breaking change and a state where some credentials cannot be validated. The resolution to
-this particular issue is to adapt current storage methods so that the values of the flags or each individual flag default
-to a null-like value and manually perform an update to the storage and struct when a credential with null-like values is
-observed.
-
-The values can be obtained prior to validating the parsed response similar to the example below:
-
-```go
-package example
-
-import (
-	"net/http"
-	
-	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/go-webauthn/webauthn/webauthn"
-)
-
-func FinishLogin(w http.ResponseWriter, r *http.Request) {
-  // Abstract Business Logic: Get the WebAuthn User. 
-  user := datastore.GetUser()
-
-  // Abstract Business Logic: Get the WebAuthn Session Data. 
-  session := datastore.GetSession()
-
-  parsedResponse, err := protocol.ParseCredentialRequestResponse(r)
-  if err != nil {
-    // Handle Error and return.
-    return
-  }
-
-  // Handle updating the appropriate credential using the flags value.
-  flags := webauthn.NewCredentialFlags(parsedResponse.Response.AuthenticatorData.Flags)
-}
-```
 ### Storage
 
 It is also important to note that restoring the [webauthn.Credential] with the correct values will likely affect the
@@ -391,10 +113,12 @@ tooling to implement this yourself.
 ## Acknowledgements
 
 We graciously acknowledge the original authors of this library [github.com/duo-labs/webauthn] for their amazing
-implementation. Without their amazing work this library could not exist.
-
+implementation. In particular we'd like to acknowledge [Nick Steele](https://github.com/nicksteele) who not only created
+the original library, but maintained it, and has been an active member of the WebAuthn Working Group quite some time. 
+Without their amazing work this library could not exist.
 
 [github.com/duo-labs/webauthn]: https://github.com/duo-labs/webauthn
 [webauthn.Credential]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential
 [metadata.Provider]: https://pkg.go.dev/github.com/go-webauthn/webauthn/metadata#Provider
 [Credential Verify]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential.Verify
+[go docs]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn
