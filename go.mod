@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.24.5
 
 require (
-	github.com/fxamacker/cbor/v2 v2.8.0
+	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/go-webauthn/x v0.1.23
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/go-tpm v0.9.5
