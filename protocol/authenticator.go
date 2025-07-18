@@ -53,7 +53,8 @@ type AttestedCredentialData struct {
 	AAGUID       []byte `json:"aaguid"`
 	CredentialID []byte `json:"credential_id"`
 
-	// The raw credential public key bytes received from the attestation data.
+	// The raw credential public key bytes received from the attestation data. This is the CBOR representation of the
+	// credentials public key.
 	CredentialPublicKey []byte `json:"public_key"`
 }
 
@@ -388,7 +389,7 @@ func ResidentKeyNotRequired() *bool {
 
 // Verify on AuthenticatorData handles Steps 13 through 15 & 17 for Registration
 // and Steps 15 through 18 for Assertion.
-func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerificationRequired bool, userPresenceRequired bool) error {
+func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerificationRequired bool, userPresenceRequired bool) (err error) {
 
 	// Registration Step 13 & Assertion Step 15
 	// Verify that the RP ID hash in authData is indeed the SHA-256
