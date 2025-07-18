@@ -19,7 +19,7 @@ type CredentialAssertionResponse struct {
 	AssertionResponse AuthenticatorAssertionResponse `json:"response"`
 }
 
-// The ParsedCredentialAssertionData is the parsed CredentialAssertionResponse that has been marshalled into a format
+// The ParsedCredentialAssertionData is the parsed [CredentialAssertionResponse] that has been marshalled into a format
 // that allows us to verify the client and authenticator data inside the response.
 type ParsedCredentialAssertionData struct {
 	ParsedPublicKeyCredential
@@ -29,7 +29,7 @@ type ParsedCredentialAssertionData struct {
 }
 
 // The AuthenticatorAssertionResponse contains the raw authenticator assertion data and is parsed into
-// ParsedAssertionResponse.
+// [ParsedAssertionResponse].
 type AuthenticatorAssertionResponse struct {
 	AuthenticatorResponse
 
@@ -38,7 +38,7 @@ type AuthenticatorAssertionResponse struct {
 	UserHandle        URLEncodedBase64 `json:"userHandle,omitempty"`
 }
 
-// ParsedAssertionResponse is the parsed form of AuthenticatorAssertionResponse.
+// ParsedAssertionResponse is the parsed form of [AuthenticatorAssertionResponse].
 type ParsedAssertionResponse struct {
 	CollectedClientData CollectedClientData
 	AuthenticatorData   AuthenticatorData
@@ -47,7 +47,7 @@ type ParsedAssertionResponse struct {
 }
 
 // ParseCredentialRequestResponse parses the credential request response into a format that is either required by the
-// specification or makes the assertion verification steps easier to complete. This takes a http.Request that contains
+// specification or makes the assertion verification steps easier to complete. This takes a [*http.Request] that contains
 // the assertion response data in a raw, mostly base64 encoded format, and parses the data into manageable structures.
 func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAssertionData, error) {
 	if response == nil || response.Body == nil {
@@ -63,7 +63,7 @@ func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAs
 }
 
 // ParseCredentialRequestResponseBody parses the credential request response into a format that is either required by
-// the specification or makes the assertion verification steps easier to complete. This takes an io.Reader that contains
+// the specification or makes the assertion verification steps easier to complete. This takes an [io.Reader] that contains
 // the assertion response data in a raw, mostly base64 encoded format, and parses the data into manageable structures.
 func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAssertionData, err error) {
 	var car CredentialAssertionResponse
@@ -75,7 +75,7 @@ func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAs
 	return car.Parse()
 }
 
-// ParseCredentialRequestResponseBytes is an alternative version of ParseCredentialRequestResponseBody that just takes
+// ParseCredentialRequestResponseBytes is an alternative version of [ParseCredentialRequestResponseBody] that just takes
 // a byte slice.
 func ParseCredentialRequestResponseBytes(data []byte) (par *ParsedCredentialAssertionData, err error) {
 	var car CredentialAssertionResponse
@@ -87,9 +87,9 @@ func ParseCredentialRequestResponseBytes(data []byte) (par *ParsedCredentialAsse
 	return car.Parse()
 }
 
-// Parse validates and parses the CredentialAssertionResponse into a ParseCredentialCreationResponseBody. This receiver
+// Parse validates and parses the [CredentialAssertionResponse] into a [ParseCredentialCreationResponseBody]. This receiver
 // is unlikely to be expressly guaranteed under the versioning policy. Users looking for this guarantee should see
-// ParseCredentialRequestResponseBody instead, and this receiver should only be used if that function is inadequate
+// [ParseCredentialRequestResponseBody] instead, and this receiver should only be used if that function is inadequate
 // for their use case.
 func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionData, err error) {
 	if car.ID == "" {
@@ -136,7 +136,7 @@ func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionDa
 }
 
 // Verify the remaining elements of the assertion data by following the steps outlined in the referenced specification
-// documentation.
+// documentation. It's important to note that the credentialBytes field is the CBOR representation of the credential.
 //
 // Specification: §7.2 Verifying an Authentication Assertion (https://www.w3.org/TR/webauthn/#sctn-verifying-assertion)
 func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, appID string, verifyUser bool, verifyUserPresence bool, credentialBytes []byte) error {

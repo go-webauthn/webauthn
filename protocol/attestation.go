@@ -14,7 +14,7 @@ import (
 )
 
 // AuthenticatorAttestationResponse is the initial unpacked 'response' object received by the relying party. This
-// contains the clientDataJSON object, which will be marshalled into CollectedClientData, and the 'attestationObject',
+// contains the clientDataJSON object, which will be marshalled into [CollectedClientData], and the 'attestationObject',
 // which contains information about the authenticator, and the newly minted public key credential. The information in
 // both objects are used to verify the authenticity of the ceremony and new credential.
 //
@@ -44,7 +44,7 @@ type AuthenticatorAttestationResponse struct {
 	AttestationObject URLEncodedBase64 `json:"attestationObject"`
 }
 
-// ParsedAttestationResponse is the parsed version of AuthenticatorAttestationResponse.
+// ParsedAttestationResponse is the parsed version of [AuthenticatorAttestationResponse].
 type ParsedAttestationResponse struct {
 	CollectedClientData CollectedClientData
 	AttestationObject   AttestationObject
@@ -65,7 +65,7 @@ type ParsedAttestationResponse struct {
 //
 // Specification: §6.5. Attestation (https://www.w3.org/TR/webauthn/#sctn-attestation)
 type AttestationObject struct {
-	// The authenticator data, including the newly created public key. See AuthenticatorData for more info
+	// The authenticator data, including the newly created public key. See [AuthenticatorData] for more info
 	AuthData AuthenticatorData
 
 	// The byteform version of the authenticator data, used in part for signature validation
@@ -157,7 +157,7 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 }
 
 // VerifyAttestation only verifies the attestation object excluding the AuthData values. If you wish to also verify the
-// AuthData values you should use Verify.
+// AuthData values you should use [Verify].
 func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider) (err error) {
 	// Step 18. Determine the attestation statement format by performing a
 	// USASCII case-sensitive match on fmt against the set of supported
