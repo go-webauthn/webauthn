@@ -629,10 +629,10 @@ type CodeAccuracyDescriptor struct {
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#biometricaccuracydescriptor-dictionary
 type BiometricAccuracyDescriptor struct {
 	// The false rejection rate [ISO19795-1] for a single template, i.e. the percentage of verification transactions with truthful claims of identity that are incorrectly denied.
-	SelfAttestedFRR int64 `json:"selfAttestedFRR"`
+	SelfAttestedFRR float64 `json:"selfAttestedFRR"`
 
 	// The false acceptance rate [ISO19795-1] for a single template, i.e. the percentage of verification transactions with wrongful claims of identity that are incorrectly confirmed.
-	SelfAttestedFAR int64 `json:"selfAttestedFAR"`
+	SelfAttestedFAR float64 `json:"selfAttestedFAR"`
 
 	// Maximum number of alternative templates from different fingers allowed.
 	MaxTemplates uint16 `json:"maxTemplates"`
