@@ -213,6 +213,22 @@ func TestIsUndesiredAuthenticatorStatus(t *testing.T) {
 			FidoCertifiedL3plus,
 			false,
 		},
+		{
+			FIPS140CertifiedL1,
+			false,
+		},
+		{
+			FIPS140CertifiedL2,
+			false,
+		},
+		{
+			FIPS140CertifiedL3,
+			false,
+		},
+		{
+			FIPS140CertifiedL4,
+			false,
+		},
 	}
 
 	for _, tt := range tests {

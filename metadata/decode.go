@@ -272,3 +272,17 @@ func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err e
 
 	return certificate, nil
 }
+
+func mdsParseTimePointer(format, value string) (parsed *time.Time, err error) {
+	if value == "" {
+		return nil, nil
+	}
+
+	var p time.Time
+
+	if p, err = time.Parse(format, value); err != nil {
+		return nil, err
+	}
+
+	return &p, nil
+}
