@@ -32,7 +32,7 @@ func New(opts ...Option) (provider metadata.Provider, err error) {
 	return p, nil
 }
 
-// Provider is a concrete implementation of the metadata.Provider that utilizes memory for validation. This provider is
+// Provider is a concrete implementation of the [metadata.Provider] that utilizes memory for validation. This provider is
 // a simple one-shot that doesn't perform any locking, provide dynamic functionality, or download the metadata at any
 // stage (it expects it's provided via one of the Option's).
 type Provider struct {

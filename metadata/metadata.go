@@ -38,6 +38,7 @@ func Fetch() (metadata *Metadata, err error) {
 	return decoder.Parse(payload)
 }
 
+// Metadata represents a MDS3.1 blob in either a fully parsed or partially parsed state.
 type Metadata struct {
 	Parsed   Parsed
 	Unparsed []EntryError
@@ -55,7 +56,7 @@ func (m *Metadata) ToMap() (metadata map[uuid.UUID]*Entry) {
 	return metadata
 }
 
-// Parsed is a structure representing the Parsed MDS3 dictionary.
+// Parsed is a structure representing the MDS3.1 Metadata BLOB Payload dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-payload-blob
 type Parsed struct {
@@ -72,7 +73,7 @@ type Parsed struct {
 	Entries []Entry
 }
 
-// PayloadJSON is an intermediary JSON/JWT representation of the Parsed.
+// PayloadJSON is an intermediary JSON/JWT representation of the [Parsed] struct.
 type PayloadJSON struct {
 	LegalHeader string `json:"legalHeader"`
 	Number      int    `json:"no"`
@@ -106,7 +107,7 @@ func (j PayloadJSON) Parse() (payload Parsed, err error) {
 	}, nil
 }
 
-// Entry is a structure representing the Entry MDS3 dictionary.
+// Entry is a structure representing the MDS3.1 Metadata BLOB Payload Entry dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-blob-pe
 type Entry struct {
@@ -138,7 +139,8 @@ type Entry struct {
 	RogueListHash string
 }
 
-// EntryJSON is an intermediary JSON/JWT structure representing the Entry MDS3 dictionary.
+// EntryJSON is an intermediary JSON/JWT structure representing the MDS3.1 Metadata BLOB Payload Entry dictionary and
+// JSON representation of the [Entry] struct.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-blob-pe
 type EntryJSON struct {
@@ -223,7 +225,7 @@ func (j EntryJSON) Parse() (entry Entry, err error) {
 	}, nil
 }
 
-// Statement is a structure representing the Statement MDS3 dictionary.
+// Statement is a structure representing the Statement MDS3.1 dictionary.
 // Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
 // contained in the authoritative statement is used in several other places.
 //
@@ -371,7 +373,8 @@ func (s *Statement) Verifier(x5cis []*x509.Certificate) (opts x509.VerifyOptions
 	}
 }
 
-// StatementJSON is an intermediary JSON/JWT structure representing the Statement MDS3 dictionary.
+// StatementJSON is an intermediary JSON/JWT structure representing the MetadataStatement MDS3.1 dictionary and the JSON
+// representation of the [Statement] struct.
 // Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
 // contained in the authoritative statement is used in several other places.
 //
@@ -516,10 +519,10 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 	}, nil
 }
 
-// BiometricStatusReport is a structure representing the BiometricStatusReport MDS3 dictionary.
+// BiometricStatusReport is a structure representing the BiometricStatusReport MDS3.1 dictionary.
 // Contains the current status of the authenticator's biometric component.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#dictdef-biometricstatusreport
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-bio-stat-rep
 type BiometricStatusReport struct {
 	// Achieved level of the biometric certification of this biometric component of the authenticator
 	CertLevel uint16
@@ -543,10 +546,11 @@ type BiometricStatusReport struct {
 	CertificationRequirementsVersion string
 }
 
-// BiometricStatusReportJSON is a structure representing the BiometricStatusReport MDS3 dictionary.
+// BiometricStatusReportJSON is a structure representing the BiometricStatusReport MDS3.1 dictionary and the JSON
+// representation of the [BiometricStatusReport] struct.
 // Contains the current status of the authenticator's biometric component.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#dictdef-biometricstatusreport
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-bio-stat-rep
 type BiometricStatusReportJSON struct {
 	CertLevel               uint16 `json:"certLevel"`
 	Modality                string `json:"modality"`
@@ -576,7 +580,7 @@ func (j BiometricStatusReportJSON) Parse() (report BiometricStatusReport, err er
 	}, nil
 }
 
-// StatusReport is a structure representing the StatusReport MDS3 dictionary.
+// StatusReport is a structure representing the StatusReport MDS3.1 dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-stat-rep
 type StatusReport struct {
@@ -624,7 +628,8 @@ type StatusReport struct {
 	FIPSPhysicalSecurityLevel uint32
 }
 
-// StatusReportJSON is an intermediary JSON/JWT structure representing the StatusReport MDS3 dictionary.
+// StatusReportJSON is an intermediary JSON/JWT structure representing the StatusReport MDS3.1 dictionary and the JSON
+// representation of the [StatusReport] struct.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-stat-rep
 type StatusReportJSON struct {
@@ -704,7 +709,7 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 	}, nil
 }
 
-// RogueListEntry is a structure representing the RogueListEntry MDS3 dictionary.
+// RogueListEntry is a structure representing the RogueListEntry MDS3.1 dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-rogue-list-entry
 type RogueListEntry struct {
@@ -715,10 +720,10 @@ type RogueListEntry struct {
 	Date string `json:"date"`
 }
 
-// CodeAccuracyDescriptor is a structure representing the CodeAccuracyDescriptor MDS3 dictionary.
+// CodeAccuracyDescriptor is a structure representing the CodeAccuracyDescriptor MDS3.1 dictionary.
 // It describes the relevant accuracy/complexity aspects of passcode user verification methods.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#dictdef-codeaccuracydescriptor
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-cad
 type CodeAccuracyDescriptor struct {
 	// The numeric system base (radix) of the code, e.g. 10 in the case of decimal digits.
 	Base uint16 `json:"base"`
@@ -735,7 +740,7 @@ type CodeAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// BiometricAccuracyDescriptor is a structure representing the BiometricAccuracyDescriptor MDS3 dictionary.
+// BiometricAccuracyDescriptor is a structure representing the BiometricAccuracyDescriptor MDS3.1 dictionary.
 // It describes relevant accuracy/complexity aspects in the case of a biometric user verification method.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-bad
@@ -764,7 +769,7 @@ type BiometricAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// PatternAccuracyDescriptor is a structure representing the PatternAccuracyDescriptor MDS3 dictionary.
+// PatternAccuracyDescriptor is a structure representing the PatternAccuracyDescriptor MDS3.1 dictionary.
 // It describes relevant accuracy/complexity aspects in the case that a pattern is used as the user verification method.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-pad
@@ -781,10 +786,10 @@ type PatternAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// VerificationMethodDescriptor is a structure representing the VerificationMethodDescriptor MDS3 dictionary.
+// VerificationMethodDescriptor is a structure representing the VerificationMethodDescriptor MDS3.1 dictionary.
 // It describes a descriptor for a specific base user verification method as implemented by the authenticator.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#dictdef-verificationmethoddescriptor
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-vmd
 type VerificationMethodDescriptor struct {
 	// a single USER_VERIFY constant (see [FIDORegistry]), not a bit flag combination. This value MUST be non-zero.
 	UserVerificationMethod string `json:"userVerificationMethod"`
@@ -799,10 +804,10 @@ type VerificationMethodDescriptor struct {
 	PaDesc PatternAccuracyDescriptor `json:"paDesc"`
 }
 
-// RGBPaletteEntry is a structure representing the RGBPaletteEntry MDS3 dictionary.
+// RGBPaletteEntry is a structure representing the RGBPaletteEntry MDS3.1 dictionary.
 // It describes an RGB three-sample tuple palette entry.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#dictdef-rgbpaletteentry
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-rgbpe
 type RGBPaletteEntry struct {
 	// Red channel sample value
 	R uint16 `json:"r"`
@@ -814,10 +819,10 @@ type RGBPaletteEntry struct {
 	B uint16 `json:"b"`
 }
 
-// DisplayPNGCharacteristicsDescriptor is a structure representing the DisplayPNGCharacteristicsDescriptor MDS3 dictionary.
+// DisplayPNGCharacteristicsDescriptor is a structure representing the DisplayPNGCharacteristicsDescriptor MDS3.1 dictionary.
 // It describes a PNG image characteristics as defined in the PNG [PNG] spec for IHDR (image header) and PLTE (palette table)/
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#dictdef-displaypngcharacteristicsdescriptor
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-dpngcd
 type DisplayPNGCharacteristicsDescriptor struct {
 	// image width
 	Width uint32 `json:"width"`
@@ -844,7 +849,7 @@ type DisplayPNGCharacteristicsDescriptor struct {
 	Plte []RGBPaletteEntry `json:"plte"`
 }
 
-// EcdaaTrustAnchor is a structure representing the EcdaaTrustAnchor MDS3 dictionary.
+// EcdaaTrustAnchor is a structure representing the EcdaaTrustAnchor MDS3.1 dictionary.
 // In the case of ECDAA attestation, the ECDAA-Issuer's trust anchor MUST be specified in this field.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ecdaata
@@ -868,10 +873,10 @@ type EcdaaTrustAnchor struct {
 	G1Curve string `json:"G1Curve"`
 }
 
-// ExtensionDescriptor is a structure representing the ExtensionDescriptor MDS3 dictionary.
+// ExtensionDescriptor is a structure representing the ExtensionDescriptor MDS3.1 dictionary.
 // This descriptor contains an extension supported by the authenticator.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#dictdef-extensiondescriptor
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ed
 type ExtensionDescriptor struct {
 	// Identifies the extension.
 	ID string `json:"id"`
@@ -886,7 +891,10 @@ type ExtensionDescriptor struct {
 	FailIfUnknown bool `json:"fail_if_unknown"`
 }
 
-// Version represents a generic version with major and minor fields.
+// Version is a structure representing the Version FIDO UAF Protocol 1.2 dictionary and represents a generic version
+// with major and minor fields.
+//
+// See: https://fidoalliance.org/specs/fido-uaf-v1.2-ps-20201020/fido-uaf-protocol-v1.2-ps-20201020.html#version-interface
 type Version struct {
 	// Major version.
 	Major uint16 `json:"major"`
@@ -895,6 +903,9 @@ type Version struct {
 	Minor uint16 `json:"minor"`
 }
 
+// AuthenticatorGetInfo is a structure representing the AuthenticatorGetInfo MDS3.1 dictionary.
+//
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-agid
 type AuthenticatorGetInfo struct {
 	// List of supported versions.
 	Versions []string
