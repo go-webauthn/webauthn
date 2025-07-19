@@ -9,7 +9,7 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-// New returns a new cached Provider given a set of functional Option's. This provider will download a new version and
+// New returns a new cached Provider given a set of functional [Option]'s. This provider will download a new version and
 // save it to the configured file path if it doesn't exist or if it's out of date by default.
 func New(opts ...Option) (provider metadata.Provider, err error) {
 	p := &Provider{
@@ -48,7 +48,7 @@ func New(opts ...Option) (provider metadata.Provider, err error) {
 	return p, nil
 }
 
-// Provider implements a metadata.Provider with a file-based cache.
+// Provider implements a [metadata.Provider] with a file-based cache.
 type Provider struct {
 	metadata.Provider
 

@@ -5,8 +5,8 @@ package metadata
 // See: https://github.com/passkeydeveloper/passkey-authenticator-aaguids
 type PasskeyAuthenticator map[string]PassKeyAuthenticatorAAGUID
 
-// PassKeyAuthenticatorAAGUID is a type that represents the indivudal schema entry from the Passkey Developer AAGUID
-// listing. Used with PasskeyAuthenticator.
+// PassKeyAuthenticatorAAGUID is a type that represents the individual schema entry from the Passkey Developer AAGUID
+// listing. Used with [PasskeyAuthenticator].
 //
 // See: https://github.com/passkeydeveloper/passkey-authenticator-aaguids
 type PassKeyAuthenticatorAAGUID struct {

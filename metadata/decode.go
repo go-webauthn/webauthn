@@ -45,7 +45,8 @@ type Decoder struct {
 	ignoreEntryParsingErrors bool
 }
 
-// Parse handles parsing of the raw JSON values of the metadata blob. Should be used after using Decode or DecodeBytes.
+// Parse handles parsing of the raw JSON values of the metadata blob. Should be used after using [Decoder.Decode] or
+// [Decoder.DecodeBytes].
 func (d *Decoder) Parse(payload *PayloadJSON) (metadata *Metadata, err error) {
 	metadata = &Metadata{
 		Parsed: Parsed{
@@ -80,7 +81,7 @@ func (d *Decoder) Parse(payload *PayloadJSON) (metadata *Metadata, err error) {
 	return metadata, nil
 }
 
-// Decode the blob from an io.Reader. This function will close the io.ReadCloser after completing.
+// Decode the blob from an [io.Reader]. This function will close the [io.ReadCloser] after completing.
 func (d *Decoder) Decode(r io.Reader) (payload *PayloadJSON, err error) {
 	bytes, err := io.ReadAll(r)
 	if err != nil {
@@ -90,7 +91,7 @@ func (d *Decoder) Decode(r io.Reader) (payload *PayloadJSON, err error) {
 	return d.DecodeBytes(bytes)
 }
 
-// DecodeBytes handles decoding raw bytes. If you have a read closer it's suggested to use Decode.
+// DecodeBytes handles decoding raw bytes. If you have a read closer it's suggested to use [Decoder.Decode].
 func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 	var token *jwt.Token
 
@@ -271,4 +272,18 @@ func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err e
 	}
 
 	return certificate, nil
+}
+
+func mdsParseTimePointer(format, value string) (parsed *time.Time, err error) {
+	if value == "" {
+		return nil, nil
+	}
+
+	var p time.Time
+
+	if p, err = time.Parse(format, value); err != nil {
+		return nil, err
+	}
+
+	return &p, nil
 }

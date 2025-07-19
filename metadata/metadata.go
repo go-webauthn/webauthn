@@ -38,6 +38,7 @@ func Fetch() (metadata *Metadata, err error) {
 	return decoder.Parse(payload)
 }
 
+// Metadata represents a MDS3.1 blob in either a fully parsed or partially parsed state.
 type Metadata struct {
 	Parsed   Parsed
 	Unparsed []EntryError
@@ -55,9 +56,9 @@ func (m *Metadata) ToMap() (metadata map[uuid.UUID]*Entry) {
 	return metadata
 }
 
-// Parsed is a structure representing the Parsed MDS3 dictionary.
+// Parsed is a structure representing the MDS3.1 Metadata BLOB Payload dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#metadata-blob-payload-entry-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-payload-blob
 type Parsed struct {
 	// The legalHeader, if present, contains a legal guide for accessing and using metadata, which itself MAY contain URL(s) pointing to further information, such as a full Terms and Conditions statement.
 	LegalHeader string
@@ -72,7 +73,7 @@ type Parsed struct {
 	Entries []Entry
 }
 
-// PayloadJSON is an intermediary JSON/JWT representation of the Parsed.
+// PayloadJSON is an intermediary JSON/JWT representation of the [Parsed] struct.
 type PayloadJSON struct {
 	LegalHeader string `json:"legalHeader"`
 	Number      int    `json:"no"`
@@ -106,27 +107,27 @@ func (j PayloadJSON) Parse() (payload Parsed, err error) {
 	}, nil
 }
 
-// Entry is a structure representing the Entry MDS3 dictionary.
+// Entry is a structure representing the MDS3.1 Metadata BLOB Payload Entry dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#metadata-blob-payload-entry-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-blob-pe
 type Entry struct {
 	// The Authenticator Attestation ID.
-	Aaid string `json:"aaid"`
+	Aaid string
 
 	// The Authenticator Attestation GUID.
-	AaGUID uuid.UUID `json:"aaguid"`
+	AaGUID uuid.UUID
 
 	// A list of the attestation certificate public key identifiers encoded as hex string.
-	AttestationCertificateKeyIdentifiers []string `json:"attestationCertificateKeyIdentifiers"`
+	AttestationCertificateKeyIdentifiers []string
 
 	// The metadataStatement JSON object as defined in FIDOMetadataStatement.
-	MetadataStatement Statement `json:"metadataStatement"`
+	MetadataStatement Statement
 
 	// Status of the FIDO Biometric Certification of one or more biometric components of the Authenticator
-	BiometricStatusReports []BiometricStatusReport `json:"biometricStatusReports"`
+	BiometricStatusReports []BiometricStatusReport
 
 	// An array of status reports applicable to this authenticator.
-	StatusReports []StatusReport `json:"statusReports"`
+	StatusReports []StatusReport
 
 	// ISO-8601 formatted date since when the status report array was set to the current value.
 	TimeOfLastStatusChange time.Time
@@ -138,9 +139,10 @@ type Entry struct {
 	RogueListHash string
 }
 
-// EntryJSON is an intermediary JSON/JWT structure representing the Entry MDS3 dictionary.
+// EntryJSON is an intermediary JSON/JWT structure representing the MDS3.1 Metadata BLOB Payload Entry dictionary and
+// JSON representation of the [Entry] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#metadata-blob-payload-entry-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-blob-pe
 type EntryJSON struct {
 	Aaid                                 string   `json:"aaid"`
 	AaGUID                               string   `json:"aaguid"`
@@ -223,11 +225,11 @@ func (j EntryJSON) Parse() (entry Entry, err error) {
 	}, nil
 }
 
-// Statement is a structure representing the Statement MDS3 dictionary.
+// Statement is a structure representing the Statement MDS3.1 dictionary.
 // Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
 // contained in the authoritative statement is used in several other places.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#metadata-keys
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
 type Statement struct {
 	// The legalHeader, if present, contains a legal guide for accessing and using metadata, which itself MAY contain URL(s) pointing to further information, such as a full Terms and Conditions statement.
 	LegalHeader string
@@ -240,6 +242,9 @@ type Statement struct {
 
 	// A list of the attestation certificate public key identifiers encoded as hex string.
 	AttestationCertificateKeyIdentifiers []string
+
+	// This descriptor contains friendly names (e.g., public trade name) of the authenticator in multiple languages.
+	FriendlyNames map[string]string
 
 	// A human-readable, short description of the authenticator, in English.
 	Description string
@@ -309,14 +314,40 @@ type Statement struct {
 	// A list of trust anchors used for ECDAA attestation. This entry MUST be present if and only if attestationType includes ATTESTATION_ECDAA.
 	EcdaaTrustAnchors []EcdaaTrustAnchor
 
-	// A data: url [RFC2397] encoded PNG [PNG] icon for the Authenticator.
+	// A data: url [RFC2397] encoded [PNG] or [SVG11] (light mode) icon for the Authenticator (e.g., depicting the
+	// security key). This icon is intended to be shown to users by RPs. Use of [SVG11] format is mandatory if any of
+	// the iconDark, providerLogoLight and/or providerLogoDark is used in addition to icon. Use of [SVG11] is
+	// recommended if only icon is used. The icon is more specific than the provider logo and should be shown if present.
 	Icon *url.URL
+
+	// A data: url [RFC2397] encoded [SVG11] dark mode icon for the Authenticator (e.g., depicting the security key).
+	// This icon is intended to be shown to users by RPs. The icon is more specific than the provider logo and should be
+	// shown if present.
+	IconDark *url.URL
+
+	// A data: url [RFC2397] encoded [SVG11] light mode icon for the provider (e.g., logomark of the passkey provider).
+	// The SVG MUST meet all of the requirements defined in § 4.1 SVG requirements. This icon is intended to be shown
+	// to users by RPs.
+	ProviderLogoLight *url.URL
+
+	// A data: url [RFC2397] encoded [SVG11] dark mode icon for the provider (e.g., logomark of the passkey provider).
+	// The SVG MUST meet all of the requirements defined in § 4.1 SVG requirements. This icon is intended to be shown
+	// to users by RPs.
+	ProviderLogoDark *url.URL
 
 	// List of extensions supported by the authenticator.
 	SupportedExtensions []ExtensionDescriptor
 
+	// Scope of keys generated and maintained by this authenticator model.
+	KeyScope KeyScope
+
+	MultiDeviceCredentialSupport MultiDeviceCredentialSupport
+
 	// Describes supported versions, extensions, AAGUID of the device and its capabilities
 	AuthenticatorGetInfo AuthenticatorGetInfo
+
+	// Specifies the URL for retrieving the configuration details for the credential export protocol (CXP).
+	CredentialExportProtocolConfigURL *url.URL
 }
 
 func (s *Statement) Verifier(x5cis []*x509.Certificate) (opts x509.VerifyOptions) {
@@ -342,16 +373,18 @@ func (s *Statement) Verifier(x5cis []*x509.Certificate) (opts x509.VerifyOptions
 	}
 }
 
-// StatementJSON is an intermediary JSON/JWT structure representing the Statement MDS3 dictionary.
+// StatementJSON is an intermediary JSON/JWT structure representing the MetadataStatement MDS3.1 dictionary and the JSON
+// representation of the [Statement] struct.
 // Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
 // contained in the authoritative statement is used in several other places.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#metadata-keys
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
 type StatementJSON struct {
 	LegalHeader                          string                                `json:"legalHeader"`
 	Aaid                                 string                                `json:"aaid"`
 	AaGUID                               string                                `json:"aaguid"`
 	AttestationCertificateKeyIdentifiers []string                              `json:"attestationCertificateKeyIdentifiers"`
+	FriendlyNames                        map[string]string                     `json:"friendlyNames"`
 	Description                          string                                `json:"description"`
 	AlternativeDescriptions              map[string]string                     `json:"alternativeDescriptions"`
 	AuthenticatorVersion                 uint32                                `json:"authenticatorVersion"`
@@ -374,8 +407,14 @@ type StatementJSON struct {
 	AttestationRootCertificates          []string                              `json:"attestationRootCertificates"`
 	EcdaaTrustAnchors                    []EcdaaTrustAnchor                    `json:"ecdaaTrustAnchors"`
 	Icon                                 string                                `json:"icon"`
+	IconDark                             string                                `json:"iconDark"`
+	ProviderLogoLight                    string                                `json:"providerLogoLight"`
+	ProviderLogoDark                     string                                `json:"providerLogoDark"`
 	SupportedExtensions                  []ExtensionDescriptor                 `json:"supportedExtensions"`
+	KeyScope                             KeyScope                              `json:"keyScope"`
+	MultiDeviceCredentialSupport         MultiDeviceCredentialSupport          `json:"multiDeviceCredentialSupport"`
 	AuthenticatorGetInfo                 AuthenticatorGetInfoJSON              `json:"authenticatorGetInfo"`
+	CredentialExportProtocolConfigURL    string                                `json:"cxpConfigURL"`
 }
 
 func (j StatementJSON) Parse() (statement Statement, err error) {
@@ -397,11 +436,41 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 		}
 	}
 
-	var icon *url.URL
+	var (
+		icon, iconDark *url.URL
+
+		logoLight, logoDark *url.URL
+
+		cxpConfigURL *url.URL
+	)
 
 	if len(j.Icon) != 0 {
 		if icon, err = url.ParseRequestURI(j.Icon); err != nil {
 			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing icon value: %w", j.Description, err)
+		}
+	}
+
+	if len(j.IconDark) != 0 {
+		if iconDark, err = url.ParseRequestURI(j.IconDark); err != nil {
+			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing icon dark value: %w", j.Description, err)
+		}
+	}
+
+	if len(j.ProviderLogoLight) != 0 {
+		if logoLight, err = url.ParseRequestURI(j.ProviderLogoLight); err != nil {
+			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing provider logo light value: %w", j.Description, err)
+		}
+	}
+
+	if len(j.ProviderLogoDark) != 0 {
+		if logoDark, err = url.ParseRequestURI(j.ProviderLogoDark); err != nil {
+			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing provider logo dark value: %w", j.Description, err)
+		}
+	}
+
+	if len(j.CredentialExportProtocolConfigURL) != 0 {
+		if cxpConfigURL, err = url.ParseRequestURI(j.CredentialExportProtocolConfigURL); err != nil {
+			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing cxp config url value: %w", j.Description, err)
 		}
 	}
 
@@ -416,6 +485,7 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 		Aaid:                                 j.Aaid,
 		AaGUID:                               aaguid,
 		AttestationCertificateKeyIdentifiers: j.AttestationCertificateKeyIdentifiers,
+		FriendlyNames:                        j.FriendlyNames,
 		Description:                          j.Description,
 		AlternativeDescriptions:              j.AlternativeDescriptions,
 		AuthenticatorVersion:                 j.AuthenticatorVersion,
@@ -438,15 +508,21 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 		AttestationRootCertificates:          certificates,
 		EcdaaTrustAnchors:                    j.EcdaaTrustAnchors,
 		Icon:                                 icon,
+		IconDark:                             iconDark,
+		ProviderLogoLight:                    logoLight,
+		ProviderLogoDark:                     logoDark,
 		SupportedExtensions:                  j.SupportedExtensions,
+		KeyScope:                             j.KeyScope,
+		MultiDeviceCredentialSupport:         j.MultiDeviceCredentialSupport,
 		AuthenticatorGetInfo:                 info,
+		CredentialExportProtocolConfigURL:    cxpConfigURL,
 	}, nil
 }
 
-// BiometricStatusReport is a structure representing the BiometricStatusReport MDS3 dictionary.
+// BiometricStatusReport is a structure representing the BiometricStatusReport MDS3.1 dictionary.
 // Contains the current status of the authenticator's biometric component.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#biometricstatusreport-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-bio-stat-rep
 type BiometricStatusReport struct {
 	// Achieved level of the biometric certification of this biometric component of the authenticator
 	CertLevel uint16
@@ -470,10 +546,11 @@ type BiometricStatusReport struct {
 	CertificationRequirementsVersion string
 }
 
-// BiometricStatusReportJSON is a structure representing the BiometricStatusReport MDS3 dictionary.
+// BiometricStatusReportJSON is a structure representing the BiometricStatusReport MDS3.1 dictionary and the JSON
+// representation of the [BiometricStatusReport] struct.
 // Contains the current status of the authenticator's biometric component.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#biometricstatusreport-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-bio-stat-rep
 type BiometricStatusReportJSON struct {
 	CertLevel               uint16 `json:"certLevel"`
 	Modality                string `json:"modality"`
@@ -503,9 +580,9 @@ func (j BiometricStatusReportJSON) Parse() (report BiometricStatusReport, err er
 	}, nil
 }
 
-// StatusReport is a structure representing the StatusReport MDS3 dictionary.
+// StatusReport is a structure representing the StatusReport MDS3.1 dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#statusreport-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-stat-rep
 type StatusReport struct {
 	// Status of the authenticator. Additional fields MAY be set depending on this value.
 	Status AuthenticatorStatus
@@ -517,6 +594,9 @@ type StatusReport struct {
 	AuthenticatorVersion uint32
 
 	// Base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value related to the current status, if applicable.
+	BatchCertificate *x509.Certificate
+
+	// Base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value related to the current status, if applicable. This field will typically not be present if field batchCertificate is present.
 	Certificate *x509.Certificate
 
 	// HTTPS URL where additional information may be found related to the current status, if applicable.
@@ -533,25 +613,45 @@ type StatusReport struct {
 
 	// The Document Version of the Authenticator Security Requirements (DV) [FIDOAuthenticatorSecurityRequirements] the implementation is certified to, e.g. "1.2.0".
 	CertificationRequirementsVersion string
+
+	// ISO-8601 formatted date since when the status wil expire, if applicable. If no date is given, the status is
+	// assumed to not have a scheduled expiry.
+	SunsetDate *time.Time
+
+	// The revision number of the FIPS 140 specification, e.g. "3" in the case of FIPS 140-3. This entry MUST be present
+	// if and only if the status entry is one of FIPS140_CERTIFIED_L*.
+	FIPSRevision uint32
+
+	// In the case the status represents a FIPS certification, this field contains the "physical security level" of the
+	// FIPS certification. This entry MUST be present if and only if the status entry is one of FIPS140_CERTIFIED_L*. It
+	// MUST reflect the physical security level which might deviate from the overall level.
+	FIPSPhysicalSecurityLevel uint32
 }
 
-// StatusReportJSON is an intermediary JSON/JWT structure representing the StatusReport MDS3 dictionary.
+// StatusReportJSON is an intermediary JSON/JWT structure representing the StatusReport MDS3.1 dictionary and the JSON
+// representation of the [StatusReport] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#statusreport-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-stat-rep
 type StatusReportJSON struct {
 	Status                           AuthenticatorStatus `json:"status"`
 	EffectiveDate                    string              `json:"effectiveDate"`
 	AuthenticatorVersion             uint32              `json:"authenticatorVersion"`
+	BatchCertificate                 string              `json:"batchCertificate"`
 	Certificate                      string              `json:"certificate"`
 	URL                              string              `json:"url"`
 	CertificationDescriptor          string              `json:"certificationDescriptor"`
 	CertificateNumber                string              `json:"certificateNumber"`
 	CertificationPolicyVersion       string              `json:"certificationPolicyVersion"`
 	CertificationRequirementsVersion string              `json:"certificationRequirementsVersion"`
+	SunsetDate                       string              `json:"sunsetDate"`
+	FIPSRevision                     uint32              `json:"fipsRevision"`
+	FIPSPhysicalSecurityLevel        uint32              `json:"fipsPhysicalSecurityLevel"`
 }
 
 func (j StatusReportJSON) Parse() (report StatusReport, err error) {
-	var certificate *x509.Certificate
+	var (
+		certificate, batchCertificate *x509.Certificate
+	)
 
 	if len(j.Certificate) != 0 {
 		if certificate, err = mdsParseX509Certificate(j.Certificate); err != nil {
@@ -559,10 +659,23 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 		}
 	}
 
-	var effective time.Time
+	if len(j.BatchCertificate) != 0 {
+		if batchCertificate, err = mdsParseX509Certificate(j.BatchCertificate); err != nil {
+			return report, fmt.Errorf("error occurred parsing batch certificate value: %w", err)
+		}
+	}
+
+	var (
+		effective time.Time
+		sunset    *time.Time
+	)
 
 	if effective, err = time.Parse(time.DateOnly, j.EffectiveDate); err != nil {
 		return report, fmt.Errorf("error occurred parsing effective date value: %w", err)
+	}
+
+	if sunset, err = mdsParseTimePointer(time.DateOnly, j.SunsetDate); err != nil {
+		return report, fmt.Errorf("error occurred parsing sunset date value: %w", err)
 	}
 
 	var uri *url.URL
@@ -583,18 +696,22 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 		Status:                           j.Status,
 		EffectiveDate:                    effective,
 		AuthenticatorVersion:             j.AuthenticatorVersion,
+		BatchCertificate:                 batchCertificate,
 		Certificate:                      certificate,
 		URL:                              uri,
 		CertificationDescriptor:          j.CertificationDescriptor,
 		CertificateNumber:                j.CertificateNumber,
 		CertificationPolicyVersion:       j.CertificationPolicyVersion,
 		CertificationRequirementsVersion: j.CertificationRequirementsVersion,
+		SunsetDate:                       sunset,
+		FIPSRevision:                     j.FIPSRevision,
+		FIPSPhysicalSecurityLevel:        j.FIPSPhysicalSecurityLevel,
 	}, nil
 }
 
-// RogueListEntry is a structure representing the RogueListEntry MDS3 dictionary.
+// RogueListEntry is a structure representing the RogueListEntry MDS3.1 dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#roguelistentry-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-rogue-list-entry
 type RogueListEntry struct {
 	// Base64url encoding of the rogue authenticator's secret key
 	Sk string `json:"sk"`
@@ -603,10 +720,10 @@ type RogueListEntry struct {
 	Date string `json:"date"`
 }
 
-// CodeAccuracyDescriptor is a structure representing the CodeAccuracyDescriptor MDS3 dictionary.
+// CodeAccuracyDescriptor is a structure representing the CodeAccuracyDescriptor MDS3.1 dictionary.
 // It describes the relevant accuracy/complexity aspects of passcode user verification methods.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#codeaccuracydescriptor-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-cad
 type CodeAccuracyDescriptor struct {
 	// The numeric system base (radix) of the code, e.g. 10 in the case of decimal digits.
 	Base uint16 `json:"base"`
@@ -623,16 +740,22 @@ type CodeAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// BiometricAccuracyDescriptor is a structure representing the BiometricAccuracyDescriptor MDS3 dictionary.
+// BiometricAccuracyDescriptor is a structure representing the BiometricAccuracyDescriptor MDS3.1 dictionary.
 // It describes relevant accuracy/complexity aspects in the case of a biometric user verification method.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#biometricaccuracydescriptor-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-bad
 type BiometricAccuracyDescriptor struct {
 	// The false rejection rate [ISO19795-1] for a single template, i.e. the percentage of verification transactions with truthful claims of identity that are incorrectly denied.
 	SelfAttestedFRR float64 `json:"selfAttestedFRR"`
 
 	// The false acceptance rate [ISO19795-1] for a single template, i.e. the percentage of verification transactions with wrongful claims of identity that are incorrectly confirmed.
 	SelfAttestedFAR float64 `json:"selfAttestedFAR"`
+
+	// Impostor Attack Presentation Accept Rate (IAPAR) is the proportion of impostor attack presentations using the
+	// same presentation attack instrument (PAI) species that result in accept [isoiec-30107-3]. For biometric
+	// certification requirements [FIDOBiometricsRequirements], certification can be achieved for an IAPAR threshold of
+	// less than 7% OR less than 15% for each of the PAI species tested.
+	ImposterAttackPresentationAcceptRateThreshold float64 `json:"iAPARThreshold"`
 
 	// Maximum number of alternative templates from different fingers allowed.
 	MaxTemplates uint16 `json:"maxTemplates"`
@@ -646,10 +769,10 @@ type BiometricAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// PatternAccuracyDescriptor is a structure representing the PatternAccuracyDescriptor MDS3 dictionary.
+// PatternAccuracyDescriptor is a structure representing the PatternAccuracyDescriptor MDS3.1 dictionary.
 // It describes relevant accuracy/complexity aspects in the case that a pattern is used as the user verification method.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#patternaccuracydescriptor-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-pad
 type PatternAccuracyDescriptor struct {
 	// Number of possible patterns (having the minimum length) out of which exactly one would be the right one, i.e. 1/probability in the case of equal distribution.
 	MinComplexity uint32 `json:"minComplexity"`
@@ -663,10 +786,10 @@ type PatternAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// VerificationMethodDescriptor is a structure representing the VerificationMethodDescriptor MDS3 dictionary.
+// VerificationMethodDescriptor is a structure representing the VerificationMethodDescriptor MDS3.1 dictionary.
 // It describes a descriptor for a specific base user verification method as implemented by the authenticator.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#verificationmethoddescriptor-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-vmd
 type VerificationMethodDescriptor struct {
 	// a single USER_VERIFY constant (see [FIDORegistry]), not a bit flag combination. This value MUST be non-zero.
 	UserVerificationMethod string `json:"userVerificationMethod"`
@@ -681,10 +804,10 @@ type VerificationMethodDescriptor struct {
 	PaDesc PatternAccuracyDescriptor `json:"paDesc"`
 }
 
-// RGBPaletteEntry is a structure representing the RGBPaletteEntry MDS3 dictionary.
+// RGBPaletteEntry is a structure representing the RGBPaletteEntry MDS3.1 dictionary.
 // It describes an RGB three-sample tuple palette entry.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#rgbpaletteentry-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-rgbpe
 type RGBPaletteEntry struct {
 	// Red channel sample value
 	R uint16 `json:"r"`
@@ -696,10 +819,10 @@ type RGBPaletteEntry struct {
 	B uint16 `json:"b"`
 }
 
-// DisplayPNGCharacteristicsDescriptor is a structure representing the DisplayPNGCharacteristicsDescriptor MDS3 dictionary.
+// DisplayPNGCharacteristicsDescriptor is a structure representing the DisplayPNGCharacteristicsDescriptor MDS3.1 dictionary.
 // It describes a PNG image characteristics as defined in the PNG [PNG] spec for IHDR (image header) and PLTE (palette table)/
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#displaypngcharacteristicsdescriptor-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-dpngcd
 type DisplayPNGCharacteristicsDescriptor struct {
 	// image width
 	Width uint32 `json:"width"`
@@ -726,10 +849,10 @@ type DisplayPNGCharacteristicsDescriptor struct {
 	Plte []RGBPaletteEntry `json:"plte"`
 }
 
-// EcdaaTrustAnchor is a structure representing the EcdaaTrustAnchor MDS3 dictionary.
+// EcdaaTrustAnchor is a structure representing the EcdaaTrustAnchor MDS3.1 dictionary.
 // In the case of ECDAA attestation, the ECDAA-Issuer's trust anchor MUST be specified in this field.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#ecdaatrustanchor-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ecdaata
 type EcdaaTrustAnchor struct {
 	// base64url encoding of the result of ECPoint2ToB of the ECPoint2 X
 	X string `json:"X"`
@@ -750,10 +873,10 @@ type EcdaaTrustAnchor struct {
 	G1Curve string `json:"G1Curve"`
 }
 
-// ExtensionDescriptor is a structure representing the ExtensionDescriptor MDS3 dictionary.
+// ExtensionDescriptor is a structure representing the ExtensionDescriptor MDS3.1 dictionary.
 // This descriptor contains an extension supported by the authenticator.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#extensiondescriptor-dictionary
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ed
 type ExtensionDescriptor struct {
 	// Identifies the extension.
 	ID string `json:"id"`
@@ -768,7 +891,10 @@ type ExtensionDescriptor struct {
 	FailIfUnknown bool `json:"fail_if_unknown"`
 }
 
-// Version represents a generic version with major and minor fields.
+// Version is a structure representing the Version FIDO UAF Protocol 1.2 dictionary and represents a generic version
+// with major and minor fields.
+//
+// See: https://fidoalliance.org/specs/fido-uaf-v1.2-ps-20201020/fido-uaf-protocol-v1.2-ps-20201020.html#version-interface
 type Version struct {
 	// Major version.
 	Major uint16 `json:"major"`
@@ -777,6 +903,9 @@ type Version struct {
 	Minor uint16 `json:"minor"`
 }
 
+// AuthenticatorGetInfo is a structure representing the AuthenticatorGetInfo MDS3.1 dictionary.
+//
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-agid
 type AuthenticatorGetInfo struct {
 	// List of supported versions.
 	Versions []string

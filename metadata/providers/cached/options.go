@@ -40,7 +40,7 @@ func WithForceUpdate(force bool) Option {
 	}
 }
 
-// WithNew customizes the NewFunc. By default we just create a fairly standard memory.Provider with strict defaults.
+// WithNew customizes the NewFunc. By default we just create a fairly standard [memory.Provider] with strict defaults.
 func WithNew(newup NewFunc) Option {
 	return func(provider *Provider) (err error) {
 		provider.newup = newup
@@ -60,7 +60,7 @@ func WithDecoder(decoder *metadata.Decoder) Option {
 }
 
 // WithMetadataURL configures the URL to get the metadata from. This shouldn't be modified unless you know what you're
-// doing as we use the metadata.ProductionMDSURL which is safe in most instances.
+// doing as we use the [metadata.ProductionMDSURL] which is safe in most instances.
 func WithMetadataURL(uri string) Option {
 	return func(provider *Provider) (err error) {
 		if _, err = url.ParseRequestURI(uri); err != nil {
@@ -73,7 +73,7 @@ func WithMetadataURL(uri string) Option {
 	}
 }
 
-// WithClient configures the *http.Client used to get the MDS3 blob.
+// WithClient configures the [*http.Client] used to get the MDS3 blob.
 func WithClient(client *http.Client) Option {
 	return func(provider *Provider) (err error) {
 		provider.client = client
@@ -82,7 +82,7 @@ func WithClient(client *http.Client) Option {
 	}
 }
 
-// WithClock allows injection of a metadata.Clock to check the up-to-date status of a blob.
+// WithClock allows injection of a [metadata.Clock] to check the up-to-date status of a blob.
 func WithClock(clock metadata.Clock) Option {
 	return func(provider *Provider) (err error) {
 		provider.clock = clock

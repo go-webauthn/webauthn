@@ -86,8 +86,25 @@ const (
 	None AuthenticatorAttestationType = "none"
 )
 
+type KeyScope string
+
+const (
+	KeyScopeNone                   KeyScope = ""
+	PublicKeyCredentialSource      KeyScope = "public-key-credential-source"
+	DeviceSupplementalPublicKeys   KeyScope = "device-spk"
+	ProviderSupplementalPublicKeys KeyScope = "provider-spk"
+)
+
+type MultiDeviceCredentialSupport string
+
+const (
+	MultiDeviceCredentialUnsupported MultiDeviceCredentialSupport = "unsupported"
+	MultiDeviceCredentialExplicit    MultiDeviceCredentialSupport = "explicit"
+	MultiDeviceCredentialImplicit    MultiDeviceCredentialSupport = "implicit"
+)
+
 // AuthenticatorStatus - This enumeration describes the status of an authenticator model as identified by its AAID and potentially some additional information (such as a specific attestation key).
-// https://fidoalliance.org/specs/mds/fido-metadata-service-v3.0-ps-20210518.html#authenticatorstatus-enum
+// https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-authnr-stat
 type AuthenticatorStatus string
 
 const (
@@ -121,6 +138,14 @@ const (
 	FidoCertifiedL3 AuthenticatorStatus = "FIDO_CERTIFIED_L3"
 	// FidoCertifiedL3plus - The authenticator has passed FIDO Authenticator certification at level 3+. This level is more strict than level 3.
 	FidoCertifiedL3plus AuthenticatorStatus = "FIDO_CERTIFIED_L3plus"
+	// FIPS140CertifiedL1 - The authenticator has passed FIPS 140 certification at overall level 1.
+	FIPS140CertifiedL1 AuthenticatorStatus = "FIPS140_CERTIFIED_L1"
+	// FIPS140CertifiedL2 - The authenticator has passed FIPS 140 certification at overall level 2.
+	FIPS140CertifiedL2 AuthenticatorStatus = "FIPS140_CERTIFIED_L2"
+	// FIPS140CertifiedL3 - The authenticator has passed FIPS 140 certification at overall level 3.
+	FIPS140CertifiedL3 AuthenticatorStatus = "FIPS140_CERTIFIED_L3"
+	// FIPS140CertifiedL4 - The authenticator has passed FIPS 140 certification at overall level 4.
+	FIPS140CertifiedL4 AuthenticatorStatus = "FIPS140_CERTIFIED_L4"
 )
 
 // defaultUndesiredAuthenticatorStatus is an array of undesirable authenticator statuses
