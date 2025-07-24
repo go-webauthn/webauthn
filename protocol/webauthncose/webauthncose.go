@@ -95,13 +95,18 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
 	h.Write(data)
 
-	type ECDSASignature struct {
-		R, S *big.Int
-	}
+	var err error
+
 	e := &ECDSASignature{}
-	_, err := asn1.Unmarshal(sig, e)
-	if err != nil {
+
+	if _, err = asn1.Unmarshal(sig, e); err != nil {
 		return false, ErrSigNotProvidedOrInvalid
+	}
+
+	s := new(big.Int).Rsh(curve.Params().N, 1)
+
+	if e.S.Cmp(s) == 1 {
+		e.S = new(big.Int).Sub(curve.Params().N, e.S)
 	}
 
 	return ecdsa.Verify(pubkey, h.Sum(nil), e.R, e.S), nil
@@ -471,4 +476,8 @@ func (passedError *Error) WithDetails(details string) *Error {
 	err.Details = details
 
 	return &err
+}
+
+type ECDSASignature struct {
+	R, S *big.Int
 }
