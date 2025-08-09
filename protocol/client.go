@@ -108,25 +108,11 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 
 	// Registration Step 5 & Assertion Step 9. Verify that the value of C.origin matches
 	// the Relying Party's origin.
-	var fqOrigin string
 
-	if fqOrigin, err = FullyQualifiedOrigin(c.Origin); err != nil {
-		return ErrParsingData.WithDetails("Error decoding clientData origin as URL").WithError(err)
-	}
-
-	found := false
-
-	for _, origin := range rpOrigins {
-		if strings.EqualFold(fqOrigin, origin) {
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	if !isOriginInSlice(c.Origin, rpOrigins) {
 		return ErrVerification.
 			WithDetails("Error validating origin").
-			WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", rpOrigins, fqOrigin))
+			WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", rpOrigins, c.Origin))
 	}
 
 	if rpTopOriginsVerify != TopOriginIgnoreVerificationMode {
@@ -145,10 +131,6 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 				possibleTopOrigins []string
 			)
 
-			if fqTopOrigin, err = FullyQualifiedOrigin(c.TopOrigin); err != nil {
-				return ErrParsingData.WithDetails("Error decoding clientData topOrigin as URL").WithError(err)
-			}
-
 			switch rpTopOriginsVerify {
 			case TopOriginExplicitVerificationMode:
 				possibleTopOrigins = rpTopOrigins
@@ -160,16 +142,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 				return ErrNotImplemented.WithDetails("Error handling unknown Top Origin verification mode")
 			}
 
-			found = false
-
-			for _, origin := range possibleTopOrigins {
-				if strings.EqualFold(fqTopOrigin, origin) {
-					found = true
-					break
-				}
-			}
-
-			if !found {
+			if !isOriginInSlice(c.TopOrigin, possibleTopOrigins) {
 				return ErrVerification.
 					WithDetails("Error validating top origin").
 					WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", possibleTopOrigins, fqTopOrigin))
@@ -221,3 +194,23 @@ const (
 	// Top Origin is verified against the allowed Top Origins values.
 	TopOriginExplicitVerificationMode
 )
+
+func isOriginInSlice(needle string, haystack []string) bool {
+	needleURI, _ := url.Parse(needle)
+
+	for _, hay := range haystack {
+		if needleURI != nil {
+			if hayURI, err := url.Parse(hay); err == nil && hayURI != nil {
+				if (hayURI.Path == "" || hayURI.Path == "/") && (needleURI.Path == "" || needleURI.Path == "/") && strings.EqualFold(needle, hay) {
+					return true
+				} else if needle == hay {
+					return true
+				}
+			}
+		} else if needle == hay {
+			return true
+		}
+	}
+
+	return false
+}
