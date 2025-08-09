@@ -106,3 +106,151 @@ func TestFullyQualifiedOrigin(t *testing.T) {
 		})
 	}
 }
+
+func TestIsOriginInHaystack(t *testing.T) {
+	testCases := []struct {
+		name     string
+		origin   string
+		haystack []string
+		expected bool
+	}{
+		{
+			"ShouldHandleFullyQualifiedOrigin",
+			"https://app.example.com",
+			[]string{"https://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginCaseInsensitiveScheme",
+			"https://app.example.com",
+			[]string{"HTTPS://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginCaseInsensitiveHost",
+			"https://app.EXAMPLE.com",
+			[]string{"https://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginWithPort",
+			"https://app.example.com:443",
+			[]string{"https://app.example.com:443"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentScheme",
+			"http://app.example.com",
+			[]string{"https://app.example.com"},
+			false,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentPort",
+			"https://app.example.com:443",
+			[]string{"https://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentPortNotMatchingScheme",
+			"https://app.example.com:80",
+			[]string{"https://app.example.com"},
+			false,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentPath",
+			"https://app.example.com/abc",
+			[]string{"https://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentQuery",
+			"https://app.example.com/?abc=123",
+			[]string{"https://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentQueryCount",
+			"https://app.example.com/?abc=123",
+			[]string{"https://app.example.com/?zyz=123&abc=123"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentQueryOrder",
+			"https://app.example.com/?abc=123&xyz=123",
+			[]string{"https://app.example.com/?xyz=123&abc=123"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDifferentQueryValue",
+			"https://app.example.com/?abc=123&xyz=123",
+			[]string{"https://app.example.com/?xyz=1234&abc=123"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginFragment",
+			"https://app.example.com/#abc",
+			[]string{"https://app.example.com/#abc"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginFragmentDifferent",
+			"https://app.example.com/#abc",
+			[]string{"https://app.example.com/#abc2"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginWithoutAllowed",
+			"https://app.example.com",
+			nil,
+			false,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginWithTrailingSlashes",
+			"https://app.example.com/",
+			[]string{"https://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleNativeAppAndroid",
+			"android:apk-key-hash:7d1043473d55bfa90e8530d35801d4e381bc69f0",
+			[]string{"android:apk-key-hash:7d1043473d55bfa90e8530d35801d4e381bc69f0"},
+			true,
+		},
+		{
+			"ShouldHandleNativeAppAndroidCaseSensitive",
+			"android:apk-key-hash:7d1043473d55bfa90e8530d35801d4e381bc69F0",
+			[]string{"android:apk-key-hash:7d1043473d55bfa90e8530d35801d4e381bc69f0"},
+			false,
+		},
+		{
+			"ShouldHandleNonFQDNOrigin",
+			"https://user:password@app.example.com/",
+			[]string{"https://app.example.com/"},
+			true,
+		},
+		{
+			"ShouldHandleNonFQDNOriginExactStringMatch",
+			"https://user:password@app.example.com/",
+			[]string{"https://user:password@app.example.com/"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDefaultPortEquivalentHTTPS",
+			"https://app.example.com:443",
+			[]string{"https://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleFullyQualifiedOriginDefaultPortEquivalentHTTP",
+			"http://app.example.com:80",
+			[]string{"http://app.example.com"},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsOriginInHaystack(tc.origin, tc.haystack))
+		})
+	}
+}
