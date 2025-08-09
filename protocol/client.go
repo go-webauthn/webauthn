@@ -108,16 +108,10 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 
 	// Registration Step 5 & Assertion Step 9. Verify that the value of C.origin matches
 	// the Relying Party's origin.
-	var fqOrigin string
-
-	if fqOrigin, err = FullyQualifiedOrigin(c.Origin); err != nil {
-		return ErrParsingData.WithDetails("Error decoding clientData origin as URL").WithError(err)
-	}
-
 	found := false
 
 	for _, origin := range rpOrigins {
-		if strings.EqualFold(fqOrigin, origin) {
+		if strings.EqualFold(c.Origin, origin) {
 			found = true
 			break
 		}
@@ -126,7 +120,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 	if !found {
 		return ErrVerification.
 			WithDetails("Error validating origin").
-			WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", rpOrigins, fqOrigin))
+			WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", rpOrigins, c.Origin))
 	}
 
 	if rpTopOriginsVerify != TopOriginIgnoreVerificationMode {
