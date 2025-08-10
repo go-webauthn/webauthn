@@ -1,17 +1,20 @@
 package protocol
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupCollectedClientData(challenge URLEncodedBase64, origin string) *CollectedClientData {
+func setupCollectedClientData(challenge URLEncodedBase64, origin, topOrigin string, crossOrigin bool) *CollectedClientData {
 	ccd := &CollectedClientData{
-		Type:      CreateCeremony,
-		Origin:    origin,
-		Challenge: challenge.String(),
+		Type:        CreateCeremony,
+		Origin:      origin,
+		TopOrigin:   topOrigin,
+		CrossOrigin: crossOrigin,
+		Challenge:   challenge.String(),
 	}
 
 	return ccd
@@ -21,11 +24,77 @@ func TestVerifyCollectedClientData(t *testing.T) {
 	newChallenge, err := CreateChallenge()
 	require.NoError(t, err)
 
-	ccd := setupCollectedClientData(newChallenge, "http://example.com")
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
 
 	var storedChallenge = newChallenge
 
-	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode))
+	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode))
+}
+
+func TestVerifyCollectedClientDataNoTopOrigin(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	require.NoError(t, err)
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "", true)
+
+	var storedChallenge = newChallenge
+
+	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode))
+}
+
+func TestVerifyCollectedClientDataTopOrigin(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	require.NoError(t, err)
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example2.com", true)
+
+	var storedChallenge = newChallenge
+
+	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode))
+}
+
+func TestVerifyCollectedClientDataTopOriginIgnore(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	require.NoError(t, err)
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example2.com", true)
+
+	var storedChallenge = newChallenge
+
+	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{"https://example3.com"}, TopOriginIgnoreVerificationMode))
+}
+
+func TestVerifyCollectedClientDataTopOriginImplicit(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	require.NoError(t, err)
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
+
+	var storedChallenge = newChallenge
+
+	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginImplicitVerificationMode))
+}
+
+func TestVerifyCollectedClientDataTopOriginAuto(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	require.NoError(t, err)
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
+
+	var storedChallenge = newChallenge
+
+	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{"https://example.com"}, TopOriginAutoVerificationMode))
+}
+
+func TestVerifyCollectedClientDataTopOriginInvalidValue(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	require.NoError(t, err)
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
+
+	var storedChallenge = newChallenge
+
+	AssertIsProtocolError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{"https://example.com"}, -1), "not_implemented", "Error handling unknown Top Origin verification mode", "")
 }
 
 func TestVerifyCollectedClientDataIncorrectChallenge(t *testing.T) {
@@ -34,12 +103,12 @@ func TestVerifyCollectedClientDataIncorrectChallenge(t *testing.T) {
 		t.Fatalf("error creating challenge: %s", err)
 	}
 
-	ccd := setupCollectedClientData(newChallenge, "http://example.com")
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
 
 	bogusChallenge, err := CreateChallenge()
 	require.NoError(t, err)
 
-	assert.EqualError(t, ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode), "Error validating challenge")
+	AssertIsProtocolError(t, ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode), "verification_error", "Error validating challenge", fmt.Sprintf("Expected b Value: \"%s\"\nReceived b: \"%s\"\n", bogusChallenge.String(), newChallenge.String()))
 }
 
 func TestVerifyCollectedClientDataUnexpectedOrigin(t *testing.T) {
@@ -48,11 +117,36 @@ func TestVerifyCollectedClientDataUnexpectedOrigin(t *testing.T) {
 		t.Fatalf("error creating challenge: %s", err)
 	}
 
-	ccd := setupCollectedClientData(newChallenge, "http://example.com")
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
 	storedChallenge := newChallenge
 	expectedOrigins := []string{"http://different.com"}
 
-	if err = ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins, nil, TopOriginIgnoreVerificationMode); err == nil {
+	AssertIsProtocolError(t, ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins, nil, TopOriginExplicitVerificationMode), "verification_error", "Error validating origin", "Expected Values: [http://different.com], Received: http://example.com")
+}
+
+func TestVerifyCollectedClientDataUnexpectedTopOriginCrossOrigin(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	if err != nil {
+		t.Fatalf("error creating challenge: %s", err)
+	}
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example2.com", false)
+	storedChallenge := newChallenge
+
+	AssertIsProtocolError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode), "verification_error", "Error validating topOrigin", "The topOrigin can't have values unless crossOrigin is true.")
+}
+
+func TestVerifyCollectedClientDataUnexpectedTopOrigin(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	if err != nil {
+		t.Fatalf("error creating challenge: %s", err)
+	}
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
+	storedChallenge := newChallenge
+	expectedOrigins := []string{"http://different.com"}
+
+	if err = ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.TopOrigin}, expectedOrigins, TopOriginExplicitVerificationMode); err == nil {
 		t.Fatalf("error expected but not received. expected %#v got %#v", expectedOrigins, ccd.Origin)
 	}
 }
@@ -63,7 +157,7 @@ func TestVerifyCollectedClientDataWithMultipleExpectedOrigins(t *testing.T) {
 		t.Fatalf("error creating challenge: %s", err)
 	}
 
-	ccd := setupCollectedClientData(newChallenge, "http://example.com")
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
 
 	var storedChallenge = newChallenge
 
@@ -244,6 +338,12 @@ func TestIsOriginInHaystack(t *testing.T) {
 			"ShouldHandleFullyQualifiedOriginDefaultPortEquivalentHTTP",
 			"http://app.example.com:80",
 			[]string{"http://app.example.com"},
+			true,
+		},
+		{
+			"ShouldHandleInvalidURLAsSimpleStringMatch",
+			"http://app.example.%%%&123?1",
+			[]string{"http://app.example.%%%&123?1"},
 			true,
 		},
 	}
