@@ -4,7 +4,7 @@
     "go": "1.24"
   },
   "extends": [
-    "config:base",
+    "config:recommended",
     ":semanticCommitTypeAll(build)",
     ":separatePatchReleases"
   ],
@@ -21,7 +21,7 @@
   ],
   "packageRules": [
     {
-      "datasources": [
+      "matchDatasources": [
         "go"
       ],
       "addLabels": [
@@ -30,7 +30,6 @@
     }
   ],
   "postUpdateOptions": [
-      "gomodTidy",
-      "gomodNoMassage"
+    "gomodTidy"
   ]
 }
