@@ -33,12 +33,18 @@ type Config struct {
 	// RPDisplayName configures the display name for the Relying Party Server. This can be any string.
 	RPDisplayName string
 
-	// RPOrigins configures the list of Relying Party Server Origins that are permitted. These should be fully
-	// qualified origins.
+	// RPOrigins configures the list of Relying Party Server Origins that are permitted. The provided origins can either
+	// be fully qualified origins or strings for simple string comparison. The strings are matched using canonical
+	// origin matching semantics specifically if they start with 'http://' or 'https://' if the provided origin has a
+	// case-insensitive equal scheme and host component they are equal, otherwise simple string comparison is utilized
+	// to determine equality.
 	RPOrigins []string
 
-	// RPTopOrigins configures the list of Relying Party Server Top Origins that are permitted. These should be fully
-	// qualified origins.
+	// RPTopOrigins configures the list of Relying Party Server Top Origins that are permitted. The provided origins can
+	// either be fully qualified origins or strings for simple string comparison. The strings are matched using
+	// canonical origin matching semantics specifically if they start with 'http://' or 'https://' if the provided
+	// origin has a case-insensitive equal scheme and host component they are equal, otherwise simple string comparison
+	// is utilized to determine equality.
 	RPTopOrigins []string
 
 	// RPTopOriginVerificationMode determines the verification mode for the Top Origin value. By default the
@@ -90,12 +96,10 @@ type TimeoutConfig struct {
 }
 
 // Validate that the config flags in Config are properly set
-func (config *Config) validate() error {
+func (config *Config) validate() (err error) {
 	if config.validated {
 		return nil
 	}
-
-	var err error
 
 	if len(config.RPID) != 0 {
 		if _, err = url.Parse(config.RPID); err != nil {
@@ -129,9 +133,9 @@ func (config *Config) validate() error {
 	switch config.RPTopOriginVerificationMode {
 	case protocol.TopOriginDefaultVerificationMode:
 		config.RPTopOriginVerificationMode = protocol.TopOriginIgnoreVerificationMode
-	case protocol.TopOriginImplicitVerificationMode:
+	case protocol.TopOriginExplicitVerificationMode:
 		if len(config.RPTopOrigins) == 0 {
-			return fmt.Errorf("must provide at least one value to the 'RPTopOrigins' field when 'RPTopOriginVerificationMode' field is set to protocol.TopOriginImplicitVerificationMode")
+			return fmt.Errorf("must provide at least one value to the 'RPTopOrigins' field when 'RPTopOriginVerificationMode' field is set to protocol.TopOriginExplicitVerificationMode")
 		}
 	}
 
