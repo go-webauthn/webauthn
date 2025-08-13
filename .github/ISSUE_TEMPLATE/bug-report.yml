@@ -18,16 +18,31 @@ body:
       description: What version of the library are you using or which versions do you see the issue in?
       multiple: true
       options:
-        - 0.13.3
-        - 0.13.1
-        - 0.13.0
-        - 0.12.3
-        - 0.12.2
-        - 0.12.1
-        - 0.12.0
-        - 0.11.2
-        - 0.11.1
-        - 0.11.0
+        - '0.13.4'
+        - '0.13.3'
+        - '0.13.2'
+        - '0.13.1'
+        - '0.13.0'
+        - '0.12.3'
+        - '0.12.2'
+        - '0.12.1'
+        - '0.12.0'
+        - '0.11.2'
+        - '0.11.1'
+        - '0.11.0'
+    validations:
+      required: true
+  - type: dropdown
+    id: go-version
+    attributes:
+      label: Go Version
+      description: What version of go are you using?
+      multiple: true
+      options:
+        - '1.25'
+        - '1.24'
+        - '1.23'
+        - 'Other'
     validations:
       required: true
   - type: textarea

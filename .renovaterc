@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "constraints": {
-    "go": "1.24"
+    "go": "1.25"
   },
   "extends": [
     "config:recommended",
