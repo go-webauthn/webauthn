@@ -1,39 +1,40 @@
-name: Go
+name: 'Go'
 on:
   pull_request: {}
   push:
     branches:
-      - master
+      - 'master'
 permissions:
-  contents: read
+  contents: 'read'
 
 jobs:
   cover:
-    name: Coverage
-    runs-on: ubuntu-latest
+    name: 'Coverage'
+    runs-on: 'ubuntu-latest'
     steps:
-      - name: Harden Runner
+      - name: 'Harden Runner'
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
         with:
-          egress-policy: audit
-      - name: Set up Go 1.24
+          egress-policy: 'audit'
+      - name: 'Set up Go'
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version: 1.25
-      - name: Check out code into the Go module directory
+      - name: 'Checkout'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: Get dependencies
+      - name: 'Get Dependencies'
         run: |
           go get -v -t -d ./...
-      - name: Test
-        run: go test -coverprofile=coverage.txt -v ./...
-      - name: Coverage
+      - name: 'Test'
+        run: |
+          go test -coverprofile=coverage.txt -v ./...
+      - name: 'Coverage'
         uses: codecov/codecov-action@fdcc8476540edceab3de004e990f80d881c6cc00 # v5.5.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
   build:
-    name: Build
-    runs-on: ubuntu-latest
+    name: 'Build'
+    runs-on: 'ubuntu-latest'
     strategy:
       matrix:
         go:
@@ -42,20 +43,22 @@ jobs:
           - '1.25'
       fail-fast: false
     steps:
-      - name: Harden Runner
+      - name: 'Harden Runner'
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
         with:
-          egress-policy: audit
-      - name: Set up Go ${{ matrix.go }}
+          egress-policy: 'audit'
+      - name: 'Set up Go ${{ matrix.go }}'
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version: ${{ matrix.go }}
-      - name: Check out code into the Go module directory
+      - name: 'Checkout'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: Get dependencies
+      - name: 'Get Dependencies'
         run: |
           go get -v -t -d ./...
-      - name: Build
-        run: go build -v ./...
-      - name: Test
-        run: go test -v ./...
+      - name: 'Build'
+        run: |
+          go build -v ./...
+      - name: 'Test'
+        run: |
+          go test -v ./...
