@@ -34,26 +34,6 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
 	// the contained fields.
 
-	if attAndroidKeyHardwareRootsCertPool == nil {
-		pool := x509.NewCertPool()
-
-		var cert *x509.Certificate
-
-		if cert, err = x509.ParseCertificate(attAndroidKeyHardwareRoot3); err != nil {
-			return "", nil, ErrAttestationFormat.WithDetails("Error occurred parsing android-key hardware root 3").WithError(err)
-		} else {
-			pool.AddCert(cert)
-		}
-
-		if cert, err = x509.ParseCertificate(attAndroidKeyHardwareRoot4); err != nil {
-			return "", nil, ErrAttestationFormat.WithDetails("Error occurred parsing android-key hardware root 4").WithError(err)
-		} else {
-			pool.AddCert(cert)
-		}
-
-		attAndroidKeyHardwareRootsCertPool = pool
-	}
-
 	// Get the alg value - A COSEAlgorithmIdentifier containing the identifier of the algorithm
 	// used to generate the attestation signature.
 	alg, present := att.AttStatement[stmtAlgorithm].(int64)
