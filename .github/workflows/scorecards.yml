@@ -1,23 +1,21 @@
 name: 'Scorecard'
 on:
-  branch_protection_rule:
+  branch_protection_rule: {}
   schedule:
     - cron: '20 7 * * 2'
   push:
-    branches: ['master']
-
+    branches:
+     - 'master'
 permissions: 'read-all'
-
 jobs:
   analysis:
-    name: 'Scorecard Analysis'
+    name: 'Analysis'
     runs-on: 'ubuntu-latest'
     permissions:
       security-events: 'write'
       id-token: 'write'
       contents: 'read'
       actions: 'read'
-
     steps:
       - name: 'Harden Runner'
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
@@ -27,7 +25,6 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
-
       - name: 'Run'
         uses: ossf/scorecard-action@05b42c624433fc40578a4040d5cf5e36ddca8cde # v2.4.2
         with:
@@ -41,6 +38,6 @@ jobs:
           path: 'results.sarif'
           retention-days: 5
       - name: 'Upload to Code Scanning Dashboard'
-        uses: github/codeql-action/upload-sarif@96f518a34f7a870018057716cc4d7a5c014bd61c # v3.29.5
+        uses: github/codeql-action/upload-sarif@3c3833e0f8c1c83d449a7478aa59c036a9165498 # v3.29.5
         with:
           sarif_file: 'results.sarif'
