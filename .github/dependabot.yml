@@ -3,4 +3,5 @@ updates:
   - package-ecosystem: 'github-actions'
     directory: /
     schedule:
-      interval: 'hourly'
+      interval: 'cron'
+      cronjob: '0 * * * *'
