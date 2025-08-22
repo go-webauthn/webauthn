@@ -332,6 +332,21 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 		var credentialsOwned bool
 
 		for _, allowedCredentialID := range session.AllowedCredentialIDs {
+			for _, credential = range credentials {
+				if bytes.Equal(credential.ID, allowedCredentialID) {
+					credentialsOwned = true
+
+					break
+				}
+
+				credentialsOwned = false
+			}
+			if !credentialsOwned {
+				return nil, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
+			}
+		}
+
+		for _, allowedCredentialID := range session.AllowedCredentialIDs {
 			if bytes.Equal(parsedResponse.RawID, allowedCredentialID) {
 				found = true
 

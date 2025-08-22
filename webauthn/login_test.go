@@ -1,6 +1,11 @@
 package webauthn
 
 import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -131,5 +136,72 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFinishLoginFailure(t *testing.T) {
+	const (
+		credentialID = "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng"
+		userHandle   = "0ToAAAAAAAAAAA"
+	)
+	var (
+		byteUserHandle, _       = base64.RawURLEncoding.DecodeString(userHandle)
+		byteID, _               = base64.RawURLEncoding.DecodeString(credentialID)
+		byteCredentialPubKey, _ = base64.RawURLEncoding.DecodeString("pQMmIAEhWCAoCF-x0dwEhzQo-ABxHIAgr_5WL6cJceREc81oIwFn7iJYIHEHx8ZhBIE42L26-rSC_3l0ZaWEmsHAKyP9rgslApUdAQI")
+		byteAAGUID, _           = base64.RawURLEncoding.DecodeString("rc4AAjW8xgpkiwsl8fBVAw")
+	)
+
+	credentials := []Credential{
+		{
+			ID:        byteID,
+			PublicKey: byteCredentialPubKey,
+			Authenticator: Authenticator{
+				AAGUID: byteAAGUID,
+			},
+		},
+	}
+
+	// instantiate user
+	user := &defaultUser{
+		id:          byteUserHandle,
+		credentials: credentials,
+	}
+
+	// build session
+	session := SessionData{
+		UserID:    byteUserHandle,
+		Challenge: "E4PTcIH_HfX1pC6Sigk1SC9NAlgeztN0439vi8z_c9k",
+		// AllowedCredentialIDs contain 1 extra credential to trigger the
+		// "User does not own all credentials" error.
+		AllowedCredentialIDs: [][]byte{[]byte("test"), byteID},
+	}
+
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPDisplayName: "test_rp",
+			RPOrigins:     []string{"https://webauthn.io"},
+			RPID:          "webauthn.io",
+		},
+	}
+
+	// build returned response from authenticator
+	reqBody := ioutil.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{
+			"id":"%[1]s",
+			"rawId":"%[1]s",
+			"type":"public-key",
+			"response":{
+				"authenticatorData":"dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBFXJJiGa3OAAI1vMYKZIsLJfHwVQMANwCOw-atj9C0vhWpfWU-whzNjeQS21Lpxfdk_G-omAtffWztpGoErlNOfuXWRqm9Uj9ANJck1p6lAQIDJiABIVggKAhfsdHcBIc0KPgAcRyAIK_-Vi-nCXHkRHPNaCMBZ-4iWCBxB8fGYQSBONi9uvq0gv95dGWlhJrBwCsj_a4LJQKVHQ",
+				"clientDataJSON":"eyJjaGFsbGVuZ2UiOiJFNFBUY0lIX0hmWDFwQzZTaWdrMVNDOU5BbGdlenROMDQzOXZpOHpfYzlrIiwibmV3X2tleXNfbWF5X2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgiLCJvcmlnaW4iOiJodHRwczovL3dlYmF1dGhuLmlvIiwidHlwZSI6IndlYmF1dGhuLmdldCJ9",
+				"signature":"MEUCIBtIVOQxzFYdyWQyxaLR0tik1TnuPhGVhXVSNgFwLmN5AiEAnxXdCq0UeAVGWxOaFcjBZ_mEZoXqNboY5IkQDdlWZYc",
+				"userHandle":"%[2]s"
+			}
+		}`, credentialID, userHandle,
+	))))
+	httpReq := &http.Request{Body: reqBody}
+
+	expectedErr := protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
+	_, err := webauthn.FinishLogin(user, session, httpReq)
+	if err == nil || err.Error() != expectedErr.Error() {
+		t.Fatalf("FinishLogin() expected err=%v, got=%v", expectedErr, err)
 	}
 }
