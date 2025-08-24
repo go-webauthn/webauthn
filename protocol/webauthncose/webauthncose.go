@@ -107,16 +107,16 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 }
 
 // Verify RSA Public Key Signature.
-func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
-	e := uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16
+func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (valid bool, err error) {
+	var e int
 
-	if e > math.MaxInt {
+	if e, err = parseRSAPublicKeyDataExponent(k); err != nil {
 		return false, ErrUnsupportedKey
 	}
 
 	pubkey := &rsa.PublicKey{
 		N: big.NewInt(0).SetBytes(k.Modulus),
-		E: int(e),
+		E: e,
 	}
 
 	coseAlg := COSEAlgorithmIdentifier(k.Algorithm)
@@ -226,15 +226,15 @@ func DisplayPublicKey(cpk []byte) string {
 
 	switch k := parsedKey.(type) {
 	case RSAPublicKeyData:
-		e := uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16
+		var e int
 
-		if e > math.MaxInt {
+		if e, err = parseRSAPublicKeyDataExponent(&k); err != nil {
 			return keyCannotDisplay
 		}
 
 		rKey := &rsa.PublicKey{
 			N: big.NewInt(0).SetBytes(k.Modulus),
-			E: int(e),
+			E: e,
 		}
 
 		data, err := x509.MarshalPKIXPublicKey(rKey)
@@ -499,4 +499,28 @@ func (passedError *Error) WithDetails(details string) *Error {
 	err.Details = details
 
 	return &err
+}
+
+func parseRSAPublicKeyDataExponent(k *RSAPublicKeyData) (exp int, err error) {
+	if k == nil {
+		return 0, fmt.Errorf("invalid key")
+	}
+
+	if len(k.Exponent) == 0 {
+		return 0, fmt.Errorf("invalid exponent length")
+	}
+
+	for _, b := range k.Exponent {
+		if exp > (math.MaxInt >> 8) {
+			return 0, ErrUnsupportedKey
+		}
+
+		exp = (exp << 8) | int(b)
+	}
+
+	if exp <= 0 {
+		return 0, ErrUnsupportedKey
+	}
+
+	return exp, nil
 }

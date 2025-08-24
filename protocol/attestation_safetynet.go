@@ -135,23 +135,37 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds met
 }
 
 func keyFuncSafetyNetJWT(token *jwt.Token) (key any, err error) {
-	chain := token.Header[stmtX5C].([]any)
+	var (
+		ok    bool
+		raw   any
+		chain []any
+		first string
+		der   []byte
+		cert  *x509.Certificate
+	)
 
-	o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
-
-	n, err := base64.StdEncoding.Decode(o, []byte(chain[0].(string)))
-	if err != nil {
-		return nil, err
+	if raw, ok = token.Header[stmtX5C]; !ok {
+		return nil, fmt.Errorf("jwt header missing x5c")
 	}
 
-	var cert *x509.Certificate
+	if chain, ok = raw.([]any); !ok || len(chain) == 0 {
+		return nil, fmt.Errorf("jwt header x5c is not a non-empty array")
+	}
 
-	if cert, err = x509.ParseCertificate(o[:n]); err != nil {
+	if first, ok = chain[0].(string); !ok || first == "" {
+		return nil, fmt.Errorf("jwt header x5c[0] not a base64 string")
+	}
+
+	if der, err = base64.StdEncoding.DecodeString(first); err != nil {
+		return nil, fmt.Errorf("decode x5c leaf: %w", err)
+	}
+
+	if cert, err = x509.ParseCertificate(der); err != nil {
 		if cert != nil {
-			return cert.PublicKey, err
+			return cert.PublicKey, fmt.Errorf("parse x5c leaf: %w", err)
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("parse x5c leaf: %w", err)
 	}
 
 	return cert.PublicKey, nil

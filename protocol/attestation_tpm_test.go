@@ -12,6 +12,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"errors"
+	"math"
 	"math/big"
 	"testing"
 
@@ -212,7 +213,7 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
 	}
 
-	if rsaKey.E < 0 || rsaKey.E > 4294967295 {
+	if rsaKey.E < 0 || rsaKey.E > math.MaxUint32 {
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, errors.New("invalid E value")
 	}
 

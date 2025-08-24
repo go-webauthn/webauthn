@@ -617,49 +617,51 @@ type StatusReport struct {
 	// Status of the authenticator. Additional fields MAY be set depending on this value.
 	Status AuthenticatorStatus
 
-	// ISO-8601 formatted date since when the status code was set, if applicable. If no date is given, the status is
-	// assumed to be effective while present.
+	// EffectiveDate is an ISO-8601 formatted date since when the status code was set, if applicable. If no date is
+	// given, the status is assumed to be effective while present.
 	EffectiveDate time.Time
 
-	// The authenticatorVersion that this status report relates to. In the case of FIDO_CERTIFIED* status values, the
+	// The AuthenticatorVersion that this status report relates to. In the case of FIDO_CERTIFIED* status values, the
 	// status applies to higher authenticatorVersions until there is a new statusReport.
 	AuthenticatorVersion uint32
 
-	// Base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value related to the current
-	// status, if applicable.
+	// BatchCertificate is a base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value
+	// related to the current status, if applicable.
 	BatchCertificate *x509.Certificate
 
-	// Base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value related to the current
-	// status, if applicable. This field will typically not be present if field batchCertificate is present.
+	// Certificate is a base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value related to
+	// the current status, if applicable. This field will typically not be present if field batchCertificate is present.
 	Certificate *x509.Certificate
 
-	// HTTPS URL where additional information may be found related to the current status, if applicable.
+	// URL is a HTTPS URL where additional information may be found related to the current status, if applicable.
 	URL *url.URL
 
-	// Describes the externally visible aspects of the Authenticator Certification evaluation.
+	// CertificationDescriptor describes the externally visible aspects of the Authenticator Certification evaluation.
 	CertificationDescriptor string
 
-	// The unique identifier for the issued Certification.
+	// CertificateNumber is the unique identifier for the issued Certification.
 	CertificateNumber string
 
-	// The version of the Authenticator Certification Policy the implementation is Certified to, e.g. "1.0.0".
+	// CertificationPolicyVersion is the version of the Authenticator Certification Policy the implementation is
+	// Certified to, e.g. "1.0.0".
 	CertificationPolicyVersion string
 
-	// The Document Version of the Authenticator Security Requirements (DV) [FIDOAuthenticatorSecurityRequirements] the
-	// implementation is certified to, e.g. "1.2.0".
+	// CertificationRequirementsVersion is the Document Version of the Authenticator Security Requirements (DV)
+	// [FIDOAuthenticatorSecurityRequirements] the implementation is certified to, e.g. "1.2.0".
 	CertificationRequirementsVersion string
 
-	// ISO-8601 formatted date since when the status wil expire, if applicable. If no date is given, the status is
-	// assumed to not have a scheduled expiry.
+	// SunsetDate is an ISO-8601 formatted date since when the status wil expire, if applicable. If no date is given,
+	// the status is assumed to not have a scheduled expiry.
 	SunsetDate *time.Time
 
-	// The revision number of the FIPS 140 specification, e.g. "3" in the case of FIPS 140-3. This entry MUST be present
-	// if and only if the status entry is one of FIPS140_CERTIFIED_L*.
+	// FIPSRevision is the revision number of the FIPS 140 specification, e.g. "3" in the case of FIPS 140-3. This entry
+	// MUST be present if and only if the status entry is one of FIPS140_CERTIFIED_L*.
 	FIPSRevision uint32
 
-	// In the case the status represents a FIPS certification, this field contains the "physical security level" of the
-	// FIPS certification. This entry MUST be present if and only if the status entry is one of FIPS140_CERTIFIED_L*. It
-	// MUST reflect the physical security level which might deviate from the overall level.
+	// FIPSPhysicalSecurityLevel is an indicator that in the case the status represents a FIPS certification, this field
+	// contains the "physical security level" of the FIPS certification. This entry MUST be present if and only if the
+	// status entry is one of FIPS140_CERTIFIED_L*. It MUST reflect the physical security level which might deviate from
+	// the overall level.
 	FIPSPhysicalSecurityLevel uint32
 }
 
@@ -759,18 +761,19 @@ type RogueListEntry struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-cad
 type CodeAccuracyDescriptor struct {
-	// The numeric system base (radix) of the code, e.g. 10 in the case of decimal digits.
+	// Base is the numeric system base (radix) of the code, e.g. 10 in the case of decimal digits.
 	Base uint16 `json:"base"`
 
-	// The minimum number of digits of the given base required for that code, e.g. 4 in the case of 4 digits.
+	// MinLength is the minimum number of digits of the given base required for that code, e.g. 4 in the case of 4
+	// digits.
 	MinLength uint16 `json:"minLength"`
 
-	// Maximum number of false attempts before the authenticator will block this method (at least for some time). 0
-	// means it will never block.
+	// MaxRetries is the maximum number of false attempts before the authenticator will block this method (at least for
+	// some time). 0 means it will never block.
 	MaxRetries uint16 `json:"maxRetries"`
 
-	// Enforced minimum number of seconds wait time after blocking (e.g. due to forced reboot or similar).
-	// 0 means this user verification method will be blocked, either permanently, or until an alternative user
+	// BlockSlowdown is the enforced minimum number of seconds wait time after blocking (e.g. due to forced reboot or
+	// similar). 0 means this user verification method will be blocked, either permanently, or until an alternative user
 	// verification method method succeeded. All alternative user verification methods MUST be specified appropriately
 	// in the Metadata in userVerificationDetails.
 	BlockSlowdown uint16 `json:"blockSlowdown"`
@@ -781,31 +784,32 @@ type CodeAccuracyDescriptor struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-bad
 type BiometricAccuracyDescriptor struct {
-	// The false rejection rate [ISO19795-1] for a single template, i.e. the percentage of verification transactions
-	// with truthful claims of identity that are incorrectly denied.
+	// SelfAttestedFRR is the false rejection rate [ISO19795-1] for a single template, i.e. the percentage of
+	// verification transactions with truthful claims of identity that are incorrectly denied.
 	SelfAttestedFRR float64 `json:"selfAttestedFRR"`
 
-	// The false acceptance rate [ISO19795-1] for a single template, i.e. the percentage of verification transactions
-	// with wrongful claims of identity that are incorrectly confirmed.
+	// SelfAttestedFAR is the false acceptance rate [ISO19795-1] for a single template, i.e. the percentage of
+	// verification transactions with wrongful claims of identity that are incorrectly confirmed.
 	SelfAttestedFAR float64 `json:"selfAttestedFAR"`
 
-	// Impostor Attack Presentation Accept Rate (IAPAR) is the proportion of impostor attack presentations using the
-	// same presentation attack instrument (PAI) species that result in accept [isoiec-30107-3]. For biometric
-	// certification requirements [FIDOBiometricsRequirements], certification can be achieved for an IAPAR threshold of
-	// less than 7% OR less than 15% for each of the PAI species tested.
+	// ImposterAttackPresentationAcceptRateThreshold is the threshold for Impostor Attack Presentation Accept Rate
+	// (IAPAR) is the proportion of impostor attack presentations using the same presentation attack instrument (PAI)
+	// species that result in accept [isoiec-30107-3]. For biometric certification requirements
+	// [FIDOBiometricsRequirements], certification can be achieved for an IAPAR threshold of less than 7% OR less than
+	// 15% for each of the PAI species tested.
 	ImposterAttackPresentationAcceptRateThreshold float64 `json:"iAPARThreshold"`
 
-	// Maximum number of alternative templates from different fingers allowed.
+	// MaxTemplates is the maximum number of alternative templates from different fingers allowed.
 	MaxTemplates uint16 `json:"maxTemplates"`
 
-	// Maximum number of false attempts before the authenticator will block this method (at least for some time). 0
-	// means it will never block.
+	// MaxRetries is the maximum number of false attempts before the authenticator will block this method (at least for
+	// some time). 0 means it will never block.
 	MaxRetries uint16 `json:"maxRetries"`
 
-	// Enforced minimum number of seconds wait time after blocking (e.g. due to forced reboot or similar).
-	// 0 means that this user verification method will be blocked either permanently or until an alternative user
-	// verification method succeeded. All alternative user verification methods MUST be specified appropriately in the
-	// metadata in userVerificationDetails.
+	// BlockSlowdown is the enforced minimum number of seconds wait time after blocking (e.g. due to forced reboot or
+	// similar).0 means that this user verification method will be blocked either permanently or until an alternative
+	// user verification method succeeded. All alternative user verification methods MUST be specified appropriately in
+	// the metadata in userVerificationDetails.
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
@@ -814,18 +818,18 @@ type BiometricAccuracyDescriptor struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-pad
 type PatternAccuracyDescriptor struct {
-	// Number of possible patterns (having the minimum length) out of which exactly one would be the right one, i.e.
-	// 1/probability in the case of equal distribution.
+	// MinComplexity is the number of possible patterns (having the minimum length) out of which exactly one would be
+	// the right one, i.e. 1/probability in the case of equal distribution.
 	MinComplexity uint32 `json:"minComplexity"`
 
-	// Maximum number of false attempts before the authenticator will block authentication using this method (at least
-	// temporarily). 0 means it will never block.
+	// MaxRetries is the maximum number of false attempts before the authenticator will block authentication using this
+	// method (at least temporarily). 0 means it will never block.
 	MaxRetries uint16 `json:"maxRetries"`
 
-	// Enforced minimum number of seconds wait time after blocking (due to forced reboot or similar mechanism).
-	// 0 means this user verification method will be blocked, either permanently, or until an alternative user
-	// verification method method succeeded. All alternative user verification methods MUST be specified appropriately
-	// in the metadata under userVerificationDetails.
+	// BlockSlowdown is the enforced minimum number of seconds wait time after blocking (due to forced reboot or similar
+	// mechanism). 0 means this user verification method will be blocked, either permanently, or until an alternative
+	// user verification method method succeeded. All alternative user verification methods MUST be specified
+	// appropriately in the metadata under userVerificationDetails.
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
@@ -834,17 +838,18 @@ type PatternAccuracyDescriptor struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-vmd
 type VerificationMethodDescriptor struct {
-	// a single USER_VERIFY constant (see [FIDORegistry]), not a bit flag combination. This value MUST be non-zero.
+	// UserVerificationMethod is a single USER_VERIFY constant (see [FIDORegistry]), not a bit flag combination. This
+	// value MUST be non-zero.
 	UserVerificationMethod string `json:"userVerificationMethod"`
 
-	// May optionally be used in the case of method USER_VERIFY_PASSCODE.
+	// CaDesc nay optionally be used in the case of method USER_VERIFY_PASSCODE.
 	CaDesc CodeAccuracyDescriptor `json:"caDesc"`
 
-	// May optionally be used in the case of method USER_VERIFY_FINGERPRINT, USER_VERIFY_VOICEPRINT,
+	// BaDesc may optionally be used in the case of method USER_VERIFY_FINGERPRINT, USER_VERIFY_VOICEPRINT,
 	// USER_VERIFY_FACEPRINT, USER_VERIFY_EYEPRINT, or USER_VERIFY_HANDPRINT.
 	BaDesc BiometricAccuracyDescriptor `json:"baDesc"`
 
-	// May optionally be used in case of method USER_VERIFY_PATTERN.
+	// PaDesc may optionally be used in case of method USER_VERIFY_PATTERN.
 	PaDesc PatternAccuracyDescriptor `json:"paDesc"`
 }
 
@@ -924,18 +929,18 @@ type EcdaaTrustAnchor struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ed
 type ExtensionDescriptor struct {
-	// Identifies the extension.
+	// ID identifies the extension.
 	ID string `json:"id"`
 
-	// The TAG of the extension if this was assigned. TAGs are assigned to extensions if they could appear in an
-	// assertion.
+	// Tag of the extension if this was assigned. TAGs are assigned to extensions if they could appear in an assertion.
 	Tag uint16 `json:"tag"`
 
-	// Contains arbitrary data further describing the extension and/or data needed to correctly process the extension.
+	// Data contains arbitrary data further describing the extension and/or data needed to correctly process the
+	// extension.
 	Data string `json:"data"`
 
-	// Indicates whether unknown extensions must be ignored (false) or must lead to an error (true) when the extension
-	// is to be processed by the FIDO Server, FIDO Client, ASM, or FIDO Authenticator.
+	// FailIfUnknown indicates whether unknown extensions must be ignored (false) or must lead to an error (true) when
+	// the extension is to be processed by the FIDO Server, FIDO Client, ASM, or FIDO Authenticator.
 	FailIfUnknown bool `json:"fail_if_unknown"`
 }
 
@@ -955,71 +960,75 @@ type Version struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-agid
 type AuthenticatorGetInfo struct {
-	// List of supported versions.
+	// Versions is a list of supported versions.
 	Versions []string
 
-	// List of supported extensions.
+	// Extensions is a list of supported extensions.
 	Extensions []string
 
-	// The claimed AAGUID.
+	// AaGUID is the claimed AAGUID.
 	AaGUID uuid.UUID
 
-	// List of supported options.
+	// Options is a list of supported options.
 	Options map[string]bool
 
-	// Maximum message size supported by the authenticator.
+	// MaxMsgSize is the maximum message size supported by the authenticator.
 	MaxMsgSize uint
 
-	// List of supported PIN/UV auth protocols in order of decreasing authenticator preference.
+	// PivUvAuthProtocols is a list of supported PIN/UV auth protocols in order of decreasing authenticator preference.
 	PivUvAuthProtocols []uint
 
-	// Maximum number of credentials supported in credentialID list at a time by the authenticator.
+	// MaxCredentialCountInList is the maximum number of credentials supported in credentialID list at a time by the
+	// authenticator.
 	MaxCredentialCountInList uint
 
-	// Maximum Credential ID Length supported by the authenticator.
+	// MaxCredentialIdLength is the maximum Credential ID Length supported by the authenticator.
 	MaxCredentialIdLength uint
 
-	// List of supported transports.
+	// Transports is the list of supported transports.
 	Transports []string
 
-	// List of supported algorithms for credential generation, as specified in WebAuthn.
+	// Algorithms is the list of supported algorithms for credential generation, as specified in WebAuthn.
 	Algorithms []PublicKeyCredentialParameters
 
-	// The maximum size, in bytes, of the serialized large-blob array that this authenticator can store.
+	// MaxSerializedLargeBlobArray is the maximum size, in bytes, of the serialized large-blob array that this
+	// authenticator can store.
 	MaxSerializedLargeBlobArray uint
 
-	// If this member is present and set to true, the PIN must be changed.
+	// ForcePINChange indicates if the PIN must be changed.
 	ForcePINChange bool
 
-	// This specifies the current minimum PIN length, in Unicode code points, the authenticator enforces for ClientPIN.
+	// MinPINLength specifies the current minimum PIN length, in Unicode code points, the authenticator enforces for ClientPIN.
 	MinPINLength uint
 
-	// Indicates the firmware version of the authenticator model identified by AAGUID.
+	// FirmwareVersion indicates the firmware version of the authenticator model identified by AAGUID.
 	FirmwareVersion uint
 
-	// Maximum credBlob length in bytes supported by the authenticator.
+	// MaxCredBlobLength indicates the maximum credential blob length in bytes supported by the authenticator.
 	MaxCredBlobLength uint
 
-	// This specifies the max number of RP IDs that authenticator can set via setMinPINLength subcommand.
+	// MaxRPIDsForSetMinPINLength specifies the max number of RP IDs that authenticator can set via setMinPINLength
+	// subcommand.
 	MaxRPIDsForSetMinPINLength uint
 
-	// This specifies the preferred number of invocations of the getPinUvAuthTokenUsingUvWithPermissions subCommand the
-	// platform may attempt before falling back to the getPinUvAuthTokenUsingPinWithPermissions subCommand or displaying an error.
+	// PreferredPlatformUvAttempts specifies the preferred number of invocations of the
+	// getPinUvAuthTokenUsingUvWithPermissions subCommand the platform may attempt before falling back to the
+	// getPinUvAuthTokenUsingPinWithPermissions subCommand or displaying an error.
 	PreferredPlatformUvAttempts uint
 
-	// This specifies the user verification modality supported by the authenticator via authenticatorClientPIN's
+	// UvModality specifies the user verification modality supported by the authenticator via authenticatorClientPIN's
 	// getPinUvAuthTokenUsingUvWithPermissions subcommand.
 	UvModality uint
 
-	// This specifies a list of authenticator certifications.
+	// Certifications specifies a list of authenticator certifications.
 	Certifications map[string]float64
 
-	// If this member is present it indicates the estimated number of additional discoverable credentials that can be
-	// stored.
+	// RemainingDiscoverableCredentials if present indicates the estimated number of additional discoverable credentials
+	// that can be stored.
 	RemainingDiscoverableCredentials uint
 
-	// If present the authenticator supports the authenticatorConfig vendorPrototype subcommand, and its value is a list
-	// of authenticatorConfig vendorCommandId values supported, which MAY be empty.
+	// VendorPrototypeConfigCommands if present the authenticator supports the authenticatorConfig vendorPrototype
+	// subcommand, and its value is a list of authenticatorConfig vendorCommandId values supported, which MAY be empty.
 	VendorPrototypeConfigCommands []uint
 }
 
@@ -1083,16 +1092,16 @@ func (j AuthenticatorGetInfoJSON) Parse() (info AuthenticatorGetInfo, err error)
 
 // MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint.
 type MDSGetEndpointsRequest struct {
-	// The URL of the local server endpoint, e.g. https://webauthn.io/
+	// Endpoint is the URL of the local server endpoint, e.g. https://webauthn.io/
 	Endpoint string `json:"endpoint"`
 }
 
 // MDSGetEndpointsResponse is the response received from a conformance metadata getEndpoints request.
 type MDSGetEndpointsResponse struct {
-	// The status of the response.
+	// Status is the status of the response.
 	Status string `json:"status"`
 
-	// An array of urls, each pointing to a MetadataTOCPayload.
+	// Result is an array of urls, each pointing to a MetadataTOCPayload.
 	Result []string `json:"result"`
 }
 
