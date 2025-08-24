@@ -341,10 +341,9 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 				credentialsOwned = false
 			}
-		}
-
-		if !credentialsOwned {
-			return nil, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
+			if !credentialsOwned {
+				return nil, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
+			}
 		}
 
 		for _, allowedCredentialID := range session.AllowedCredentialIDs {
