@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"context"
 	"crypto/x509"
 	"encoding/asn1"
 	"fmt"
@@ -29,7 +30,7 @@ func init() {
 //	  }
 //
 // Specification: §8.4. Android Key Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-key-attestation)
-func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Given the verification procedure inputs attStmt, authenticatorData and clientDataHash, the verification procedure is as follows:
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
 	// the contained fields.
@@ -66,11 +67,13 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err)).WithError(err)
 	}
 
-	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
-
-	if _, err = attCert.Verify(x509.VerifyOptions{Roots: attAndroidKeyHardwareRootsCertPool}); err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err)).WithError(err)
+	if mds != nil && mds.GetValidateTrustAnchor(context.Background()) {
+		if _, err = attCert.Verify(x509.VerifyOptions{Roots: attAndroidKeyHardwareRootsCertPool}); err != nil {
+			return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err)).WithError(err)
+		}
 	}
+
+	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
