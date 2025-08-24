@@ -103,7 +103,7 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, signature); err != nil {
-		return "", x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err)).WithError(err)
+		return "", x5c, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
 	// Step 2.2 Verify that attestnCert meets the requirements in §8.2.1 Packed attestation statement certificate requirements.
@@ -207,7 +207,7 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signatur
 
 	key, err := webauthncose.ParsePublicKey(pubKey)
 	if err != nil {
-		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing the public key: %+v\n", err))
+		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing the public key: %+v", err))
 	}
 
 	// §4.1 Validate that alg matches the algorithm of the credentialPublicKey in authenticatorData.

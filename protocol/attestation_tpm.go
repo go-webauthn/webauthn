@@ -152,7 +152,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		}
 
 		if err = aikCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), certInfoBytes, sigBytes); err != nil {
-			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
+			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 		}
 
 		// Verify that aikCert meets the requirements in §8.3.1 TPM Attestation Statement Certificate Requirements.

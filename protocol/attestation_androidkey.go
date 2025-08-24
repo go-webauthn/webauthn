@@ -69,7 +69,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, mds me
 
 	if mds != nil && mds.GetValidateTrustAnchor(context.Background()) {
 		if _, err = attCert.Verify(x509.VerifyOptions{Roots: attAndroidKeyHardwareRootsCertPool}); err != nil {
-			return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err)).WithError(err)
+			return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Trust Anchor validation error: %+v", err)).WithError(err)
 		}
 	}
 
@@ -77,20 +77,20 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, mds me
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err)).WithError(err)
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
 	// Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.
 	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
 	if err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err)).WithError(err)
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
 	}
 
 	e := pubKey.(webauthncose.EC2PublicKeyData)
 
 	valid, err = e.Verify(signatureData, sig)
 	if err != nil || !valid {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err)).WithError(err)
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
 	}
 
 	// §8.4.3. Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.

@@ -84,7 +84,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	// TODO: Probably move this part to webauthncose.go.
 	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
 	if err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err)).WithError(err)
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
 	}
 
 	credPK := pubKey.(webauthncose.EC2PublicKeyData)
