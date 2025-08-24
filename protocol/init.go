@@ -11,7 +11,7 @@ func init() {
 	attAndroidKeyHardwareRoots[3] = MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot4))
 	attAndroidKeyHardwareRoots[4] = MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot5))
 
-	insecureMangleCertsNotAfter(attAndroidKeyHardwareRoots)
+	certsInsecureNotAfterMangle(attAndroidKeyHardwareRoots)
 
 	attAndroidKeyHardwareRootsCertPool = x509.NewCertPool()
 

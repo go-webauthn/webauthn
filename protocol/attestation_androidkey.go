@@ -2,10 +2,10 @@ package protocol
 
 import (
 	"bytes"
-	"context"
 	"crypto/x509"
 	"encoding/asn1"
 	"fmt"
+	"time"
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -30,7 +30,7 @@ func init() {
 //	  }
 //
 // Specification: §8.4. Android Key Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-key-attestation)
-func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
+func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Given the verification procedure inputs attStmt, authenticatorData and clientDataHash, the verification procedure is as follows:
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
 	// the contained fields.
@@ -63,20 +63,16 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, mds me
 		return "", nil, ErrAttestation.WithDetails("Error parsing x5c cert chain").WithError(err)
 	}
 
-	attCert := certs[0]
+	leaf := certs[0]
 
-	certs = insecureMangleCertsNotAfter(certs)
-
-	if mds != nil && mds.GetValidateTrustAnchor(context.Background()) {
-		if _, err = attCert.Verify(x509.VerifyOptions{Roots: attAndroidKeyHardwareRootsCertPool, Intermediates: certsToCertPool(certs[1:])}); err != nil {
-			return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Trust Anchor validation error: %+v", err)).WithError(err)
-		}
+	if _, err = certChainVerify(certs, attAndroidKeyHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {
+		return "", nil, ErrInvalidAttestation.WithDetails("Error validating x5c cert chain").WithError(err)
 	}
 
 	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
-	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
+	if err = leaf.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
@@ -100,7 +96,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, mds me
 	// attCert.Extensions.
 	var attExtBytes []byte
 
-	for _, ext := range attCert.Extensions {
+	for _, ext := range leaf.Extensions {
 		if ext.Id.Equal([]int{1, 3, 6, 1, 4, 1, 11129, 2, 1, 17}) {
 			attExtBytes = ext.Value
 		}
@@ -124,7 +120,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, mds me
 	}
 
 	// The AuthorizationList.allApplications field is not present on either authorization list (softwareEnforced nor teeEnforced), since PublicKeyCredential MUST be scoped to the RP ID.
-	if nil != decoded.SoftwareEnforced.AllApplications || nil != decoded.TeeEnforced.AllApplications {
+	if decoded.SoftwareEnforced.AllApplications != nil || decoded.TeeEnforced.AllApplications != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains all applications field")
 	}
 

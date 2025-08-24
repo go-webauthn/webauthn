@@ -3,6 +3,7 @@ package protocol
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -46,10 +47,77 @@ func parseX5C(x5c []any) (x5cs []*x509.Certificate, err error) {
 	return x5cs, nil
 }
 
-// This function is used to intentionally mangle the certificates not before and not after values to exclude them from
-// the verification process. This should only be used in instances where the all you care about is which certificates
+func certChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotAfter bool, mangleNotAfterSafeTime time.Time) (chains [][]*x509.Certificate, err error) {
+	if len(certs) == 0 {
+		return nil, errors.New("empty chain")
+	}
+
+	leaf := certs[0]
+
+	for _, cert := range certs {
+		if !cert.IsCA {
+			if mangleNotAfter {
+				leaf = certInsecureNotAfterMangle(cert, mangleNotAfterSafeTime)
+			} else {
+				leaf = cert
+			}
+
+			break
+		}
+	}
+
+	var (
+		intermediates *x509.CertPool
+	)
+
+	intermediates = x509.NewCertPool()
+
+	if roots == nil {
+		if roots, err = x509.SystemCertPool(); err != nil || roots == nil {
+			roots = x509.NewCertPool()
+		}
+	}
+
+	for _, cert := range certs {
+		if cert == leaf {
+			continue
+		}
+
+		if mangleNotAfter {
+			if isSelfSigned(cert) {
+				roots.AddCert(certInsecureNotAfterMangle(cert, mangleNotAfterSafeTime))
+			} else {
+				intermediates.AddCert(certInsecureNotAfterMangle(cert, mangleNotAfterSafeTime))
+			}
+		} else {
+			if isSelfSigned(cert) {
+				roots.AddCert(cert)
+			} else {
+				intermediates.AddCert(cert)
+			}
+		}
+	}
+
+	opts := x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: intermediates,
+	}
+
+	return leaf.Verify(opts)
+}
+
+func isSelfSigned(c *x509.Certificate) bool {
+	// Cheap check (Subject == Issuer) + cryptographic check.
+	if !c.IsCA {
+		return false
+	}
+	return c.CheckSignatureFrom(c) == nil
+}
+
+// This function is used to intentionally mangle the certificates not after values to exclude them from
+// the verification process. This should only be used in instances where all you care about is which certificates
 // performed the signing.
-func insecureMangleCertsNotAfter(certs []*x509.Certificate) (out []*x509.Certificate) {
+func certsInsecureNotAfterMangle(certs []*x509.Certificate) (out []*x509.Certificate) {
 	// Add 1 year to the current time. This is effectively the not after time which is used to determine which
 	// certificates to mangle.
 	safe := time.Now().Add(time.Hour * 8760).UTC()
@@ -57,13 +125,22 @@ func insecureMangleCertsNotAfter(certs []*x509.Certificate) (out []*x509.Certifi
 	out = make([]*x509.Certificate, len(certs))
 
 	for i, cert := range certs {
-		c := *cert
+		out[i] = certInsecureNotAfterMangle(cert, safe)
+	}
 
-		out[i] = &c
+	return out
+}
 
-		if out[i].NotAfter.Before(safe) {
-			out[i].NotAfter = safe
-		}
+// This function is used to intentionally mangle the certificate not after value to exclude it from
+// the verification process. This should only be used in instances where all you care about is which certificates
+// performed the signing.
+func certInsecureNotAfterMangle(cert *x509.Certificate, safe time.Time) (out *x509.Certificate) {
+	c := *cert
+
+	out = &c
+
+	if out.NotAfter.Before(safe) {
+		out.NotAfter = safe
 	}
 
 	return out
