@@ -128,3 +128,81 @@ MCowBQYDK2VwAyEAe4gQJK3JgtOAuHceO5v45LOZi8fQWDBmAs5NDy/kt4E=
 		t.Fatalf("incorrect PEM format received for ed25519 public key. expected\n%#v\n got \n%#v\n", expected, got)
 	}
 }
+
+func TestRSAExponent(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     *RSAPublicKeyData
+		expected int
+		err      string
+	}{
+		{
+			"ShouldHandle3ByteExponent",
+			&RSAPublicKeyData{
+				Exponent: []byte{0x01, 0x00, 0x01},
+			},
+			65537,
+			"",
+		},
+		{
+			"ShouldHandle3ByteExponentAlt",
+			&RSAPublicKeyData{
+				Exponent: []byte{0x01, 0x00, 0x02},
+			},
+			65538,
+			"",
+		},
+		{
+			"ShouldHandle3ByteExponentLarge",
+			&RSAPublicKeyData{
+				Exponent: []byte{0xff, 0xff, 0xff},
+			},
+			16777215,
+			"",
+		},
+		{
+			"ShouldHandle4ByteExponent",
+			&RSAPublicKeyData{
+				Exponent: []byte{0x01, 0x00, 0x02, 0xff},
+			},
+			16777983,
+			"",
+		},
+		{
+			"ShouldHandleZeroLength",
+			&RSAPublicKeyData{
+				Exponent: []byte{},
+			},
+			0,
+			"invalid exponent length",
+		},
+		{
+			"ShouldHandleNilExponent",
+			&RSAPublicKeyData{
+				Exponent: nil,
+			},
+			0,
+			"invalid exponent length",
+		},
+		{
+			"ShouldHandleNilKey",
+			nil,
+			0,
+			"invalid key",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, err := parseRSAPublicKeyDataExponent(tc.have)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.Equal(t, 0, actual)
+			} else {
+				assert.Equal(t, tc.expected, actual)
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

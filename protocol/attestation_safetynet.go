@@ -29,8 +29,6 @@ type SafetyNetResponse struct {
 	BasicIntegrity             bool   `json:"basicIntegrity"`
 }
 
-// Thanks to @koesie10 and @herrjemand for outlining how to support this type really well
-
 // When the authenticator in question is a platform-provided Authenticator on certain Android platforms, the attestation
 // statement is based on the SafetyNet API. In this case the authenticator data is completely controlled by the caller of
 // the SafetyNet API (typically an application running on the Android platform) and the attestation statement only provides
@@ -41,7 +39,7 @@ type SafetyNetResponse struct {
 // authenticators SHOULD make use of the Android Key Attestation when available, even if the SafetyNet API is also present.
 //
 // Specification: §8.5. Android SafetyNet Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation)
-func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
+func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
 	//                           fmt: "android-safetynet",
@@ -67,33 +65,20 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds met
 		return "", nil, ErrAttestationFormat.WithDetails("Not a proper version for SafetyNet")
 	}
 
-	// TODO: provide user the ability to designate their supported versions
+	// TODO: provide user the ability to designate their supported versions.
 
 	response, present := att.AttStatement["response"].([]byte)
 	if !present {
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to find the SafetyNet response")
 	}
 
-	token, err := jwt.Parse(string(response), func(token *jwt.Token) (any, error) {
-		chain := token.Header[stmtX5C].([]any)
+	var token *jwt.Token
 
-		o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
-
-		n, err := base64.StdEncoding.Decode(o, []byte(chain[0].(string)))
-		if err != nil {
-			return nil, err
-		}
-
-		cert, err := x509.ParseCertificate(o[:n])
-
-		return cert.PublicKey, err
-	})
-
-	if err != nil {
+	if token, err = jwt.Parse(string(response), keyFuncSafetyNetJWT, jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()})); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
 	}
 
-	// marshall the JWT payload into the safetynet response json
+	// marshall the JWT payload into the safetynet response json.
 	var safetyNetResponse SafetyNetResponse
 
 	if err = mapstructure.Decode(token.Claims, &safetyNetResponse); err != nil {
@@ -123,7 +108,7 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds met
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
 	}
 
-	// §8.5.5 Verify that attestationCert is issued to the hostname "attest.android.com"
+	// §8.5.5 Verify that attestationCert is issued to the hostname "attest.android.com".
 	err = attestationCert.VerifyHostname("attest.android.com")
 	if err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
@@ -147,4 +132,41 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds met
 	// §8.5.7 If successful, return implementation-specific values representing attestation type Basic and attestation
 	// trust path attestationCert.
 	return string(metadata.BasicFull), nil, nil
+}
+
+func keyFuncSafetyNetJWT(token *jwt.Token) (key any, err error) {
+	var (
+		ok    bool
+		raw   any
+		chain []any
+		first string
+		der   []byte
+		cert  *x509.Certificate
+	)
+
+	if raw, ok = token.Header[stmtX5C]; !ok {
+		return nil, fmt.Errorf("jwt header missing x5c")
+	}
+
+	if chain, ok = raw.([]any); !ok || len(chain) == 0 {
+		return nil, fmt.Errorf("jwt header x5c is not a non-empty array")
+	}
+
+	if first, ok = chain[0].(string); !ok || first == "" {
+		return nil, fmt.Errorf("jwt header x5c[0] not a base64 string")
+	}
+
+	if der, err = base64.StdEncoding.DecodeString(first); err != nil {
+		return nil, fmt.Errorf("decode x5c leaf: %w", err)
+	}
+
+	if cert, err = x509.ParseCertificate(der); err != nil {
+		if cert != nil {
+			return cert.PublicKey, fmt.Errorf("parse x5c leaf: %w", err)
+		}
+
+		return nil, fmt.Errorf("parse x5c leaf: %w", err)
+	}
+
+	return cert.PublicKey, nil
 }

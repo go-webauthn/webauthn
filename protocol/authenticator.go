@@ -195,13 +195,13 @@ const (
 type UserVerificationRequirement string
 
 const (
-	// VerificationRequired User verification is required to create/release a credential
+	// VerificationRequired User verification is required to create/release a credential.
 	VerificationRequired UserVerificationRequirement = "required"
 
-	// VerificationPreferred User verification is preferred to create/release a credential
-	VerificationPreferred UserVerificationRequirement = "preferred" // This is the default
+	// VerificationPreferred User verification is preferred to create/release a credential.
+	VerificationPreferred UserVerificationRequirement = "preferred" // This is the default.
 
-	// VerificationDiscouraged The authenticator should not verify the user for the credential
+	// VerificationDiscouraged The authenticator should not verify the user for the credential.
 	VerificationDiscouraged UserVerificationRequirement = "discouraged"
 )
 
@@ -216,7 +216,7 @@ type AuthenticatorFlags byte
 // The bits that do not have flags are reserved for future use.
 const (
 	// FlagUserPresent Bit 00000001 in the byte sequence. Tells us if user is present. Also referred to as the UP flag.
-	FlagUserPresent AuthenticatorFlags = 1 << iota // Referred to as UP
+	FlagUserPresent AuthenticatorFlags = 1 << iota // Referred to as UP.
 
 	// FlagRFU1 is a reserved for future use flag.
 	FlagRFU1
@@ -227,7 +227,7 @@ const (
 
 	// FlagBackupEligible Bit 00001000 in the byte sequence. Tells us if a backup is eligible for device. Also referred
 	// to as the BE flag.
-	FlagBackupEligible // Referred to as BE
+	FlagBackupEligible // Referred to as BE.
 
 	// FlagBackupState Bit 00010000 in the byte sequence. Tells us if a backup state for device. Also referred to as the
 	// BS flag.
@@ -310,7 +310,7 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) (err error) {
 			}
 
 			attDataLen := len(a.AttData.AAGUID) + 2 + len(a.AttData.CredentialID) + len(a.AttData.CredentialPublicKey)
-			remaining = remaining - attDataLen
+			remaining -= attDataLen
 		} else {
 			return ErrBadRequest.WithDetails("Attested credential flag set but data is missing")
 		}
@@ -390,11 +390,10 @@ func ResidentKeyNotRequired() *bool {
 // Verify on AuthenticatorData handles Steps 13 through 15 & 17 for Registration
 // and Steps 15 through 18 for Assertion.
 func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerificationRequired bool, userPresenceRequired bool) (err error) {
-
 	// Registration Step 13 & Assertion Step 15
 	// Verify that the RP ID hash in authData is indeed the SHA-256
 	// hash of the RP ID expected by the RP.
-	if !bytes.Equal(a.RPIDHash[:], rpIdHash) && !bytes.Equal(a.RPIDHash[:], appIDHash) {
+	if !bytes.Equal(a.RPIDHash, rpIdHash) && !bytes.Equal(a.RPIDHash, appIDHash) {
 		return ErrVerification.WithInfo(fmt.Sprintf("RP Hash mismatch. Expected %x and Received %x", a.RPIDHash, rpIdHash))
 	}
 

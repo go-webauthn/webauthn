@@ -91,10 +91,11 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	if len(assertion.Response.Challenge) == 0 {
-		challenge, err := protocol.CreateChallenge()
-		if err != nil {
+		var challenge protocol.URLEncodedBase64
+		if challenge, err = protocol.CreateChallenge(); err != nil {
 			return nil, nil, err
 		}
+
 		assertion.Response.Challenge = challenge
 	}
 
@@ -109,8 +110,8 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	if assertion.Response.Timeout == 0 {
-		switch {
-		case assertion.Response.UserVerification == protocol.VerificationDiscouraged:
+		switch assertion.Response.UserVerification {
+		case protocol.VerificationDiscouraged:
 			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.TimeoutUVD.Milliseconds())
 		default:
 			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.Timeout.Milliseconds())
@@ -323,39 +324,13 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	// NON-NORMATIVE Prior Step: Verify that the allowCredentials for the session are owned by the user provided.
 	credentials := user.WebAuthnCredentials()
 
-	var (
-		found      bool
-		credential Credential
-	)
-
 	if len(session.AllowedCredentialIDs) > 0 {
-		var credentialsOwned bool
-
-		for _, allowedCredentialID := range session.AllowedCredentialIDs {
-			for _, credential = range credentials {
-				if bytes.Equal(credential.ID, allowedCredentialID) {
-					credentialsOwned = true
-
-					break
-				}
-
-				credentialsOwned = false
-			}
-			if !credentialsOwned {
-				return nil, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
-			}
+		if !isCredentialsAllowedMatchingOwned(session.AllowedCredentialIDs, credentials) {
+			return nil, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowed credential list")
 		}
 
-		for _, allowedCredentialID := range session.AllowedCredentialIDs {
-			if bytes.Equal(parsedResponse.RawID, allowedCredentialID) {
-				found = true
-
-				break
-			}
-		}
-
-		if !found {
-			return nil, protocol.ErrBadRequest.WithDetails("User does not own the credential returned")
+		if !isByteArrayInSlice(parsedResponse.RawID, session.AllowedCredentialIDs...) {
+			return nil, protocol.ErrBadRequest.WithDetails("The credential ID provided is not in the allowed credential list")
 		}
 	}
 
@@ -367,9 +342,14 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	userHandle := parsedResponse.Response.UserHandle
 	if len(userHandle) > 0 {
 		if !bytes.Equal(userHandle, user.WebAuthnID()) {
-			return nil, protocol.ErrBadRequest.WithDetails("userHandle and User ID do not match")
+			return nil, protocol.ErrBadRequest.WithDetails("User handle and User ID do not match")
 		}
 	}
+
+	var (
+		found      bool
+		credential Credential
+	)
 
 	// Step 3. Using credential’s id attribute (or the corresponding rawId, if base64url encoding is inappropriate
 	// for your use case), look up the corresponding credential public key.
@@ -402,10 +382,8 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err)).WithError(err)
 		}
 
-		var protoErr *protocol.Error
-
-		if protoErr = protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, "", nil); protoErr != nil {
-			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(protoErr.DevInfo).WithError(protoErr)
+		if e := protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, "", nil); e != nil {
+			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(e.DevInfo).WithError(e)
 		}
 	}
 

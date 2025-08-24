@@ -135,7 +135,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 			assert.Equal(t, tc.expected.Response.AttestationObject.AuthData.AttData.CredentialID, actual.Response.AttestationObject.AuthData.AttData.CredentialID)
 			assert.Equal(t, tc.expected.Response.AttestationObject.Format, actual.Response.AttestationObject.Format)
 
-			// Unmarshall CredentialPublicKey
+			// Unmarshall CredentialPublicKey.
 			var pkExpected, pkActual any
 
 			pkBytesExpected := tc.expected.Response.AttestationObject.AuthData.AttData.CredentialPublicKey

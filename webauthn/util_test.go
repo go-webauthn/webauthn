@@ -1,66 +1,109 @@
-package webauthn_test
+package webauthn
 
 import (
-	"crypto/subtle"
-	"fmt"
+	"testing"
 
-	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/stretchr/testify/assert"
 )
 
-type defaultUser struct {
-	id          []byte
-	credentials []webauthn.Credential
-}
-
-var _ webauthn.User = (*defaultUser)(nil)
-
-func (user *defaultUser) WebAuthnID() []byte {
-	return user.id
-}
-
-func (user *defaultUser) WebAuthnName() string {
-	return "newUser"
-}
-
-func (user *defaultUser) WebAuthnDisplayName() string {
-	return "New User"
-}
-
-func (user *defaultUser) WebAuthnCredentials() []webauthn.Credential {
-	return user.credentials
-}
-
-var testUser *defaultUser
-
-// GetUser is a crude and abstract example of getting users.
-func GetUser() *defaultUser {
-	return &defaultUser{}
-}
-
-// LoadUser is a crude and abstract example of loading users.
-func LoadUser() (user *defaultUser, err error) {
-	if testUser != nil {
-		return testUser, nil
+func TestIsByteArrayInSlice(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     []byte
+		haystack [][]byte
+		expected bool
+	}{
+		{
+			"ShouldMatchSingleEntry",
+			[]byte("123"),
+			[][]byte{[]byte("123")},
+			true,
+		},
+		{
+			"ShouldMatchMultiEntry",
+			[]byte("123"),
+			[][]byte{[]byte("bac"), []byte("123")},
+			true,
+		},
+		{
+			"ShouldNotMatchEmpty",
+			[]byte("123"),
+			nil,
+			false,
+		},
+		{
+			"ShouldNotMatchNotInSlice",
+			[]byte("123"),
+			[][]byte{[]byte("bac"), []byte("no")},
+			false,
+		},
 	}
 
-	return GetUser(), nil
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isByteArrayInSlice(tc.have, tc.haystack...))
+		})
+	}
 }
 
-func LoadUserByHandle(handle []byte) (user *defaultUser, err error) {
-	if testUser != nil {
-		return nil, fmt.Errorf("not initialized")
+func TestIsCredentialsAllowedMatchingOwned(t *testing.T) {
+	testCases := []struct {
+		name        string
+		allowed     [][]byte
+		credentials []Credential
+		expected    bool
+	}{
+		{
+			"ShouldMatchSingleEntry",
+			[][]byte{[]byte("123")},
+			[]Credential{
+				{
+					ID: []byte("123"),
+				},
+			},
+			true,
+		},
+		{
+			"ShouldMatchMultipleEntry",
+			[][]byte{[]byte("123")},
+			[]Credential{
+				{
+					ID: []byte("123"),
+				},
+				{
+					ID: []byte("ab"),
+				},
+			},
+			true,
+		},
+		{
+			"ShouldMatchMultipleEntryAlt",
+			[][]byte{[]byte("123"), []byte("ab")},
+			[]Credential{
+				{
+					ID: []byte("123"),
+				},
+				{
+					ID: []byte("ab"),
+				},
+			},
+			true,
+		},
+		{
+			"ShouldNotMatchDifferentCredentials",
+			[][]byte{[]byte("123")},
+			[]Credential{
+				{
+					ID: []byte("456"),
+				},
+			},
+			false,
+		},
 	}
 
-	if subtle.ConstantTimeCompare(testUser.id, handle) != 1 {
-		return nil, fmt.Errorf("not found")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isCredentialsAllowedMatchingOwned(tc.allowed, tc.credentials))
+		})
 	}
-
-	return testUser, nil
-}
-
-// SaveUser is a crude and abstract example of saving users.
-func SaveUser(user *defaultUser) (err error) {
-	testUser = user
-
-	return nil
 }

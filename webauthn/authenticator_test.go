@@ -96,6 +96,7 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 
 			previousSignCount := a.SignCount
 			a.UpdateCounter(tt.args.authDataCount)
+
 			if a.CloneWarning != tt.wantWarning {
 				t.Errorf("Clone warning result [%v] does not match expectation: [%v]", a.CloneWarning, tt.wantWarning)
 				return

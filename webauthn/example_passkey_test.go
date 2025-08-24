@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -39,7 +40,17 @@ func Example_passkeysRegisterAndLogin() {
 	// Crude example that assumes the app is handled exclusively by a proxy which handles TLS termination. You will
 	// have to adjust this depending on the context to ensure TLS is used on port 443 or the relevant config options
 	// are adjusted.
-	if err = http.ListenAndServe(":8080", mux); err != nil {
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
+		ReadTimeout:       5 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+
+	if err = server.ListenAndServe(); err != nil {
 		panic(err)
 	}
 }
@@ -76,15 +87,18 @@ func handlerExamplePasskeyCreateChallenge(w *webauthn.WebAuthn) func(rw http.Res
 			return
 		}
 
-		creation, s, err := w.BeginMediatedRegistration(
-			user,
-			protocol.MediationDefault,
+		var (
+			creation *protocol.CredentialCreation
+			s        *webauthn.SessionData
+		)
+
+		opts := []webauthn.RegistrationOption{
 			webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
 			webauthn.WithExclusions(webauthn.Credentials(user.WebAuthnCredentials()).CredentialDescriptors()),
 			webauthn.WithExtensions(map[string]any{"credProps": true}),
-		)
+		}
 
-		if err != nil {
+		if creation, s, err = w.BeginMediatedRegistration(user, protocol.MediationDefault, opts...); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 
 			return

@@ -165,15 +165,13 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 		return validError
 	}
 
-	// allowedUserCredentialIDs := session.AllowedCredentialIDs
-
 	// Step 15. Let hash be the result of computing a hash over the cData using SHA-256.
 	clientDataHash := sha256.Sum256(p.Raw.AssertionResponse.ClientDataJSON)
 
 	// Step 16. Using the credential public key looked up in step 3, verify that sig is
 	// a valid signature over the binary concatenation of authData and hash.
 
-	sigData := append(p.Raw.AssertionResponse.AuthenticatorData, clientDataHash[:]...)
+	sigData := append(p.Raw.AssertionResponse.AuthenticatorData, clientDataHash[:]...) //nolint:gocritic // This is intentional.
 
 	var (
 		key any

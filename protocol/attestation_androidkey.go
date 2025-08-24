@@ -29,7 +29,7 @@ func init() {
 //	  }
 //
 // Specification: §8.4. Android Key Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-key-attestation)
-func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
+func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Given the verification procedure inputs attStmt, authenticatorData and clientDataHash, the verification procedure is as follows:
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
 	// the contained fields.
@@ -47,10 +47,10 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
-	// If x5c is not present, return an error
+	// If x5c is not present, return an error.
 	x5c, x509present := att.AttStatement[stmtX5C].([]any)
 	if !x509present {
-		// Handle Basic Attestation steps for the x509 Certificate
+		// Handle Basic Attestation steps for the x509 Certificate.
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
 	}
 
@@ -61,12 +61,12 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 		return "", nil, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
 	}
 
-	signatureData := append(att.RawAuthData, clientDataHash...)
-
 	attCert, err := x509.ParseCertificate(attCertBytes)
 	if err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err)).WithError(err)
 	}
+
+	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
 	if err = attCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
@@ -87,7 +87,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	}
 
 	// §8.4.3. Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
-	// attCert.Extensions
+	// attCert.Extensions.
 	var attExtBytes []byte
 
 	for _, ext := range attCert.Extensions {
@@ -109,7 +109,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	}
 
 	// Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
-	if bytes.Compare(decoded.AttestationChallenge, clientDataHash) != 0 {
+	if !bytes.Equal(decoded.AttestationChallenge, clientDataHash) {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation challenge not equal to clientDataHash")
 	}
 
@@ -119,12 +119,12 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	}
 
 	// For the following, use only the teeEnforced authorization list if the RP wants to accept only keys from a trusted execution environment, otherwise use the union of teeEnforced and softwareEnforced.
-	// The value in the AuthorizationList.origin field is equal to KM_ORIGIN_GENERATED.  (which == 0)
-	if KM_ORIGIN_GENERATED != decoded.SoftwareEnforced.Origin || KM_ORIGIN_GENERATED != decoded.TeeEnforced.Origin {
+	// The value in the AuthorizationList.origin field is equal to KM_ORIGIN_GENERATED (which == 0).
+	if decoded.SoftwareEnforced.Origin != KM_ORIGIN_GENERATED || decoded.TeeEnforced.Origin != KM_ORIGIN_GENERATED {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED")
 	}
 
-	// The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN.  (which == 2)
+	// The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN (which == 2).
 	if !contains(decoded.SoftwareEnforced.Purpose, KM_PURPOSE_SIGN) && !contains(decoded.TeeEnforced.Purpose, KM_PURPOSE_SIGN) {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN")
 	}
@@ -193,10 +193,10 @@ type authorizationList struct {
 }
 
 type rootOfTrust struct {
-	verifiedBootKey   []byte
-	deviceLocked      bool
-	verifiedBootState verifiedBootState
-	verifiedBootHash  []byte
+	verifiedBootKey   []byte            //nolint:unused
+	deviceLocked      bool              //nolint:unused
+	verifiedBootState verifiedBootState //nolint:unused
+	verifiedBootHash  []byte            //nolint:unused
 }
 
 type verifiedBootState int

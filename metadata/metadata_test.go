@@ -318,6 +318,7 @@ func getEndpoints(c *http.Client) ([]string, error) {
 	}
 
 	defer req.Body.Close()
+
 	body, _ := io.ReadAll(req.Body)
 
 	var resp MDSGetEndpointsResponse

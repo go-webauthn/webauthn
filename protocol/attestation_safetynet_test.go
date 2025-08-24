@@ -55,6 +55,7 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 	}
 }
 
+//nolint:unused
 var safetyNetTestRequest = map[string]string{
 	`success`: `{
 		"publicKey": {

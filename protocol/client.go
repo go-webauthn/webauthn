@@ -135,7 +135,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 			case TopOriginExplicitVerificationMode:
 				possibleTopOrigins = rpTopOrigins
 			case TopOriginAutoVerificationMode:
-				possibleTopOrigins = append(rpTopOrigins, rpOrigins...)
+				possibleTopOrigins = append(rpTopOrigins, rpOrigins...) //nolint:gocritic // This is intentional.
 			case TopOriginImplicitVerificationMode:
 				possibleTopOrigins = rpOrigins
 			default:

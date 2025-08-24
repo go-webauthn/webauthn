@@ -160,20 +160,25 @@ func TestAuthenticatorData_Unmarshal(t *testing.T) {
 
 	noneAuthData, _ := base64.StdEncoding.DecodeString(noneAuthDataBase64)
 	attAuthData, _ := base64.StdEncoding.DecodeString(attAuthDataBase64)
-	// Empty data
+
+	// Empty data.
 	badAuthData1 := []byte{}
-	// Attested credential data missing
+
+	// Attested credential data missing.
 	badAuthData2 := make([]byte, minAttestedAuthLength-1)
 	copy(badAuthData2, attAuthData)
-	// Flags not set but data exists
+
+	// Flags not set but data exists.
 	badAuthData3 := make([]byte, len(attAuthData))
 	copy(badAuthData3, attAuthData)
 	badAuthData3[32] &= 0b0011_1111
-	// Extensions data missing
+
+	// Extensions data missing.
 	badAuthData4 := make([]byte, len(attAuthData))
 	copy(badAuthData4, attAuthData)
 	badAuthData4[32] |= 0b1000_0000
-	// Leftover bytes
+
+	// Leftover bytes.
 	badAuthData5 := make([]byte, len(attAuthData))
 	copy(badAuthData5, attAuthData)
 	badAuthData5 = append(badAuthData5, []byte("Hello World")...)
@@ -298,17 +303,21 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 
 	noneAuthData, _ := base64.StdEncoding.DecodeString(noneAuthDataBase64)
 	attAuthData, _ := base64.StdEncoding.DecodeString(attAuthDataBase64)
-	// Data length too short
+
+	// Data length too short.
 	badAuthData1 := make([]byte, len(attAuthData))
 	copy(badAuthData1, attAuthData)
 	binary.BigEndian.PutUint16(badAuthData1[53:], 256)
-	// ID length too long
+
+	// ID length too long.
 	badAuthData2 := make([]byte, len(attAuthData)+maxCredentialIDLength+1)
 	copy(badAuthData2, attAuthData)
 	binary.BigEndian.PutUint16(badAuthData2[53:], maxCredentialIDLength+1)
-	// Malformed public key
+
+	// Malformed public key.
 	badAuthData3 := make([]byte, 119)
 	copy(badAuthData3, attAuthData[:119])
+
 	badData, _ := hex.DecodeString("83FF20030102")
 	badAuthData3 = append(badAuthData3, badData...)
 
@@ -379,6 +388,7 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 				AttData:  tt.fields.AttData,
 				ExtData:  tt.fields.ExtData,
 			}
+
 			err := a.unmarshalAttestedData(tt.args.rawAuthData)
 			if tt.errString != "" {
 				assert.EqualError(t, err, tt.errString)
@@ -409,7 +419,6 @@ func Test_unmarshalCredentialPublicKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := unmarshalCredentialPublicKey(tt.args.keyBytes)
-
 			if err != nil {
 				t.Errorf("unmarshalCredentialPublicKey() returned err %v", err)
 			} else if !reflect.DeepEqual(got, tt.want) {
@@ -509,6 +518,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 				AttData:  tt.fields.AttData,
 				ExtData:  tt.fields.ExtData,
 			}
+
 			err := a.Verify(tt.args.rpIdHash, nil, tt.args.userVerificationRequired, tt.args.userPresenceRequired)
 			if tt.errString != "" {
 				assert.EqualError(t, err, tt.errString)

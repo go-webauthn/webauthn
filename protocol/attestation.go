@@ -20,7 +20,7 @@ import (
 //
 // See: https://www.w3.org/TR/webauthn/#typedefdef-publickeycredentialjson
 type AuthenticatorAttestationResponse struct {
-	// The byte slice of clientDataJSON, which becomes CollectedClientData
+	// The byte slice of clientDataJSON, which becomes CollectedClientData.
 	AuthenticatorResponse
 
 	Transports []string `json:"transports,omitempty"`
@@ -65,10 +65,10 @@ type ParsedAttestationResponse struct {
 //
 // Specification: §6.5. Attestation (https://www.w3.org/TR/webauthn/#sctn-attestation)
 type AttestationObject struct {
-	// The authenticator data, including the newly created public key. See [AuthenticatorData] for more info
+	// The authenticator data, including the newly created public key. See [AuthenticatorData] for more info.
 	AuthData AuthenticatorData
 
-	// The byteform version of the authenticator data, used in part for signature validation
+	// The byteform version of the authenticator data, used in part for signature validation.
 	RawAuthData []byte `json:"authData"`
 
 	// The format of the Attestation data.
@@ -78,12 +78,12 @@ type AttestationObject struct {
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
-type attestationFormatValidationHandler func(AttestationObject, []byte, metadata.Provider) (string, []any, error)
+type attestationFormatValidationHandler func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error)
 
 var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
 
 // RegisterAttestationFormat is a method to register attestation formats with the library. Generally using one of the
-// locally registered attestation formats is sufficient.
+// locally registered attestation formats is enough.
 func RegisterAttestationFormat(format AttestationFormat, handler attestationFormatValidationHandler) {
 	attestationRegistry[format] = handler
 }
@@ -138,17 +138,20 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 
 	// Step 16. Verify that the "alg" parameter in the credential public key in
 	// authData matches the alg attribute of one of the items in options.pubKeyCredParams.
-	pk := webauthncose.PublicKeyData{}
+	var pk webauthncose.PublicKeyData
 	if err = webauthncbor.Unmarshal(a.AuthData.AttData.CredentialPublicKey, &pk); err != nil {
 		return err
 	}
+
 	found := false
+
 	for _, credParam := range credParams {
 		if int(pk.Algorithm) == int(credParam.Algorithm) {
 			found = true
 			break
 		}
 	}
+
 	if !found {
 		return ErrAttestationFormat.WithInfo("Credential public key algorithm not supported")
 	}
@@ -211,10 +214,8 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		return nil
 	}
 
-	var protoErr *Error
-
-	if protoErr = ValidateMetadata(context.Background(), mds, aaguid, attestationType, x5cs); protoErr != nil {
-		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", protoErr)).WithDetails(protoErr.DevInfo).WithError(protoErr)
+	if e := ValidateMetadata(context.Background(), mds, aaguid, attestationType, x5cs); e != nil {
+		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
 	}
 
 	return nil

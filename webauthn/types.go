@@ -95,7 +95,7 @@ type TimeoutConfig struct {
 	TimeoutUVD time.Duration
 }
 
-// Validate that the config flags in Config are properly set
+// Validate that the config flags in Config are properly set.
 func (config *Config) validate() (err error) {
 	if config.validated {
 		return nil

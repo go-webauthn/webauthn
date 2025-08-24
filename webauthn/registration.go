@@ -89,8 +89,8 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	if creation.Response.Timeout == 0 {
-		switch {
-		case creation.Response.AuthenticatorSelection.UserVerification == protocol.VerificationDiscouraged:
+		switch creation.Response.AuthenticatorSelection.UserVerification {
+		case protocol.VerificationDiscouraged:
 			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.TimeoutUVD.Milliseconds())
 		default:
 			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())

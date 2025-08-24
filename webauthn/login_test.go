@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -131,6 +131,7 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 				assert.NoError(t, err)
 				require.NotNil(t, creation)
 				assert.Equal(t, tc.expectedID, creation.Response.RelyingPartyID)
+
 				if len(tc.expectedChallenge) > 0 {
 					assert.Equal(t, protocol.URLEncodedBase64(tc.expectedChallenge).String(), creation.Response.Challenge.String())
 				}
@@ -141,9 +142,10 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 
 func TestFinishLoginFailure(t *testing.T) {
 	const (
-		credentialID = "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng"
+		credentialID = "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng" //nolint:gosec
 		userHandle   = "0ToAAAAAAAAAAA"
 	)
+
 	var (
 		byteUserHandle, _       = base64.RawURLEncoding.DecodeString(userHandle)
 		byteID, _               = base64.RawURLEncoding.DecodeString(credentialID)
@@ -161,18 +163,14 @@ func TestFinishLoginFailure(t *testing.T) {
 		},
 	}
 
-	// instantiate user
 	user := &defaultUser{
 		id:          byteUserHandle,
 		credentials: credentials,
 	}
 
-	// build session
 	session := SessionData{
-		UserID:    byteUserHandle,
-		Challenge: "E4PTcIH_HfX1pC6Sigk1SC9NAlgeztN0439vi8z_c9k",
-		// AllowedCredentialIDs contain 1 extra credential to trigger the
-		// "User does not own all credentials" error.
+		UserID:               byteUserHandle,
+		Challenge:            "E4PTcIH_HfX1pC6Sigk1SC9NAlgeztN0439vi8z_c9k",
 		AllowedCredentialIDs: [][]byte{[]byte("test"), byteID},
 	}
 
@@ -184,8 +182,7 @@ func TestFinishLoginFailure(t *testing.T) {
 		},
 	}
 
-	// build returned response from authenticator
-	reqBody := ioutil.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{
+	reqBody := io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{
 			"id":"%[1]s",
 			"rawId":"%[1]s",
 			"type":"public-key",
@@ -199,9 +196,7 @@ func TestFinishLoginFailure(t *testing.T) {
 	))))
 	httpReq := &http.Request{Body: reqBody}
 
-	expectedErr := protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
 	_, err := webauthn.FinishLogin(user, session, httpReq)
-	if err == nil || err.Error() != expectedErr.Error() {
-		t.Fatalf("FinishLogin() expected err=%v, got=%v", expectedErr, err)
-	}
+
+	require.Equal(t, err, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowed credential list"))
 }
