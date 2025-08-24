@@ -74,7 +74,7 @@ func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds met
 
 	var token *jwt.Token
 
-	if token, err = jwt.Parse(string(response), keyFuncSafetyNetJWT); err != nil {
+	if token, err = jwt.Parse(string(response), keyFuncSafetyNetJWT, jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()})); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
 	}
 
