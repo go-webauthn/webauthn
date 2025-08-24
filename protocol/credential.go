@@ -67,8 +67,10 @@ func ParseCredentialCreationResponse(request *http.Request) (*ParsedCredentialCr
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
-	defer request.Body.Close()
-	defer io.Copy(io.Discard, request.Body)
+	defer func() {
+		_, _ = io.Copy(io.Discard, request.Body)
+		_ = request.Body.Close()
+	}()
 
 	return ParseCredentialCreationResponseBody(request.Body)
 }
@@ -107,15 +109,15 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 	}
 
 	testB64, err := base64.RawURLEncoding.DecodeString(ccr.ID)
-	if err != nil || !(len(testB64) > 0) {
+	if err != nil || len(testB64) == 0 {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("ID not base64.RawURLEncoded")
 	}
 
-	if ccr.PublicKeyCredential.Credential.Type == "" {
+	if ccr.Type == "" {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Missing type")
 	}
 
-	if ccr.PublicKeyCredential.Credential.Type != string(PublicKeyCredentialType) {
+	if ccr.Type != string(PublicKeyCredentialType) {
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Type not public-key")
 	}
 
@@ -146,7 +148,7 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 //
 // Specification: §7.1. Registering a New Credential (https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential)
 func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, verifyUserPresence bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, mds metadata.Provider, credParams []CredentialParameter) (clientDataHash []byte, err error) {
-	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data
+	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data.
 	if err = pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify); err != nil {
 		return nil, err
 	}
@@ -199,7 +201,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 	// Step 19. If the attestation statement attStmt successfully verified but is not trustworthy per step 16 above,
 	// the Relying Party SHOULD fail the registration ceremony.
 
-	// TODO: Not implemented for the reasons mentioned under Step 16
+	// TODO: Not implemented for the reasons mentioned under Step 16.
 
 	return clientDataHash, nil
 }

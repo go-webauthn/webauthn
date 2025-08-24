@@ -16,28 +16,24 @@ func init() {
 }
 
 // verifyU2FFormat - Follows verification steps set out by https://www.w3.org/TR/webauthn/#fido-u2f-attestation
-func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
+func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	if !bytes.Equal(att.AuthData.AttData.AAGUID, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("U2F attestation format AAGUID not set to 0x00")
 	}
 
 	// Signing procedure step - If the credential public key of the given credential is not of
 	// algorithm -7 ("ES256"), stop and return an error.
-	key := webauthncose.EC2PublicKeyData{}
-	webauthncbor.Unmarshal(att.AuthData.AttData.CredentialPublicKey, &key)
+	var key webauthncose.EC2PublicKeyData
+	if err = webauthncbor.Unmarshal(att.AuthData.AttData.CredentialPublicKey, &key); err != nil {
+		return "", nil, ErrAttestationCertificate.WithDetails("Error parsing public key").WithError(err)
+	}
 
-	if webauthncose.COSEAlgorithmIdentifier(key.PublicKeyData.Algorithm) != webauthncose.AlgES256 {
+	if webauthncose.COSEAlgorithmIdentifier(key.Algorithm) != webauthncose.AlgES256 {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("Non-ES256 Public Key algorithm used")
 	}
 
 	// U2F Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined above
 	// and perform CBOR decoding on it to extract the contained fields.
-
-	// The Format/syntax is
-	// u2fStmtFormat = {
-	// 	x5c: [ attestnCert: bytes ],
-	// 	sig: bytes
-	// }
 
 	// Check for "x5c" which is a single element array containing the attestation certificate in X.509 format.
 	x5c, present := att.AttStatement[stmtX5C].([]any)
@@ -57,7 +53,7 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	// key be the public key conveyed by attCert. (3) If certificate public key is not an Elliptic Curve (EC) public
 	// key over the P-256 curve, terminate this algorithm and return an appropriate error.
 
-	// Step 2.1
+	// Step 2.1.
 	if len(x5c) > 1 {
 		return "", nil, ErrAttestationFormat.WithDetails("Received more than one element in x5c values")
 	}
@@ -68,7 +64,7 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	// as defined in RFC8152 (https://www.w3.org/TR/webauthn/#biblio-rfc8152)
 	// and RFC8230 (https://www.w3.org/TR/webauthn/#biblio-rfc8230).
 
-	// Step 2.2
+	// Step 2.2.
 	asn1Bytes, decoded := x5c[0].([]byte)
 	if !decoded {
 		return "", nil, ErrAttestationFormat.WithDetails("Error decoding ASN.1 data from x5c")
@@ -79,9 +75,14 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1 data into certificate").WithError(err)
 	}
 
-	// Step 2.3
-	if attCert.PublicKeyAlgorithm != x509.ECDSA && attCert.PublicKey.(*ecdsa.PublicKey).Curve != elliptic.P256() {
-		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate is in invalid format")
+	// Step 2.3.
+	if attCert.PublicKeyAlgorithm != x509.ECDSA {
+		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate public key algorithm is not ECDSA")
+	}
+
+	ecdsaPub, ok := attCert.PublicKey.(*ecdsa.PublicKey)
+	if !ok || ecdsaPub.Curve != elliptic.P256() {
+		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate does not contain a P-256 ECDSA public key")
 	}
 
 	// Step 3. Extract the claimed rpIdHash from authenticatorData, and the claimed credentialId and credentialPublicKey
@@ -91,7 +92,7 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 
 	credentialID := att.AuthData.AttData.CredentialID
 
-	// credentialPublicKey handled earlier
+	// The credentialPublicKey is handled earlier.
 
 	// Step 4. Convert the COSE_KEY formatted credentialPublicKey (see Section 7 of RFC8152 [https://www.w3.org/TR/webauthn/#biblio-rfc8152])
 	// to Raw ANSI X9.62 public key format (see ALG_KEY_ECC_X962_RAW in Section 3.6.2 Public Key

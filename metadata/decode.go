@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-webauthn/x/revoke"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/mitchellh/mapstructure"
+
+	"github.com/go-webauthn/x/revoke"
 )
 
 // NewDecoder returns a new metadata decoder.
@@ -96,9 +97,9 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 	var token *jwt.Token
 
 	if token, err = d.parser.Parse(string(bytes), func(token *jwt.Token) (any, error) {
-		// 2. If the x5u attribute is present in the JWT Header, then
+		// 2. If the x5u attribute is present in the JWT Header.
 		if _, ok := token.Header[HeaderX509URI].([]any); ok {
-			// never seen an x5u here, although it is in the spec
+			// Never seen an x5u here, although it is in the spec.
 			return nil, errors.New("x5u encountered in header of metadata TOC payload")
 		}
 

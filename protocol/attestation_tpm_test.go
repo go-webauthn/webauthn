@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/binary"
+	"errors"
 	"math/big"
 	"testing"
 
@@ -211,13 +212,19 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
 	}
 
+	if rsaKey.E < 0 || rsaKey.E > 4294967295 {
+		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, errors.New("invalid E value")
+	}
+
+	exp := uint32(rsaKey.E) //nolint:gosec
+
 	r := webauthncose.RSAPublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{
 			KeyType:   int64(webauthncose.RSAKey),
 			Algorithm: int64(webauthncose.AlgRS256),
 		},
 		Modulus:  rsaKey.N.Bytes(),
-		Exponent: uint32ToBytes(uint32(rsaKey.E)),
+		Exponent: uint32ToBytes(exp),
 	}
 
 	eccKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -278,6 +285,11 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	require.GreaterOrEqual(t, rsaKey.E, 0)
+	require.LessOrEqual(t, rsaKey.E, 4294967295)
+
+	e := uint32(rsaKey.E) //nolint:gosec
+
 	tests := []struct {
 		name      string
 		keyType   webauthncose.COSEKeyType
@@ -313,7 +325,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 		{
 			"TPM Negative Test pubArea N mismatch",
 			webauthncose.RSAKey,
-			tpm2.RSAParams{ModulusRaw: corruptBytes(rsaKey.N.Bytes()), ExponentRaw: uint32(rsaKey.E)},
+			tpm2.RSAParams{ModulusRaw: corruptBytes(rsaKey.N.Bytes()), ExponentRaw: e},
 			tpm2.ECCParams{},
 			rpk,
 			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
@@ -321,7 +333,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 		{
 			"TPM Negative Test pubArea E mismatch",
 			webauthncose.RSAKey,
-			tpm2.RSAParams{ModulusRaw: rsaKey.N.Bytes(), ExponentRaw: uint32(rsaKey.E + 1)},
+			tpm2.RSAParams{ModulusRaw: rsaKey.N.Bytes(), ExponentRaw: e + 1},
 			tpm2.ECCParams{},
 			rpk,
 			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
@@ -385,17 +397,22 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
+	require.GreaterOrEqual(t, rsaKey.E, 0)
+	require.LessOrEqual(t, rsaKey.E, 4294967295)
+
+	e := uint32(rsaKey.E) //nolint:gosec
+
 	r := webauthncose.RSAPublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{
 			KeyType:   int64(webauthncose.RSAKey),
 			Algorithm: int64(webauthncose.AlgRS256),
 		},
 		Modulus:  rsaKey.N.Bytes(),
-		Exponent: uint32ToBytes(uint32(rsaKey.E)),
+		Exponent: uint32ToBytes(e),
 	}
 
 	public := defaultRSAPublic
-	public.RSAParameters.ExponentRaw = uint32(rsaKey.E)
+	public.RSAParameters.ExponentRaw = e
 	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
 	attStmt[stmtPubArea], _ = public.Encode()
 	rpk, _ := webauthncbor.Marshal(r)
@@ -466,6 +483,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 }
 
 var (
+	//nolint:unused
 	x5cTemplate = x509.Certificate{
 		SerialNumber: big.NewInt(0),
 		Version:      3,
@@ -498,17 +516,22 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
+	require.GreaterOrEqual(t, rsaKey.E, 0)
+	require.LessOrEqual(t, rsaKey.E, 4294967295)
+
+	e := uint32(rsaKey.E) //nolint:gosec
+
 	r := webauthncose.RSAPublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{
 			KeyType:   int64(webauthncose.RSAKey),
 			Algorithm: int64(webauthncose.AlgRS256),
 		},
 		Modulus:  rsaKey.N.Bytes(),
-		Exponent: uint32ToBytes(uint32(rsaKey.E)),
+		Exponent: uint32ToBytes(e),
 	}
 
 	public := defaultRSAPublic
-	public.RSAParameters.ExponentRaw = uint32(rsaKey.E)
+	public.RSAParameters.ExponentRaw = e
 	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
 	pubBytes, _ := public.Encode()
 	attStmt[stmtPubArea] = pubBytes

@@ -21,6 +21,7 @@ func TestAttestationVerify(t *testing.T) {
 			require.NoError(t, json.Unmarshal([]byte(testAttestationResponses[i]), &ccr))
 
 			var pcc ParsedCredentialCreationData
+
 			pcc.ID, pcc.RawID, pcc.Type, pcc.ClientExtensionResults = ccr.ID, ccr.RawID, ccr.Type, ccr.ClientExtensionResults
 			pcc.Raw = ccr
 

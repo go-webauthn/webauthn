@@ -31,13 +31,13 @@ func init() {
 //	  }
 //
 // Specification: §8.8. Apple Anonymous Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation)
-func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
+func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
 	// If x5c is not present, return an error.
 	x5c, x509present := att.AttStatement[stmtX5C].([]any)
 	if !x509present {
-		// Handle Basic Attestation steps for the x509 Certificate
+		// Handle Basic Attestation steps for the x509 Certificate.
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
 	}
 
@@ -52,7 +52,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	}
 
 	// Step 2. Concatenate authenticatorData and clientDataHash to form nonceToHash.
-	nonceToHash := append(att.RawAuthData, clientDataHash...)
+	nonceToHash := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	// Step 3. Perform SHA-256 hash of nonceToHash to produce nonce.
 	nonce := sha256.Sum256(nonceToHash)
@@ -81,7 +81,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	}
 
 	// Step 5. Verify that the credential public key equals the Subject Public Key of credCert.
-	// TODO: Probably move this part to webauthncose.go
+	// TODO: Probably move this part to webauthncose.go.
 	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
 	if err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err)).WithError(err)

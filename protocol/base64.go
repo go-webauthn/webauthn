@@ -22,7 +22,7 @@ func (e *URLEncodedBase64) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// Trim the leading and trailing quotes from raw JSON data (the whole value part)
+	// Trim the leading and trailing quotes from raw JSON data (the whole value part).
 	data = bytes.Trim(data, `"`)
 
 	// Trim the trailing equal characters.

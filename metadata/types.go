@@ -13,7 +13,7 @@ import (
 
 // The Provider is an interface which describes the elements required to satisfy validation of metadata.
 type Provider interface {
-	// GetEntry returns a MDS3 payload entry given a AAGUID. This
+	// GetEntry returns a MDS3 payload entry given a AAGUID.
 	GetEntry(ctx context.Context, aaguid uuid.UUID) (entry *Entry, err error)
 
 	// GetValidateEntry returns true if this provider requires an entry to exist with a AAGUID matching the attestation
@@ -82,7 +82,7 @@ const (
 	// AnonCA In this case, the authenticator uses an Anonymization CA which dynamically generates per-credential attestation certificates such that the attestation statements presented to Relying Parties do not provide uniquely identifiable information, e.g., that might be used for tracking purposes. The applicable [WebAuthn] attestation formats "fmt" are Google SafetyNet Attestation "android-safetynet", Android Keystore Attestation "android-key", Apple Anonymous Attestation "apple", and Apple Application Attestation "apple-appattest".
 	AnonCA AuthenticatorAttestationType = "anonca"
 
-	// None - Indicates absence of attestation
+	// None - Indicates absence of attestation.
 	None AuthenticatorAttestationType = "none"
 )
 
@@ -90,7 +90,7 @@ type KeyScope string
 
 const (
 	KeyScopeNone                   KeyScope = ""
-	PublicKeyCredentialSource      KeyScope = "public-key-credential-source"
+	PublicKeyCredentialSource      KeyScope = "public-key-credential-source" //nolint:gosec
 	DeviceSupplementalPublicKeys   KeyScope = "device-spk"
 	ProviderSupplementalPublicKeys KeyScope = "provider-spk"
 )
@@ -110,45 +110,64 @@ type AuthenticatorStatus string
 const (
 	// NotFidoCertified - This authenticator is not FIDO certified.
 	NotFidoCertified AuthenticatorStatus = "NOT_FIDO_CERTIFIED"
+
 	// FidoCertified - This authenticator has passed FIDO functional certification. This certification scheme is phased out and will be replaced by FIDO_CERTIFIED_L1.
 	FidoCertified AuthenticatorStatus = "FIDO_CERTIFIED"
+
 	// UserVerificationBypass - Indicates that malware is able to bypass the user verification. This means that the authenticator could be used without the user's consent and potentially even without the user's knowledge.
+	//nolint:gosec
 	UserVerificationBypass AuthenticatorStatus = "USER_VERIFICATION_BYPASS"
+
 	// AttestationKeyCompromise - Indicates that an attestation key for this authenticator is known to be compromised. Additional data should be supplied, including the key identifier and the date of compromise, if known.
 	AttestationKeyCompromise AuthenticatorStatus = "ATTESTATION_KEY_COMPROMISE"
+
 	// UserKeyRemoteCompromise - This authenticator has identified weaknesses that allow registered keys to be compromised and should not be trusted. This would include both, e.g. weak entropy that causes predictable keys to be generated or side channels that allow keys or signatures to be forged, guessed or extracted.
 	UserKeyRemoteCompromise AuthenticatorStatus = "USER_KEY_REMOTE_COMPROMISE"
+
 	// UserKeyPhysicalCompromise - This authenticator has known weaknesses in its key protection mechanism(s) that allow user keys to be extracted by an adversary in physical possession of the device.
 	UserKeyPhysicalCompromise AuthenticatorStatus = "USER_KEY_PHYSICAL_COMPROMISE"
+
 	// UpdateAvailable - A software or firmware update is available for the device. Additional data should be supplied including a URL where users can obtain an update and the date the update was published.
 	UpdateAvailable AuthenticatorStatus = "UPDATE_AVAILABLE"
+
 	// Revoked - The FIDO Alliance has determined that this authenticator should not be trusted for any reason, for example if it is known to be a fraudulent product or contain a deliberate backdoor.
 	Revoked AuthenticatorStatus = "REVOKED"
+
 	// SelfAssertionSubmitted - The authenticator vendor has completed and submitted the self-certification checklist to the FIDO Alliance. If this completed checklist is publicly available, the URL will be specified in StatusReportJSON.url.
 	SelfAssertionSubmitted AuthenticatorStatus = "SELF_ASSERTION_SUBMITTED"
+
 	// FidoCertifiedL1 - The authenticator has passed FIDO Authenticator certification at level 1. This level is the more strict successor of FIDO_CERTIFIED.
 	FidoCertifiedL1 AuthenticatorStatus = "FIDO_CERTIFIED_L1"
+
 	// FidoCertifiedL1plus - The authenticator has passed FIDO Authenticator certification at level 1+. This level is the more than level 1.
 	FidoCertifiedL1plus AuthenticatorStatus = "FIDO_CERTIFIED_L1plus"
+
 	// FidoCertifiedL2 - The authenticator has passed FIDO Authenticator certification at level 2. This level is more strict than level 1+.
 	FidoCertifiedL2 AuthenticatorStatus = "FIDO_CERTIFIED_L2"
+
 	// FidoCertifiedL2plus - The authenticator has passed FIDO Authenticator certification at level 2+. This level is more strict than level 2.
 	FidoCertifiedL2plus AuthenticatorStatus = "FIDO_CERTIFIED_L2plus"
+
 	// FidoCertifiedL3 - The authenticator has passed FIDO Authenticator certification at level 3. This level is more strict than level 2+.
 	FidoCertifiedL3 AuthenticatorStatus = "FIDO_CERTIFIED_L3"
+
 	// FidoCertifiedL3plus - The authenticator has passed FIDO Authenticator certification at level 3+. This level is more strict than level 3.
 	FidoCertifiedL3plus AuthenticatorStatus = "FIDO_CERTIFIED_L3plus"
+
 	// FIPS140CertifiedL1 - The authenticator has passed FIPS 140 certification at overall level 1.
 	FIPS140CertifiedL1 AuthenticatorStatus = "FIPS140_CERTIFIED_L1"
+
 	// FIPS140CertifiedL2 - The authenticator has passed FIPS 140 certification at overall level 2.
 	FIPS140CertifiedL2 AuthenticatorStatus = "FIPS140_CERTIFIED_L2"
+
 	// FIPS140CertifiedL3 - The authenticator has passed FIPS 140 certification at overall level 3.
 	FIPS140CertifiedL3 AuthenticatorStatus = "FIPS140_CERTIFIED_L3"
+
 	// FIPS140CertifiedL4 - The authenticator has passed FIPS 140 certification at overall level 4.
 	FIPS140CertifiedL4 AuthenticatorStatus = "FIPS140_CERTIFIED_L4"
 )
 
-// defaultUndesiredAuthenticatorStatus is an array of undesirable authenticator statuses
+// defaultUndesiredAuthenticatorStatus is an array of undesirable authenticator statuses.
 var defaultUndesiredAuthenticatorStatus = [...]AuthenticatorStatus{
 	AttestationKeyCompromise,
 	UserVerificationBypass,
@@ -157,7 +176,7 @@ var defaultUndesiredAuthenticatorStatus = [...]AuthenticatorStatus{
 	Revoked,
 }
 
-// IsUndesiredAuthenticatorStatus returns whether the supplied authenticator status is desirable or not
+// IsUndesiredAuthenticatorStatus returns whether the supplied authenticator status is desirable or not.
 func IsUndesiredAuthenticatorStatus(status AuthenticatorStatus) bool {
 	for _, s := range defaultUndesiredAuthenticatorStatus {
 		if s == status {
@@ -168,7 +187,7 @@ func IsUndesiredAuthenticatorStatus(status AuthenticatorStatus) bool {
 	return false
 }
 
-// IsUndesiredAuthenticatorStatusSlice returns whether the supplied authenticator status is desirable or not
+// IsUndesiredAuthenticatorStatusSlice returns whether the supplied authenticator status is desirable or not.
 func IsUndesiredAuthenticatorStatusSlice(status AuthenticatorStatus, values []AuthenticatorStatus) bool {
 	for _, s := range values {
 		if s == status {
@@ -179,7 +198,7 @@ func IsUndesiredAuthenticatorStatusSlice(status AuthenticatorStatus, values []Au
 	return false
 }
 
-// IsUndesiredAuthenticatorStatusMap returns whether the supplied authenticator status is desirable or not
+// IsUndesiredAuthenticatorStatusMap returns whether the supplied authenticator status is desirable or not.
 func IsUndesiredAuthenticatorStatusMap(status AuthenticatorStatus, values map[AuthenticatorStatus]bool) bool {
 	_, ok := values[status]
 
@@ -232,18 +251,18 @@ const (
 	ALG_SIGN_RSASSA_PSS_SHA512_RAW AuthenticationAlgorithm = "rsassa_pss_sha512_raw"
 
 	// ALG_SIGN_RSASSA_PKCSV15_SHA256_RAW is a RSASSA-PKCS1-v1_5 RFC3447 with SHA256(aka RS256) signature must have raw
-	// S buffers, encoded in big-endian order RFC8017 RFC4056
+	// S buffers, encoded in big-endian order RFC8017 RFC4056.
 	ALG_SIGN_RSASSA_PKCSV15_SHA256_RAW AuthenticationAlgorithm = "rsassa_pkcsv15_sha256_raw"
 
-	// RSASSA-PKCS1-v1_5 RFC3447 with SHA384(aka RS384) signature must have raw S buffers, encoded in big-endian order RFC8017 RFC4056
+	// ALG_SIGN_RSASSA_PKCSV15_SHA384_RAW is a RSASSA-PKCS1-v1_5 RFC3447 with SHA384(aka RS384) signature must have raw S buffers, encoded in big-endian order RFC8017 RFC4056.
 	ALG_SIGN_RSASSA_PKCSV15_SHA384_RAW AuthenticationAlgorithm = "rsassa_pkcsv15_sha384_raw"
 
 	// ALG_SIGN_RSASSA_PKCSV15_SHA512_RAW is a RSASSA-PKCS1-v1_5 RFC3447 with SHA512(aka RS512) signature must have raw
-	// S buffers, encoded in big-endian order RFC8017 RFC4056
+	// S buffers, encoded in big-endian order RFC8017 RFC4056.
 	ALG_SIGN_RSASSA_PKCSV15_SHA512_RAW AuthenticationAlgorithm = "rsassa_pkcsv15_sha512_raw"
 
 	// ALG_SIGN_RSASSA_PKCSV15_SHA1_RAW is a RSASSA-PKCS1-v1_5 RFC3447 with SHA1(aka RS1) signature must have raw S
-	// buffers, encoded in big-endian order RFC8017 RFC4056
+	// buffers, encoded in big-endian order RFC8017 RFC4056.
 	ALG_SIGN_RSASSA_PKCSV15_SHA1_RAW AuthenticationAlgorithm = "rsassa_pkcsv15_sha1_raw"
 
 	// ALG_SIGN_SECP384R1_ECDSA_SHA384_RAW is an ECDSA signature on the NIST secp384r1 curve with SHA384(aka: ES384)
@@ -263,7 +282,7 @@ const (
 	ALG_SIGN_ED448_EDDSA_SHA512_RAW AuthenticationAlgorithm = "ed448_eddsa_sha512_raw"
 )
 
-// TODO: this goes away after webauthncose.CredentialPublicKey gets implemented
+// TODO: this goes away after webauthncose.CredentialPublicKey gets implemented.
 type algKeyCose struct {
 	KeyType   webauthncose.COSEKeyType
 	Algorithm webauthncose.COSEAlgorithmIdentifier

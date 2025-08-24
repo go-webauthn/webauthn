@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -131,6 +131,7 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 				assert.NoError(t, err)
 				require.NotNil(t, creation)
 				assert.Equal(t, tc.expectedID, creation.Response.RelyingPartyID)
+
 				if len(tc.expectedChallenge) > 0 {
 					assert.Equal(t, protocol.URLEncodedBase64(tc.expectedChallenge).String(), creation.Response.Challenge.String())
 				}
@@ -185,7 +186,7 @@ func TestFinishLoginFailure(t *testing.T) {
 	}
 
 	// build returned response from authenticator
-	reqBody := ioutil.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{
+	reqBody := io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{
 			"id":"%[1]s",
 			"rawId":"%[1]s",
 			"type":"public-key",
@@ -199,9 +200,7 @@ func TestFinishLoginFailure(t *testing.T) {
 	))))
 	httpReq := &http.Request{Body: reqBody}
 
-	expectedErr := protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowedCredentialList")
 	_, err := webauthn.FinishLogin(user, session, httpReq)
-	if err == nil || err.Error() != expectedErr.Error() {
-		t.Fatalf("FinishLogin() expected err=%v, got=%v", expectedErr, err)
-	}
+
+	require.Equal(t, err, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowed credential list"))
 }

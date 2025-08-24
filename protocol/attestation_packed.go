@@ -34,7 +34,7 @@ func init() {
 //	 }
 //
 // Specification: §8.2. Packed Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-packed-attestation)
-func verifyPackedFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
+func verifyPackedFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
 	// Get the alg value - A COSEAlgorithmIdentifier containing the identifier of the algorithm
@@ -53,15 +53,15 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte, _ metadata
 	// Step 2. If x5c is present, this indicates that the attestation type is not ECDAA.
 	x5c, x509present := att.AttStatement[stmtX5C].([]any)
 	if x509present {
-		// Handle Basic Attestation steps for the x509 Certificate
+		// Handle Basic Attestation steps for the x509 Certificate.
 		return handleBasicAttestation(sig, clientDataHash, att.RawAuthData, att.AuthData.AttData.AAGUID, alg, x5c)
 	}
 
 	// Step 3. If ecdaaKeyId is present, then the attestation type is ECDAA.
-	// Also make sure the we did not have an x509 then
+	// Also make sure the we did not have an x509.
 	ecdaaKeyID, ecdaaKeyPresent := att.AttStatement[stmtECDAAKID].([]byte)
 	if ecdaaKeyPresent {
-		// Handle ECDAA Attestation steps for the x509 Certificate
+		// Handle ECDAA Attestation steps for the x509 Certificate.
 		return handleECDAAAttestation(sig, clientDataHash, ecdaaKeyID)
 	}
 
@@ -69,7 +69,7 @@ func verifyPackedFormat(att AttestationObject, clientDataHash []byte, _ metadata
 	return handleSelfAttestation(alg, att.AuthData.AttData.CredentialPublicKey, att.RawAuthData, clientDataHash, sig)
 }
 
-// Handle the attestation steps laid out in
+// Handle the attestation steps laid out in the basic format.
 func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, alg int64, x5c []any) (string, []any, error) {
 	// Step 2.1. Verify that sig is a valid signature over the concatenation of authenticatorData
 	// and clientDataHash using the attestation public key in attestnCert with the algorithm specified in alg.
@@ -94,7 +94,7 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 		return "", x5c, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
 	}
 
-	signatureData := append(authData, clientDataHash...)
+	signatureData := append(authData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	attCert, err := x509.ParseCertificate(attCertBytes)
 	if err != nil {
@@ -115,9 +115,8 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	}
 
 	// Step 2.2.2 (from §8.2.1) Subject field MUST be set to:
-
 	// 	Subject-C
-	// 	ISO 3166 code specifying the country where the Authenticator vendor is incorporated (PrintableString)
+	// 	ISO 3166 code specifying the country where the Authenticator vendor is incorporated (PrintableString).
 
 	//  TODO: Find a good, useable, country code library. For now, check stringy-ness
 	subjectString := strings.Join(attCert.Subject.Country, "")
@@ -126,26 +125,28 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	}
 
 	// 	Subject-O
-	// 	Legal name of the Authenticator vendor (UTF8String)
+	// 	Legal name of the Authenticator vendor (UTF8String).
 	subjectString = strings.Join(attCert.Subject.Organization, "")
 	if subjectString == "" {
 		return "", x5c, ErrAttestationCertificate.WithDetails("Attestation Certificate Organization is invalid")
 	}
 
-	// 	Subject-OU
-	// 	Literal string “Authenticator Attestation” (UTF8String)
-	subjectString = strings.Join(attCert.Subject.OrganizationalUnit, " ")
-	if subjectString != "Authenticator Attestation" {
-		// TODO: Implement a return error when I'm more certain this is general practice
-	}
+	// Subject-OU
+	// Literal string “Authenticator Attestation” (UTF8String)
+	// TODO: Implement a return error when I'm more certain this is general practice.
+	// subjectString = strings.Join(attCert.Subject.OrganizationalUnit, " ")
+	// if subjectString != "Authenticator Attestation" {
+	// }
+	// TODO: Implement a return error when I'm more certain this is general practice.
 
-	// 	Subject-CN
-	//  A UTF8String of the vendor’s choosing
+	//  Subject-CN
+	//  A UTF8String of the vendor’s choosing.
 	subjectString = attCert.Subject.CommonName
 	if subjectString == "" {
 		return "", x5c, ErrAttestationCertificate.WithDetails("Attestation Certificate Common Name not set")
 	}
-	// TODO: And then what
+
+	// TODO: And then what.
 
 	// Step 2.2.3 (from §8.2.1) If the related attestation root certificate is used for multiple authenticator models,
 	// the Extension OID 1.3.6.1.4.1.45724.1.1.4 (id-fido-gen-ce-aaguid) MUST be present, containing the
@@ -172,7 +173,9 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	if len(foundAAGUID) > 0 {
 		unMarshalledAAGUID := []byte{}
 
-		asn1.Unmarshal(foundAAGUID, &unMarshalledAAGUID)
+		if _, err = asn1.Unmarshal(foundAAGUID, &unMarshalledAAGUID); err != nil {
+			return "", x5c, ErrInvalidAttestation.WithDetails("Error unmarshalling AAGUID from certificate")
+		}
 
 		if !bytes.Equal(aaguid, unMarshalledAAGUID) {
 			return "", x5c, ErrInvalidAttestation.WithDetails("Certificate AAGUID does not match Auth Data certificate")
@@ -191,7 +194,7 @@ func handleBasicAttestation(signature, clientDataHash, authData, aaguid []byte, 
 	// [FIDOMetadataService] (https://www.w3.org/TR/webauthn/#biblio-fidometadataservice)
 
 	// Step 2.4 If successful, return attestation type Basic and attestation trust path x5c.
-	// We don't handle trust paths yet but we're done
+	// We don't handle trust paths yet but we're done.
 	return string(metadata.BasicFull), x5c, nil
 }
 
@@ -200,7 +203,7 @@ func handleECDAAAttestation(signature, clientDataHash, ecdaaKeyID []byte) (strin
 }
 
 func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, signature []byte) (string, []any, error) {
-	verificationData := append(authData, clientDataHash...)
+	verificationData := append(authData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	key, err := webauthncose.ParsePublicKey(pubKey)
 	if err != nil {

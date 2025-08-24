@@ -19,13 +19,12 @@ func init() {
 	RegisterAttestationFormat(AttestationFormatTPM, verifyTPMFormat)
 }
 
-func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (string, []any, error) {
+func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Given the verification procedure inputs attStmt, authenticatorData
-	// and clientDataHash, the verification procedure is as follows
+	// and clientDataHash, the verification procedure is as follows.
 
 	// Verify that attStmt is valid CBOR conforming to the syntax defined
-	// above and perform CBOR decoding on it to extract the contained fields
-
+	// above and perform CBOR decoding on it to extract the contained fields.
 	ver, present := att.AttStatement[stmtVersion].(string)
 	if !present {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving ver value")
@@ -44,7 +43,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 
 	x5c, x509present := att.AttStatement[stmtX5C].([]any)
 	if !x509present {
-		// Handle Basic Attestation steps for the x509 Certificate
+		// Handle Basic Attestation steps for the x509 Certificate.
 		return "", nil, ErrNotImplemented
 	}
 
@@ -97,11 +96,11 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		return "", nil, ErrUnsupportedKey
 	}
 
-	// Concatenate authenticatorData and clientDataHash to form attToBeSigned
-	attToBeSigned := append(att.RawAuthData, clientDataHash...)
+	// Concatenate authenticatorData and clientDataHash to form attToBeSigned.
+	attToBeSigned := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	// Validate that certInfo is valid:
-	// 1/4 Verify that magic is set to TPM_GENERATED_VALUE, handled here
+	// 1/4 Verify that magic is set to TPM_GENERATED_VALUE, handled here.
 	certInfo, err := tpm2.DecodeAttestationData(certInfoBytes)
 	if err != nil {
 		return "", nil, err
@@ -155,7 +154,8 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		if err = aikCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), certInfoBytes, sigBytes); err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v\n", err))
 		}
-		// Verify that aikCert meets the requirements in §8.3.1 TPM Attestation Statement Certificate Requirements
+
+		// Verify that aikCert meets the requirements in §8.3.1 TPM Attestation Statement Certificate Requirements.
 
 		// 1/6 Version MUST be set to 3.
 		if aikCert.Version != 3 {
@@ -176,17 +176,18 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		)
 
 		for _, ext := range aikCert.Extensions {
-			if ext.Id.Equal(oidExtensionSubjectAltName) {
+			switch {
+			case ext.Id.Equal(oidExtensionSubjectAltName):
 				if manufacturer, model, version, err = parseSANExtension(ext.Value); err != nil {
 					return "", nil, err
 				}
-			} else if ext.Id.Equal(oidExtensionExtendedKeyUsage) {
+			case ext.Id.Equal(oidExtensionExtendedKeyUsage):
 				if rest, err = asn1.Unmarshal(ext.Value, &eku); len(rest) != 0 || err != nil || !eku[0].Equal(tcgKpAIKCertificate) {
 					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU missing 2.23.133.8.3")
 				}
 
 				ekuValid = true
-			} else if ext.Id.Equal(oidExtensionBasicConstraints) {
+			case ext.Id.Equal(oidExtensionBasicConstraints):
 				if rest, err = asn1.Unmarshal(ext.Value, &constraints); err != nil {
 					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints malformed")
 				} else if len(rest) != 0 {
@@ -195,7 +196,7 @@ func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 			}
 		}
 
-		// 3/6 The Subject Alternative Name extension MUST be set as defined in [TPMv2-EK-Profile] section 3.2.9{}
+		// 3/6 The Subject Alternative Name extension MUST be set as defined in [TPMv2-EK-Profile] section 3.2.9.
 		if manufacturer == "" || model == "" || version == "" {
 			return "", nil, ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate")
 		}
@@ -282,12 +283,10 @@ var (
 
 func parseSANExtension(value []byte) (manufacturer string, model string, version string, err error) {
 	err = forEachSAN(value, func(tag int, data []byte) error {
-		switch tag {
-		case nameTypeDN:
+		if tag == nameTypeDN {
 			tpmDeviceAttributes := pkix.RDNSequence{}
-			_, err := asn1.Unmarshal(data, &tpmDeviceAttributes)
 
-			if err != nil {
+			if _, err = asn1.Unmarshal(data, &tpmDeviceAttributes); err != nil {
 				return err
 			}
 
@@ -406,7 +405,7 @@ func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
 		return ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate.")
 	}
 
-	var unhandled []asn1.ObjectIdentifier
+	var unhandled []asn1.ObjectIdentifier //nolint:prealloc
 
 	for _, uce := range attestation.UnhandledCriticalExtensions {
 		if uce.Equal(oidExtensionSubjectAltName) {

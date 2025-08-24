@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"hash"
+	"math"
 	"math/big"
 
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -27,7 +28,7 @@ import (
 // Specification: §6.4.1.1. Examples of credentialPublicKey Values Encoded in COSE_Key Format (https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples)
 type PublicKeyData struct {
 	// Decode the results to int by default.
-	_struct bool `cbor:",keyasint" json:"public_key"`
+	_struct bool `cbor:",keyasint" json:"public_key"` //nolint:unused,govet
 
 	// The type of key created. Should be OKP, EC2, or RSA.
 	KeyType int64 `cbor:"1,keyasint" json:"kty"`
@@ -92,13 +93,11 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 		Y:     big.NewInt(0).SetBytes(k.YCoord),
 	}
 
-	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm))
+	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.Algorithm))
 	h.Write(data)
 
-	type ECDSASignature struct {
-		R, S *big.Int
-	}
 	e := &ECDSASignature{}
+
 	_, err := asn1.Unmarshal(sig, e)
 	if err != nil {
 		return false, ErrSigNotProvidedOrInvalid
@@ -109,16 +108,24 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 
 // Verify RSA Public Key Signature.
 func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
-	pubkey := &rsa.PublicKey{
-		N: big.NewInt(0).SetBytes(k.Modulus),
-		E: int(uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16),
+	e := uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16
+
+	if e > math.MaxInt {
+		return false, ErrUnsupportedKey
 	}
 
-	coseAlg := COSEAlgorithmIdentifier(k.PublicKeyData.Algorithm)
+	pubkey := &rsa.PublicKey{
+		N: big.NewInt(0).SetBytes(k.Modulus),
+		E: int(e),
+	}
+
+	coseAlg := COSEAlgorithmIdentifier(k.Algorithm)
+
 	algDetail, ok := COSESignatureAlgorithmDetails[coseAlg]
 	if !ok {
 		return false, ErrUnsupportedAlgorithm
 	}
+
 	hash := algDetail.hash
 	h := hash.New()
 	h.Write(data)
@@ -138,30 +145,41 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 }
 
 // ParsePublicKey figures out what kind of COSE material was provided and create the data for the new key.
-func ParsePublicKey(keyBytes []byte) (any, error) {
+func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 	pk := PublicKeyData{}
-	// TODO (james-d-elliott): investigate the ignored errors.
-	webauthncbor.Unmarshal(keyBytes, &pk)
+
+	if err = webauthncbor.Unmarshal(keyBytes, &pk); err != nil {
+		return nil, ErrUnsupportedKey
+	}
 
 	switch COSEKeyType(pk.KeyType) {
 	case OctetKey:
 		var o OKPPublicKeyData
 
-		webauthncbor.Unmarshal(keyBytes, &o)
+		if err = webauthncbor.Unmarshal(keyBytes, &o); err != nil {
+			return nil, err
+		}
+
 		o.PublicKeyData = pk
 
 		return o, nil
 	case EllipticKey:
 		var e EC2PublicKeyData
 
-		webauthncbor.Unmarshal(keyBytes, &e)
+		if err = webauthncbor.Unmarshal(keyBytes, &e); err != nil {
+			return nil, err
+		}
+
 		e.PublicKeyData = pk
 
 		return e, nil
 	case RSAKey:
 		var r RSAPublicKeyData
 
-		webauthncbor.Unmarshal(keyBytes, &r)
+		if err = webauthncbor.Unmarshal(keyBytes, &r); err != nil {
+			return nil, err
+		}
+
 		r.PublicKeyData = pk
 
 		return r, nil
@@ -208,9 +226,15 @@ func DisplayPublicKey(cpk []byte) string {
 
 	switch k := parsedKey.(type) {
 	case RSAPublicKeyData:
+		e := uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16
+
+		if e > math.MaxInt {
+			return keyCannotDisplay
+		}
+
 		rKey := &rsa.PublicKey{
 			N: big.NewInt(0).SetBytes(k.Modulus),
-			E: int(uint(k.Exponent[2]) | uint(k.Exponent[1])<<8 | uint(k.Exponent[0])<<16),
+			E: int(e),
 		}
 
 		data, err := x509.MarshalPKIXPublicKey(rKey)
@@ -407,6 +431,7 @@ func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) x509.SignatureAlgorithm 
 	if !ok {
 		return x509.UnknownSignatureAlgorithm
 	}
+
 	return d.sigAlg
 }
 
@@ -417,6 +442,7 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) hash.Hash {
 		// default to SHA256?  Why not.
 		return crypto.SHA256.New()
 	}
+
 	return d.hash.New()
 }
 
@@ -441,8 +467,10 @@ var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
 type Error struct {
 	// Short name for the type of error that has occurred.
 	Type string `json:"type"`
+
 	// Additional details about the error.
 	Details string `json:"error"`
+
 	// Information to help debug the error.
 	DevInfo string `json:"debug"`
 }
