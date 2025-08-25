@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	RegisterAttestationFormat(AttestationFormatPacked, verifyPackedFormat)
+	RegisterAttestationFormat(AttestationFormatPacked, attestationFormatValidationHandlerPacked)
 }
 
 // The packed attestation statement looks like:
@@ -34,7 +34,7 @@ func init() {
 //	 }
 //
 // Specification: §8.2. Packed Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-packed-attestation)
-func verifyPackedFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
 	// Get the alg value - A COSEAlgorithmIdentifier containing the identifier of the algorithm

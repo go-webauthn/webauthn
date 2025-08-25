@@ -1,21 +1,27 @@
 package protocol
 
-import "crypto/x509"
+import (
+	"crypto/x509"
+)
 
 func init() {
-	attAndroidKeyHardwareRoots := make([]*x509.Certificate, 5)
+	initAndroidKeyHardwareRoots()
+	initAppleHardwareRoots()
+}
 
-	attAndroidKeyHardwareRoots[0] = MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot1))
-	attAndroidKeyHardwareRoots[1] = MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot2))
-	attAndroidKeyHardwareRoots[2] = MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot3))
-	attAndroidKeyHardwareRoots[3] = MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot4))
-	attAndroidKeyHardwareRoots[4] = MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot5))
-
-	certsInsecureNotAfterMangle(attAndroidKeyHardwareRoots)
-
+func initAndroidKeyHardwareRoots() {
 	attAndroidKeyHardwareRootsCertPool = x509.NewCertPool()
 
-	for _, cert := range attAndroidKeyHardwareRoots {
-		attAndroidKeyHardwareRootsCertPool.AddCert(cert)
-	}
+	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot1)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot2)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot3)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot4)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot5)))
+
+}
+
+func initAppleHardwareRoots() {
+	attAppleHardwareRootsCertPool = x509.NewCertPool()
+
+	attAppleHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAppleRoot1)))
 }

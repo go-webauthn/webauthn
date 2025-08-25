@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	RegisterAttestationFormat(AttestationFormatAndroidSafetyNet, verifySafetyNetFormat)
+	RegisterAttestationFormat(AttestationFormatAndroidSafetyNet, attestationFormatValidationHandlerAndroidSafetynet)
 }
 
 type SafetyNetResponse struct {
@@ -39,7 +39,7 @@ type SafetyNetResponse struct {
 // authenticators SHOULD make use of the Android Key Attestation when available, even if the SafetyNet API is also present.
 //
 // Specification: §8.5. Android SafetyNet Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation)
-func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAndroidSafetynet(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
 	//                           fmt: "android-safetynet",

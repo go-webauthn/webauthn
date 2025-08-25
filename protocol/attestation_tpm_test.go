@@ -30,7 +30,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-			attestationType, _, err := verifyTPMFormat(pcc.Response.AttestationObject, clientDataHash[:], nil)
+			attestationType, _, err := attestationFormatValidationHandlerTPM(pcc.Response.AttestationObject, clientDataHash[:], nil)
 			require.NoError(t, err)
 
 			if err != nil {
@@ -133,7 +133,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		attestationType, _, err := verifyTPMFormat(tt.att, nil, nil)
+		attestationType, _, err := attestationFormatValidationHandlerTPM(tt.att, nil, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
@@ -380,7 +380,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			},
 		}
 
-		attestationType, _, err := verifyTPMFormat(att, nil, nil)
+		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
 		} else {
@@ -473,7 +473,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 		}
 
 		att.AttStatement[stmtCertInfo] = certInfo
-		attestationType, _, err := verifyTPMFormat(att, nil, nil)
+		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
 
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -496,7 +496,7 @@ var (
 		},
 		Extensions: []pkix.Extension{
 			{
-				Id:       asn1.ObjectIdentifier([]int{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}),
+				Id:       asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4},
 				Critical: false,
 				Value: []byte{
 					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -595,7 +595,7 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 
 	for _, tt := range tests {
 		att.AttStatement[stmtX5C] = tt.x5c
-		attestationType, _, err := verifyTPMFormat(att, nil, nil)
+		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
 
 		if tt.wantErr != "" {
 			assert.Contains(t, err.Error(), tt.wantErr)

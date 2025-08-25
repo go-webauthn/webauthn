@@ -1,11 +1,14 @@
 package protocol
 
 import (
+	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
 func MustParseX509Certificate(der []byte) *x509.Certificate {
@@ -107,10 +110,10 @@ func certChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotA
 }
 
 func isSelfSigned(c *x509.Certificate) bool {
-	// Cheap check (Subject == Issuer) + cryptographic check.
 	if !c.IsCA {
 		return false
 	}
+
 	return c.CheckSignatureFrom(c) == nil
 }
 
@@ -146,12 +149,28 @@ func certInsecureNotAfterMangle(cert *x509.Certificate, safe time.Time) (out *x5
 	return out
 }
 
-func certsToCertPool(certs []*x509.Certificate) *x509.CertPool {
-	pool := x509.NewCertPool()
+func verifyAttestationECDSAPublicKeyMatch(att AttestationObject, cert *x509.Certificate) (attPublicKeyData webauthncose.EC2PublicKeyData, err error) {
+	var (
+		attPublicKey any
+		publicKey    *ecdsa.PublicKey
+		ok           bool
+	)
 
-	for _, cert := range certs {
-		pool.AddCert(cert)
+	if attPublicKey, err = webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey); err != nil {
+		return attPublicKeyData, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
 	}
 
-	return pool
+	if attPublicKeyData, ok = attPublicKey.(webauthncose.EC2PublicKeyData); !ok {
+		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Attestation public key is not ECDSA")
+	}
+
+	if publicKey, ok = cert.PublicKey.(*ecdsa.PublicKey); !ok {
+		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Credential public key is not ECDSA")
+	}
+
+	if !attPublicKeyData.ToECDSA().Equal(publicKey) {
+		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Certificate public key does not match public key in authData")
+	}
+
+	return attPublicKeyData, nil
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	RegisterAttestationFormat(AttestationFormatAndroidKey, verifyAndroidKeyFormat)
+	RegisterAttestationFormat(AttestationFormatAndroidKey, attestationFormatValidationHandlerAndroidKey)
 }
 
 // The android-key attestation statement looks like:
@@ -30,7 +30,7 @@ func init() {
 //	  }
 //
 // Specification: §8.4. Android Key Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-key-attestation)
-func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Given the verification procedure inputs attStmt, authenticatorData and clientDataHash, the verification procedure is as follows:
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
 	// the contained fields.
@@ -63,7 +63,7 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 		return "", nil, ErrAttestation.WithDetails("Error parsing x5c cert chain").WithError(err)
 	}
 
-	leaf := certs[0]
+	credCert := certs[0]
 
 	if _, err = certChainVerify(certs, attAndroidKeyHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails("Error validating x5c cert chain").WithError(err)
@@ -72,23 +72,18 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
-	if err = leaf.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
+	if err = credCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
 	// Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.
-	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
-	if err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
-	}
-
-	e, ok := pubKey.(webauthncose.EC2PublicKeyData)
-	if !ok {
-		return "", nil, ErrInvalidAttestation.WithDetails("Attestation public key is not EC2")
+	var attPublicKeyData webauthncose.EC2PublicKeyData
+	if attPublicKeyData, err = verifyAttestationECDSAPublicKeyMatch(att, credCert); err != nil {
+		return "", nil, err
 	}
 
 	var valid bool
-	if valid, err = e.Verify(signatureData, sig); err != nil || !valid {
+	if valid, err = attPublicKeyData.Verify(signatureData, sig); err != nil || !valid {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
 	}
 
@@ -96,8 +91,8 @@ func verifyAndroidKeyFormat(att AttestationObject, clientDataHash []byte, _ meta
 	// attCert.Extensions.
 	var attExtBytes []byte
 
-	for _, ext := range leaf.Extensions {
-		if ext.Id.Equal([]int{1, 3, 6, 1, 4, 1, 11129, 2, 1, 17}) {
+	for _, ext := range credCert.Extensions {
+		if ext.Id.Equal(oidExtensionAndroidKeystore) {
 			attExtBytes = ext.Value
 		}
 	}

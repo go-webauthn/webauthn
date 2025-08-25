@@ -89,13 +89,13 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 					tc.setup(t, mds)
 				}
 
-				attestationType, x5cs, err = verifyAndroidKeyFormat(tc.args.att, tc.args.clientDataHash, mds)
+				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, mds)
 			} else {
 				if tc.setup != nil {
 					tc.setup(t, nil)
 				}
 
-				attestationType, x5cs, err = verifyAndroidKeyFormat(tc.args.att, tc.args.clientDataHash, nil)
+				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, nil)
 			}
 
 			if tc.err != "" {

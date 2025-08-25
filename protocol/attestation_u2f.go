@@ -12,11 +12,11 @@ import (
 )
 
 func init() {
-	RegisterAttestationFormat(AttestationFormatFIDOUniversalSecondFactor, verifyU2FFormat)
+	RegisterAttestationFormat(AttestationFormatFIDOUniversalSecondFactor, attestationFormatValidationHandlerFIDOU2F)
 }
 
-// verifyU2FFormat - Follows verification steps set out by https://www.w3.org/TR/webauthn/#fido-u2f-attestation
-func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+// attestationFormatValidationHandlerFIDOU2F - Follows verification steps set out by https://www.w3.org/TR/webauthn/#fido-u2f-attestation
+func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	if !bytes.Equal(att.AuthData.AttData.AAGUID, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("U2F attestation format AAGUID not set to 0x00")
 	}

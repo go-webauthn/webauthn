@@ -16,10 +16,10 @@ import (
 )
 
 func init() {
-	RegisterAttestationFormat(AttestationFormatTPM, verifyTPMFormat)
+	RegisterAttestationFormat(AttestationFormatTPM, attestationFormatValidationHandlerTPM)
 }
 
-func verifyTPMFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Given the verification procedure inputs attStmt, authenticatorData
 	// and clientDataHash, the verification procedure is as follows.
 
@@ -419,13 +419,6 @@ func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
 
 	return nil
 }
-
-var (
-	oidExtensionSubjectAltName   = []int{2, 5, 29, 17}
-	oidExtensionExtendedKeyUsage = []int{2, 5, 29, 37}
-	oidExtensionBasicConstraints = []int{2, 5, 29, 19}
-	oidKpPrivacyCA               = []int{1, 3, 6, 1, 4, 1, 311, 21, 36}
-)
 
 type tpmBasicConstraints struct {
 	IsCA       bool `asn1:"optional"`
