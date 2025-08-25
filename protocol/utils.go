@@ -29,6 +29,23 @@ func MustParseX509CertificatePEM(raw []byte) *x509.Certificate {
 	return MustParseX509Certificate(block.Bytes)
 }
 
+func parseX5CFromAttStatement(attStatement map[string]any, key string) (x5c []any, x5cs []*x509.Certificate, err error) {
+	var ok bool
+	if x5c, ok = attStatement[key].([]any); !ok {
+		return nil, nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
+	}
+
+	if len(x5c) == 0 {
+		return nil, nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value: empty array")
+	}
+
+	if x5cs, err = parseX5C(x5c); err != nil {
+		return nil, nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value: error occurred parsing values").WithError(err)
+	}
+
+	return x5c, x5cs, nil
+}
+
 func parseX5C(x5c []any) (x5cs []*x509.Certificate, err error) {
 	x5cs = make([]*x509.Certificate, len(x5c))
 
@@ -151,16 +168,17 @@ func certInsecureNotAfterMangle(cert *x509.Certificate, safe time.Time) (out *x5
 
 func verifyAttestationECDSAPublicKeyMatch(att AttestationObject, cert *x509.Certificate) (attPublicKeyData webauthncose.EC2PublicKeyData, err error) {
 	var (
-		attPublicKey any
-		publicKey    *ecdsa.PublicKey
-		ok           bool
+		key any
+		ok  bool
+
+		publicKey, attPublicKey *ecdsa.PublicKey
 	)
 
-	if attPublicKey, err = webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey); err != nil {
+	if key, err = webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey); err != nil {
 		return attPublicKeyData, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
 	}
 
-	if attPublicKeyData, ok = attPublicKey.(webauthncose.EC2PublicKeyData); !ok {
+	if attPublicKeyData, ok = key.(webauthncose.EC2PublicKeyData); !ok {
 		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Attestation public key is not ECDSA")
 	}
 
@@ -168,7 +186,11 @@ func verifyAttestationECDSAPublicKeyMatch(att AttestationObject, cert *x509.Cert
 		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Credential public key is not ECDSA")
 	}
 
-	if !attPublicKeyData.ToECDSA().Equal(publicKey) {
+	if attPublicKey, err = attPublicKeyData.ToECDSA(); err != nil {
+		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Error converting public key to ECDSA").WithError(err)
+	}
+
+	if !attPublicKey.Equal(publicKey) {
 		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Certificate public key does not match public key in authData")
 	}
 

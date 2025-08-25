@@ -31,10 +31,19 @@ func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, cli
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
 	// If x5c is not present, return an error.
-	x5c, x509present := att.AttStatement[stmtX5C].([]any)
-	if !x509present {
-		// Handle Basic Attestation steps for the x509 Certificate.
-		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
+	var (
+		x5c   []any
+		certs []*x509.Certificate
+	)
+
+	if x5c, certs, err = parseX5CFromAttStatement(att.AttStatement, stmtX5C); err != nil {
+		return "", nil, err
+	}
+
+	credCert := certs[0]
+
+	if _, err = certChainVerify(certs, attAppleHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {
+		return "", nil, ErrInvalidAttestation.WithDetails("Error validating x5c cert chain").WithError(err)
 	}
 
 	// Step 2. Concatenate authenticatorData and clientDataHash to form nonceToHash.
@@ -44,18 +53,6 @@ func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, cli
 	nonce := sha256.Sum256(nonceToHash)
 
 	// Step 4. Verify that nonce equals the value of the extension with OID 1.2.840.113635.100.8.2 in credCert.
-	var certs []*x509.Certificate
-
-	if certs, err = parseX5C(x5c); err != nil {
-		return "", nil, ErrAttestation.WithDetails("Error parsing x5c cert chain").WithError(err)
-	}
-
-	credCert := certs[0]
-
-	if _, err = certChainVerify(certs, attAppleHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails("Error validating x5c cert chain").WithError(err)
-	}
-
 	var attExtBytes []byte
 
 	for _, ext := range credCert.Extensions {

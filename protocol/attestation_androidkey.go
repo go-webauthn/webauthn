@@ -48,19 +48,19 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
-	// If x5c is not present, return an error.
-	x5c, x509present := att.AttStatement[stmtX5C].([]any)
-	if !x509present {
-		// Handle Basic Attestation steps for the x509 Certificate.
-		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
-	}
-
 	// §8.4.2. Verify that sig is a valid signature over the concatenation of authenticatorData and clientDataHash
 	// using the public key in the first certificate in x5c with the algorithm specified in alg.
-	var certs []*x509.Certificate
+	var (
+		x5c   []any
+		certs []*x509.Certificate
+	)
 
-	if certs, err = parseX5C(x5c); err != nil {
-		return "", nil, ErrAttestation.WithDetails("Error parsing x5c cert chain").WithError(err)
+	if x5c, certs, err = parseX5CFromAttStatement(att.AttStatement, stmtX5C); err != nil {
+		return "", nil, err
+	}
+
+	if len(certs) == 0 {
+		return "", nil, ErrInvalidAttestation.WithDetails("No certificates in x5c")
 	}
 
 	credCert := certs[0]
@@ -71,8 +71,9 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 
 	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
-	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
-	if err = credCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), signatureData, sig); err != nil {
+	if sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.COSEAlgorithmIdentifier(alg)); sigAlg == x509.UnknownSignatureAlgorithm {
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", alg))
+	} else if err = credCert.CheckSignature(sigAlg, signatureData, sig); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 

@@ -10,7 +10,9 @@ func init() {
 }
 
 func initAndroidKeyHardwareRoots() {
-	attAndroidKeyHardwareRootsCertPool = x509.NewCertPool()
+	if attAndroidKeyHardwareRootsCertPool == nil {
+		attAndroidKeyHardwareRootsCertPool = x509.NewCertPool()
+	}
 
 	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot1)))
 	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot2)))
@@ -21,7 +23,9 @@ func initAndroidKeyHardwareRoots() {
 }
 
 func initAppleHardwareRoots() {
-	attAppleHardwareRootsCertPool = x509.NewCertPool()
+	if attAppleHardwareRootsCertPool == nil {
+		attAppleHardwareRootsCertPool = x509.NewCertPool()
+	}
 
 	attAppleHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAppleRoot1)))
 }
