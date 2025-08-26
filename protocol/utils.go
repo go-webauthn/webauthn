@@ -71,6 +71,8 @@ func parseX5C(x5c []any) (x5cs []*x509.Certificate, err error) {
 // mangling the not after value for purpose of just validating the attestation lineage. If you set mangleNotAfter to
 // true this function should only be considered safe for determining lineage, and not hte validity of a chain in
 // general.
+//
+// WARNING: Setting mangleNotAfter=true weakens security by accepting expired certificates.
 func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotAfter bool, mangleNotAfterSafeTime time.Time) (chains [][]*x509.Certificate, err error) {
 	if len(certs) == 0 {
 		return nil, errors.New("empty chain")
@@ -146,6 +148,8 @@ func certsInsecureNotAfterMangle(certs []*x509.Certificate) (out []*x509.Certifi
 // This function is used to intentionally but conditionally mangle the certificate not after value to exclude it from
 // the verification process. This should only be used in instances where all you care about is which certificates
 // performed the signing.
+//
+// WARNING: Setting mangle=true weakens security by accepting expired certificates.
 func certInsecureConditionalNotAfterMangle(cert *x509.Certificate, mangle bool, safe time.Time) (out *x509.Certificate) {
 	if !mangle || cert.NotAfter.After(safe) {
 		return cert
