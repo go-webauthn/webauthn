@@ -67,6 +67,7 @@ table for more information. We also include JSON mappings for those that wish to
 |           type            |            N/A             |            N/A             |                       This field is always `publicKey` for WebAuthn                       |
 |            id             |             ID             |             id             |                                                                                           |
 |         publicKey         |         PublicKey          |         publicKey          |                                                                                           |
+|     attestationFormat     |      AttestationType       |      attestationType       |           This field is currently named incorrectly and this will be corrected.           |
 |         signCount         |  Authenticator.SignCount   |  authenticator.signCount   |                                                                                           |
 |        transports         |         Transport          |         transport          |                                                                                           |
 |       uvInitialized       |     Flags.UserVerified     |     flags.userVerified     |                                                                                           |

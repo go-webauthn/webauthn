@@ -372,7 +372,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 		err   error
 	)
 
-	// Ensure authenticators with a bad status is not used.
+	// Ensure authenticators with a bad status are not used.
 	if webauthn.Config.MDS != nil {
 		var aaguid uuid.UUID
 
@@ -382,7 +382,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err)).WithError(err)
 		}
 
-		if e := protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, "", nil); e != nil {
+		if e := protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, "", credential.AttestationType, nil); e != nil {
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(e.DevInfo).WithError(e)
 		}
 	}
