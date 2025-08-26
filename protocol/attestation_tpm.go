@@ -210,7 +210,9 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 				}
 			case ext.Id.Equal(oidExtensionExtendedKeyUsage):
 				if rest, err = asn1.Unmarshal(ext.Value, &eku); err != nil {
-					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU malformed")
+					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate extended key usage malformed")
+				} else if len(rest) != 0 {
+					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate extended key usage contains extra data")
 				}
 
 				found := false
@@ -223,7 +225,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 				}
 
 				if !found {
-					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU missing 2.23.133.8.3")
+					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate extended key usage missing 2.23.133.8.3")
 				}
 
 				ekuValid = true

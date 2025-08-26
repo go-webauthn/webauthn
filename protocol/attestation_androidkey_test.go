@@ -78,6 +78,7 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 				x5cs            []any
 				err             error
 			)
+
 			if tc.mds {
 				var mds *mocks.MockMetadataProvider
 
