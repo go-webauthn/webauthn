@@ -176,10 +176,8 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 			return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1")
 		}
 
-		var sigAlg x509.SignatureAlgorithm
-
-		if sigAlg = webauthncose.SigAlgFromCOSEAlg(coseAlg); sigAlg == x509.UnknownSignatureAlgorithm {
-
+		if sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg); sigAlg == x509.UnknownSignatureAlgorithm {
+			return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", alg))
 		} else if err = aikCert.CheckSignature(sigAlg, certInfoBytes, sig); err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 		}
