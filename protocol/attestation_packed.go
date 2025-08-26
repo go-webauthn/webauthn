@@ -127,7 +127,7 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 	// 	Subject-C
 	// 	ISO 3166 code specifying the country where the Authenticator vendor is incorporated (PrintableString).
 
-	//  TODO: Find a good, useable, country code library. For now, check stringy-ness
+	//  TODO: Find a good, usable, country code library. For now, check stringy-ness
 	subjectString := strings.Join(attestnCert.Subject.Country, "")
 	if subjectString == "" {
 		return "", x5c, ErrAttestationCertificate.WithDetails("Attestation Certificate Country Code is invalid")

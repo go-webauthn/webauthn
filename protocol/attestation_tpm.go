@@ -304,7 +304,7 @@ func forEachSAN(extension []byte, callback func(tag int, data []byte) error) err
 			return err
 		}
 
-		if err := callback(v.Tag, v.Bytes); err != nil {
+		if err = callback(v.Tag, v.Bytes); err != nil {
 			return err
 		}
 	}

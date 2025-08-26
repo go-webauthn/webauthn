@@ -12,6 +12,10 @@ const (
 	stmtPubArea   = "pubArea"
 )
 
+const (
+	attStatementAndroidSafetyNetHostname = "attest.android.com"
+)
+
 var (
 	// internalRemappedAuthenticatorTransport handles remapping of AuthenticatorTransport values. Specifically it is
 	// intentional on remapping only transports that never made recommendation but are being used in the wild. It
