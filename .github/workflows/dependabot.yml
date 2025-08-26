@@ -2,12 +2,14 @@ name: 'Dependabot'
 on:
   pull_request: {}
 permissions:
-  contents: 'write'
-  pull-requests: 'write'
+  contents: 'read'
 jobs:
   automerge:
     name: 'Auto-Merge'
     runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      pull-requests: 'write'
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'go-webauthn/webauthn'
     steps:
       - name: 'Harden Runner'
@@ -23,5 +25,5 @@ jobs:
         run: |
           gh pr merge --auto --squash "$PR_URL"
         env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

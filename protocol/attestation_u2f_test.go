@@ -37,14 +37,14 @@ func TestVerifyU2FFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := verifyU2FFormat(tt.args.att, tt.args.clientDataHash, nil)
+			got, _, err := attestationFormatValidationHandlerFIDOU2F(tt.args.att, tt.args.clientDataHash, nil)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("verifyU2FFormat() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("attestationFormatValidationHandlerFIDOU2F() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if got != tt.want {
-				t.Errorf("verifyU2FFormat() got = %v, want %v", got, tt.want)
+				t.Errorf("attestationFormatValidationHandlerFIDOU2F() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

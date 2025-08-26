@@ -38,18 +38,18 @@ func Test_verifySafetyNetFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := verifySafetyNetFormat(tt.args.att, tt.args.clientDataHash, nil)
+			got, got1, err := attestationFormatValidationHandlerAndroidSafetyNet(tt.args.att, tt.args.clientDataHash, nil)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("verifySafetyNetFormat() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("attestationFormatValidationHandlerAndroidSafetyNet() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if got != tt.want {
-				t.Errorf("verifySafetyNetFormat() got = %v, want %v", got, tt.want)
+				t.Errorf("attestationFormatValidationHandlerAndroidSafetyNet() got = %v, want %v", got, tt.want)
 			}
 
 			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("verifySafetyNetFormat() got1 = %v, want %v", got1, tt.want1)
+				t.Errorf("attestationFormatValidationHandlerAndroidSafetyNet() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}

@@ -15,31 +15,31 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-func init() {
-	RegisterAttestationFormat(AttestationFormatAndroidSafetyNet, verifySafetyNetFormat)
-}
-
-type SafetyNetResponse struct {
-	Nonce                      string `json:"nonce"`
-	TimestampMs                int64  `json:"timestampMs"`
-	ApkPackageName             string `json:"apkPackageName"`
-	ApkDigestSha256            string `json:"apkDigestSha256"`
-	CtsProfileMatch            bool   `json:"ctsProfileMatch"`
-	ApkCertificateDigestSha256 []any  `json:"apkCertificateDigestSha256"`
-	BasicIntegrity             bool   `json:"basicIntegrity"`
-}
-
-// When the authenticator in question is a platform-provided Authenticator on certain Android platforms, the attestation
-// statement is based on the SafetyNet API. In this case the authenticator data is completely controlled by the caller of
-// the SafetyNet API (typically an application running on the Android platform) and the attestation statement only provides
+// attestationFormatValidationHandlerAndroidSafetyNet is the handler for the Android SafetyNet Attestation Statement
+// Format.
 //
-//	some statements about the health of the platform and the identity of the calling application. This attestation does not
+// When the authenticator is a platform authenticator on certain Android platforms, the attestation statement may be
+// based on the SafetyNet API. In this case the authenticator data is completely controlled by the caller of the
+// SafetyNet API (typically an application running on the Android platform) and the attestation statement provides some
+// statements about the health of the platform and the identity of the calling application (see SafetyNet Documentation
+// for more details).
 //
-// provide information regarding provenance of the authenticator and its associated data. Therefore platform-provided
-// authenticators SHOULD make use of the Android Key Attestation when available, even if the SafetyNet API is also present.
+// The syntax of an Android Attestation statement is defined as follows:
 //
-// Specification: §8.5. Android SafetyNet Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation)
-func verifySafetyNetFormat(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
+//	$$attStmtType //= (
+//			fmt: "android-safetynet",
+//			attStmt: safetynetStmtFormat
+//	)
+//
+//	safetynetStmtFormat = {
+//			ver: text,
+//			response: bytes
+//	}
+//
+// Specification: §8.5. Android SafetyNet Attestation Statement Format
+//
+// See: https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation
+func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
 	//                           fmt: "android-safetynet",
@@ -169,4 +169,18 @@ func keyFuncSafetyNetJWT(token *jwt.Token) (key any, err error) {
 	}
 
 	return cert.PublicKey, nil
+}
+
+type SafetyNetResponse struct {
+	Nonce                      string `json:"nonce"`
+	TimestampMs                int64  `json:"timestampMs"`
+	ApkPackageName             string `json:"apkPackageName"`
+	ApkDigestSha256            string `json:"apkDigestSha256"`
+	CtsProfileMatch            bool   `json:"ctsProfileMatch"`
+	ApkCertificateDigestSha256 []any  `json:"apkCertificateDigestSha256"`
+	BasicIntegrity             bool   `json:"basicIntegrity"`
+}
+
+func init() {
+	RegisterAttestationFormat(AttestationFormatAndroidSafetyNet, attestationFormatValidationHandlerAndroidSafetyNet)
 }

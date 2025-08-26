@@ -11,12 +11,24 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func init() {
-	RegisterAttestationFormat(AttestationFormatFIDOUniversalSecondFactor, verifyU2FFormat)
-}
-
-// verifyU2FFormat - Follows verification steps set out by https://www.w3.org/TR/webauthn/#fido-u2f-attestation
-func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+// attestationFormatValidationHandlerFIDOU2F is the handler for the FIDO U2F Attestation Statement Format.
+//
+// The syntax of a FIDO U2F attestation statement is defined as follows:
+//
+// $$attStmtType //= (
+//                       fmt: "fido-u2f",
+//                       attStmt: u2fStmtFormat
+//                   )
+//
+// u2fStmtFormat = {
+//                     x5c: [ attestnCert: bytes ],
+//                     sig: bytes
+//                 }
+//
+// Specification: §8.6. FIDO U2F Attestation Statement Format
+//
+// See: https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
+func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	if !bytes.Equal(att.AuthData.AttData.AAGUID, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("U2F attestation format AAGUID not set to 0x00")
 	}
@@ -32,20 +44,24 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("Non-ES256 Public Key algorithm used")
 	}
 
+	var (
+		sig []byte
+		raw []byte
+		x5c []any
+		ok  bool
+	)
 	// U2F Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined above
 	// and perform CBOR decoding on it to extract the contained fields.
 
 	// Check for "x5c" which is a single element array containing the attestation certificate in X.509 format.
-	x5c, present := att.AttStatement[stmtX5C].([]any)
-	if !present {
+	if x5c, ok = att.AttStatement[stmtX5C].([]any); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Missing properly formatted x5c data")
 	}
 
 	// Check for "sig" which is The attestation signature. The signature was calculated over the (raw) U2F
 	// registration response message https://www.w3.org/TR/webauthn/#biblio-fido-u2f-message-formats]
 	// received by the client from the authenticator.
-	signature, present := att.AttStatement[stmtSignature].([]byte)
-	if !present {
+	if sig, ok = att.AttStatement[stmtSignature].([]byte); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Missing sig data")
 	}
 
@@ -65,12 +81,11 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	// and RFC8230 (https://www.w3.org/TR/webauthn/#biblio-rfc8230).
 
 	// Step 2.2.
-	asn1Bytes, decoded := x5c[0].([]byte)
-	if !decoded {
+	if raw, ok = x5c[0].([]byte); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error decoding ASN.1 data from x5c")
 	}
 
-	attCert, err := x509.ParseCertificate(asn1Bytes)
+	attCert, err := x509.ParseCertificate(raw)
 	if err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1 data into certificate").WithError(err)
 	}
@@ -125,11 +140,14 @@ func verifyU2FFormat(att AttestationObject, clientDataHash []byte, _ metadata.Pr
 	verificationData.Write(publicKeyU2F.Bytes())
 
 	// Step 6. Verify the sig using verificationData and certificate public key per SEC1[https://www.w3.org/TR/webauthn/#biblio-sec1].
-	sigErr := attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), signature)
-	if sigErr != nil {
-		return "", nil, sigErr
+	if err = attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), sig); err != nil {
+		return "", nil, err
 	}
 
 	// Step 7. If successful, return attestation type Basic with the attestation trust path set to x5c.
-	return string(metadata.BasicFull), x5c, sigErr
+	return string(metadata.BasicFull), x5c, nil
+}
+
+func init() {
+	RegisterAttestationFormat(AttestationFormatFIDOUniversalSecondFactor, attestationFormatValidationHandlerFIDOU2F)
 }

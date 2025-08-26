@@ -60,7 +60,7 @@ func TestPackedAttestationVerification(t *testing.T) {
 		// Test Packed Verification. Unpack args.
 		clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-		_, _, err := verifyPackedFormat(pcc.Response.AttestationObject, clientDataHash[:], nil)
+		_, _, err := attestationFormatValidationHandlerPacked(pcc.Response.AttestationObject, clientDataHash[:], nil)
 		require.NoError(t, err)
 	})
 }

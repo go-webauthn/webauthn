@@ -106,6 +106,21 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 	return ecdsa.Verify(pubkey, h.Sum(nil), e.R, e.S), nil
 }
 
+// ToECDSA converts the EC2PublicKeyData to an ecdsa.PublicKey.
+func (k *EC2PublicKeyData) ToECDSA() (key *ecdsa.PublicKey, err error) {
+	curve := ec2AlgCurve(k.Algorithm)
+
+	if curve == nil {
+		return nil, ErrUnsupportedAlgorithm
+	}
+
+	return &ecdsa.PublicKey{
+		Curve: curve,
+		X:     big.NewInt(0).SetBytes(k.XCoord),
+		Y:     big.NewInt(0).SetBytes(k.YCoord),
+	}, nil
+}
+
 // Verify RSA Public Key Signature.
 func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (valid bool, err error) {
 	var e int

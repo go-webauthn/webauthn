@@ -2,53 +2,46 @@ package protocol
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
-	"fmt"
-	"math/big"
+	"time"
 
 	"github.com/go-webauthn/webauthn/metadata"
-	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func init() {
-	RegisterAttestationFormat(AttestationFormatApple, verifyAppleFormat)
-}
-
-// The apple attestation statement looks like:
+// attestationFormatValidationHandlerAppleAnonymous is the handler for the Apple Anonymous Attestation Statement Format.
+//
+// The syntax of an Apple attestation statement is defined as follows:
+//
 // $$attStmtType //= (
+//                       fmt: "apple",
+//                       attStmt: appleStmtFormat
+//                   )
 //
-//	fmt: "apple",
-//	attStmt: appleStmtFormat
+// appleStmtFormat = {
+//                       x5c: [ credCert: bytes, * (caCert: bytes) ]
+//                   }
 //
-// )
+// Specification: §8.8. Apple Anonymous Attestation Statement Format
 //
-//	appleStmtFormat = {
-//			x5c: [ credCert: bytes, * (caCert: bytes) ]
-//	  }
-//
-// Specification: §8.8. Apple Anonymous Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation)
-func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
-	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
-	// above and perform CBOR decoding on it to extract the contained fields.
-	// If x5c is not present, return an error.
-	x5c, x509present := att.AttStatement[stmtX5C].([]any)
-	if !x509present {
-		// Handle Basic Attestation steps for the x509 Certificate.
-		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
+// See : https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation
+func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it
+	// to extract the contained fields.
+	var (
+		x5c   []any
+		certs []*x509.Certificate
+	)
+
+	if x5c, certs, err = attStatementParseX5CS(att.AttStatement, stmtX5C); err != nil {
+		return "", nil, err
 	}
 
-	credCertBytes, valid := x5c[0].([]byte)
-	if !valid {
-		return "", nil, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
-	}
+	credCert := certs[0]
 
-	credCert, err := x509.ParseCertificate(credCertBytes)
-	if err != nil {
-		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error parsing certificate from ASN.1 data: %+v", err)).WithError(err)
+	if _, err = attStatementCertChainVerify(certs, attAppleHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {
+		return "", nil, ErrInvalidAttestation.WithDetails("Error validating x5c cert chain").WithError(err)
 	}
 
 	// Step 2. Concatenate authenticatorData and clientDataHash to form nonceToHash.
@@ -61,7 +54,7 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	var attExtBytes []byte
 
 	for _, ext := range credCert.Extensions {
-		if ext.Id.Equal([]int{1, 2, 840, 113635, 100, 8, 2}) {
+		if ext.Id.Equal(oidExtensionAppleAnonymousAttestation) {
 			attExtBytes = ext.Value
 		}
 	}
@@ -81,25 +74,12 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 	}
 
 	// Step 5. Verify that the credential public key equals the Subject Public Key of credCert.
-	// TODO: Probably move this part to webauthncose.go.
-	pubKey, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
-	if err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v\n", err)).WithError(err)
+	if _, err = verifyAttestationECDSAPublicKeyMatch(att, credCert); err != nil {
+		return "", nil, err
 	}
 
-	credPK := pubKey.(webauthncose.EC2PublicKeyData)
-	subjectPK := credCert.PublicKey.(*ecdsa.PublicKey)
-	credPKInfo := &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     big.NewInt(0).SetBytes(credPK.XCoord),
-		Y:     big.NewInt(0).SetBytes(credPK.YCoord),
-	}
-
-	if !credPKInfo.Equal(subjectPK) {
-		return "", nil, ErrInvalidAttestation.WithDetails("Certificate public key does not match public key in authData")
-	}
-
-	// Step 6. If successful, return implementation-specific values representing attestation type Anonymization CA and attestation trust path x5c.
+	// Step 6. If successful, return implementation-specific values representing attestation type Anonymization CA and
+	// attestation trust path x5c.
 	return string(metadata.AnonCA), x5c, nil
 }
 
@@ -107,4 +87,12 @@ func verifyAppleFormat(att AttestationObject, clientDataHash []byte, _ metadata.
 // extension (as of JULY 2021.)
 type AppleAnonymousAttestation struct {
 	Nonce []byte `asn1:"tag:1,explicit"`
+}
+
+var (
+	attAppleHardwareRootsCertPool *x509.CertPool
+)
+
+func init() {
+	RegisterAttestationFormat(AttestationFormatApple, attestationFormatValidationHandlerAppleAnonymous)
 }

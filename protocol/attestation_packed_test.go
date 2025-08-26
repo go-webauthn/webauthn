@@ -61,15 +61,15 @@ func Test_verifyPackedFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := verifyPackedFormat(tt.args.att, tt.args.clientDataHash, nil)
+			got, _, err := attestationFormatValidationHandlerPacked(tt.args.att, tt.args.clientDataHash, nil)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("verifyPackedFormat() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("attestationFormatValidationHandlerPacked() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			// TODO: Consider doing something with the second return value from verifyPackedFormat, x5c.
+			// TODO: Consider doing something with the second return value from attestationFormatValidationHandlerPacked, x5c.
 			if got != tt.want {
-				t.Errorf("verifyPackedFormat() got = %v, want %v", got, tt.want)
+				t.Errorf("attestationFormatValidationHandlerPacked() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
