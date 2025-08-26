@@ -209,7 +209,20 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 					return "", nil, err
 				}
 			case ext.Id.Equal(oidExtensionExtendedKeyUsage):
-				if rest, err = asn1.Unmarshal(ext.Value, &eku); len(rest) != 0 || err != nil || !eku[0].Equal(oidTCGKpAIKCertificate) {
+				if rest, err = asn1.Unmarshal(ext.Value, &eku); err != nil {
+					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU malformed")
+				}
+
+				found := false
+
+				for _, oid := range eku {
+					if oid.Equal(oidTCGKpAIKCertificate) {
+						found = true
+						break
+					}
+				}
+
+				if !found {
 					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU missing 2.23.133.8.3")
 				}
 
