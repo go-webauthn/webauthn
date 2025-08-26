@@ -39,13 +39,20 @@ import (
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-tpm-attestation
 func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+	var (
+		ver    string
+		alg    int64
+		x5c    []any
+		ok     bool
+		x509ok bool
+	)
+
 	// Given the verification procedure inputs attStmt, authenticatorData
 	// and clientDataHash, the verification procedure is as follows.
 
 	// Verify that attStmt is valid CBOR conforming to the syntax defined
 	// above and perform CBOR decoding on it to extract the contained fields.
-	ver, present := att.AttStatement[stmtVersion].(string)
-	if !present {
+	if ver, ok = att.AttStatement[stmtVersion].(string); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving ver value")
 	}
 
@@ -53,48 +60,46 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		return "", nil, ErrAttestationFormat.WithDetails("WebAuthn only supports TPM 2.0 currently")
 	}
 
-	alg, present := att.AttStatement[stmtAlgorithm].(int64)
-	if !present {
+	if alg, ok = att.AttStatement[stmtAlgorithm].(int64); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
 	}
 
-	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
-
-	x5c, x509present := att.AttStatement[stmtX5C].([]any)
-	if !x509present {
+	if x5c, x509ok = att.AttStatement[stmtX5C].([]any); !x509ok {
 		// Handle Basic Attestation steps for the x509 Certificate.
 		return "", nil, ErrNotImplemented
 	}
 
-	_, ecdaaKeyPresent := att.AttStatement[stmtECDAAKID].([]byte)
-	if ecdaaKeyPresent {
+	if _, ok = att.AttStatement[stmtECDAAKID].([]byte); ok {
 		return "", nil, ErrNotImplemented
 	}
 
-	sigBytes, present := att.AttStatement[stmtSignature].([]byte)
-	if !present {
+	var (
+		sig           []byte
+		certInfoBytes []byte
+		pubAreaBytes  []byte
+		pubArea       tpm2.Public
+		key           any
+	)
+
+	if sig, ok = att.AttStatement[stmtSignature].([]byte); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
-	certInfoBytes, present := att.AttStatement[stmtCertInfo].([]byte)
-	if !present {
+	if certInfoBytes, ok = att.AttStatement[stmtCertInfo].([]byte); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving certInfo value")
 	}
 
-	pubAreaBytes, present := att.AttStatement[stmtPubArea].([]byte)
-	if !present {
+	if pubAreaBytes, ok = att.AttStatement[stmtPubArea].([]byte); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving pubArea value")
 	}
 
 	// Verify that the public key specified by the parameters and unique fields of pubArea
 	// is identical to the credentialPublicKey in the attestedCredentialData in authenticatorData.
-	pubArea, err := tpm2.DecodePublic(pubAreaBytes)
-	if err != nil {
+	if pubArea, err = tpm2.DecodePublic(pubAreaBytes); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to decode TPMT_PUBLIC in attestation statement").WithError(err)
 	}
 
-	key, err := webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey)
-	if err != nil {
+	if key, err = webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey); err != nil {
 		return "", nil, err
 	}
 
@@ -131,6 +136,8 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	}
 
 	// 3/4 Verify that extraData is set to the hash of attToBeSigned using the hash algorithm employed in "alg".
+	coseAlg := webauthncose.COSEAlgorithmIdentifier(alg)
+
 	h := webauthncose.HasherFromCOSEAlg(coseAlg)
 	h.Write(attToBeSigned)
 
@@ -142,12 +149,9 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	// [TPMv2-Part2] section 10.12.3, whose name field contains a valid Name for pubArea,
 	// as computed using the algorithm in the nameAlg field of pubArea
 	// using the procedure specified in [TPMv2-Part1] section 16.
-	matches, err := certInfo.AttestedCertifyInfo.Name.MatchesPublic(pubArea)
-	if err != nil {
+	if ok, err = certInfo.AttestedCertifyInfo.Name.MatchesPublic(pubArea); err != nil {
 		return "", nil, err
-	}
-
-	if !matches {
+	} else if !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Hash value mismatch attested and pubArea")
 	}
 
@@ -156,21 +160,27 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	// are ignored. These fields MAY be used as an input to risk engines.
 
 	// If x5c is present, this indicates that the attestation type is not ECDAA.
-	if x509present {
+	if x509ok {
+		var (
+			aikCert *x509.Certificate
+			raw     []byte
+		)
+
 		// In this case:
 		// Verify the sig is a valid signature over certInfo using the attestation public key in aikCert with the algorithm specified in alg.
-		aikCertBytes, valid := x5c[0].([]byte)
-		if !valid {
+		if raw, ok = x5c[0].([]byte); !ok {
 			return "", nil, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
 		}
 
-		var aikCert *x509.Certificate
-
-		if aikCert, err = x509.ParseCertificate(aikCertBytes); err != nil {
+		if aikCert, err = x509.ParseCertificate(raw); err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1")
 		}
 
-		if err = aikCert.CheckSignature(webauthncose.SigAlgFromCOSEAlg(coseAlg), certInfoBytes, sigBytes); err != nil {
+		var sigAlg x509.SignatureAlgorithm
+
+		if sigAlg = webauthncose.SigAlgFromCOSEAlg(coseAlg); sigAlg == x509.UnknownSignatureAlgorithm {
+
+		} else if err = aikCert.CheckSignature(sigAlg, certInfoBytes, sig); err != nil {
 			return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 		}
 

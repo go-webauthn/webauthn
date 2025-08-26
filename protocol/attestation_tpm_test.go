@@ -79,66 +79,94 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 	tests := []struct {
 		name    string
 		att     AttestationObject
-		wantErr string
+		attestationType string
+		x5cs            []any
+		err             string
 	}{
 		{
-			"TPM Negative Test AttStatement Missing Ver",
+			"ShouldNotParseAttStatementMissingVer",
 			AttestationObject{},
+			"",
+			nil,
 			"Error retrieving ver value",
 		},
 		{
-			"TPM Negative Test AttStatement Ver not 2.0",
+			"ShouldNotParseAttStatementWithVersionNot2Point0",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "foo.bar"}},
+			"",
+			nil,
 			"WebAuthn only supports TPM 2.0 currently",
 		},
 		{
-			"TPM Negative Test AttStatement Alg not present",
+			"ShouldNotParseAttStatementWithNoAlg",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0"}},
+			"",
+			nil,
 			"Error retrieving alg value",
 		},
 		{
-			"TPM Negative Test AttStatement x5c not present",
+			"ShouldNotParseAttStatementWithoutX5C",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0)}},
+			"",
+			nil,
 			ErrNotImplemented.Details,
 		},
 		{
-			"TPM Negative Test AttStatement ecdaaKeyId present",
+			"ShouldNotParseAttStatementWithECDAAKID",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtECDAAKID: []byte{}}},
+			"",
+			nil,
 			ErrNotImplemented.Details,
 		},
 		{
-			"TPM Negative Test AttStatement sig not present",
+			"ShouldNotParseAttStatementWithNoSig",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}}},
+			"",
+			nil,
 			"Error retrieving sig value",
 		},
 		{
-			"TPM Negative Test AttStatement certInfo not present",
+			"ShouldNotParseAttStatementCertInfoNotPresent",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}}},
+			"",
+			nil,
 			"Error retrieving certInfo value",
 		},
 		{
-			"TPM Negative Test AttStatement pubArea not present",
+			"ShouldNotParseAttStatementPubAreaNotPresent",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}}},
+			"",
+			nil,
 			"Error retrieving pubArea value",
 		},
 		{
-			"TPM Negative Test pubArea not TPMT_PUBLIC",
+			"ShouldNotParseAttStatementPubAreaNotCorrectValue",
 			AttestationObject{AttStatement: defaultAttStatement},
+			"",
+			nil,
 			"Unable to decode TPMT_PUBLIC in attestation statement",
 		},
 		{
-			"TPM Negative Test Unsupported Public Key Type",
+			"ShouldNotParseAttStatementUnsupportedPublicKeyType",
 			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: makeDefaultRSAPublicBytes()}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
+			"",
+			nil,
 			"Unsupported Public Key Type",
 		},
 	}
-	for _, tt := range tests {
-		attestationType, _, err := attestationFormatValidationHandlerTPM(tt.att, nil, nil)
-		if tt.wantErr != "" {
-			assert.Contains(t, err.Error(), tt.wantErr)
-		} else {
-			assert.Equal(t, "attca", attestationType)
-		}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(tc.att, nil, nil)
+
+			assert.Equal(t, tc.attestationType, attestationType)
+			assert.Equal(t, tc.x5cs, x5cs)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
 
