@@ -10,8 +10,12 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType string, x5cs []any) (protoErr *Error) {
+func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType, attestationFormat string, x5cs []any) (protoErr *Error) {
 	if mds == nil {
+		return nil
+	}
+
+	if AttestationFormat(attestationFormat) == AttestationFormatNone {
 		return nil
 	}
 
