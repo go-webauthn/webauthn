@@ -11,7 +11,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func MustParseX509Certificate(der []byte) *x509.Certificate {
+func mustParseX509Certificate(der []byte) *x509.Certificate {
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
 		panic(err)
@@ -20,16 +20,16 @@ func MustParseX509Certificate(der []byte) *x509.Certificate {
 	return cert
 }
 
-func MustParseX509CertificatePEM(raw []byte) *x509.Certificate {
+func mustParseX509CertificatePEM(raw []byte) *x509.Certificate {
 	block, rest := pem.Decode(raw)
 	if len(rest) > 0 || block == nil || block.Type != "CERTIFICATE" {
 		panic("Invalid PEM Certificate")
 	}
 
-	return MustParseX509Certificate(block.Bytes)
+	return mustParseX509Certificate(block.Bytes)
 }
 
-func parseX5CFromAttStatement(attStatement map[string]any, key string) (x5c []any, x5cs []*x509.Certificate, err error) {
+func attStatementParseX5CS(attStatement map[string]any, key string) (x5c []any, x5cs []*x509.Certificate, err error) {
 	var ok bool
 	if x5c, ok = attStatement[key].([]any); !ok {
 		return nil, nil, ErrAttestationFormat.WithDetails("Error retrieving x5c value")
@@ -67,7 +67,7 @@ func parseX5C(x5c []any) (x5cs []*x509.Certificate, err error) {
 	return x5cs, nil
 }
 
-func certChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotAfter bool, mangleNotAfterSafeTime time.Time) (chains [][]*x509.Certificate, err error) {
+func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotAfter bool, mangleNotAfterSafeTime time.Time) (chains [][]*x509.Certificate, err error) {
 	if len(certs) == 0 {
 		return nil, errors.New("empty chain")
 	}
@@ -76,11 +76,7 @@ func certChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotA
 
 	for _, cert := range certs {
 		if !cert.IsCA {
-			if mangleNotAfter {
-				leaf = certInsecureNotAfterMangle(cert, mangleNotAfterSafeTime)
-			} else {
-				leaf = cert
-			}
+			leaf = certInsecureConditionalNotAfterMangle(cert, mangleNotAfter, mangleNotAfterSafeTime)
 
 			break
 		}
@@ -103,18 +99,10 @@ func certChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotA
 			continue
 		}
 
-		if mangleNotAfter {
-			if isSelfSigned(cert) {
-				roots.AddCert(certInsecureNotAfterMangle(cert, mangleNotAfterSafeTime))
-			} else {
-				intermediates.AddCert(certInsecureNotAfterMangle(cert, mangleNotAfterSafeTime))
-			}
+		if isSelfSigned(cert) {
+			roots.AddCert(certInsecureConditionalNotAfterMangle(cert, mangleNotAfter, mangleNotAfterSafeTime))
 		} else {
-			if isSelfSigned(cert) {
-				roots.AddCert(cert)
-			} else {
-				intermediates.AddCert(cert)
-			}
+			intermediates.AddCert(certInsecureConditionalNotAfterMangle(cert, mangleNotAfter, mangleNotAfterSafeTime))
 		}
 	}
 
@@ -147,6 +135,20 @@ func certsInsecureNotAfterMangle(certs []*x509.Certificate) (out []*x509.Certifi
 	for i, cert := range certs {
 		out[i] = certInsecureNotAfterMangle(cert, safe)
 	}
+
+	return out
+}
+
+func certInsecureConditionalNotAfterMangle(cert *x509.Certificate, mangle bool, safe time.Time) (out *x509.Certificate) {
+	if !mangle || cert.NotAfter.After(safe) {
+		return cert
+	}
+
+	out = &x509.Certificate{}
+
+	*out = *cert
+
+	out.NotAfter = safe
 
 	return out
 }

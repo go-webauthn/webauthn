@@ -55,7 +55,7 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 		certs []*x509.Certificate
 	)
 
-	if x5c, certs, err = parseX5CFromAttStatement(att.AttStatement, stmtX5C); err != nil {
+	if x5c, certs, err = attStatementParseX5CS(att.AttStatement, stmtX5C); err != nil {
 		return "", nil, err
 	}
 
@@ -65,7 +65,7 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 
 	credCert := certs[0]
 
-	if _, err = certChainVerify(certs, attAndroidKeyHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {
+	if _, err = attStatementCertChainVerify(certs, attAndroidKeyHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails("Error validating x5c cert chain").WithError(err)
 	}
 

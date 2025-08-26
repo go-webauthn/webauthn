@@ -7,6 +7,6 @@ func init() {
 		attAndroidKeyHardwareRootsCertPool = x509.NewCertPool()
 	}
 
-	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyIntermediateFAKE1)))
-	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyIntermediateFAKE2)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyIntermediateFAKE1)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyIntermediateFAKE2)))
 }

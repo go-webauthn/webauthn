@@ -14,11 +14,11 @@ func initAndroidKeyHardwareRoots() {
 		attAndroidKeyHardwareRootsCertPool = x509.NewCertPool()
 	}
 
-	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot1)))
-	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot2)))
-	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot3)))
-	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot4)))
-	attAndroidKeyHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot5)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot1)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot2)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot3)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot4)))
+	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot5)))
 
 }
 
@@ -27,5 +27,5 @@ func initAppleHardwareRoots() {
 		attAppleHardwareRootsCertPool = x509.NewCertPool()
 	}
 
-	attAppleHardwareRootsCertPool.AddCert(MustParseX509CertificatePEM([]byte(certificateAppleRoot1)))
+	attAppleHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAppleRoot1)))
 }
