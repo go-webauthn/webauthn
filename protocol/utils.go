@@ -92,6 +92,8 @@ func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool
 		intermediates *x509.CertPool
 	)
 
+	staticRoots := roots != nil
+
 	intermediates = x509.NewCertPool()
 
 	if roots == nil {
@@ -105,7 +107,7 @@ func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool
 			continue
 		}
 
-		if isSelfSigned(cert) {
+		if isSelfSigned(cert) && !staticRoots {
 			roots.AddCert(certInsecureConditionalNotAfterMangle(cert, mangleNotAfter, mangleNotAfterSafeTime))
 		} else {
 			intermediates.AddCert(certInsecureConditionalNotAfterMangle(cert, mangleNotAfter, mangleNotAfterSafeTime))

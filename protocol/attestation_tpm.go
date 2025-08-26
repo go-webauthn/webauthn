@@ -209,7 +209,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 					return "", nil, err
 				}
 			case ext.Id.Equal(oidExtensionExtendedKeyUsage):
-				if rest, err = asn1.Unmarshal(ext.Value, &eku); len(rest) != 0 || err != nil || !eku[0].Equal(tcgKpAIKCertificate) {
+				if rest, err = asn1.Unmarshal(ext.Value, &eku); len(rest) != 0 || err != nil || !eku[0].Equal(oidTCGKpAIKCertificate) {
 					return "", nil, ErrAttestationFormat.WithDetails("AIK certificate EKU missing 2.23.133.8.3")
 				}
 
@@ -301,13 +301,6 @@ const (
 	nameTypeDN = 4
 )
 
-var (
-	tcgKpAIKCertificate  = asn1.ObjectIdentifier{2, 23, 133, 8, 3}
-	tcgAtTpmManufacturer = asn1.ObjectIdentifier{2, 23, 133, 2, 1}
-	tcgAtTpmModel        = asn1.ObjectIdentifier{2, 23, 133, 2, 2}
-	tcgAtTpmVersion      = asn1.ObjectIdentifier{2, 23, 133, 2, 3}
-)
-
 func parseSANExtension(value []byte) (manufacturer string, model string, version string, err error) {
 	err = forEachSAN(value, func(tag int, data []byte) error {
 		if tag == nameTypeDN {
@@ -328,15 +321,15 @@ func parseSANExtension(value []byte) (manufacturer string, model string, version
 						continue
 					}
 
-					if atv.Type.Equal(tcgAtTpmManufacturer) {
+					if atv.Type.Equal(oidTCGAtTpmManufacturer) {
 						manufacturer = strings.TrimPrefix(value, "id:")
 					}
 
-					if atv.Type.Equal(tcgAtTpmModel) {
+					if atv.Type.Equal(oidTCGAtTpmModel) {
 						model = value
 					}
 
-					if atv.Type.Equal(tcgAtTpmVersion) {
+					if atv.Type.Equal(oidTCGAtTPMVersion) {
 						version = strings.TrimPrefix(value, "id:")
 					}
 				}
@@ -460,13 +453,13 @@ func tpmRemoveEKU(x5c *x509.Certificate) *Error {
 	)
 
 	for _, eku := range x5c.UnknownExtKeyUsage {
-		if eku.Equal(tcgKpAIKCertificate) {
+		if eku.Equal(oidTCGKpAIKCertificate) {
 			hasAiK = true
 
 			continue
 		}
 
-		if eku.Equal(oidKpPrivacyCA) {
+		if eku.Equal(oidMicrosoftKpPrivacyCA) {
 			continue
 		}
 

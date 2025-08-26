@@ -10,7 +10,7 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-// attestationFormatValidationHandlerAndroidKey is the handler for the Android Key Attestation Statement Format.
+// attestationFormatValidationHandlerAppleAnonymous is the handler for the Apple Anonymous Attestation Statement Format.
 //
 // The syntax of an Apple attestation statement is defined as follows:
 //
