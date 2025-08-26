@@ -10,27 +10,25 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-func init() {
-	RegisterAttestationFormat(AttestationFormatApple, attestationFormatValidationHandlerAppleAnonymous)
-}
-
-// The apple attestation statement looks like:
+// attestationFormatValidationHandlerAndroidKey is the handler for the Android Key Attestation Statement Format.
+//
+// The syntax of an Apple attestation statement is defined as follows:
+//
 // $$attStmtType //= (
+//                       fmt: "apple",
+//                       attStmt: appleStmtFormat
+//                   )
 //
-//	fmt: "apple",
-//	attStmt: appleStmtFormat
+// appleStmtFormat = {
+//                       x5c: [ credCert: bytes, * (caCert: bytes) ]
+//                   }
 //
-// )
+// Specification: §8.8. Apple Anonymous Attestation Statement Format
 //
-//	appleStmtFormat = {
-//			x5c: [ credCert: bytes, * (caCert: bytes) ]
-//	  }
-//
-// Specification: §8.8. Apple Anonymous Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation)
+// See : https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation
 func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
-	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined
-	// above and perform CBOR decoding on it to extract the contained fields.
-	// If x5c is not present, return an error.
+	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it
+	// to extract the contained fields.
 	var (
 		x5c   []any
 		certs []*x509.Certificate
@@ -80,7 +78,8 @@ func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, cli
 		return "", nil, err
 	}
 
-	// Step 6. If successful, return implementation-specific values representing attestation type Anonymization CA and attestation trust path x5c.
+	// Step 6. If successful, return implementation-specific values representing attestation type Anonymization CA and
+	// attestation trust path x5c.
 	return string(metadata.AnonCA), x5c, nil
 }
 
@@ -93,3 +92,7 @@ type AppleAnonymousAttestation struct {
 var (
 	attAppleHardwareRootsCertPool *x509.CertPool
 )
+
+func init() {
+	RegisterAttestationFormat(AttestationFormatApple, attestationFormatValidationHandlerAppleAnonymous)
+}

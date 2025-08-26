@@ -11,40 +11,43 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func init() {
-	RegisterAttestationFormat(AttestationFormatAndroidKey, attestationFormatValidationHandlerAndroidKey)
-}
-
-// The android-key attestation statement looks like:
+// attestationFormatValidationHandlerAndroidKey is the handler for the Android Key Attestation Statement Format.
+//
+// An Android key attestation statement consists simply of the Android attestation statement, which is a series of DER
+// encoded X.509 certificates. See the Android developer documentation. Its syntax is defined as follows:
+//
 // $$attStmtType //= (
+//                       fmt: "android-key",
+//                       attStmt: androidStmtFormat
+//                   )
 //
-//	fmt: "android-key",
-//	attStmt: androidStmtFormat
+// androidStmtFormat = {
+//                       alg: COSEAlgorithmIdentifier,
+//                       sig: bytes,
+//                       x5c: [ credCert: bytes, * (caCert: bytes) ]
+//                     }
 //
-// )
+// Specification: §8.4. Android Key Attestation Statement Format
 //
-//	androidStmtFormat = {
-//			alg: COSEAlgorithmIdentifier,
-//			sig: bytes,
-//			x5c: [ credCert: bytes, * (caCert: bytes) ]
-//	  }
-//
-// Specification: §8.4. Android Key Attestation Statement Format (https://www.w3.org/TR/webauthn/#sctn-android-key-attestation)
+// See: https://www.w3.org/TR/webauthn/#sctn-android-key-attestation
 func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+	var (
+		alg int64
+		sig []byte
+		ok  bool
+	)
+	
 	// Given the verification procedure inputs attStmt, authenticatorData and clientDataHash, the verification procedure is as follows:
 	// §8.4.1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it to extract
 	// the contained fields.
-
 	// Get the alg value - A COSEAlgorithmIdentifier containing the identifier of the algorithm
 	// used to generate the attestation signature.
-	alg, present := att.AttStatement[stmtAlgorithm].(int64)
-	if !present {
+	if alg, ok = att.AttStatement[stmtAlgorithm].(int64); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving alg value")
 	}
 
 	// Get the sig value - A byte string containing the attestation signature.
-	sig, present := att.AttStatement[stmtSignature].([]byte)
-	if !present {
+	if sig, ok = att.AttStatement[stmtSignature].([]byte); !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving sig value")
 	}
 
@@ -90,6 +93,9 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 
 	// §8.4.3. Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
 	// attCert.Extensions.
+	// As noted in §8.4.1 (https://www.w3.org/TR/webauthn/#key-attstn-cert-requirements) the Android Key Attestation
+	// certificate's android key attestation certificate extension data is identified by the OID
+	// "1.3.6.1.4.1.11129.2.1.17".
 	var attExtBytes []byte
 
 	for _, ext := range credCert.Extensions {
@@ -102,8 +108,6 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions missing 1.3.6.1.4.1.11129.2.1.17")
 	}
 
-	// As noted in §8.4.1 (https://www.w3.org/TR/webauthn/#key-attstn-cert-requirements) the Android Key Attestation attestation certificate's
-	// android key attestation certificate extension data is identified by the OID "1.3.6.1.4.1.11129.2.1.17".
 	decoded := keyDescription{}
 
 	if _, err = asn1.Unmarshal(attExtBytes, &decoded); err != nil {
@@ -210,38 +214,47 @@ const (
 	Failed
 )
 
-/**
- * The origin of a key (or pair), i.e. where it was generated.  Note that KM_TAG_ORIGIN can be found
- * in either the hardware-enforced or software-enforced list for a key, indicating whether the key
- * is hardware or software-based.  Specifically, a key with KM_ORIGIN_GENERATED in the
- * hardware-enforced list is guaranteed never to have existed outide the secure hardware.
- */
-type KM_KEY_ORIGIN int
-
 const (
-	KM_ORIGIN_GENERATED = iota /* Generated in keymaster.  Should not exist outside the TEE. */
-	KM_ORIGIN_DERIVED          /* Derived inside keymaster.  Likely exists off-device. */
-	KM_ORIGIN_IMPORTED         /* Imported into keymaster.  Existed as clear text in Android. */
-	KM_ORIGIN_UNKNOWN          /* Keymaster did not record origin.  This value can only be seen on
-	 * keys in a keymaster0 implementation.  The keymaster0 adapter uses
-	 * this value to document the fact that it is unknown whether the key
-	 * was generated inside or imported into keymaster. */
+	// KM_ORIGIN_GENERATED means generated in keymaster. Should not exist outside the TEE.
+	KM_ORIGIN_GENERATED = iota
+
+	// KM_ORIGIN_DERIVED means derived inside keymaster. Likely exists off-device.
+	KM_ORIGIN_DERIVED
+
+	// KM_ORIGIN_IMPORTED means imported into keymaster. Existed as clear text in Android.
+	KM_ORIGIN_IMPORTED
+
+	// KM_ORIGIN_UNKNOWN means keymaster did not record origin.  This value can only be seen on keys in a keymaster0
+	// implementation. The keymaster0 adapter uses this value to document the fact that it is unknown whether the key
+	// was generated inside or imported into keymaster.
+	KM_ORIGIN_UNKNOWN
 )
 
-/**
- * Possible purposes of a key (or pair).
- */
-type KM_PURPOSE int
 
 const (
-	KM_PURPOSE_ENCRYPT    = iota /* Usable with RSA, EC and AES keys. */
-	KM_PURPOSE_DECRYPT           /* Usable with RSA, EC and AES keys. */
-	KM_PURPOSE_SIGN              /* Usable with RSA, EC and HMAC keys. */
-	KM_PURPOSE_VERIFY            /* Usable with RSA, EC and HMAC keys. */
-	KM_PURPOSE_DERIVE_KEY        /* Usable with EC keys. */
-	KM_PURPOSE_WRAP              /* Usable with wrapped keys. */
+	// KM_PURPOSE_ENCRYPT is usable with RSA, EC and AES keys.
+	KM_PURPOSE_ENCRYPT = iota
+
+	// KM_PURPOSE_DECRYPT is usable with RSA, EC and AES keys.
+	KM_PURPOSE_DECRYPT
+
+	// KM_PURPOSE_SIGN is usable with RSA, EC and HMAC keys.
+	KM_PURPOSE_SIGN
+
+	// KM_PURPOSE_VERIFY is usable with RSA, EC and HMAC keys.
+	KM_PURPOSE_VERIFY
+
+	// KM_PURPOSE_DERIVE_KEY is usable with EC keys.
+	KM_PURPOSE_DERIVE_KEY
+
+	// KM_PURPOSE_WRAP is usable with wrapped keys.
+	KM_PURPOSE_WRAP
 )
 
 var (
 	attAndroidKeyHardwareRootsCertPool *x509.CertPool
 )
+
+func init() {
+	RegisterAttestationFormat(AttestationFormatAndroidKey, attestationFormatValidationHandlerAndroidKey)
+}

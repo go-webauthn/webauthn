@@ -15,10 +15,29 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func init() {
-	RegisterAttestationFormat(AttestationFormatTPM, attestationFormatValidationHandlerTPM)
-}
-
+// attestationFormatValidationHandlerTPM is the handler for the TPM Attestation Statement Format.
+//
+// The syntax of a TPM Attestation statement is as follows:
+//
+// $$attStmtType // = (
+//                        fmt: "tpm",
+//                        attStmt: tpmStmtFormat
+//                    )
+//
+// tpmStmtFormat = {
+//                     ver: "2.0",
+//                     (
+//                         alg: COSEAlgorithmIdentifier,
+//                         x5c: [ aikCert: bytes, * (caCert: bytes) ]
+//                     )
+//                     sig: bytes,
+//                     certInfo: bytes,
+//                     pubArea: bytes
+//                 }
+//
+// Specification: §8.3. TPM Attestation Statement Format
+//
+// See: https://www.w3.org/TR/webauthn/#sctn-tpm-attestation
 func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Given the verification procedure inputs attStmt, authenticatorData
 	// and clientDataHash, the verification procedure is as follows.
@@ -453,4 +472,8 @@ func tpmRemoveEKU(x5c *x509.Certificate) *Error {
 	x5c.UnknownExtKeyUsage = unknown
 
 	return nil
+}
+
+func init() {
+	RegisterAttestationFormat(AttestationFormatTPM, attestationFormatValidationHandlerTPM)
 }

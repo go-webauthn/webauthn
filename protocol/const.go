@@ -208,4 +208,5 @@ var (
 	oidExtensionExtendedKeyUsage          = asn1.ObjectIdentifier{2, 5, 29, 37}
 	oidExtensionBasicConstraints          = asn1.ObjectIdentifier{2, 5, 29, 19}
 	oidKpPrivacyCA                        = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 311, 21, 36}
+	oidFIDOGenCeAAGUID = asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}
 )
