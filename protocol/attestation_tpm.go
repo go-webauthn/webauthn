@@ -357,6 +357,7 @@ func parseSANExtension(value []byte) (manufacturer string, model string, version
 	return
 }
 
+// See https://trustedcomputinggroup.org/resource/vendor-id-registry/ for registry contents.
 var tpmManufacturers = []struct {
 	id   string
 	name string
@@ -381,6 +382,7 @@ var tpmManufacturers = []struct {
 	{"4D534654", "Microsoft", "MSFT"},
 	{"4E534D20", "National Semiconductor", "NSM"},
 	{"4E545A00", "Nationz", "NTZ"},
+	{"4E534700", "NSING", "NSG"},
 	{"4E544300", "Nuvoton Technology", "NTC"},
 	{"51434F4D", "Qualcomm", "QCOM"},
 	{"534D534E", "Samsung", "SECE"},
