@@ -109,8 +109,7 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 	}
 
 	// §8.5.5 Verify that attestationCert is issued to the hostname "attest.android.com".
-	err = attestationCert.VerifyHostname("attest.android.com")
-	if err != nil {
+	if err = attestationCert.VerifyHostname(attStatementAndroidSafetyNetHostname); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
 	}
 

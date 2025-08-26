@@ -19,7 +19,6 @@ func initAndroidKeyHardwareRoots() {
 	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot3)))
 	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot4)))
 	attAndroidKeyHardwareRootsCertPool.AddCert(mustParseX509CertificatePEM([]byte(certificateAndroidKeyRoot5)))
-
 }
 
 func initAppleHardwareRoots() {
