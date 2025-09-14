@@ -25,7 +25,7 @@ which are not available in that version. The current intentionally supported ver
 
 - go 1.25
 - go 1.24
-- go 1.23
+- ~~go 1.23~~ (not supported by golang.org/x/crypto v0.42.0)
 
 ## Status
 
