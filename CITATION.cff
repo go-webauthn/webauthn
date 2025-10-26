@@ -1,25 +1,30 @@
 ---
 cff-version: 1.2.0
+type: software
+title: Go WebAuthn
+license: BSD-3-Clause
+commit: 80f6c83285fd577867f1ba20ce772412164f3be1
 version: 0.14.0
-title: 'Introducing the Go WebAuthn Library: A FIDO2 Conformant WebAuthn and Passkey backend library for golang'
-license: 'BSD-3-Clause'
-abstract: >
-   The Go WebAuthn library is a FIDO2 Conformant WebAuthn and Passkey backend library for golang that simplifies the
-   WebAuthn Relying Party implementation for go developers. It implements all of the attestation elements and conforms
-   with modern conformance requirements from the FIDO Alliance, as well as implements the WebAuthn Level 3.
+date-released: '2025-09-15'
+repository-code: 'https://github.com/go-webauthn/webauthn/'
+abstract: >-
+  The Go WebAuthn library is a FIDO2 Conformant WebAuthn and
+  Passkey backend library for golang that simplifies the
+  WebAuthn Relying Party implementation for go developers.
+  It implements all of the attestation elements and conforms
+  with modern conformance requirements from the FIDO
+  Alliance, as well as implements the WebAuthn Level 3.
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
 authors:
-  - family-names: Elliott
+  - orcid: 'https://orcid.org/0009-0000-4673-5510'
     given-names: James
-    orcid: 'https://orcid.org/0009-0000-4673-5510'
-date-released: '2017-10-27'
+    family-names: Elliott
+    email: james.elliott@authelia.com
 keywords:
   - webauthn
   - passkeys
   - cryptography
   - crypto
   - golang
-repository-code: 'https://github.com/go-webauthn/webauthn/'
-type: software
-message: 'Available at https://github.com/go-webauthn/webauthn. v0.14.0 Accessed Sept, 2025.'
-contact:
-  - name: 'Go WebAuthn Authors'
