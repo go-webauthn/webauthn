@@ -6,11 +6,11 @@ toolchain go1.25.4
 
 require (
 	github.com/fxamacker/cbor/v2 v2.9.0
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/go-webauthn/x v0.1.26
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-tpm v0.9.6
 	github.com/google/uuid v1.6.0
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 )
