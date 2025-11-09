@@ -4,8 +4,8 @@ type: software
 title: Go WebAuthn
 license: BSD-3-Clause
 commit: 80f6c83285fd577867f1ba20ce772412164f3be1
-version: 0.14.0
-date-released: '2025-09-15'
+version: 0.15.0
+date-released: '2025-11-09'
 repository-code: 'https://github.com/go-webauthn/webauthn/'
 abstract: >-
   The Go WebAuthn library is a FIDO2 Conformant WebAuthn and
