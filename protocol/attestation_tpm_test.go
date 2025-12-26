@@ -241,7 +241,7 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, err
 	}
 
-	if rsaKey.E < 0 || rsaKey.E > math.MaxUint32 {
+	if rsaKey.E < 0 || int64(rsaKey.E) > int64(math.MaxUint32) {
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, errors.New("invalid E value")
 	}
 
@@ -315,7 +315,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 	}
 
 	require.GreaterOrEqual(t, rsaKey.E, 0)
-	require.LessOrEqual(t, rsaKey.E, 4294967295)
+	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
 
 	e := uint32(rsaKey.E) //nolint:gosec
 
@@ -427,7 +427,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
 	require.GreaterOrEqual(t, rsaKey.E, 0)
-	require.LessOrEqual(t, rsaKey.E, 4294967295)
+	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
 
 	e := uint32(rsaKey.E) //nolint:gosec
 
@@ -546,7 +546,7 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 
 	require.GreaterOrEqual(t, rsaKey.E, 0)
-	require.LessOrEqual(t, rsaKey.E, 4294967295)
+	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
 
 	e := uint32(rsaKey.E) //nolint:gosec
 
