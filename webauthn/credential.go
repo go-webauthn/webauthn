@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 
-	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
@@ -130,7 +129,13 @@ func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationDa
 }
 
 // Verify this credentials against the metadata.Provider given.
-func (c Credential) Verify(mds metadata.Provider) (err error) {
+func (c Credential) Verify(verifier protocol.VerificationProvider) (err error) {
+	if verifier == nil {
+		return fmt.Errorf("error verifying credential: the verification provider must be provided but it's nil")
+	}
+
+	mds := verifier.GetMetadataProvider()
+
 	if mds == nil {
 		return fmt.Errorf("error verifying credential: the metadata provider must be provided but it's nil")
 	}
@@ -164,7 +169,7 @@ func (c Credential) Verify(mds metadata.Provider) (err error) {
 		clientDataHash = sum[:]
 	}
 
-	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, mds); err != nil {
+	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, verifier); err != nil {
 		return fmt.Errorf("error verifying credential: error verifying attestation: %w", err)
 	}
 

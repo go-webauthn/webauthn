@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
@@ -210,4 +211,23 @@ func verifyAttestationECDSAPublicKeyMatch(att AttestationObject, cert *x509.Cert
 	}
 
 	return attPublicKeyData, nil
+}
+
+type VerificationProvider interface {
+	GetMetadataProvider() metadata.Provider
+	GetVerifySignatureAllowBER() bool
+}
+
+type StandardVerificationProvider struct {
+	VerifySignatureAllowBER bool
+
+	Metadata metadata.Provider
+}
+
+func (p *StandardVerificationProvider) GetMetadataProvider() metadata.Provider {
+	return p.Metadata
+}
+
+func (p *StandardVerificationProvider) GetVerifySignatureAllowBER() bool {
+	return p.VerifySignatureAllowBER
 }

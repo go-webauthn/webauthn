@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
@@ -78,7 +77,7 @@ type AttestationObject struct {
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
-type attestationFormatValidationHandler func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error)
+type attestationFormatValidationHandler func(att AttestationObject, clientDataHash []byte, verifier VerificationProvider) (attestationType string, x5cs []any, err error)
 
 var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
 
@@ -128,7 +127,7 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 //
 // Steps 13 through 15 are verified against the auth data. These steps are identical to 15 through 18 for assertion so we
 // handle them with AuthData.
-func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, userPresenceRequired bool, mds metadata.Provider, credParams []CredentialParameter) (err error) {
+func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, userPresenceRequired bool, verifier VerificationProvider, credParams []CredentialParameter) (err error) {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
 	// Begin Step 13 through 15. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
@@ -156,12 +155,12 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 		return ErrAttestationFormat.WithInfo("Credential public key algorithm not supported")
 	}
 
-	return a.VerifyAttestation(clientDataHash, mds)
+	return a.VerifyAttestation(clientDataHash, verifier)
 }
 
 // VerifyAttestation only verifies the attestation object excluding the AuthData values. If you wish to also verify the
 // AuthData values you should use [Verify].
-func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider) (err error) {
+func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, verifier VerificationProvider) (err error) {
 	// Step 18. Determine the attestation statement format by performing a
 	// USASCII case-sensitive match on fmt against the set of supported
 	// WebAuthn Attestation Statement Format Identifier values. The up-to-date
@@ -200,7 +199,7 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	// Step 19. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
-	if attestationType, x5cs, err = handler(*a, clientDataHash, mds); err != nil {
+	if attestationType, x5cs, err = handler(*a, clientDataHash, verifier); err != nil {
 		return err.(*Error).WithInfo(attestationType)
 	}
 
@@ -210,11 +209,9 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		}
 	}
 
-	if mds == nil {
+	if mds := verifier.GetMetadataProvider(); mds == nil {
 		return nil
-	}
-
-	if e := ValidateMetadata(context.Background(), mds, aaguid, attestationType, a.Format, x5cs); e != nil {
+	} else if e := ValidateMetadata(context.Background(), mds, aaguid, attestationType, a.Format, x5cs); e != nil {
 		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
 	}
 

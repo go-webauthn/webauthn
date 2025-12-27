@@ -95,12 +95,12 @@ func TestP256SignatureVerification(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Happy path, verification should succeed.
-	ok, err := VerifySignature(key, data, validSig)
+	ok, err := VerifySignature(key, data, validSig, false)
 	assert.True(t, ok, "invalid EC signature")
 	assert.Nil(t, err, "error verifying EC signature")
 
 	// Verification against BAD data should fail.
-	ok, err = VerifySignature(key, []byte("webauthnFTL"), validSig)
+	ok, err = VerifySignature(key, []byte("webauthnFTL"), validSig, false)
 	assert.Nil(t, err, "error verifying EC signature")
 	assert.False(t, ok, "verification against bad data is successful!")
 }

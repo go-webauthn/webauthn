@@ -90,7 +90,7 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 					tc.setup(t, mds)
 				}
 
-				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, mds)
+				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, &StandardVerificationProvider{Metadata: mds})
 			} else {
 				if tc.setup != nil {
 					tc.setup(t, nil)

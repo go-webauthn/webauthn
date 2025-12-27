@@ -61,6 +61,9 @@ type Config struct {
 	// Debug enables various debug options.
 	Debug bool
 
+	// VerifyAllowBERSignature allows BER encoding of ECDSA signatures.
+	VerifyAllowBERSignature bool
+
 	// EncodeUserIDAsString ensures the user.id value during registrations is encoded as a raw UTF8 string. This is
 	// useful when you only use printable ASCII characters for the random user.id but the browser library does not
 	// decode the URL Safe Base64 data.
@@ -160,8 +163,8 @@ func (c *Config) GetTopOriginVerificationMode() protocol.TopOriginVerificationMo
 	return c.RPTopOriginVerificationMode
 }
 
-func (c *Config) GetMetaDataProvider() metadata.Provider {
-	return c.MDS
+func (c *Config) GetVerificationProvider() protocol.VerificationProvider {
+	return &protocol.StandardVerificationProvider{Metadata: c.MDS, VerifySignatureAllowBER: c.VerifyAllowBERSignature}
 }
 
 type ConfigProvider interface {
@@ -169,7 +172,7 @@ type ConfigProvider interface {
 	GetOrigins() []string
 	GetTopOrigins() []string
 	GetTopOriginVerificationMode() protocol.TopOriginVerificationMode
-	GetMetaDataProvider() metadata.Provider
+	GetVerificationProvider() protocol.VerificationProvider
 }
 
 // User is an interface with the Relying Party's User entry and provides the fields and methods needed for WebAuthn

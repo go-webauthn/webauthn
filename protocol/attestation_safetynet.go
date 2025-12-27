@@ -2,15 +2,14 @@ package protocol
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/go-webauthn/webauthn/metadata"
 )
@@ -39,7 +38,7 @@ import (
 // Specification: §8.5. Android SafetyNet Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation
-func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, _ VerificationProvider) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
 	//                           fmt: "android-safetynet",
@@ -123,9 +122,7 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 		return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp after current time")
 	} else if t.Before(time.Now().Add(-time.Minute)) {
 		// Small tolerance for pre-dated timestamps.
-		if mds != nil && mds.GetValidateEntry(context.Background()) {
-			return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp before one minute ago")
-		}
+		return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp before one minute ago")
 	}
 
 	// §8.5.7 If successful, return implementation-specific values representing attestation type Basic and attestation

@@ -21,24 +21,25 @@ func init() {
 // The syntax of a Packed Attestation statement is defined by the following CDDL:
 //
 // $$attStmtType //= (
-//                       fmt: "packed",
-//                       attStmt: packedStmtFormat
-//                   )
 //
-// packedStmtFormat = {
-//                        alg: COSEAlgorithmIdentifier,
-//                        sig: bytes,
-//                        x5c: [ attestnCert: bytes, * (caCert: bytes) ]
-//                    } //
-//                    {
-//                        alg: COSEAlgorithmIdentifier
-//                        sig: bytes,
-//                    }
+//	    fmt: "packed",
+//	    attStmt: packedStmtFormat
+//	)
+//
+//	packedStmtFormat = {
+//	                       alg: COSEAlgorithmIdentifier,
+//	                       sig: bytes,
+//	                       x5c: [ attestnCert: bytes, * (caCert: bytes) ]
+//	                   } //
+//	                   {
+//	                       alg: COSEAlgorithmIdentifier
+//	                       sig: bytes,
+//	                   }
 //
 // Specification: §8.2. Packed Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-packed-attestation
-func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataHash []byte, verifier VerificationProvider) (attestationType string, x5cs []any, err error) {
 	var (
 		alg int64
 		sig []byte
@@ -62,7 +63,7 @@ func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataH
 	// Step 2. If x5c is present, this indicates that the attestation type is not ECDAA.
 	if x5c, ok = att.AttStatement[stmtX5C].([]any); ok {
 		// Handle Basic Attestation steps for the x509 Certificate.
-		return handleBasicAttestation(sig, clientDataHash, att.RawAuthData, att.AuthData.AttData.AAGUID, alg, x5c, mds)
+		return handleBasicAttestation(sig, clientDataHash, att.RawAuthData, att.AuthData.AttData.AAGUID, alg, x5c, verifier.GetMetadataProvider())
 	}
 
 	// Step 3. If ecdaaKeyId is present, then the attestation type is ECDAA.
@@ -70,11 +71,11 @@ func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataH
 	ecdaaKeyID, ecdaaKeyPresent := att.AttStatement[stmtECDAAKID].([]byte)
 	if ecdaaKeyPresent {
 		// Handle ECDAA Attestation steps for the x509 Certificate.
-		return handleECDAAAttestation(sig, clientDataHash, ecdaaKeyID, mds)
+		return handleECDAAAttestation(sig, clientDataHash, ecdaaKeyID, verifier.GetMetadataProvider())
 	}
 
 	// Step 4. If neither x5c nor ecdaaKeyId is present, self attestation is in use.
-	return handleSelfAttestation(alg, att.AuthData.AttData.CredentialPublicKey, att.RawAuthData, clientDataHash, sig, mds)
+	return handleSelfAttestation(alg, att.AuthData.AttData.CredentialPublicKey, att.RawAuthData, clientDataHash, sig, verifier)
 }
 
 // Handle the attestation steps laid out in the basic format.
@@ -206,7 +207,7 @@ func handleECDAAAttestation(sig, clientDataHash, ecdaaKeyID []byte, _ metadata.P
 	return "Packed (ECDAA)", nil, ErrNotSpecImplemented
 }
 
-func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, sig []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, sig []byte, verifier VerificationProvider) (attestationType string, x5cs []any, err error) {
 	verificationData := append(authData, clientDataHash...) //nolint:gocritic // This is intentional.
 
 	var (
@@ -236,7 +237,7 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, sig []by
 
 	// §4.2 Verify that sig is a valid signature over the concatenation of authenticatorData and
 	// clientDataHash using the credential public key with alg.
-	if valid, err = webauthncose.VerifySignature(key, verificationData, sig); err != nil {
+	if valid, err = webauthncose.VerifySignature(key, verificationData, sig, verifier.GetVerifySignatureAllowBER()); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error verifying the signature: %+v", err)).WithError(err)
 	} else if !valid {
 		return "", nil, ErrInvalidAttestation.WithDetails("Unable to verify signature")

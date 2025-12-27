@@ -16,19 +16,20 @@ import (
 // The syntax of a FIDO U2F attestation statement is defined as follows:
 //
 // $$attStmtType //= (
-//                       fmt: "fido-u2f",
-//                       attStmt: u2fStmtFormat
-//                   )
 //
-// u2fStmtFormat = {
-//                     x5c: [ attestnCert: bytes ],
-//                     sig: bytes
-//                 }
+//	    fmt: "fido-u2f",
+//	    attStmt: u2fStmtFormat
+//	)
+//
+//	u2fStmtFormat = {
+//	                    x5c: [ attestnCert: bytes ],
+//	                    sig: bytes
+//	                }
 //
 // Specification: §8.6. FIDO U2F Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
-func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ VerificationProvider) (attestationType string, x5cs []any, err error) {
 	if !bytes.Equal(att.AuthData.AttData.AAGUID, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("U2F attestation format AAGUID not set to 0x00")
 	}

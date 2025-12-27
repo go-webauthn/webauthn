@@ -81,7 +81,7 @@ func (k *OKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 }
 
 // Verify Elliptic Curve Public Key Signature.
-func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
+func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err error) {
 	curve := ec2AlgCurve(k.Algorithm)
 	if curve == nil {
 		return false, ErrUnsupportedAlgorithm
@@ -98,8 +98,7 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 
 	e := &ECDSASignature{}
 
-	_, err := asn1.Unmarshal(sig, e)
-	if err != nil {
+	if _, err = asn1.Unmarshal(sig, e); err != nil {
 		return false, ErrSigNotProvidedOrInvalid
 	}
 
@@ -220,7 +219,7 @@ func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 	}, nil
 }
 
-func VerifySignature(key any, data []byte, sig []byte) (bool, error) {
+func VerifySignature(key any, data []byte, sig []byte, allowBERSignature bool) (bool, error) {
 	switch k := key.(type) {
 	case OKPPublicKeyData:
 		return k.Verify(data, sig)

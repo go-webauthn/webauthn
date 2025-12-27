@@ -30,7 +30,7 @@ func TestAttestationVerify(t *testing.T) {
 
 			pcc.Response = *parsedAttestationResponse
 
-			_, err = pcc.Verify(options.Response.Challenge.String(), false, false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, nil, options.Response.Parameters)
+			_, err = pcc.Verify(options.Response.Challenge.String(), false, false, options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginIgnoreVerificationMode, &StandardVerificationProvider{}, options.Response.Parameters)
 
 			require.NoError(t, err)
 		})
@@ -60,7 +60,7 @@ func TestPackedAttestationVerification(t *testing.T) {
 		// Test Packed Verification. Unpack args.
 		clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-		_, _, err := attestationFormatValidationHandlerPacked(pcc.Response.AttestationObject, clientDataHash[:], nil)
+		_, _, err := attestationFormatValidationHandlerPacked(pcc.Response.AttestationObject, clientDataHash[:], &StandardVerificationProvider{})
 		require.NoError(t, err)
 	})
 }

@@ -61,7 +61,7 @@ func Test_verifyPackedFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := attestationFormatValidationHandlerPacked(tt.args.att, tt.args.clientDataHash, nil)
+			got, _, err := attestationFormatValidationHandlerPacked(tt.args.att, tt.args.clientDataHash, &StandardVerificationProvider{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("attestationFormatValidationHandlerPacked() error = %v, wantErr %v", err, tt.wantErr)
 				return

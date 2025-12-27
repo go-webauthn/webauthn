@@ -20,25 +20,26 @@ import (
 // The syntax of a TPM Attestation statement is as follows:
 //
 // $$attStmtType // = (
-//                        fmt: "tpm",
-//                        attStmt: tpmStmtFormat
-//                    )
 //
-// tpmStmtFormat = {
-//                     ver: "2.0",
-//                     (
-//                         alg: COSEAlgorithmIdentifier,
-//                         x5c: [ aikCert: bytes, * (caCert: bytes) ]
-//                     )
-//                     sig: bytes,
-//                     certInfo: bytes,
-//                     pubArea: bytes
-//                 }
+//	    fmt: "tpm",
+//	    attStmt: tpmStmtFormat
+//	)
+//
+//	tpmStmtFormat = {
+//	                    ver: "2.0",
+//	                    (
+//	                        alg: COSEAlgorithmIdentifier,
+//	                        x5c: [ aikCert: bytes, * (caCert: bytes) ]
+//	                    )
+//	                    sig: bytes,
+//	                    certInfo: bytes,
+//	                    pubArea: bytes
+//	                }
 //
 // Specification: §8.3. TPM Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-tpm-attestation
-func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ VerificationProvider) (attestationType string, x5cs []any, err error) {
 	var (
 		ver    string
 		alg    int64
