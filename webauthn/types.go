@@ -130,13 +130,8 @@ func (config *Config) validate() (err error) {
 		return fmt.Errorf("must provide at least one value to the 'RPOrigins' field")
 	}
 
-	switch config.RPTopOriginVerificationMode {
-	case protocol.TopOriginDefaultVerificationMode:
+	if config.RPTopOriginVerificationMode == protocol.TopOriginDefaultVerificationMode {
 		config.RPTopOriginVerificationMode = protocol.TopOriginIgnoreVerificationMode
-	case protocol.TopOriginExplicitVerificationMode:
-		if len(config.RPTopOrigins) == 0 {
-			return fmt.Errorf("must provide at least one value to the 'RPTopOrigins' field when 'RPTopOriginVerificationMode' field is set to protocol.TopOriginExplicitVerificationMode")
-		}
 	}
 
 	config.validated = true
