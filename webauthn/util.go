@@ -28,3 +28,13 @@ allowed:
 
 	return true
 }
+
+func isCredentialIDInCredentials(credentialID []byte, credentials []Credential) (valid bool) {
+	for _, credential := range credentials {
+		if bytes.Equal(credential.ID, credentialID) {
+			return true
+		}
+	}
+
+	return false
+}
