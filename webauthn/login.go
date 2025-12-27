@@ -333,8 +333,12 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 			return nil, protocol.ErrBadRequest.WithDetails("User does not own all credentials from the allowed credential list")
 		}
 
+		if !isCredentialIDInCredentials(parsedResponse.RawID, credentials) {
+			return nil, &protocol.ErrorUnknownCredential{Err: protocol.ErrBadRequest.WithDetails("The credential ID provided is not owned by the user")}
+		}
+
 		if !isByteArrayInSlice(parsedResponse.RawID, session.AllowedCredentialIDs...) {
-			return nil, protocol.ErrBadRequest.WithDetails("The credential ID provided is not in the allowed credential list")
+			return nil, protocol.ErrBadRequest.WithDetails("The credential ID provided is not in the sessions allowed credential list")
 		}
 	}
 
