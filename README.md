@@ -20,7 +20,7 @@ versions) with a brief transition time (usually 1 patch release of go, for examp
 likely still support go 1.17 until go 1.21.1 is released). These specific rules apply at the time of a published
 release.
 
-This library is intended to be used with [Go Toolchains](https://go.dev/doc/toolchain) as indicated by the the
+This library is intended to be used with [Go Toolchains](https://go.dev/doc/toolchain) as indicated by the
 `toolchain` directive in the `go.mod`.
 
 This library in our opinion handles a critical element of security in a dependent project and we aim to avoid backwards
