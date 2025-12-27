@@ -2,7 +2,10 @@
 
 [![GoDoc](https://godoc.org/github.com/go-webauthn/webauthn?status.svg)](https://godoc.org/github.com/go-webauthn/webauthn)
 [![Go Report Card](https://goreportcard.com/badge/github.com/go-webauthn/webauthn)](https://goreportcard.com/report/github.com/go-webauthn/webauthn)
-
+[![Version](https://img.shields.io/github/release/go-webauthn/webauthn.svg)](https://github.com/go-webauthn/webauthn/releases)
+![Go version](https://img.shields.io/badge/Go-1.25-brightgreen.svg)
+[![codecov](https://codecov.io/github/go-webauthn/webauthn/graph/badge.svg?token=P1FN91DTLE)](https://codecov.io/github/go-webauthn/webauthn)
+![License](https://img.shields.io/github/license/go-webauthn/webauthn?logo=apache&color=blue)
 
 This library is meant to handle [Web Authentication](https://www.w3.org/TR/webauthn) for Go apps that wish to implement 
 a multi-factor authentication, passwordless, or usernameless solution for users. This library conforms as much as
@@ -11,10 +14,14 @@ tested against the conformance tools.
 
 ## Go Version Support Policy
 
-This library; unless otherwise explicitly expressed; will officially support versions of go which are currently
-supported by the go maintainers (usually 3 minor versions) with a brief transition time (usually 1 patch release of go,
-for example if go 1.21.0 is released, we will likely still support go 1.17 until go 1.21.1 is released). These specific
-rules apply at the time of a published release.
+This library; unless otherwise explicitly expressed; will officially support the latest minor version of go, and will
+only offer best effort support for versions of go which are currently supported by the go maintainers (usually 3 minor
+versions) with a brief transition time (usually 1 patch release of go, for example if go 1.21.0 is released, we will
+likely still support go 1.17 until go 1.21.1 is released). These specific rules apply at the time of a published
+release.
+
+This library is intended to be used with [Go Toolchains](https://go.dev/doc/toolchain) as indicated by the the
+`toolchain` directive in the `go.mod`.
 
 This library in our opinion handles a critical element of security in a dependent project and we aim to avoid backwards
 compatibility at the cost of security wherever possible. We also consider this especially important in a language like
