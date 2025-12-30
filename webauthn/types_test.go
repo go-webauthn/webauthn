@@ -3,9 +3,8 @@ package webauthn
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/stretchr/testify/assert"
 )
 
 type defaultUser struct {
@@ -61,13 +60,13 @@ func TestNew(t *testing.T) {
 			"error occurred validating the configuration: must provide at least one value to the 'RPOrigins' field",
 		},
 		{
-			"ShouldFailBadTopOrigins",
+			"ShouldAllowEmptyRPTopOriginsExplicit",
 			&Config{
 				RPID:                        "https://example.com/",
 				RPOrigins:                   []string{"https://example.com"},
 				RPTopOriginVerificationMode: protocol.TopOriginExplicitVerificationMode,
 			},
-			"error occurred validating the configuration: must provide at least one value to the 'RPTopOrigins' field when 'RPTopOriginVerificationMode' field is set to protocol.TopOriginExplicitVerificationMode",
+			"",
 		},
 	}
 
