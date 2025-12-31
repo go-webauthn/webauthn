@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	errFmtFieldNotValidURI = "field '%s' is not a valid URI: %w"
-	errFmtConfigValidate   = "error occurred validating the configuration: %w"
+	errFmtFieldNotValidDomainString = "field '%s' is not a valid domain string: %w"
+	errFmtConfigValidate            = "error occurred validating the configuration: %w"
 )
 
 const (

@@ -47,40 +47,40 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 		{
 			name: "OptionDefinedInConfig",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPDisplayName: "Test Display Name",
 				RPOrigins:     []string{"https://example.com"},
 			},
 			opts:       nil,
-			expectedID: "https://example.com",
+			expectedID: "example.com",
 		},
 		{
 			name: "OptionDefinedInConfigAndOpts",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPDisplayName: "Test Display Name",
 				RPOrigins:     []string{"https://example.com"},
 			},
-			opts:       []LoginOption{WithLoginRelyingPartyID("https://a.example.com")},
-			expectedID: "https://a.example.com",
+			opts:       []LoginOption{WithLoginRelyingPartyID("a.example.com")},
+			expectedID: "a.example.com",
 		},
 		{
 			name: "OptionDefinedInConfigWithNoErrAndInOptsWithError",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPDisplayName: "Test Display Name",
 				RPOrigins:     []string{"https://example.com"},
 			},
 			opts: []LoginOption{WithLoginRelyingPartyID("---::~!!~@#M!@OIK#N!@IOK@@@@@@@@@@")},
-			err:  "error generating assertion: the relying party id failed to validate as it's not a valid uri with error: parse \"---::~!!~@\": first path segment in URL cannot contain colon",
+			err:  "error generating assertion: the relying party id failed to validate as it's not a valid domain string with error: parse \"---::~!!~@\": first path segment in URL cannot contain colon",
 		},
 		{
 			name: "OptionDefinedInOpts",
 			have: &Config{
 				RPOrigins: []string{"https://example.com"},
 			},
-			opts:       []LoginOption{WithLoginRelyingPartyID("https://example.com")},
-			expectedID: "https://example.com",
+			opts:       []LoginOption{WithLoginRelyingPartyID("example.com")},
+			expectedID: "example.com",
 		},
 		{
 			name: "OptionIDNotDefined",
@@ -93,7 +93,7 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 		{
 			name: "TooShortWithChallengeOption",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPOrigins:     []string{"https://example.com"},
 				RPDisplayName: "Test Display Name",
 			},
@@ -103,12 +103,12 @@ func TestWithLoginRelyingPartyID(t *testing.T) {
 		{
 			name: "WithChallengeOption",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPOrigins:     []string{"https://example.com"},
 				RPDisplayName: "Test Display Name",
 			},
 			opts:              []LoginOption{WithChallenge([]byte("00000000000000000000000000000000"))},
-			expectedID:        "https://example.com",
+			expectedID:        "example.com",
 			expectedChallenge: []byte("00000000000000000000000000000000"),
 		},
 	}

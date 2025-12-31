@@ -6,6 +6,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -130,23 +133,6 @@ func isSelfSigned(c *x509.Certificate) bool {
 	return c.CheckSignatureFrom(c) == nil
 }
 
-// This function is used to intentionally mangle the certificates not after values to exclude them from
-// the verification process. This should only be used in instances where all you care about is which certificates
-// performed the signing.
-func certsInsecureNotAfterMangle(certs []*x509.Certificate) (out []*x509.Certificate) {
-	// Add 1 year to the current time. This is effectively the not after time which is used to determine which
-	// certificates to mangle.
-	safe := time.Now().Add(time.Hour * 8760).UTC()
-
-	out = make([]*x509.Certificate, len(certs))
-
-	for i, cert := range certs {
-		out[i] = certInsecureNotAfterMangle(cert, safe)
-	}
-
-	return out
-}
-
 // This function is used to intentionally but conditionally mangle the certificate not after value to exclude it from
 // the verification process. This should only be used in instances where all you care about is which certificates
 // performed the signing.
@@ -210,4 +196,69 @@ func verifyAttestationECDSAPublicKeyMatch(att AttestationObject, cert *x509.Cert
 	}
 
 	return attPublicKeyData, nil
+}
+
+// ValidateRPID performs non-exhaustive checks to ensure the string is most likely a domain string as
+// relying-party ID's are required to be. Effectively this can be an IP, localhost, or a string that contains a period.
+// The relying-party ID must not contain scheme, port, path, query, or fragment components.
+//
+// See: https://www.w3.org/TR/webauthn/#rp-id
+func ValidateRPID(value string) (err error) {
+	if len(value) == 0 {
+		return errors.New("empty value provided")
+	}
+
+	if ip := net.ParseIP(value); ip != nil {
+		return nil
+	}
+
+	var rpid *url.URL
+
+	if rpid, err = url.Parse(value); err != nil {
+		return err
+	}
+
+	if rpid.Scheme != "" && rpid.Opaque != "" && rpid.Path == "" {
+		return errors.New("the port component must be empty")
+	}
+
+	if rpid.Scheme != "" {
+		if rpid.Host != "" && rpid.Path != "" {
+			return errors.New("the path component must be empty")
+		}
+
+		if rpid.Host != "" && rpid.RawQuery != "" {
+			return errors.New("the query component must be empty")
+		}
+
+		if rpid.Host != "" && rpid.Fragment != "" {
+			return errors.New("the fragment component must be empty")
+		}
+
+		if rpid.Host != "" && rpid.Port() != "" {
+			return errors.New("the port component must be empty")
+		}
+
+		return errors.New("the scheme component must be empty")
+	}
+
+	if rpid.RawQuery != "" {
+		return errors.New("the query component must be empty")
+	}
+
+	if rpid.RawFragment != "" || rpid.Fragment != "" {
+		return errors.New("the fragment component must be empty")
+	}
+
+	if rpid.Host == "" {
+		if strings.Contains(rpid.Path, "/") {
+			return errors.New("the path component must be empty")
+		}
+	}
+
+	if value != "localhost" && !strings.Contains(rpid.Path, ".") {
+		return errors.New("the domain component must actually be a domain")
+	}
+
+	return nil
 }
