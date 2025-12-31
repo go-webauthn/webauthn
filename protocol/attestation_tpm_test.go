@@ -77,8 +77,8 @@ var testAttestationTPMResponses = []string{
 
 func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 	tests := []struct {
-		name    string
-		att     AttestationObject
+		name            string
+		att             AttestationObject
 		attestationType string
 		x5cs            []any
 		err             string

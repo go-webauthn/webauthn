@@ -3,8 +3,9 @@ package webauthn
 import (
 	"testing"
 
-	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/go-webauthn/webauthn/protocol"
 )
 
 type defaultUser struct {

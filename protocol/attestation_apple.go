@@ -15,13 +15,14 @@ import (
 // The syntax of an Apple attestation statement is defined as follows:
 //
 // $$attStmtType //= (
-//                       fmt: "apple",
-//                       attStmt: appleStmtFormat
-//                   )
 //
-// appleStmtFormat = {
-//                       x5c: [ credCert: bytes, * (caCert: bytes) ]
-//                   }
+//	    fmt: "apple",
+//	    attStmt: appleStmtFormat
+//	)
+//
+//	appleStmtFormat = {
+//	                      x5c: [ credCert: bytes, * (caCert: bytes) ]
+//	                  }
 //
 // Specification: §8.8. Apple Anonymous Attestation Statement Format
 //

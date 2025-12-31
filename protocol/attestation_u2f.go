@@ -16,14 +16,15 @@ import (
 // The syntax of a FIDO U2F attestation statement is defined as follows:
 //
 // $$attStmtType //= (
-//                       fmt: "fido-u2f",
-//                       attStmt: u2fStmtFormat
-//                   )
 //
-// u2fStmtFormat = {
-//                     x5c: [ attestnCert: bytes ],
-//                     sig: bytes
-//                 }
+//	    fmt: "fido-u2f",
+//	    attStmt: u2fStmtFormat
+//	)
+//
+//	u2fStmtFormat = {
+//	                    x5c: [ attestnCert: bytes ],
+//	                    sig: bytes
+//	                }
 //
 // Specification: §8.6. FIDO U2F Attestation Statement Format
 //

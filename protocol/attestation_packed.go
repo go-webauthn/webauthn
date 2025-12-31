@@ -21,19 +21,20 @@ func init() {
 // The syntax of a Packed Attestation statement is defined by the following CDDL:
 //
 // $$attStmtType //= (
-//                       fmt: "packed",
-//                       attStmt: packedStmtFormat
-//                   )
 //
-// packedStmtFormat = {
-//                        alg: COSEAlgorithmIdentifier,
-//                        sig: bytes,
-//                        x5c: [ attestnCert: bytes, * (caCert: bytes) ]
-//                    } //
-//                    {
-//                        alg: COSEAlgorithmIdentifier
-//                        sig: bytes,
-//                    }
+//	    fmt: "packed",
+//	    attStmt: packedStmtFormat
+//	)
+//
+//	packedStmtFormat = {
+//	                       alg: COSEAlgorithmIdentifier,
+//	                       sig: bytes,
+//	                       x5c: [ attestnCert: bytes, * (caCert: bytes) ]
+//	                   } //
+//	                   {
+//	                       alg: COSEAlgorithmIdentifier
+//	                       sig: bytes,
+//	                   }
 //
 // Specification: §8.2. Packed Attestation Statement Format
 //
