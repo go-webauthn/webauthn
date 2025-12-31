@@ -28,7 +28,7 @@ import (
 // Specification: §6.4.1.1. Examples of credentialPublicKey Values Encoded in COSE_Key Format (https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples)
 type PublicKeyData struct {
 	// Decode the results to int by default.
-	_struct bool `cbor:",keyasint" json:"public_key"` //nolint:unused,govet
+	_struct bool `cbor:",keyasint" json:"public_key"` //nolint:govet
 
 	// The type of key created. Should be OKP, EC2, or RSA.
 	KeyType int64 `cbor:"1,keyasint" json:"kty"`
@@ -81,7 +81,7 @@ func (k *OKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 }
 
 // Verify Elliptic Curve Public Key Signature.
-func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
+func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err error) {
 	curve := ec2AlgCurve(k.Algorithm)
 	if curve == nil {
 		return false, ErrUnsupportedAlgorithm
@@ -98,8 +98,7 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 
 	e := &ECDSASignature{}
 
-	_, err := asn1.Unmarshal(sig, e)
-	if err != nil {
+	if _, err = asn1.Unmarshal(sig, e); err != nil {
 		return false, ErrSigNotProvidedOrInvalid
 	}
 
@@ -147,11 +146,11 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 
 	switch coseAlg {
 	case AlgPS256, AlgPS384, AlgPS512:
-		err := rsa.VerifyPSS(pubkey, hash, h.Sum(nil), sig, nil)
+		err = rsa.VerifyPSS(pubkey, hash, h.Sum(nil), sig, nil)
 
 		return err == nil, err
 	case AlgRS1, AlgRS256, AlgRS384, AlgRS512:
-		err := rsa.VerifyPKCS1v15(pubkey, hash, h.Sum(nil), sig)
+		err = rsa.VerifyPKCS1v15(pubkey, hash, h.Sum(nil), sig)
 
 		return err == nil, err
 	default:
@@ -213,8 +212,10 @@ func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 
 	return EC2PublicKeyData{
 		PublicKeyData: PublicKeyData{
+			KeyType:   int64(EllipticKey),
 			Algorithm: int64(AlgES256),
 		},
+		Curve:  int64(P256),
 		XCoord: x.FillBytes(make([]byte, ecCoordSize)),
 		YCoord: y.FillBytes(make([]byte, ecCoordSize)),
 	}, nil
@@ -239,6 +240,8 @@ func DisplayPublicKey(cpk []byte) string {
 		return keyCannotDisplay
 	}
 
+	var data []byte
+
 	switch k := parsedKey.(type) {
 	case RSAPublicKeyData:
 		var e int
@@ -252,17 +255,9 @@ func DisplayPublicKey(cpk []byte) string {
 			E: e,
 		}
 
-		data, err := x509.MarshalPKIXPublicKey(rKey)
-		if err != nil {
+		if data, err = x509.MarshalPKIXPublicKey(rKey); err != nil {
 			return keyCannotDisplay
 		}
-
-		pemBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "RSA PUBLIC KEY",
-			Bytes: data,
-		})
-
-		return string(pemBytes)
 	case EC2PublicKeyData:
 		curve := ec2AlgCurve(k.Algorithm)
 		if curve == nil {
@@ -275,17 +270,9 @@ func DisplayPublicKey(cpk []byte) string {
 			Y:     big.NewInt(0).SetBytes(k.YCoord),
 		}
 
-		data, err := x509.MarshalPKIXPublicKey(eKey)
-		if err != nil {
+		if data, err = x509.MarshalPKIXPublicKey(eKey); err != nil {
 			return keyCannotDisplay
 		}
-
-		pemBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "PUBLIC KEY",
-			Bytes: data,
-		})
-
-		return string(pemBytes)
 	case OKPPublicKeyData:
 		if len(k.XCoord) != ed25519.PublicKeySize {
 			return keyCannotDisplay
@@ -295,21 +282,19 @@ func DisplayPublicKey(cpk []byte) string {
 
 		copy(oKey, k.XCoord)
 
-		data, err := marshalEd25519PublicKey(oKey)
-		if err != nil {
+		if data, err = marshalEd25519PublicKey(oKey); err != nil {
 			return keyCannotDisplay
 		}
-
-		pemBytes := pem.EncodeToMemory(&pem.Block{
-			Type:  "PUBLIC KEY",
-			Bytes: data,
-		})
-
-		return string(pemBytes)
-
 	default:
 		return "Cannot display key of this type"
 	}
+
+	pemBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: data,
+	})
+
+	return string(pemBytes)
 }
 
 // COSEAlgorithmIdentifier is a number identifying a cryptographic algorithm. The algorithm identifiers SHOULD be values
