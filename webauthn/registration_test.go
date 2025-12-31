@@ -147,3 +147,148 @@ func TestEntityEncoding(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistrationOptions(t *testing.T) {
+	tv := true
+	fv := false
+
+	testCases := []struct {
+		name     string
+		opts     []RegistrationOption
+		have     protocol.PublicKeyCredentialCreationOptions
+		expected protocol.PublicKeyCredentialCreationOptions
+	}{
+		{
+			name: "Empty",
+			opts: nil,
+		},
+		{
+			name: "CredentialParametersDefault",
+			opts: []RegistrationOption{WithCredentialParameters(CredentialParametersDefault())},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				Parameters: CredentialParametersDefault(),
+			},
+		},
+		{
+			name: "CredentialParametersL3Extended",
+			opts: []RegistrationOption{WithCredentialParameters(CredentialParametersExtendedL3())},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				Parameters: CredentialParametersExtendedL3(),
+			},
+		},
+		{
+			name: "CredentialParametersL3Recommended",
+			opts: []RegistrationOption{WithCredentialParameters(CredentialParametersRecommendedL3())},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				Parameters: CredentialParametersRecommendedL3(),
+			},
+		},
+		{
+			name: "Exclusions",
+			opts: []RegistrationOption{WithExclusions([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}}})},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				CredentialExcludeList: []protocol.CredentialDescriptor{
+					{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
+				},
+			},
+		},
+		{
+			name: "Selections",
+			opts: []RegistrationOption{WithAuthenticatorSelection(protocol.AuthenticatorSelection{
+				AuthenticatorAttachment: protocol.CrossPlatform,
+				RequireResidentKey:      &tv,
+				ResidentKey:             protocol.ResidentKeyRequirementRequired,
+				UserVerification:        protocol.VerificationRequired,
+			})},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				AuthenticatorSelection: protocol.AuthenticatorSelection{
+					AuthenticatorAttachment: protocol.CrossPlatform,
+					RequireResidentKey:      &tv,
+					ResidentKey:             protocol.ResidentKeyRequirementRequired,
+					UserVerification:        protocol.VerificationRequired,
+				},
+			},
+		},
+		{
+			name: "ResidentKeyRequirementRequired",
+			opts: []RegistrationOption{WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired)},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				AuthenticatorSelection: protocol.AuthenticatorSelection{
+					RequireResidentKey: &tv,
+					ResidentKey:        protocol.ResidentKeyRequirementRequired,
+				},
+			},
+		},
+		{
+			name: "ResidentKeyRequirementPreferred",
+			opts: []RegistrationOption{WithResidentKeyRequirement(protocol.ResidentKeyRequirementPreferred)},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				AuthenticatorSelection: protocol.AuthenticatorSelection{
+					RequireResidentKey: &fv,
+					ResidentKey:        protocol.ResidentKeyRequirementPreferred,
+				},
+			},
+		},
+		{
+			name: "PublicKeyCredentialHints",
+			opts: []RegistrationOption{WithPublicKeyCredentialHints([]protocol.PublicKeyCredentialHints{
+				protocol.PublicKeyCredentialHintSecurityKey,
+			})},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				Hints: []protocol.PublicKeyCredentialHints{
+					protocol.PublicKeyCredentialHintSecurityKey,
+				},
+			},
+		},
+		{
+			name: "ConveyancePreference",
+			opts: []RegistrationOption{WithConveyancePreference(protocol.PreferEnterpriseAttestation)},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				Attestation: protocol.PreferEnterpriseAttestation,
+			},
+		},
+		{
+			name: "AttestationFormats",
+			opts: []RegistrationOption{WithAttestationFormats([]protocol.AttestationFormat{protocol.AttestationFormatPacked})},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				AttestationFormats: []protocol.AttestationFormat{protocol.AttestationFormatPacked},
+			},
+		},
+		{
+			name: "Extensions",
+			opts: []RegistrationOption{WithExtensions(map[string]any{"appID": "example"})},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				Extensions: map[string]any{"appID": "example"},
+			},
+		},
+		{
+			name:     "AppIDExcludeExtensionWithNoExclusions",
+			opts:     []RegistrationOption{WithAppIdExcludeExtension("apple")},
+			expected: protocol.PublicKeyCredentialCreationOptions{},
+		},
+		{
+			name: "AppIDExcludeExtensionWithExclusions",
+			opts: []RegistrationOption{WithExclusions([]protocol.CredentialDescriptor{
+				{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
+			}), WithAppIdExcludeExtension("apple")},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				CredentialExcludeList: []protocol.CredentialDescriptor{
+					{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
+				},
+				Extensions: map[string]any{"appidExclude": "apple"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := &tc.have
+
+			for _, opt := range tc.opts {
+				opt(opts)
+			}
+
+			assert.Equal(t, tc.expected, *opts)
+		})
+	}
+}
