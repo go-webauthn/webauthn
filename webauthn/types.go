@@ -2,7 +2,6 @@ package webauthn
 
 import (
 	"fmt"
-	"net/url"
 	"time"
 
 	"github.com/go-webauthn/webauthn/metadata"
@@ -102,8 +101,8 @@ func (config *Config) validate() (err error) {
 	}
 
 	if len(config.RPID) != 0 {
-		if _, err = url.Parse(config.RPID); err != nil {
-			return fmt.Errorf(errFmtFieldNotValidURI, "RPID", err)
+		if err = protocol.ValidateRPID(config.RPID); err != nil {
+			return fmt.Errorf(errFmtFieldNotValidDomainString, "RPID", err)
 		}
 	}
 
