@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -9,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-tpm/legacy/tpm2"
+	"github.com/google/go-tpm/tpm2"
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -78,7 +79,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		sig           []byte
 		certInfoBytes []byte
 		pubAreaBytes  []byte
-		pubArea       tpm2.Public
+		pubArea       *tpm2.TPMTPublic
 		key           any
 	)
 
@@ -94,9 +95,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		return "", nil, ErrAttestationFormat.WithDetails("Error retrieving pubArea value")
 	}
 
-	// Verify that the public key specified by the parameters and unique fields of pubArea
-	// is identical to the credentialPublicKey in the attestedCredentialData in authenticatorData.
-	if pubArea, err = tpm2.DecodePublic(pubAreaBytes); err != nil {
+	if pubArea, err = tpm2.Unmarshal[tpm2.TPMTPublic](pubAreaBytes); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to decode TPMT_PUBLIC in attestation statement").WithError(err)
 	}
 
@@ -106,16 +105,46 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 
 	switch k := key.(type) {
 	case webauthncose.EC2PublicKeyData:
-		if pubArea.ECCParameters.CurveID != k.TPMCurveID() ||
-			!bytes.Equal(pubArea.ECCParameters.Point.XRaw, k.XCoord) ||
-			!bytes.Equal(pubArea.ECCParameters.Point.YRaw, k.YCoord) {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
+		var (
+			params *tpm2.TPMSECCParms
+			point  *tpm2.TPMSECCPoint
+		)
+
+		if params, err = pubArea.Parameters.ECCDetail(); err != nil {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 1")
+		}
+
+		if point, err = pubArea.Unique.ECC(); err != nil {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 2")
+		}
+
+		if params.CurveID != k.TPMCurveID() {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 3")
+		}
+		if !bytes.Equal(point.X.Buffer, k.XCoord) || !bytes.Equal(point.Y.Buffer, k.YCoord) {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 4")
 		}
 	case webauthncose.RSAPublicKeyData:
+		var (
+			params  *tpm2.TPMSRSAParms
+			modulus *tpm2.TPM2BPublicKeyRSA
+		)
+
+		if params, err = pubArea.Parameters.RSADetail(); err != nil {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 1")
+		}
+
+		if modulus, err = pubArea.Unique.RSA(); err != nil {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 2")
+		}
+
+		if !bytes.Equal(modulus.Buffer, k.Modulus) {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 3")
+		}
+
 		exp := uint32(k.Exponent[0]) + uint32(k.Exponent[1])<<8 + uint32(k.Exponent[2])<<16
-		if !bytes.Equal(pubArea.RSAParameters.ModulusRaw, k.Modulus) ||
-			pubArea.RSAParameters.Exponent() != exp {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
+		if tpm2Exponent(params) != exp {
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 4")
 		}
 	default:
 		return "", nil, ErrUnsupportedKey
@@ -124,15 +153,16 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	// Concatenate authenticatorData and clientDataHash to form attToBeSigned.
 	attToBeSigned := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
+	var certInfo *tpm2.TPMSAttest
+
 	// Validate that certInfo is valid:
 	// 1/4 Verify that magic is set to TPM_GENERATED_VALUE, handled here.
-	certInfo, err := tpm2.DecodeAttestationData(certInfoBytes)
-	if err != nil {
+	if certInfo, err = tpm2.Unmarshal[tpm2.TPMSAttest](certInfoBytes); err != nil {
 		return "", nil, err
 	}
 
 	// 2/4 Verify that type is set to TPM_ST_ATTEST_CERTIFY.
-	if certInfo.Type != tpm2.TagAttestCertify {
+	if certInfo.Type != tpm2.TPMSTAttestCertify {
 		return "", nil, ErrAttestationFormat.WithDetails("Type is not set to TPM_ST_ATTEST_CERTIFY")
 	}
 
@@ -142,7 +172,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	h := webauthncose.HasherFromCOSEAlg(coseAlg)
 	h.Write(attToBeSigned)
 
-	if !bytes.Equal(certInfo.ExtraData, h.Sum(nil)) {
+	if !bytes.Equal(certInfo.ExtraData.Buffer, h.Sum(nil)) {
 		return "", nil, ErrAttestationFormat.WithDetails("ExtraData is not set to hash of attToBeSigned")
 	}
 
@@ -150,7 +180,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	// [TPMv2-Part2] section 10.12.3, whose name field contains a valid Name for pubArea,
 	// as computed using the algorithm in the nameAlg field of pubArea
 	// using the procedure specified in [TPMv2-Part1] section 16.
-	if ok, err = certInfo.AttestedCertifyInfo.Name.MatchesPublic(pubArea); err != nil {
+	if ok, err = tpm2NameMatch(certInfo, pubArea); err != nil {
 		return "", nil, err
 	} else if !ok {
 		return "", nil, ErrAttestationFormat.WithDetails("Hash value mismatch attested and pubArea")
@@ -262,6 +292,35 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	}
 
 	return string(metadata.AttCA), x5c, err
+}
+
+func tpm2Exponent(params *tpm2.TPMSRSAParms) (exp uint32) {
+	if params.Exponent != 0 {
+		return params.Exponent
+	}
+
+	return 65537
+}
+
+func tpm2NameMatch(certInfo *tpm2.TPMSAttest, pubArea *tpm2.TPMTPublic) (match bool, err error) {
+	if certInfo == nil || pubArea == nil {
+		return false, nil
+	}
+
+	var (
+		certifyInfo *tpm2.TPMSCertifyInfo
+		name        *tpm2.TPM2BName
+	)
+
+	if certifyInfo, err = certInfo.Attested.Certify(); err != nil {
+		return false, err
+	}
+
+	if name, err = tpm2.ObjectName(pubArea); err != nil {
+		return false, err
+	}
+
+	return subtle.ConstantTimeCompare(certifyInfo.Name.Buffer, name.Buffer) == 1, nil
 }
 
 // forEachSAN loops through the TPM SAN extension.
