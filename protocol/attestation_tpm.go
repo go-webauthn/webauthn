@@ -2,10 +2,12 @@ package protocol
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/subtle"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"strings"
@@ -161,6 +163,10 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		return "", nil, err
 	}
 
+	if err = certInfo.Magic.Check(); err != nil {
+		return "", nil, ErrInvalidAttestation.WithDetails("Magic is not set to TPM_GENERATED_VALUE")
+	}
+
 	// 2/4 Verify that type is set to TPM_ST_ATTEST_CERTIFY.
 	if certInfo.Type != tpm2.TPMSTAttestCertify {
 		return "", nil, ErrAttestationFormat.WithDetails("Type is not set to TPM_ST_ATTEST_CERTIFY")
@@ -174,16 +180,6 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 
 	if !bytes.Equal(certInfo.ExtraData.Buffer, h.Sum(nil)) {
 		return "", nil, ErrAttestationFormat.WithDetails("ExtraData is not set to hash of attToBeSigned")
-	}
-
-	// 4/4 Verify that attested contains a TPMS_CERTIFY_INFO structure as specified in
-	// [TPMv2-Part2] section 10.12.3, whose name field contains a valid Name for pubArea,
-	// as computed using the algorithm in the nameAlg field of pubArea
-	// using the procedure specified in [TPMv2-Part1] section 16.
-	if ok, err = tpm2NameMatch(certInfo, pubArea); err != nil {
-		return "", nil, err
-	} else if !ok {
-		return "", nil, ErrAttestationFormat.WithDetails("Hash value mismatch attested and pubArea")
 	}
 
 	// Note that the remaining fields in the "Standard Attestation Structure"
@@ -291,6 +287,18 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		}
 	}
 
+	// 4/4 Verify that attested contains a TPMS_CERTIFY_INFO structure as specified in
+	// [TPMv2-Part2] section 10.12.3, whose name field contains a valid Name for pubArea,
+	// as computed using the algorithm in the nameAlg field of pubArea
+	// using the procedure specified in [TPMv2-Part1] section 16.
+	//
+	// This needs to move after the x5c check as the QualifiedSigner only gets populated when it can be verified.
+	if ok, err = tpm2NameMatch(certInfo, pubArea); err != nil {
+		return "", nil, err
+	} else if !ok {
+		return "", nil, ErrAttestationFormat.WithDetails("Hash value mismatch attested and pubArea")
+	}
+
 	return string(metadata.AttCA), x5c, err
 }
 
@@ -320,7 +328,39 @@ func tpm2NameMatch(certInfo *tpm2.TPMSAttest, pubArea *tpm2.TPMTPublic) (match b
 		return false, err
 	}
 
+	if _, _, err = tpm2NameDigest(certInfo.QualifiedSigner); err != nil {
+		return false, fmt.Errorf("invalid name digest algorithm: %w", err)
+	}
+
 	return subtle.ConstantTimeCompare(certifyInfo.Name.Buffer, name.Buffer) == 1, nil
+}
+
+func tpm2NameDigest(name tpm2.TPM2BName) (alg tpm2.TPMIAlgHash, digest []byte, err error) {
+	buf := name.Buffer
+
+	if len(buf) < 3 {
+		return 0, nil, fmt.Errorf("name too short")
+	}
+
+	alg = tpm2.TPMIAlgHash(binary.BigEndian.Uint16(buf[:2]))
+
+	var hash crypto.Hash
+
+	if hash, err = alg.Hash(); err != nil {
+		return 0, nil, fmt.Errorf("invalid hash algorithm: %w", err)
+	}
+
+	digest = buf[2:]
+
+	if len(digest) == 0 {
+		return 0, nil, fmt.Errorf("name digest is empty")
+	}
+
+	if len(digest) != hash.Size() {
+		return 0, nil, fmt.Errorf("invalid name digest length: %d", len(digest))
+	}
+
+	return alg, digest, nil
 }
 
 // forEachSAN loops through the TPM SAN extension.

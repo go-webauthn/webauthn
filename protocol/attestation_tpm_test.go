@@ -7,13 +7,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/asn1"
 	"encoding/binary"
 	"errors"
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -458,83 +454,61 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 	h.Write(att.RawAuthData)
 	extraData := h.Sum(nil)
 
-	tests := []struct {
+	testCases := []struct {
 		name     string
 		certInfo tpm2.AttestationData
 		wantErr  string
 	}{
 		{
-			"TPM Negative Test CertInfo invalid certInfo",
+			"CertInfoInvalid",
 			tpm2.AttestationData{},
-			"decoding Magic/Type: EOF",
+			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest",
 		},
 		{
-			"TPM Negative Test CertInfo magic value not 0xff544347",
+			"CertInfoMagicValueNoCorrect",
 			tpm2.AttestationData{Magic: 42, Type: tpm2.TagAttestCreation, AttestedCreationInfo: &tpm2.CreationInfo{}},
 			"incorrect magic value: 2a",
 		},
 		{
-			"TPM Negative Test CertInfo type not TagAttestCertify",
+			"CertInfoTypeNotTagAttestCertify",
 			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCreation, AttestedCreationInfo: &tpm2.CreationInfo{}},
 			"Type is not set to TPM_ST_ATTEST_CERTIFY",
 		},
 		{
-			"TPM Negative Test CertInfo type not TagAttestCertify",
+			"CertInfoTypeNotTagAttestCertify",
 			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{}},
 			"ExtraData is not set to hash of attToBeSigned",
 		},
 		{
-			"TPM Negative Test CertInfo Name/pubArea mismatch",
+			"CertInfoPubAreaNameMismatch",
 			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{Name: tpm2.Name{Digest: nil}}, ExtraData: extraData},
 			"Name doesn't have a Digest, can't compare to Public",
 		},
 		{
-			"TPM Negative Test CertInfo Name/pubArea mismatch",
+			"CertInfoPubAreaNameMismatch",
 			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{Name: tpm2.Name{Digest: &tpm2.HashValue{Alg: tpm2.AlgSHA256, Value: extraData}}}, ExtraData: h.Sum(nil)},
 			"Hash value mismatch attested and pubArea",
 		},
 	}
-	for _, tt := range tests {
-		certInfo, err := tt.certInfo.Encode()
-		if tt.certInfo.Magic != 0 && err != nil {
-			t.Fatal(err)
-		}
 
-		att.AttStatement[stmtCertInfo] = certInfo
-		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			certInfo, err := tc.certInfo.Encode()
+			if tc.certInfo.Magic != 0 && err != nil {
+				t.Fatal(err)
+			}
 
-		if tt.wantErr != "" {
-			assert.Contains(t, err.Error(), tt.wantErr)
-		} else {
-			assert.Equal(t, "attca", attestationType)
-		}
+			att.AttStatement[stmtCertInfo] = certInfo
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
+
+			if tc.wantErr != "" {
+				assert.Contains(t, err.Error(), tc.wantErr)
+			} else {
+				assert.Equal(t, "attca", attestationType)
+			}
+		})
 	}
 }
-
-var (
-	//nolint:unused
-	x5cTemplate = x509.Certificate{
-		SerialNumber: big.NewInt(0),
-		Version:      3,
-		Subject: pkix.Name{
-			Country:            []string{"US"},
-			Organization:       []string{"Duo Labs"},
-			OrganizationalUnit: []string{"Authenticator Attestation"},
-			CommonName:         "WebAuthn.io",
-		},
-		Extensions: []pkix.Extension{
-			{
-				Id:       asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4},
-				Critical: false,
-				Value: []byte{
-					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				},
-			},
-		},
-		IsCA: false,
-	}
-)
 
 func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	attStmt := make(map[string]any, len(defaultAttStatement))
