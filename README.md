@@ -5,7 +5,7 @@
 [![Version](https://img.shields.io/github/release/go-webauthn/webauthn.svg)](https://github.com/go-webauthn/webauthn/releases)
 ![Go version](https://img.shields.io/badge/Go-1.25-brightgreen.svg)
 [![codecov](https://codecov.io/github/go-webauthn/webauthn/graph/badge.svg?token=P1FN91DTLE)](https://codecov.io/github/go-webauthn/webauthn)
-![License](https://img.shields.io/github/license/go-webauthn/webauthn?logo=apache&color=blue)
+[![License](https://img.shields.io/github/license/go-webauthn/webauthn?color=blue)](https://github.com/go-webauthn/webauthn?tab=BSD-3-Clause-1-ov-file#readme)
 
 This library is meant to handle [Web Authentication](https://www.w3.org/TR/webauthn) for Go apps that wish to implement 
 a multi-factor authentication, passwordless, or usernameless solution for users. This library conforms as much as
