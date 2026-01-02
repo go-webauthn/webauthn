@@ -3,6 +3,8 @@ package protocol
 import "encoding/asn1"
 
 const (
+	stmtAttStmt   = "attStmt"
+	stmtFmt       = "fmt"
 	stmtX5C       = "x5c"
 	stmtSignature = "sig"
 	stmtAlgorithm = "alg"
