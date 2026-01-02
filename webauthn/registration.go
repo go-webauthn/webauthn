@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -75,8 +74,8 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 
 	if len(creation.Response.RelyingParty.ID) == 0 {
 		return nil, nil, fmt.Errorf("error generating credential creation: the relying party id must be provided via the configuration or a functional option for a creation")
-	} else if _, err = url.Parse(creation.Response.RelyingParty.ID); err != nil {
-		return nil, nil, fmt.Errorf("error generating credential creation: the relying party id failed to validate as it's not a valid uri with error: %w", err)
+	} else if err = protocol.ValidateRPID(creation.Response.RelyingParty.ID); err != nil {
+		return nil, nil, fmt.Errorf("error generating credential creation: the relying party id failed to validate as it's not a valid domain string with error: %w", err)
 	}
 
 	if len(creation.Response.RelyingParty.Name) == 0 {
