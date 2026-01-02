@@ -344,3 +344,86 @@ func TestFinishLoginFailureCredentialNotOwned(t *testing.T) {
 
 	require.Equal(t, &protocol.ErrorUnknownCredential{Err: protocol.ErrBadRequest.WithDetails("The credential ID provided is not owned by the user")}, err)
 }
+
+func TestLoginOptions(t *testing.T) {
+	testCases := []struct {
+		name     string
+		opts     []LoginOption
+		have     protocol.PublicKeyCredentialRequestOptions
+		expected protocol.PublicKeyCredentialRequestOptions
+	}{
+		{
+			name: "Empty",
+			opts: nil,
+		},
+		{
+			name: "AllowedCredentials",
+			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123")}})},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123")}},
+			},
+		},
+		{
+			name: "UserVerification",
+			opts: []LoginOption{WithUserVerification(protocol.VerificationRequired)},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				UserVerification: protocol.VerificationRequired,
+			},
+		},
+		{
+			name: "PublicKeyCredentialHints",
+			opts: []LoginOption{WithAssertionPublicKeyCredentialHints([]protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintSecurityKey})},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				Hints: []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintSecurityKey},
+			},
+		},
+		{
+			name: "Extensions",
+			opts: []LoginOption{WithAssertionExtensions(protocol.AuthenticationExtensions{"example": "extension"})},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				Extensions: protocol.AuthenticationExtensions{"example": "extension"},
+			},
+		},
+		{
+			name: "AppIDExtensionWithoutU2F",
+			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123")}}), WithAppIdExtension("example")},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123")}},
+			},
+		},
+		{
+			name: "AppIDExtensionWithU2F",
+			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}}), WithAppIdExtension("example")},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}},
+				Extensions:         protocol.AuthenticationExtensions{protocol.ExtensionAppID: "example"},
+			},
+		},
+		{
+			name: "RelyingPartyID",
+			opts: []LoginOption{WithLoginRelyingPartyID("example.com")},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				RelyingPartyID: "example.com",
+			},
+		},
+		{
+			name: "Challenge",
+			opts: []LoginOption{WithChallenge([]byte("00000000000000000000000000000000"))},
+			expected: protocol.PublicKeyCredentialRequestOptions{
+				Challenge: []byte("00000000000000000000000000000000"),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := &tc.have
+
+			for _, opt := range tc.opts {
+				opt(opts)
+			}
+
+			assert.Equal(t, tc.expected, *opts)
+		})
+	}
+}
