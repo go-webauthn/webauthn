@@ -71,6 +71,9 @@ type CredentialDescriptor struct {
 
 	// The AttestationType from the Credential. Used internally only.
 	AttestationType string `json:"-"`
+
+	// The AttestationFormat from the Credential. Used internally only.
+	AttestationFormat string `json:"-"`
 }
 
 // CredentialParameter is the credential type and algorithm

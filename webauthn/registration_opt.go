@@ -104,7 +104,7 @@ func WithExtensions(extension protocol.AuthenticationExtensions) RegistrationOpt
 func WithAppIdExcludeExtension(appid string) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) {
 		for _, credential := range cco.CredentialExcludeList {
-			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
+			if credential.AttestationFormat == protocol.CredentialTypeFIDOU2F {
 				if cco.Extensions == nil {
 					cco.Extensions = map[string]any{}
 				}

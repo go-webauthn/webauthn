@@ -393,9 +393,9 @@ func TestLoginOptions(t *testing.T) {
 		},
 		{
 			name: "AppIDExtensionWithU2F",
-			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}}), WithAppIdExtension("example")},
+			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: "basic_full", AttestationFormat: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}}), WithAppIdExtension("example")},
 			expected: protocol.PublicKeyCredentialRequestOptions{
-				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}},
+				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: "basic_full", AttestationFormat: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}},
 				Extensions:         protocol.AuthenticationExtensions{protocol.ExtensionAppID: "example"},
 			},
 		},

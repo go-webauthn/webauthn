@@ -128,19 +128,19 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 //
 // Steps 13 through 15 are verified against the auth data. These steps are identical to 15 through 18 for assertion so we
 // handle them with AuthData.
-func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, userPresenceRequired bool, mds metadata.Provider, credParams []CredentialParameter) (err error) {
+func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, userPresenceRequired bool, mds metadata.Provider, credParams []CredentialParameter) (attestationType string, err error) {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
 	// Begin Step 13 through 15. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
 	if err = a.AuthData.Verify(rpIDHash[:], nil, userVerificationRequired, userPresenceRequired); err != nil {
-		return err
+		return attestationType, err
 	}
 
 	// Step 16. Verify that the "alg" parameter in the credential public key in
 	// authData matches the alg attribute of one of the items in options.pubKeyCredParams.
 	var pk webauthncose.PublicKeyData
 	if err = webauthncbor.Unmarshal(a.AuthData.AttData.CredentialPublicKey, &pk); err != nil {
-		return err
+		return attestationType, err
 	}
 
 	found := false
@@ -153,7 +153,7 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 	}
 
 	if !found {
-		return ErrAttestationFormat.WithInfo("Credential public key algorithm not supported")
+		return attestationType, ErrAttestationFormat.WithInfo("Credential public key algorithm not supported")
 	}
 
 	return a.VerifyAttestation(clientDataHash, mds)
@@ -161,7 +161,7 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 
 // VerifyAttestation only verifies the attestation object excluding the AuthData values. If you wish to also verify the
 // AuthData values you should use [Verify].
-func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider) (err error) {
+func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider) (attestationType string, err error) {
 	// Step 18. Determine the attestation statement format by performing a
 	// USASCII case-sensitive match on fmt against the set of supported
 	// WebAuthn Attestation Statement Format Identifier values. The up-to-date
@@ -176,10 +176,10 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	// any of the following steps.
 	if AttestationFormat(a.Format) == AttestationFormatNone {
 		if len(a.AttStatement) != 0 {
-			return ErrAttestationFormat.WithInfo("Attestation format none with attestation present")
+			return attestationType, ErrAttestationFormat.WithInfo("Attestation format none with attestation present")
 		}
 
-		return nil
+		return string(metadata.None), nil
 	}
 
 	var (
@@ -188,35 +188,34 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	)
 
 	if handler, valid = attestationRegistry[AttestationFormat(a.Format)]; !valid {
-		return ErrAttestationFormat.WithInfo(fmt.Sprintf("Attestation format %s is unsupported", a.Format))
+		return attestationType, ErrAttestationFormat.WithInfo(fmt.Sprintf("Attestation format %s is unsupported", a.Format))
 	}
 
 	var (
-		aaguid          uuid.UUID
-		attestationType string
-		x5cs            []any
+		aaguid uuid.UUID
+		x5cs   []any
 	)
 
 	// Step 19. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
 	if attestationType, x5cs, err = handler(*a, clientDataHash, mds); err != nil {
-		return err.(*Error).WithInfo(attestationType)
+		return attestationType, err.(*Error).WithInfo(attestationType)
 	}
 
 	if len(a.AuthData.AttData.AAGUID) != 0 {
 		if aaguid, err = uuid.FromBytes(a.AuthData.AttData.AAGUID); err != nil {
-			return ErrInvalidAttestation.WithInfo("Error occurred parsing AAGUID during attestation validation").WithDetails(err.Error()).WithError(err)
+			return attestationType, ErrInvalidAttestation.WithInfo("Error occurred parsing AAGUID during attestation validation").WithDetails(err.Error()).WithError(err)
 		}
 	}
 
 	if mds == nil {
-		return nil
+		return attestationType, nil
 	}
 
 	if e := ValidateMetadata(context.Background(), mds, aaguid, attestationType, a.Format, x5cs); e != nil {
-		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
+		return attestationType, ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
 	}
 
-	return nil
+	return attestationType, nil
 }
