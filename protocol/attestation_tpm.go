@@ -113,18 +113,19 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		)
 
 		if params, err = pubArea.Parameters.ECCDetail(); err != nil {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 1")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 
 		if point, err = pubArea.Unique.ECC(); err != nil {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 2")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 
 		if params.CurveID != k.TPMCurveID() {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 3")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
+
 		if !bytes.Equal(point.X.Buffer, k.XCoord) || !bytes.Equal(point.Y.Buffer, k.YCoord) {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey 4")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 	case webauthncose.RSAPublicKeyData:
 		var (
@@ -133,20 +134,20 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		)
 
 		if params, err = pubArea.Parameters.RSADetail(); err != nil {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 1")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
 
 		if modulus, err = pubArea.Unique.RSA(); err != nil {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 2")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
 
 		if !bytes.Equal(modulus.Buffer, k.Modulus) {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 3")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
 
 		exp := uint32(k.Exponent[0]) + uint32(k.Exponent[1])<<8 + uint32(k.Exponent[2])<<16
 		if tpm2Exponent(params) != exp {
-			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey 4")
+			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
 	default:
 		return "", nil, ErrUnsupportedKey
@@ -192,6 +193,10 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 			aikCert *x509.Certificate
 			raw     []byte
 		)
+
+		if len(x5c) == 0 {
+			return "", nil, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
+		}
 
 		// In this case:
 		// Verify the sig is a valid signature over certInfo using the attestation public key in aikCert with the algorithm specified in alg.
