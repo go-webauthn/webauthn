@@ -74,7 +74,7 @@ func WithAssertionExtensions(extensions protocol.AuthenticationExtensions) Login
 func WithAppIdExtension(appid string) LoginOption {
 	return func(cco *protocol.PublicKeyCredentialRequestOptions) {
 		for _, credential := range cco.AllowedCredentials {
-			if credential.AttestationType == protocol.CredentialTypeFIDOU2F {
+			if credential.AttestationFormat == protocol.CredentialTypeFIDOU2F {
 				if cco.Extensions == nil {
 					cco.Extensions = map[string]any{}
 				}
