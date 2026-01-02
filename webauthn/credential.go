@@ -11,27 +11,39 @@ import (
 // Credential contains all needed information about a WebAuthn credential for storage. This struct is effectively the
 // Credential Record as described in the specification.
 //
+// Providing this data structure is preserved properly this Credential can be properly verified using the
+// [Credential.Verify] function when provided a [metadata.Provider].
+//
+// It is strongly recommended for the best security that a [Credential] is encrypted at rest with the exception of the
+// ID and the value you use to lookup the user. This prevents a person with access to the database being able to
+// compromise privacy by being able to view this data, as well as prevents them being able to compromise ecurity by
+// adding or modifying a Credential without them also having access to the encryption key.
+//
 // See: §4. Terminology: Credential Record (https://www.w3.org/TR/webauthn-3/#credential-record)
 type Credential struct {
-	// The Credential ID of the public key credential source. Described by the Credential Record 'id' field.
+	// The ID is the ID of the public key credential source. Described by the Credential Record 'id' field.
 	ID []byte `json:"id"`
 
-	// The credential public key of the public key credential source. Described by the Credential Record 'publicKey field.
+	// The credential public key of the public key credential source. Described by the Credential Record 'publicKey'
+	// field.
 	PublicKey []byte `json:"publicKey"`
 
-	// The attestation format used (if any) by the authenticator when creating the credential.
+	// The AttestationType stores the attestation format used (if any) by the authenticator when creating the
+	// Credential.
+	//
+	// Important Note: This field is named attestationType but this is actually the attestation format.
 	AttestationType string `json:"attestationType"`
 
-	// The transport types the authenticator supports.
+	// Transport types the authenticator supports. Described by the Credential Record 'transports' field.
 	Transport []protocol.AuthenticatorTransport `json:"transport"`
 
-	// The commonly stored flags.
+	// Flags represent the commonly stored flags.
 	Flags CredentialFlags `json:"flags"`
 
-	// The Authenticator information for a given certificate.
+	// The Authenticator information for a given Credential.
 	Authenticator Authenticator `json:"authenticator"`
 
-	// The attestation values that can be used to validate this credential via the MDS3 at a later date.
+	// The attestation values that can be used to validate this Credential via the MDS3 at a later date.
 	Attestation CredentialAttestation `json:"attestation"`
 }
 

@@ -41,25 +41,30 @@ While we strive to avoid such changes and strive to notify users they may be una
 
 ## Quickstart
 
-`go get github.com/go-webauthn/webauthn` and initialize it in your application with basic configuration values. 
+First run `go get github.com/go-webauthn/webauthn` and initialize it in your application with basic configuration
+values.
 
-Make sure your `user` model is able to handle the interface functions laid out in `webauthn/types.go`. This means also 
-supporting the storage and retrieval of the credential and authenticator structs in `webauthn/credential.go` and 
-`webauthn/authenticator.go`, respectively.
+Make sure your `user` model is able to handle the interface functions laid out in the
+[webauthn.User](https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#User) interface. This means also
+supporting the storage and retrieval of the [webauthn.Credential] struct which can be encoded fairly easily.
 
 ## Notable Changes
 
 The notable breaking changes made by this library are documented in the [breaking changes](BREAKING.md) documentation.
 
-## Documentation
-
-The intent is to move all documentation into the [go docs], and this is the location we'd recommend checking.
-
 ## Examples
 
-The examples are documented in the [go docs]. 
+The examples are documented in the [go docs -> webauthn -> examples].
 
-## Credential Record
+## Documentation
+
+The intent is to move all documentation into the [go docs], and a good starting place is the [go docs -> webauthn]
+location.
+
+### Credential Record
+
+**_Important:_** It is considered critical that implementers carefully read the [webauthn.Credential] struct
+documentation as part of the implementation process.
 
 The WebAuthn Level 3 specification describes the Credential Record which includes several required and optional elements
 that you should store for. See [§ 4 Terminology](https://www.w3.org/TR/webauthn-3/#credential-record) for details.
@@ -69,21 +74,22 @@ This section describes this element.
 The fields listed in the specification have corresponding fields in the [webauthn.Credential] struct. See the below
 table for more information. We also include JSON mappings for those that wish to just store these values as JSON.
 
-|    Specification Field    |       Library Field        |         JSON Field         |                                           Notes                                           |
-|:-------------------------:|:--------------------------:|:--------------------------:|:-----------------------------------------------------------------------------------------:|
-|           type            |            N/A             |            N/A             |                       This field is always `publicKey` for WebAuthn                       |
-|            id             |             ID             |             id             |                                                                                           |
-|         publicKey         |         PublicKey          |         publicKey          |                                                                                           |
-|     attestationFormat     |      AttestationType       |      attestationType       |           This field is currently named incorrectly and this will be corrected.           |
-|         signCount         |  Authenticator.SignCount   |  authenticator.signCount   |                                                                                           |
-|        transports         |         Transport          |         transport          |                                                                                           |
-|       uvInitialized       |     Flags.UserVerified     |     flags.userVerified     |                                                                                           |
-|      backupEligible       |    Flags.BackupEligible    |    flags.backupEligible    |                                                                                           |
-|        backupState        |     Flags.BackupState      |     flags.backupState      |                                                                                           |
-|     attestationObject     |     Attestation.Object     |     attestation.object     | This field is a composite of the attestationObject and the relevant values to validate it |
-| attestationClientDataJSON | Attestation.ClientDataJSON | attestation.clientDataJSON |                                                                                           |
+|    Specification Field    |       Library Field        |         JSON Field         |                                                                      Notes                                                                      |
+|:-------------------------:|:--------------------------:|:--------------------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------:|
+|           type            |            N/A             |            N/A             |                                                 This field is always `public-key` for WebAuthn.                                                 |
+|            id             |             ID             |             id             |                                                                                                                                                 |
+|         publicKey         |         PublicKey          |         publicKey          |                                                                                                                                                 |
+|     attestationFormat     |      AttestationType       |      attestationType       |                                      This field is currently named incorrectly and this will be corrected.                                      |
+|         signCount         |  Authenticator.SignCount   |  authenticator.signCount   |                                                                                                                                                 |
+|        transports         |         Transport          |         transport          |                                                                                                                                                 |
+|       uvInitialized       |     Flags.UserVerified     |     flags.userVerified     |                                                                                                                                                 |
+|      backupEligible       |    Flags.BackupEligible    |    flags.backupEligible    |                                                                                                                                                 |
+|        backupState        |     Flags.BackupState      |     flags.backupState      |                                                                                                                                                 |
+|            N/A            |        Attestation         |        attestation         | This field is a composite object containing fields from the Credential Record and additional fields to assist in validation of this Credential. |
+|     attestationObject     |     Attestation.Object     |     attestation.object     |                                                                                                                                                 |
+| attestationClientDataJSON | Attestation.ClientDataJSON | attestation.clientDataJSON |                                                                                                                                                 |
 
-### Flags
+#### Flags
 
 It's important to note that the recommendations and requirements for flag storage have changed over the course of the
 evolution of the WebAuthn specification. We at the present time only make the flags classified like this available for
@@ -98,13 +104,13 @@ to retrieve the raw value and
 restore it; and instead of using the individual flags to store the value store the Protocol Value, and only store the
 individual flags as a means to perform compliance related decisions.
 
-### Storage
+#### Storage
 
 It is also important to note that restoring the [webauthn.Credential] with the correct values will likely affect the
 validity of the [webauthn.Credential], i.e. if some values are not restored the [webauthn.Credential] may fail
 validation in this scenario.
 
-### Verification
+#### Verification
 
 As long as the [webauthn.Credential] struct has exactly the same values when restored the [Credential Verify] function 
 can be leveraged to verify the credential against the [metadata.Provider]. This can be either done during registration,
@@ -118,6 +124,70 @@ At this time no tooling exists to verify the credential automatically outside th
 this is considered domain logic and beyond the scope of what we provide documentation for; we just provide the necessary
 tooling to implement this yourself.
 
+## Support
+
+This section indicates various support statuses for specific elements of the spec. The level column indicates the spec
+level this library currently supports for that statement format by the first number, and the number in parenthesis
+represents when the format was introduced into the spec.
+
+### Attestation Format
+
+|                                                          Format                                                           |     Identifier      |  Supported  | Level |
+|:-------------------------------------------------------------------------------------------------------------------------:|:-------------------:|:-----------:|:-----:|
+|            [§8.2 Packed Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-packed-attestation)            |      `packed`       |     Yes     | 3 (1) |
+|               [§8.3 TPM Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-tpm-attestation)               |        `tpm`        |     Yes     | 3 (1) |
+|           [§8.4 Android Key Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-tpm-attestation)           |    `android-key`    |     Yes     | 3 (1) |
+| [§8.5 Android SafetyNet Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation) | `android-safetynet` |     Yes     | 3 (1) |
+|          [§8.6 FIDO U2F Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation)          |     `fido-u2f`      |     Yes     | 3 (1) |
+|              [§8.7 None Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-none-attestation)              |       `none`        |     Yes     | 3 (1) |
+|        [§8.8 Apple Anonymous Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-none-attestation)         |       `apple`       |     Yes     | 3 (2) |
+|         [§8.9 Compound Attestation Statement Format](https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation)         |     `compound`      | In Progress | 3 (3) |
+
+### Extensions
+
+Standardized and Specification Listed Extensions:
+
+|                                                                                   Extension                                                                                    |   Identifier   | Supported (Registration) | Supported (Authentication) | Level |
+|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------:|:------------------------:|:--------------------------:|:-----:|
+|                                              [§10.1.1 FIDO AppID Extension](https://www.w3.org/TR/webauthn/#sctn-appid-extension)                                              |    `appid`     |         N/A[^2]          |        Yes (manual)        | 3 (1) |
+|                                     [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn/#sctn-appid-exclude-extension)                                     | `appidExclude` |       Yes (manual)       |          N/A[^1]           | 3 (1) |
+|                        [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension)                         |  `credProps`   |       Yes (manual)       |          N/A[^1]           | 3 (2) |
+|                                       [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn/#sctn-large-blob-extension)                                        |  `largeBlob`   |       Yes (manual)       |        Yes (manual)        | 3 (2) |
+|                                       [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn/#sctn-large-blob-extension)                                        |  `largeBlob`   |       Yes (manual)       |        Yes (manual)        | 3 (2) |
+| [Credential Protection Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-credProtect-extension) | `credProtect`  |       Yes (manual)       |          N/A[^1]           | CTAP  |
+
+CTAP2 Extensions Which Are Largely unsupported:
+
+|                                                                                             Extension                                                                                             |      Identifier       | Supported (Registration) | Supported (Authentication) |
+|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:------------------------:|:--------------------------:|
+|               [Credential Blob Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-credBlob-extension)               |      `credBlob`       |       Yes (manual)       |        Yes (manual)        | 
+|             [Large Blob Key Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-largeBlobKey-extension)              |    `largeBlobKey`     |       Yes (manual)       |        Yes (manual)        |
+|           [Minimum PIN Length Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-minpinlength-extension)            |    `minPinLength`     |       Yes (manual)       |        Yes (manual)        |
+|          [PIN Complexity Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-pincomplexitypolicy-extension)          | `pinComplexityPolicy` |       Yes (manual)       |          N/A[^1]           | 
+|               [HMAC Secret Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-hmac-secret-extension)                |     `hmac-secret`     |       Yes (manual)       |        Yes (manual)        | 
+|   [HMAC Secret MakeCredential Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-hmac-secret-make-cred-extension)   |   `hmac-secret-mc`    |         N/A[^2]          |        Yes (manual)        | 
+| [Third-Party Payment Authentication Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-thirdPartyPayment-extension) |  `thirdPartyPayment`  |       Yes (manual)       |        Yes (manual)        |
+
+[^1]: This extension is only applicable during Registration.
+[^2]: This extension is only applicable during Authentication.
+
+Extensions that have been deprecated and removed from the spec. The deprecated level is the first spec level that did
+not include the extension. These are all technically supported by the extensions map, but have no official support from
+this library, and are most likely not supported by either browsers or authenticators.
+
+These extensions often either were excluded due to privacy or security concerns, were introduced into the core of the
+spec as legitimate inputs outside of extensions, or never recieved support from browsers or authenticators.
+
+|                                                                  Format                                                                   |      Identifier       | Level (Added) | Level (Deprecated) |
+|:-----------------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:-------------:|:------------------:|
+|              [Generic Transaction Authorization Extension](https://www.w3.org/TR/webauthn-1/#sctn-generic-txauth-extension)               |    `txAuthGeneric`    |       1       |         2          |
+|               [Authenticator Selection Extension](https://www.w3.org/TR/webauthn-1/#sctn-authenticator-selection-extension)               |      `authnSel`       |       1       |         2          |
+|                  [Supported Extensions Extension](https://www.w3.org/TR/webauthn-1/#sctn-supported-extensions-extension)                  |        `exts`         |       1       |         2          |
+|                         [User Verification Index Extension](https://www.w3.org/TR/webauthn-1/#sctn-uvi-extension)                         |         `uvi`         |       1       |         2          |
+|                              [Location Extension](https://www.w3.org/TR/webauthn-1/#sctn-location-extension)                              |         `loc`         |       1       |         2          |
+|                        [User Verification Method Extension](https://www.w3.org/TR/webauthn-1/#sctn-uvm-extension)                         |         `uvm`         |       1       |         3          |
+| [Biometric Authenticator Performance Bounds Extension](https://www.w3.org/TR/webauthn-1/#sctn-authenticator-biometric-criteria-extension) | `biometricPerfBounds` |       1       |         2          |
+
 ## Acknowledgements
 
 We graciously acknowledge the original authors of this library [github.com/duo-labs/webauthn] for their amazing
@@ -129,4 +199,9 @@ Without their amazing work this library could not exist.
 [webauthn.Credential]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential
 [metadata.Provider]: https://pkg.go.dev/github.com/go-webauthn/webauthn/metadata#Provider
 [Credential Verify]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential.Verify
-[go docs]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn
+
+[go docs]: https://pkg.go.dev/github.com/go-webauthn/webauthn
+
+[go docs -> webauthn]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn
+
+[go docs -> webauthn -> examples]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#pkg-examples
