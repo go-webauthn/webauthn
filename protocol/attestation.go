@@ -78,6 +78,14 @@ type AttestationObject struct {
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
+type NonCompoundAttestationObject struct {
+	// The format of the Attestation data.
+	Format string `json:"fmt"`
+
+	// The attestation statement data sent back if attestation is requested.
+	AttStatement map[string]any `json:"attStmt,omitempty"`
+}
+
 type attestationFormatValidationHandler func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error)
 
 var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
@@ -202,6 +210,10 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	// client data computed in step 7.
 	if attestationType, x5cs, err = handler(*a, clientDataHash, mds); err != nil {
 		return err.(*Error).WithInfo(attestationType)
+	}
+
+	if attestationType == string(AttestationFormatCompound) {
+		return nil
 	}
 
 	if len(a.AuthData.AttData.AAGUID) != 0 {
