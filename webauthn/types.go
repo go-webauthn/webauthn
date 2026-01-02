@@ -195,7 +195,8 @@ type User interface {
 	// Specification: §5.4.3. User Account Parameters for Credential Generation (https://www.w3.org/TR/webauthn/#dom-publickeycredentialuserentity-displayname)
 	WebAuthnDisplayName() string
 
-	// WebAuthnCredentials provides the list of Credential objects owned by the user.
+	// WebAuthnCredentials provides the slice of [Credential] objects owned by the user. This generally should be all
+	// the [Credential] objects owned by the user regardless of which flow is being used.
 	WebAuthnCredentials() []Credential
 }
 
