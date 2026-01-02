@@ -1,5 +1,6 @@
 package protocol
 
+// Error is a struct that describes specific error conditions in a structured format.
 type Error struct {
 	// Short name for the type of error that has occurred.
 	Type string `json:"type"`
@@ -43,7 +44,9 @@ func (e *Error) WithError(err error) *Error {
 	return &errCopy
 }
 
-// ErrorUnknownCredential is a special Error which signals the fact the provided credential is unknown.
+// ErrorUnknownCredential is a special Error which signals the fact the provided credential is unknown. The reason this
+// specific error type is useful is so that the relying-party can send a signal to the Authenticator that the
+// credential has been removed.
 type ErrorUnknownCredential struct {
 	Err *Error
 }

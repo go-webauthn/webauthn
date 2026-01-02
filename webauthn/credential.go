@@ -35,11 +35,12 @@ type Credential struct {
 	Attestation CredentialAttestation `json:"attestation"`
 }
 
-// Credentials is a decorator type which allows easily converting a []Credential to []protocol.CredentialDescriptor.
-// This will be the type used globally for the library in a future release.
+// Credentials is a decorator type which allows easily converting a [Credential] slice into a
+// [protocol.CredentialDescriptor] slice by utilizing the [Credentials.CredentialDescriptors] method. This will be the
+// type used globally for the library in a future release.
 type Credentials []Credential
 
-// CredentialDescriptors returns the []protocol.CredentialDescriptor for this Credentials type.
+// CredentialDescriptors returns the [protocol.CredentialDescriptor] slice for this [Credentials] type.
 func (c Credentials) CredentialDescriptors() (descriptors []protocol.CredentialDescriptor) {
 	descriptors = make([]protocol.CredentialDescriptor, len(c))
 
@@ -50,9 +51,10 @@ func (c Credentials) CredentialDescriptors() (descriptors []protocol.CredentialD
 	return descriptors
 }
 
-// NewCredentialFlags is a utility function that is used to derive the Credential's Flags field. This allows
-// implementers to solely save the Raw field of the CredentialFlags to restore them appropriately for appropriate
-// processing without concern that changes forced upon implementers by the W3C will introduce breaking changes.
+// NewCredentialFlags is a utility function that is used to derive the [Credential]'s Flags field given a
+// [protocol.AuthenticatorFlags]. This allows implementers to solely save the Raw field of the [CredentialFlags] to
+// restore them appropriately for appropriate processing without concern that changes forced upon implementers by the
+// W3C will introduce breaking changes.
 func NewCredentialFlags(flags protocol.AuthenticatorFlags) CredentialFlags {
 	return CredentialFlags{
 		UserPresent:    flags.HasUserPresent(),
@@ -63,6 +65,7 @@ func NewCredentialFlags(flags protocol.AuthenticatorFlags) CredentialFlags {
 	}
 }
 
+// CredentialFlags is a JSON representation of the flags.
 type CredentialFlags struct {
 	// Flag UP indicates the users presence.
 	UserPresent bool `json:"userPresent"`
@@ -80,12 +83,14 @@ type CredentialFlags struct {
 	raw protocol.AuthenticatorFlags
 }
 
-// ProtocolValue returns the underlying protocol.AuthenticatorFlags provided this CredentialFlags was created using
+// ProtocolValue returns the underlying [protocol.AuthenticatorFlags] provided this [CredentialFlags] was created using
 // NewCredentialFlags.
 func (f CredentialFlags) ProtocolValue() protocol.AuthenticatorFlags {
 	return f.raw
 }
 
+// CredentialAttestation is a decoded representation of the [protocol.AuthenticatorAttestationResponse] in a format that
+// can easily be serialized.
 type CredentialAttestation struct {
 	ClientDataJSON     []byte `json:"clientDataJSON"`
 	ClientDataHash     []byte `json:"clientDataHash"`
@@ -94,7 +99,7 @@ type CredentialAttestation struct {
 	Object             []byte `json:"object"`
 }
 
-// Descriptor converts a Credential into a protocol.CredentialDescriptor.
+// Descriptor converts a [Credential] into a [protocol.CredentialDescriptor].
 func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 	return protocol.CredentialDescriptor{
 		Type:            protocol.PublicKeyCredentialType,
