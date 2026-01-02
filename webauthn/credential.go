@@ -16,7 +16,7 @@ import (
 //
 // It is strongly recommended for the best security that a [Credential] is encrypted at rest with the exception of the
 // ID and the value you use to lookup the user. This prevents a person with access to the database being able to
-// compromise privacy by being able to view this data, as well as prevents them being able to compromise ecurity by
+// compromise privacy by being able to view this data, as well as prevents them being able to compromise security by
 // adding or modifying a Credential without them also having access to the encryption key.
 //
 // See: §4. Terminology: Credential Record (https://www.w3.org/TR/webauthn-3/#credential-record)

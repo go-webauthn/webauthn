@@ -136,11 +136,11 @@ represents when the format was introduced into the spec.
 |:-------------------------------------------------------------------------------------------------------------------------:|:-------------------:|:-----------:|:-----:|
 |            [§8.2 Packed Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-packed-attestation)            |      `packed`       |     Yes     | 3 (1) |
 |               [§8.3 TPM Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-tpm-attestation)               |        `tpm`        |     Yes     | 3 (1) |
-|           [§8.4 Android Key Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-tpm-attestation)           |    `android-key`    |     Yes     | 3 (1) |
+|       [§8.4 Android Key Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-android-key-attestation)       |    `android-key`    |     Yes     | 3 (1) |
 | [§8.5 Android SafetyNet Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation) | `android-safetynet` |     Yes     | 3 (1) |
 |          [§8.6 FIDO U2F Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation)          |     `fido-u2f`      |     Yes     | 3 (1) |
 |              [§8.7 None Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-none-attestation)              |       `none`        |     Yes     | 3 (1) |
-|        [§8.8 Apple Anonymous Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-none-attestation)         |       `apple`       |     Yes     | 3 (2) |
+|   [§8.8 Apple Anonymous Attestation Statement Format](https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation)   |       `apple`       |     Yes     | 3 (2) |
 |         [§8.9 Compound Attestation Statement Format](https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation)         |     `compound`      | In Progress | 3 (3) |
 
 ### Extensions
@@ -153,13 +153,12 @@ Standardized and Specification Listed Extensions:
 |                                     [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn/#sctn-appid-exclude-extension)                                     | `appidExclude` |       Yes (manual)       |          N/A[^1]           | 3 (1) |
 |                        [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension)                         |  `credProps`   |       Yes (manual)       |          N/A[^1]           | 3 (2) |
 |                                       [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn/#sctn-large-blob-extension)                                        |  `largeBlob`   |       Yes (manual)       |        Yes (manual)        | 3 (2) |
-|                                       [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn/#sctn-large-blob-extension)                                        |  `largeBlob`   |       Yes (manual)       |        Yes (manual)        | 3 (2) |
-| [Credential Protection Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-credProtect-extension) | `credProtect`  |       Yes (manual)       |          N/A[^1]           | CTAP  |
 
 CTAP2 Extensions Which Are Largely unsupported:
 
 |                                                                                             Extension                                                                                             |      Identifier       | Supported (Registration) | Supported (Authentication) |
 |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:------------------------:|:--------------------------:|
+|          [Credential Protection Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-credProtect-extension)           |     `credProtect`     |       Yes (manual)       |          N/A[^1]           |
 |               [Credential Blob Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-credBlob-extension)               |      `credBlob`       |       Yes (manual)       |        Yes (manual)        | 
 |             [Large Blob Key Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-largeBlobKey-extension)              |    `largeBlobKey`     |       Yes (manual)       |        Yes (manual)        |
 |           [Minimum PIN Length Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-minpinlength-extension)            |    `minPinLength`     |       Yes (manual)       |        Yes (manual)        |
@@ -176,7 +175,7 @@ not include the extension. These are all technically supported by the extensions
 this library, and are most likely not supported by either browsers or authenticators.
 
 These extensions often either were excluded due to privacy or security concerns, were introduced into the core of the
-spec as legitimate inputs outside of extensions, or never recieved support from browsers or authenticators.
+spec as legitimate inputs outside of extensions, or never received support from browsers or authenticators.
 
 |                                                                  Format                                                                   |      Identifier       | Level (Added) | Level (Deprecated) |
 |:-----------------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:-------------:|:------------------:|
