@@ -1,12 +1,16 @@
 package protocol
 
 func NewSignalAllAcceptedCredentials(rpid string, user AllAcceptedCredentialsUser) *SignalAllAcceptedCredentials {
+	if user == nil {
+		return nil
+	}
+
 	credentials := user.WebAuthnCredentialIDs()
 
-	ids := make([]URLEncodedBase64, 0, len(credentials))
+	ids := make([]URLEncodedBase64, len(credentials))
 
-	for _, id := range credentials {
-		ids = append(ids, id)
+	for i, id := range credentials {
+		ids[i] = id
 	}
 
 	return &SignalAllAcceptedCredentials{
