@@ -7,15 +7,21 @@ import "encoding/json"
 // For a list of commonly supported extensions, see §10. Defined Extensions
 // (https://www.w3.org/TR/webauthn/#sctn-defined-extensions).
 
-type AuthenticationExtensionsClientOutputs map[string]any
+type AuthenticationExtensionsClientOutputsLegacy map[string]any
 
 const (
 	ExtensionAppID        = "appid"
 	ExtensionAppIDExclude = "appidExclude"
 )
 
-func NewExtensionsClientInput[C ExtensionsClientInputContents](contents C) (input *ExtensionsClientInput, err error) {
-	return &ExtensionsClientInput{
+func NewExtensionsClientInputs[C ExtensionsClientInputsContents](contents C) (input *ExtensionsClientInputs, err error) {
+	return &ExtensionsClientInputs{
+		contents: contents,
+	}, nil
+}
+
+func NewExtensionsClientOutputs[C ExtensionsClientOutputsContents](contents C) (input *ExtensionsClientOutputs, err error) {
+	return &ExtensionsClientOutputs{
 		contents: contents,
 	}, nil
 }
@@ -25,13 +31,23 @@ type Marshallable interface {
 	json.Unmarshaler
 }
 
-type ExtensionsClientInputContents interface {
+type ExtensionsClientInputsContents interface {
 	Marshallable
 
-	*AssertionExtensionsClientInputs | *AttestationExtensionsClientInputs
+	*AuthenticationExtensionsClientInputs | *RegistrationExtensionsClientInputs
 }
 
-type ExtensionsClientInput struct {
+type ExtensionsClientOutputsContents interface {
+	Marshallable
+
+	*AuthenticationExtensionsClientOutputs | *RegistrationExtensionsClientOutputs
+}
+
+type ExtensionsClientInputs struct {
+	contents Marshallable
+}
+
+type ExtensionsClientOutputs struct {
 	contents Marshallable
 }
 

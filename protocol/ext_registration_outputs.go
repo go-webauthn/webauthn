@@ -2,7 +2,7 @@ package protocol
 
 import "encoding/json"
 
-type AttestationExtensionsClientOutputs struct {
+type RegistrationExtensionsClientOutputs struct {
 	AppIDExclude        *bool             `json:"appidExclude,omitempty"`
 	CredBlob            *bool             `json:"credBlob,omitempty"`
 	CredProps           *CredPropsOutputs `json:"credProps,omitempty"`
@@ -14,13 +14,12 @@ type AttestationExtensionsClientOutputs struct {
 	MinPinLength        *uint             `json:"minPinLength,omitempty"`
 	PinComplexityPolicy *bool             `json:"pinComplexityPolicy,omitempty"`
 	PRF                 *PRFOutputs       `json:"prf,omitempty"`
-	ThirdPartyPayment   any               `json:"thirdPartyPayment,omitempty"`
 
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
-func (r *AttestationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err error) {
-	type alias AttestationExtensionsClientOutputs
+func (r *RegistrationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err error) {
+	type alias RegistrationExtensionsClientOutputs
 
 	var known alias
 
@@ -28,7 +27,7 @@ func (r *AttestationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err err
 		return err
 	}
 
-	*r = AttestationExtensionsClientOutputs(known)
+	*r = RegistrationExtensionsClientOutputs(known)
 
 	var m map[string]json.RawMessage
 
@@ -56,8 +55,8 @@ func (r *AttestationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err err
 	return nil
 }
 
-func (r AttestationExtensionsClientOutputs) MarshalJSON() (data []byte, err error) {
-	type alias AttestationExtensionsClientOutputs
+func (r RegistrationExtensionsClientOutputs) MarshalJSON() (data []byte, err error) {
+	type alias RegistrationExtensionsClientOutputs
 
 	m := map[string]any{}
 
@@ -79,8 +78,8 @@ func (r AttestationExtensionsClientOutputs) MarshalJSON() (data []byte, err erro
 }
 
 var (
-	_ json.Marshaler   = (*AttestationExtensionsClientOutputs)(nil)
-	_ json.Unmarshaler = (*AttestationExtensionsClientOutputs)(nil)
-	_ Marshallable     = (*AttestationExtensionsClientOutputs)(nil)
-	_ json.Marshaler   = AttestationExtensionsClientOutputs{}
+	_ json.Marshaler   = (*RegistrationExtensionsClientOutputs)(nil)
+	_ json.Unmarshaler = (*RegistrationExtensionsClientOutputs)(nil)
+	_ Marshallable     = (*RegistrationExtensionsClientOutputs)(nil)
+	_ json.Marshaler   = RegistrationExtensionsClientOutputs{}
 )

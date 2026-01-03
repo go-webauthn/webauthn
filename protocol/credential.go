@@ -34,17 +34,17 @@ type ParsedCredential struct {
 type PublicKeyCredential struct {
 	Credential
 
-	RawID                   URLEncodedBase64                      `json:"rawId"`
-	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
-	AuthenticatorAttachment string                                `json:"authenticatorAttachment,omitempty"`
+	RawID                   URLEncodedBase64                            `json:"rawId"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputsLegacy `json:"clientExtensionResults,omitempty"`
+	AuthenticatorAttachment string                                      `json:"authenticatorAttachment,omitempty"`
 }
 
 type ParsedPublicKeyCredential struct {
 	ParsedCredential
 
-	RawID                   []byte                                `json:"rawId"`
-	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
-	AuthenticatorAttachment AuthenticatorAttachment               `json:"authenticatorAttachment,omitempty"`
+	RawID                   []byte                                      `json:"rawId"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputsLegacy `json:"clientExtensionResults,omitempty"`
+	AuthenticatorAttachment AuthenticatorAttachment                     `json:"authenticatorAttachment,omitempty"`
 }
 
 type CredentialCreationResponse struct {
@@ -209,10 +209,10 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 // GetAppID takes a AuthenticationExtensions object or nil. It then performs the following checks in order:
 //
 // 1. Check that the Session Data's AuthenticationExtensions has been provided and if it hasn't return an error.
-// 2. Check that the AuthenticationExtensionsClientOutputs contains the extensions output and return an empty string if it doesn't.
+// 2. Check that the AuthenticationExtensionsClientOutputsLegacy contains the extensions output and return an empty string if it doesn't.
 // 3. Check that the Credential AttestationType is `fido-u2f` and return an empty string if it isn't.
-// 4. Check that the AuthenticationExtensionsClientOutputs contains the appid key and if it doesn't return an empty string.
-// 5. Check that the AuthenticationExtensionsClientOutputs appid is a bool and if it isn't return an error.
+// 4. Check that the AuthenticationExtensionsClientOutputsLegacy contains the appid key and if it doesn't return an empty string.
+// 5. Check that the AuthenticationExtensionsClientOutputsLegacy appid is a bool and if it isn't return an error.
 // 6. Check that the appid output is true and if it isn't return an empty string.
 // 7. Check that the Session Data has an appid extension defined and if it doesn't return an error.
 // 8. Check that the appid extension in Session Data is a string and if it isn't return an error.

@@ -2,20 +2,20 @@ package protocol
 
 import "encoding/json"
 
-type AssertionExtensionsClienOutputs struct {
+type AuthenticationExtensionsClientOutputs struct {
 	AppID             *bool                 `json:"appid,omitempty"`
 	GetCredBlob       *URLEncodedBase64     `json:"getCredBlob,omitempty"`
 	HMACGetSecret     *HMACGetSecretOutputs `json:"hmacGetSecret,omitempty"`
 	LargeBlob         *LargeBlobOutputs     `json:"largeBlob,omitempty"`
 	LargeBlobKey      *URLEncodedBase64     `json:"largeBlobKey,omitempty"`
 	PRF               *PRFOutputs           `json:"prf,omitempty"`
-	ThirdPartyPayment any                   `json:"thirdPartyPayment,omitempty"`
+	ThirdPartyPayment *bool                 `json:"thirdPartyPayment,omitempty"`
 
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
-func (a *AssertionExtensionsClienOutputs) UnmarshalJSON(data []byte) (err error) {
-	type alias AssertionExtensionsClienOutputs
+func (a *AuthenticationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err error) {
+	type alias AuthenticationExtensionsClientOutputs
 
 	var known alias
 
@@ -23,7 +23,7 @@ func (a *AssertionExtensionsClienOutputs) UnmarshalJSON(data []byte) (err error)
 		return err
 	}
 
-	*a = AssertionExtensionsClienOutputs(known)
+	*a = AuthenticationExtensionsClientOutputs(known)
 
 	var m map[string]json.RawMessage
 
@@ -47,8 +47,8 @@ func (a *AssertionExtensionsClienOutputs) UnmarshalJSON(data []byte) (err error)
 	return nil
 }
 
-func (a AssertionExtensionsClienOutputs) MarshalJSON() (data []byte, err error) {
-	type alias AssertionExtensionsClienOutputs
+func (a AuthenticationExtensionsClientOutputs) MarshalJSON() (data []byte, err error) {
+	type alias AuthenticationExtensionsClientOutputs
 
 	m := map[string]any{}
 
@@ -75,8 +75,8 @@ type HMACGetSecretOutputs struct {
 }
 
 var (
-	_ json.Marshaler   = (*AssertionExtensionsClienOutputs)(nil)
-	_ json.Unmarshaler = (*AssertionExtensionsClienOutputs)(nil)
-	_ Marshallable     = (*AssertionExtensionsClienOutputs)(nil)
-	_ json.Marshaler   = AssertionExtensionsClienOutputs{}
+	_ json.Marshaler   = (*AuthenticationExtensionsClientOutputs)(nil)
+	_ json.Unmarshaler = (*AuthenticationExtensionsClientOutputs)(nil)
+	_ Marshallable     = (*AuthenticationExtensionsClientOutputs)(nil)
+	_ json.Marshaler   = AuthenticationExtensionsClientOutputs{}
 )
