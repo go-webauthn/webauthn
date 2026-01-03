@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 )
 
-type AssertionExtensionsClientInputs struct {
+type AuthenticationExtensionsClientInputs struct {
 	AppID             *string             `json:"appid,omitempty"`
 	GetCredBlob       *bool               `json:"getCredBlob,omitempty"`
 	HMACGetSecret     *HMACGetSecretInput `json:"hmacGetSecret,omitempty"`
@@ -16,8 +16,8 @@ type AssertionExtensionsClientInputs struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
-func (a *AssertionExtensionsClientInputs) UnmarshalJSON(data []byte) (err error) {
-	type alias AssertionExtensionsClientInputs
+func (a *AuthenticationExtensionsClientInputs) UnmarshalJSON(data []byte) (err error) {
+	type alias AuthenticationExtensionsClientInputs
 
 	var known alias
 
@@ -25,7 +25,7 @@ func (a *AssertionExtensionsClientInputs) UnmarshalJSON(data []byte) (err error)
 		return err
 	}
 
-	*a = AssertionExtensionsClientInputs(known)
+	*a = AuthenticationExtensionsClientInputs(known)
 
 	var m map[string]json.RawMessage
 
@@ -48,8 +48,8 @@ func (a *AssertionExtensionsClientInputs) UnmarshalJSON(data []byte) (err error)
 	return nil
 }
 
-func (a AssertionExtensionsClientInputs) MarshalJSON() (data []byte, err error) {
-	type alias AssertionExtensionsClientInputs
+func (a AuthenticationExtensionsClientInputs) MarshalJSON() (data []byte, err error) {
+	type alias AuthenticationExtensionsClientInputs
 
 	m := map[string]any{}
 
@@ -76,8 +76,8 @@ type HMACGetSecretInput struct {
 }
 
 var (
-	_ json.Marshaler   = (*AssertionExtensionsClientInputs)(nil)
-	_ json.Unmarshaler = (*AssertionExtensionsClientInputs)(nil)
-	_ Marshallable     = (*AssertionExtensionsClientInputs)(nil)
-	_ json.Marshaler   = AssertionExtensionsClientInputs{}
+	_ json.Marshaler   = (*AuthenticationExtensionsClientInputs)(nil)
+	_ json.Unmarshaler = (*AuthenticationExtensionsClientInputs)(nil)
+	_ Marshallable     = (*AuthenticationExtensionsClientInputs)(nil)
+	_ json.Marshaler   = AuthenticationExtensionsClientInputs{}
 )
