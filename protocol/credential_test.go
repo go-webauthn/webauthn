@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -110,41 +111,62 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			body := io.NopCloser(bytes.NewReader([]byte(testCredentialRequestResponses[tc.args.responseName])))
+			for _, subtest := range []string{"Response", "ResponseBody", "Bytes"} {
+				t.Run(subtest, func(t *testing.T) {
+					var actual *ParsedCredentialCreationData
+					var err error
 
-			actual, err := ParseCredentialCreationResponseBody(body)
+					switch subtest {
+					case "Response":
+						body := io.NopCloser(bytes.NewReader([]byte(testCredentialRequestResponses[tc.args.responseName])))
 
-			if tc.errString != "" {
-				assert.EqualError(t, err, tc.errString)
+						request := &http.Request{
+							Body: body,
+						}
 
-				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
+						actual, err = ParseCredentialCreationResponse(request)
+					case "ResponseBody":
+						body := io.NopCloser(bytes.NewReader([]byte(testCredentialRequestResponses[tc.args.responseName])))
 
-				return
+						actual, err = ParseCredentialCreationResponseBody(body)
+					case "Bytes":
+						body := []byte(testCredentialRequestResponses[tc.args.responseName])
+
+						actual, err = ParseCredentialCreationResponseBytes(body)
+					}
+
+					if tc.errString != "" {
+						assert.EqualError(t, err, tc.errString)
+
+						AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
+
+						return
+					}
+
+					assert.Equal(t, tc.expected.ClientExtensionResults, actual.ClientExtensionResults)
+					assert.Equal(t, tc.expected.ID, actual.ID)
+					assert.Equal(t, tc.expected.Type, actual.Type)
+					assert.Equal(t, tc.expected.ParsedCredential, actual.ParsedCredential)
+					assert.Equal(t, tc.expected.ParsedPublicKeyCredential, actual.ParsedPublicKeyCredential)
+					assert.Equal(t, tc.expected.ParsedPublicKeyCredential, actual.ParsedPublicKeyCredential)
+					assert.Equal(t, tc.expected.Raw, actual.Raw)
+					assert.Equal(t, tc.expected.RawID, actual.RawID)
+					assert.Equal(t, tc.expected.Response.Transports, actual.Response.Transports)
+					assert.Equal(t, tc.expected.Response.CollectedClientData, actual.Response.CollectedClientData)
+					assert.Equal(t, tc.expected.Response.AttestationObject.AuthData.AttData.CredentialID, actual.Response.AttestationObject.AuthData.AttData.CredentialID)
+					assert.Equal(t, tc.expected.Response.AttestationObject.Format, actual.Response.AttestationObject.Format)
+
+					var pkExpected, pkActual any
+
+					pkBytesExpected := tc.expected.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
+					assert.NoError(t, webauthncbor.Unmarshal(pkBytesExpected, &pkExpected))
+
+					pkBytesActual := actual.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
+					assert.NoError(t, webauthncbor.Unmarshal(pkBytesActual, &pkActual))
+
+					assert.Equal(t, pkExpected, pkActual)
+				})
 			}
-
-			assert.Equal(t, tc.expected.ClientExtensionResults, actual.ClientExtensionResults)
-			assert.Equal(t, tc.expected.ID, actual.ID)
-			assert.Equal(t, tc.expected.Type, actual.Type)
-			assert.Equal(t, tc.expected.ParsedCredential, actual.ParsedCredential)
-			assert.Equal(t, tc.expected.ParsedPublicKeyCredential, actual.ParsedPublicKeyCredential)
-			assert.Equal(t, tc.expected.ParsedPublicKeyCredential, actual.ParsedPublicKeyCredential)
-			assert.Equal(t, tc.expected.Raw, actual.Raw)
-			assert.Equal(t, tc.expected.RawID, actual.RawID)
-			assert.Equal(t, tc.expected.Response.Transports, actual.Response.Transports)
-			assert.Equal(t, tc.expected.Response.CollectedClientData, actual.Response.CollectedClientData)
-			assert.Equal(t, tc.expected.Response.AttestationObject.AuthData.AttData.CredentialID, actual.Response.AttestationObject.AuthData.AttData.CredentialID)
-			assert.Equal(t, tc.expected.Response.AttestationObject.Format, actual.Response.AttestationObject.Format)
-
-			// Unmarshall CredentialPublicKey.
-			var pkExpected, pkActual any
-
-			pkBytesExpected := tc.expected.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
-			assert.NoError(t, webauthncbor.Unmarshal(pkBytesExpected, &pkExpected))
-
-			pkBytesActual := actual.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
-			assert.NoError(t, webauthncbor.Unmarshal(pkBytesActual, &pkActual))
-
-			assert.Equal(t, pkExpected, pkActual)
 		})
 	}
 }
