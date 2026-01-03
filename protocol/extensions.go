@@ -1,6 +1,9 @@
 package protocol
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+)
 
 // Extensions are discussed in §9. WebAuthn Extensions (https://www.w3.org/TR/webauthn/#extensions).
 
@@ -51,11 +54,70 @@ type ExtensionsClientOutputs struct {
 	contents Marshallable
 }
 
-type LargeBlobSupport string
+type CredentialProtectionPolicy int
 
 const (
-	LargeBlobSupportRequired  LargeBlobSupport = "required"
-	LargeBlobSupportPreferred LargeBlobSupport = "preferred"
+	UserVerificationOptional                     CredentialProtectionPolicy = iota // userVerificationOptional
+	UserVerificationOptionalWithCredentialIDList                                   // userVerificationOptionalWithCredentialIDList
+	UserVerificationRequired                                                       // userVerificationRequired
+)
+
+func (p CredentialProtectionPolicy) String() string {
+	switch p {
+	case UserVerificationOptional:
+		return "userVerificationOptional"
+	case UserVerificationOptionalWithCredentialIDList:
+		return "userVerificationOptionalWithCredentialIDList"
+	case UserVerificationRequired:
+		return "userVerificationRequired"
+	default:
+		return ""
+	}
+}
+
+func (p CredentialProtectionPolicy) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p.String())
+}
+
+func (p *CredentialProtectionPolicy) UnmarshalJSON(data []byte) error {
+	var v string
+
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	switch v {
+	case UserVerificationOptional.String():
+		*p = UserVerificationOptional
+	case UserVerificationOptionalWithCredentialIDList.String():
+		*p = UserVerificationOptionalWithCredentialIDList
+	case UserVerificationRequired.String():
+		*p = UserVerificationRequired
+	default:
+		return errors.New("unknown CredentialProtectionPolicy")
+	}
+
+	return nil
+}
+
+type LargeBlobSupport int
+
+func (s LargeBlobSupport) MarshalJSON() ([]byte, error) {
+	var value string
+
+	switch s {
+	case LargeBlobSupportRequired:
+		value = "required"
+	case LargeBlobSupportPreferred:
+		value = "preferred"
+	}
+
+	return json.Marshal(value)
+}
+
+const (
+	LargeBlobSupportRequired LargeBlobSupport = iota
+	LargeBlobSupportPreferred
 )
 
 type PRFInputs struct {
