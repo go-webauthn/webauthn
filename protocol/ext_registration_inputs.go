@@ -2,7 +2,7 @@ package protocol
 
 import "encoding/json"
 
-type AttestationExtensionsClientInputs struct {
+type RegistrationExtensionsClientInputs struct {
 	AppIDExclude        *string            `json:"appidExclude,omitempty"`
 	CredBlob            *URLEncodedBase64  `json:"credBlob,omitempty"`
 	CredProps           *bool              `json:"credProps,omitempty"`
@@ -18,8 +18,8 @@ type AttestationExtensionsClientInputs struct {
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
-func (r *AttestationExtensionsClientInputs) UnmarshalJSON(data []byte) (err error) {
-	type alias AttestationExtensionsClientInputs
+func (r *RegistrationExtensionsClientInputs) UnmarshalJSON(data []byte) (err error) {
+	type alias RegistrationExtensionsClientInputs
 
 	var known alias
 
@@ -27,7 +27,7 @@ func (r *AttestationExtensionsClientInputs) UnmarshalJSON(data []byte) (err erro
 		return err
 	}
 
-	*r = AttestationExtensionsClientInputs(known)
+	*r = RegistrationExtensionsClientInputs(known)
 
 	var m map[string]json.RawMessage
 
@@ -54,8 +54,8 @@ func (r *AttestationExtensionsClientInputs) UnmarshalJSON(data []byte) (err erro
 	return nil
 }
 
-func (r AttestationExtensionsClientInputs) MarshalJSON() (data []byte, err error) {
-	type alias AttestationExtensionsClientInputs
+func (r RegistrationExtensionsClientInputs) MarshalJSON() (data []byte, err error) {
+	type alias RegistrationExtensionsClientInputs
 
 	m := map[string]any{}
 
@@ -82,8 +82,8 @@ type CredProtectInputs struct {
 }
 
 var (
-	_ json.Marshaler   = (*AttestationExtensionsClientInputs)(nil)
-	_ json.Unmarshaler = (*AttestationExtensionsClientInputs)(nil)
-	_ Marshallable     = (*AttestationExtensionsClientInputs)(nil)
-	_ json.Marshaler   = AttestationExtensionsClientInputs{}
+	_ json.Marshaler   = (*RegistrationExtensionsClientInputs)(nil)
+	_ json.Unmarshaler = (*RegistrationExtensionsClientInputs)(nil)
+	_ Marshallable     = (*RegistrationExtensionsClientInputs)(nil)
+	_ json.Marshaler   = RegistrationExtensionsClientInputs{}
 )

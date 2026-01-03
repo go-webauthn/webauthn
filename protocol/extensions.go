@@ -7,11 +7,11 @@ import "encoding/json"
 // For a list of commonly supported extensions, see §10. Defined Extensions
 // (https://www.w3.org/TR/webauthn/#sctn-defined-extensions).
 
-// AuthenticationExtensionsClientOutputs represents the IDL of the same name. It is a map of extension identifier
+// AuthenticationExtensionsClientOutputsLegacy represents the IDL of the same name. It is a map of extension identifier
 // strings to their output values, returned by the client after a create() or get() call.
 //
 // Specification: §5.9. Authentication Extensions Client Outputs (https://www.w3.org/TR/webauthn/#iface-authentication-extensions-client-outputs)
-type AuthenticationExtensionsClientOutputs map[string]any
+type AuthenticationExtensionsClientOutputsLegacy map[string]any
 
 const (
 	// ExtensionAppID is the FIDO AppID Extension identifier. It is used during authentication to allow credentials
@@ -27,8 +27,14 @@ const (
 	ExtensionAppIDExclude = "appidExclude"
 )
 
-func NewExtensionsClientInput[C ExtensionsClientInputContents](contents C) (input *ExtensionsClientInput, err error) {
-	return &ExtensionsClientInput{
+func NewExtensionsClientInputs[C ExtensionsClientInputsContents](contents C) (input *ExtensionsClientInputs, err error) {
+	return &ExtensionsClientInputs{
+		contents: contents,
+	}, nil
+}
+
+func NewExtensionsClientOutputs[C ExtensionsClientOutputsContents](contents C) (input *ExtensionsClientOutputs, err error) {
+	return &ExtensionsClientOutputs{
 		contents: contents,
 	}, nil
 }
@@ -38,13 +44,23 @@ type Marshallable interface {
 	json.Unmarshaler
 }
 
-type ExtensionsClientInputContents interface {
+type ExtensionsClientInputsContents interface {
 	Marshallable
 
-	*AssertionExtensionsClientInputs | *AttestationExtensionsClientInputs
+	*AuthenticationExtensionsClientInputs | *RegistrationExtensionsClientInputs
 }
 
-type ExtensionsClientInput struct {
+type ExtensionsClientOutputsContents interface {
+	Marshallable
+
+	*AuthenticationExtensionsClientOutputs | *RegistrationExtensionsClientOutputs
+}
+
+type ExtensionsClientInputs struct {
+	contents Marshallable
+}
+
+type ExtensionsClientOutputs struct {
 	contents Marshallable
 }
 
