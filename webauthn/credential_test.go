@@ -1,6 +1,7 @@
 package webauthn
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,98 @@ func TestMakeNewCredential(t *testing.T) {
 
 				assert.EqualValues(t, tc.expected, actual)
 			}
+		})
+	}
+}
+
+func TestCredential_SignalUnknownCredential(t *testing.T) {
+	testCases := []struct {
+		name         string
+		rpid         string
+		have         *Credential
+		expected     *protocol.SignalUnknownCredential
+		expectedJSON string
+	}{
+		{
+			"ShouldHandleStandard",
+			"example.com",
+			&Credential{
+				ID: []byte("1234"),
+			},
+			&protocol.SignalUnknownCredential{
+				CredentialID: protocol.URLEncodedBase64("1234"),
+				RPID:         "example.com",
+			},
+			`{"credentialId":"MTIzNA","rpId":"example.com"}`,
+		},
+		{
+			"ShouldHandleNoID",
+			"example.com",
+			&Credential{},
+			&protocol.SignalUnknownCredential{
+				RPID: "example.com",
+			},
+			`{"credentialId":null,"rpId":"example.com"}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.have.SignalUnknownCredential(tc.rpid)
+
+			assert.Equal(t, tc.expected, actual)
+
+			data, err := json.Marshal(actual)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedJSON, string(data))
+		})
+	}
+}
+
+func TestCredentials_CredentialDescriptors(t *testing.T) {
+	testCases := []struct {
+		name         string
+		rpid         string
+		have         Credentials
+		expected     []protocol.CredentialDescriptor
+		expectedJSON string
+	}{
+		{
+			"ShouldHandleStandard",
+			"example.com",
+			Credentials{
+				Credential{
+					ID: []byte("1234"),
+				},
+			},
+			[]protocol.CredentialDescriptor{
+				{
+					Type:         protocol.PublicKeyCredentialType,
+					CredentialID: protocol.URLEncodedBase64("1234"),
+				},
+			},
+			`[{"type":"public-key","id":"MTIzNA"}]`,
+		},
+		{
+			"ShouldHandleEmpty",
+			"example.com",
+			Credentials{},
+			[]protocol.CredentialDescriptor{},
+			`[]`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.have.CredentialDescriptors()
+
+			assert.Equal(t, tc.expected, actual)
+
+			data, err := json.Marshal(actual)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedJSON, string(data))
 		})
 	}
 }
