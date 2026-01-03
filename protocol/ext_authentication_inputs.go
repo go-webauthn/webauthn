@@ -9,7 +9,6 @@ type AuthenticationExtensionsClientInputs struct {
 	GetCredBlob       *bool               `json:"getCredBlob,omitempty"`
 	HMACGetSecret     *HMACGetSecretInput `json:"hmacGetSecret,omitempty"`
 	LargeBlob         *LargeBlobInputs    `json:"largeBlob,omitempty"`
-	LargeBlobKey      *bool               `json:"largeBlobKey,omitempty"`
 	PRF               *PRFInputs          `json:"prf,omitempty"`
 	ThirdPartyPayment *bool               `json:"thirdPartyPayment,omitempty"`
 
@@ -37,7 +36,6 @@ func (a *AuthenticationExtensionsClientInputs) UnmarshalJSON(data []byte) (err e
 	delete(m, "getCredBlob")
 	delete(m, "hmacGetSecret")
 	delete(m, "largeBlob")
-	delete(m, "largeBlobKey")
 	delete(m, "prf")
 	delete(m, "thirdPartyPayment")
 
