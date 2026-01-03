@@ -3,14 +3,14 @@ package protocol
 import "encoding/json"
 
 type RegistrationExtensionsClientOutputs struct {
-	AppIDExclude     *bool             `json:"appidExclude,omitempty"`
-	CredBlob         *bool             `json:"credBlob,omitempty"`
-	CredProps        *CredPropsOutputs `json:"credProps,omitempty"`
-	CredProtect      any               `json:"credProtect,omitempty"`
-	HMACCreateSecret *bool             `json:"hmacCreateSecret,omitempty"`
-	LargeBlob        *LargeBlobOutputs `json:"largeBlob,omitempty"`
-	MinPinLength     *uint             `json:"minPinLength,omitempty"`
-	PRF              *PRFOutputs       `json:"prf,omitempty"`
+	AppIDExclude     *bool                                   `json:"appidExclude,omitempty"`
+	CredBlob         *bool                                   `json:"credBlob,omitempty"`
+	CredProps        *CredentialPropertiesOutput             `json:"credProps,omitempty"`
+	CredProtect      any                                     `json:"credProtect,omitempty"`
+	HMACCreateSecret *bool                                   `json:"hmacCreateSecret,omitempty"`
+	LargeBlob        *RegistrationExtensionsLargeBlobOutputs `json:"largeBlob,omitempty"`
+	MinPinLength     *uint                                   `json:"minPinLength,omitempty"`
+	PRF              *RegistrationExtensionsPRFOutputs       `json:"prf,omitempty"`
 
 	Extra map[string]json.RawMessage `json:"-"`
 }
@@ -35,6 +35,7 @@ func (r *RegistrationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err er
 	delete(m, "appidExclude")
 	delete(m, "credBlob")
 	delete(m, "credProps")
+	delete(m, "credProtect")
 	delete(m, "hmacCreateSecret")
 	delete(m, "largeBlob")
 	delete(m, "minPinLength")
@@ -67,6 +68,19 @@ func (r RegistrationExtensionsClientOutputs) MarshalJSON() (data []byte, err err
 	}
 
 	return json.Marshal(m)
+}
+
+type RegistrationExtensionsLargeBlobOutputs struct {
+	Supported *bool `json:"supported,omitempty"`
+}
+
+type RegistrationExtensionsPRFOutputs struct {
+	Enabled *bool                              `json:"enabled,omitempty"`
+	Results *AuthenticationExtensionsPRFValues `json:"results,omitempty"`
+}
+
+type CredentialPropertiesOutput struct {
+	ResidentKey *bool `json:"rk,omitempty"`
 }
 
 var (

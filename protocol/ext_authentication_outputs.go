@@ -3,12 +3,12 @@ package protocol
 import "encoding/json"
 
 type AuthenticationExtensionsClientOutputs struct {
-	AppID             *bool                 `json:"appid,omitempty"`
-	GetCredBlob       *URLEncodedBase64     `json:"getCredBlob,omitempty"`
-	HMACGetSecret     *HMACGetSecretOutputs `json:"hmacGetSecret,omitempty"`
-	LargeBlob         *LargeBlobOutputs     `json:"largeBlob,omitempty"`
-	PRF               *PRFOutputs           `json:"prf,omitempty"`
-	ThirdPartyPayment *bool                 `json:"thirdPartyPayment,omitempty"`
+	AppID             *bool                                     `json:"appid,omitempty"`
+	GetCredBlob       *URLEncodedBase64                         `json:"getCredBlob,omitempty"`
+	HMACGetSecret     *HMACGetSecretOutput                      `json:"hmacGetSecret,omitempty"`
+	LargeBlob         *AuthenticationExtensionsLargeBlobOutputs `json:"largeBlob,omitempty"`
+	PRF               *AuthenticationExtensionsPRFOutputs       `json:"prf,omitempty"`
+	ThirdPartyPayment *bool                                     `json:"thirdPartyPayment,omitempty"`
 
 	Extra map[string]json.RawMessage `json:"-"`
 }
@@ -66,9 +66,18 @@ func (a AuthenticationExtensionsClientOutputs) MarshalJSON() (data []byte, err e
 	return json.Marshal(m)
 }
 
-type HMACGetSecretOutputs struct {
+type HMACGetSecretOutput struct {
 	Output1 URLEncodedBase64  `json:"output1"`
 	Output2 *URLEncodedBase64 `json:"output2,omitempty"`
+}
+
+type AuthenticationExtensionsPRFOutputs struct {
+	Results *AuthenticationExtensionsPRFValues `json:"results,omitempty"`
+}
+
+type AuthenticationExtensionsLargeBlobOutputs struct {
+	Blob    *URLEncodedBase64 `json:"blob,omitempty"`
+	Written *bool             `json:"written,omitempty"`
 }
 
 var (

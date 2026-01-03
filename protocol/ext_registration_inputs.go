@@ -3,17 +3,15 @@ package protocol
 import "encoding/json"
 
 type RegistrationExtensionsClientInputs struct {
-	AppIDExclude      *string           `json:"appidExclude,omitempty"`
-	CredBlob          *URLEncodedBase64 `json:"credBlob,omitempty"`
-	CredProps         *bool             `json:"credProps,omitempty"`
-	HMACCreateSecret  *bool             `json:"hmacCreateSecret,omitempty"`
-	LargeBlob         *LargeBlobInputs  `json:"largeBlob,omitempty"`
-	MinPinLength      *bool             `json:"minPinLength,omitempty"`
-	PRF               *PRFInputs        `json:"prf,omitempty"`
-	ThirdPartyPayment *bool             `json:"thirdPartyPayment,omitempty"`
-
-	CredentialProtectionPolicy        *CredentialProtectionPolicy `json:"credentialProtectionPolicy,omitempty"`
-	EnforceCredentialProtectionPolicy *bool                       `json:"enforceCredentialProtectionPolicy,omitempty"`
+	AppIDExclude      *string                                  `json:"appidExclude,omitempty"`
+	CredBlob          *URLEncodedBase64                        `json:"credBlob,omitempty"`
+	CredProps         *bool                                    `json:"credProps,omitempty"`
+	CredProtect       *RegistrationExtensionsCredProtectInputs `json:"credProtect,omitempty"`
+	HMACCreateSecret  *bool                                    `json:"hmacCreateSecret,omitempty"`
+	LargeBlob         *RegistrationExtensionsLargeBlobInputs   `json:"largeBlob,omitempty"`
+	MinPinLength      *bool                                    `json:"minPinLength,omitempty"`
+	PRF               *AuthenticationExtensionsPRFInputs       `json:"prf,omitempty"`
+	ThirdPartyPayment *bool                                    `json:"thirdPartyPayment,omitempty"`
 
 	Extra map[string]json.RawMessage `json:"-"`
 }
@@ -36,14 +34,13 @@ func (r *RegistrationExtensionsClientInputs) UnmarshalJSON(data []byte) (err err
 	}
 
 	delete(m, "appidExclude")
-	delete(m, "credProps")
-	delete(m, "credentialProtectionPolicy")
-	delete(m, "enforceCredentialProtectionPolicy")
 	delete(m, "credBlob")
-	delete(m, "prf")
+	delete(m, "credProps")
+	delete(m, "credProtect")
+	delete(m, "hmacCreateSecret")
 	delete(m, "largeBlob")
 	delete(m, "minPinLength")
-	delete(m, "hmacCreateSecret")
+	delete(m, "prf")
 	delete(m, "thirdPartyPayment")
 
 	if len(m) > 0 {
@@ -73,6 +70,15 @@ func (r RegistrationExtensionsClientInputs) MarshalJSON() (data []byte, err erro
 	}
 
 	return json.Marshal(m)
+}
+
+type RegistrationExtensionsCredProtectInputs struct {
+	CredentialProtectionPolicy        *CredentialProtectionPolicy `json:"credentialProtectionPolicy,omitempty"`
+	EnforceCredentialProtectionPolicy *bool                       `json:"enforceCredentialProtectionPolicy,omitempty"`
+}
+
+type RegistrationExtensionsLargeBlobInputs struct {
+	Support *LargeBlobSupport `json:"support,omitempty"`
 }
 
 var (

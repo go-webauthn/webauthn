@@ -5,12 +5,12 @@ import (
 )
 
 type AuthenticationExtensionsClientInputs struct {
-	AppID             *string             `json:"appid,omitempty"`
-	GetCredBlob       *bool               `json:"getCredBlob,omitempty"`
-	HMACGetSecret     *HMACGetSecretInput `json:"hmacGetSecret,omitempty"`
-	LargeBlob         *LargeBlobInputs    `json:"largeBlob,omitempty"`
-	PRF               *PRFInputs          `json:"prf,omitempty"`
-	ThirdPartyPayment *bool               `json:"thirdPartyPayment,omitempty"`
+	AppID             *string                                  `json:"appid,omitempty"`
+	GetCredBlob       *bool                                    `json:"getCredBlob,omitempty"`
+	HMACGetSecret     *HMACGetSecretInput                      `json:"hmacGetSecret,omitempty"`
+	LargeBlob         *AuthenticationExtensionsLargeBlobInputs `json:"largeBlob,omitempty"`
+	PRF               *AuthenticationExtensionsPRFInputs       `json:"prf,omitempty"`
+	ThirdPartyPayment *bool                                    `json:"thirdPartyPayment,omitempty"`
 
 	Extra map[string]json.RawMessage `json:"-"`
 }
@@ -71,6 +71,11 @@ func (a AuthenticationExtensionsClientInputs) MarshalJSON() (data []byte, err er
 type HMACGetSecretInput struct {
 	Salt1 URLEncodedBase64  `json:"salt1"`
 	Salt2 *URLEncodedBase64 `json:"salt2,omitempty"`
+}
+
+type AuthenticationExtensionsLargeBlobInputs struct {
+	Read  *bool             `json:"read,omitempty"`
+	Write *URLEncodedBase64 `json:"write,omitempty"`
 }
 
 var (

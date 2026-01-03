@@ -120,33 +120,12 @@ const (
 	LargeBlobSupportPreferred
 )
 
-type PRFInputs struct {
-	Eval             *PRFValues           `json:"eval,omitempty"`
-	EvalByCredential map[string]PRFValues `json:"evalByCredential,omitempty"`
+type AuthenticationExtensionsPRFInputs struct {
+	Eval             *AuthenticationExtensionsPRFValues           `json:"eval,omitempty"`
+	EvalByCredential map[string]AuthenticationExtensionsPRFValues `json:"evalByCredential,omitempty"`
 }
 
-type PRFOutputs struct {
-	Enabled *bool      `json:"enabled,omitempty"`
-	Results *PRFValues `json:"results,omitempty"`
-}
-
-type PRFValues struct {
+type AuthenticationExtensionsPRFValues struct {
 	First  URLEncodedBase64  `json:"first"`
 	Second *URLEncodedBase64 `json:"second,omitempty"`
-}
-
-type LargeBlobInputs struct {
-	Support *LargeBlobSupport `json:"support,omitempty"`
-	Read    *bool             `json:"read,omitempty"`
-	Write   *URLEncodedBase64 `json:"write,omitempty"`
-}
-
-type LargeBlobOutputs struct {
-	Supported *bool             `json:"supported,omitempty"`
-	Blob      *URLEncodedBase64 `json:"blob,omitempty"`
-	Written   *bool             `json:"written,omitempty"`
-}
-
-type CredPropsOutputs struct {
-	ResidentKey *bool `json:"rk,omitempty"`
 }
