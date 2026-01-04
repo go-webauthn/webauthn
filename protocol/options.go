@@ -73,6 +73,13 @@ type CredentialDescriptor struct {
 	AttestationType string `json:"-"`
 }
 
+func (c CredentialDescriptor) SignalUnknownCredential(rpid string) *SignalUnknownCredential {
+	return &SignalUnknownCredential{
+		CredentialID: c.CredentialID,
+		RPID:         rpid,
+	}
+}
+
 // CredentialParameter is the credential type and algorithm
 // that the relying party wants the authenticator to create.
 type CredentialParameter struct {
