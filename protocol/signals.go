@@ -1,5 +1,7 @@
 package protocol
 
+// NewSignalAllAcceptedCredentials creates a new SignalAllAcceptedCredentials struct that can simply be encoded with
+// json.Marshal.
 func NewSignalAllAcceptedCredentials(rpid string, user AllAcceptedCredentialsUser) *SignalAllAcceptedCredentials {
 	if user == nil {
 		return nil
@@ -20,6 +22,7 @@ func NewSignalAllAcceptedCredentials(rpid string, user AllAcceptedCredentialsUse
 	}
 }
 
+// SignalAllAcceptedCredentials is a struct which represents the CDDL of the same name.
 type SignalAllAcceptedCredentials struct {
 	AllAcceptedCredentialIDs []URLEncodedBase64 `json:"allAcceptedCredentialIds"`
 	RPID                     string             `json:"rpId"`
