@@ -22,42 +22,42 @@ func TestWithRegistrationRelyingPartyID(t *testing.T) {
 		{
 			name: "OptionDefinedInConfig",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPDisplayName: "Test Display Name",
 				RPOrigins:     []string{"https://example.com"},
 			},
 			opts:         nil,
-			expectedID:   "https://example.com",
+			expectedID:   "example.com",
 			expectedName: "Test Display Name",
 		},
 		{
 			name: "OptionDefinedInConfigAndOpts",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPDisplayName: "Test Display Name",
 				RPOrigins:     []string{"https://example.com"},
 			},
-			opts:         []RegistrationOption{WithRegistrationRelyingPartyID("https://a.example.com"), WithRegistrationRelyingPartyName("Test Display Name2")},
-			expectedID:   "https://a.example.com",
+			opts:         []RegistrationOption{WithRegistrationRelyingPartyID("a.example.com"), WithRegistrationRelyingPartyName("Test Display Name2")},
+			expectedID:   "a.example.com",
 			expectedName: "Test Display Name2",
 		},
 		{
 			name: "OptionDefinedInConfigWithNoErrAndInOptsWithError",
 			have: &Config{
-				RPID:          "https://example.com",
+				RPID:          "example.com",
 				RPDisplayName: "Test Display Name",
 				RPOrigins:     []string{"https://example.com"},
 			},
 			opts: []RegistrationOption{WithRegistrationRelyingPartyID("---::~!!~@#M!@OIK#N!@IOK@@@@@@@@@@"), WithRegistrationRelyingPartyName("Test Display Name2")},
-			err:  "error generating credential creation: the relying party id failed to validate as it's not a valid uri with error: parse \"---::~!!~@\": first path segment in URL cannot contain colon",
+			err:  "error generating credential creation: the relying party id failed to validate as it's not a valid domain string with error: parse \"---::~!!~@\": first path segment in URL cannot contain colon",
 		},
 		{
 			name: "OptionDefinedInOpts",
 			have: &Config{
-				RPOrigins: []string{"https://example.com"},
+				RPOrigins: []string{"example.com"},
 			},
-			opts:         []RegistrationOption{WithRegistrationRelyingPartyID("https://example.com"), WithRegistrationRelyingPartyName("Test Display Name")},
-			expectedID:   "https://example.com",
+			opts:         []RegistrationOption{WithRegistrationRelyingPartyID("example.com"), WithRegistrationRelyingPartyName("Test Display Name")},
+			expectedID:   "example.com",
 			expectedName: "Test Display Name",
 		},
 		{
@@ -65,7 +65,7 @@ func TestWithRegistrationRelyingPartyID(t *testing.T) {
 			have: &Config{
 				RPOrigins: []string{"https://example.com"},
 			},
-			opts: []RegistrationOption{WithRegistrationRelyingPartyID("https://example.com")},
+			opts: []RegistrationOption{WithRegistrationRelyingPartyID("example.com")},
 			err:  "error generating credential creation: the relying party display name must be provided via the configuration or a functional option for a creation",
 		},
 		{
