@@ -47,6 +47,12 @@ type Credential struct {
 	Attestation CredentialAttestation `json:"attestation"`
 }
 
+// SignalUnknownCredential creates a struct that can easily be marshaled to JSON which indicates this is an unknown
+// Credential.
+func (c Credential) SignalUnknownCredential(rpid string) *protocol.SignalUnknownCredential {
+	return c.Descriptor().SignalUnknownCredential(rpid)
+}
+
 // Credentials is a decorator type which allows easily converting a [Credential] slice into a
 // [protocol.CredentialDescriptor] slice by utilizing the [Credentials.CredentialDescriptors] method. This will be the
 // type used globally for the library in a future release.
