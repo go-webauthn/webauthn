@@ -341,7 +341,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err)).WithError(err)
 		}
 
-		if e := protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, "", credential.AttestationType, nil); e != nil {
+		if e := protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, credential.AttestationType, credential.AttestationFormat, nil); e != nil {
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(e.DevInfo).WithError(e)
 		}
 	}
@@ -353,7 +353,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	rpOrigins := webauthn.Config.RPOrigins
 	rpTopOrigins := webauthn.Config.RPTopOrigins
 
-	if appID, err = parsedResponse.GetAppID(session.Extensions, credential.AttestationType); err != nil {
+	if appID, err = parsedResponse.GetAppID(session.Extensions, credential.AttestationFormat); err != nil {
 		return nil, err
 	}
 
