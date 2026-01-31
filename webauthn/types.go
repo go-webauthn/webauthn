@@ -181,9 +181,9 @@ type User interface {
 	// Specification: §5.4.3. User Account Parameters for Credential Generation (https://w3c.github.io/webauthn/#dom-publickeycredentialuserentity-id)
 	WebAuthnID() []byte
 
-	// WebAuthnName provides the name attribute of the user account during registration and is a human-palatable name for the user
-	// account, intended only for display. For example, "Alex Müller" or "田中倫". The Relying Party SHOULD let the user
-	// choose this, and SHOULD NOT restrict the choice more than necessary.
+	// WebAuthnName provides the name attribute of the user account during registration and is a human-palatable name
+	// for the user account, intended only for display. For example, "Alex Müller" or "田中倫". The Relying Party SHOULD
+	// let the user choose this, and SHOULD NOT restrict the choice more than necessary.
 	//
 	// Specification: §5.4.3. User Account Parameters for Credential Generation (https://w3c.github.io/webauthn/#dictdef-publickeycredentialuserentity)
 	WebAuthnName() string
