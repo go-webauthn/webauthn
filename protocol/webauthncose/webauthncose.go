@@ -14,7 +14,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/google/go-tpm/legacy/tpm2"
+	"github.com/google/go-tpm/tpm2"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
@@ -399,16 +399,16 @@ const (
 	Secp256k1
 )
 
-func (k *EC2PublicKeyData) TPMCurveID() tpm2.EllipticCurve {
+func (k *EC2PublicKeyData) TPMCurveID() tpm2.TPMECCCurve {
 	switch COSEEllipticCurve(k.Curve) {
 	case P256:
-		return tpm2.CurveNISTP256 // TPM_ECC_NIST_P256.
+		return tpm2.TPMECCNistP256 // TPM_ECC_NIST_P256.
 	case P384:
-		return tpm2.CurveNISTP384 // TPM_ECC_NIST_P384.
+		return tpm2.TPMECCNistP384 // TPM_ECC_NIST_P384.
 	case P521:
-		return tpm2.CurveNISTP521 // TPM_ECC_NIST_P521.
+		return tpm2.TPMECCNistP521 // TPM_ECC_NIST_P521.
 	default:
-		return tpm2.EllipticCurve(0) // TPM_ECC_NONE.
+		return tpm2.TPMECCNone // TPM_ECC_NONE.
 	}
 }
 
