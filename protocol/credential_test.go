@@ -148,7 +148,6 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 					assert.Equal(t, tc.expected.Type, actual.Type)
 					assert.Equal(t, tc.expected.ParsedCredential, actual.ParsedCredential)
 					assert.Equal(t, tc.expected.ParsedPublicKeyCredential, actual.ParsedPublicKeyCredential)
-					assert.Equal(t, tc.expected.ParsedPublicKeyCredential, actual.ParsedPublicKeyCredential)
 					assert.Equal(t, tc.expected.Raw, actual.Raw)
 					assert.Equal(t, tc.expected.RawID, actual.RawID)
 					assert.Equal(t, tc.expected.Response.Transports, actual.Response.Transports)
