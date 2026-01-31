@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -105,8 +104,8 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 
 	if len(assertion.Response.RelyingPartyID) == 0 {
 		return nil, nil, fmt.Errorf("error generating assertion: the relying party id must be provided via the configuration or a functional option for a login")
-	} else if _, err = url.Parse(assertion.Response.RelyingPartyID); err != nil {
-		return nil, nil, fmt.Errorf("error generating assertion: the relying party id failed to validate as it's not a valid uri with error: %w", err)
+	} else if err = protocol.ValidateRPID(assertion.Response.RelyingPartyID); err != nil {
+		return nil, nil, fmt.Errorf("error generating assertion: the relying party id failed to validate as it's not a valid domain string with error: %w", err)
 	}
 
 	if assertion.Response.Timeout == 0 {
