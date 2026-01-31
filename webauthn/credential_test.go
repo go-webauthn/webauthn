@@ -84,14 +84,12 @@ func TestCredential_SignalUnknownCredential(t *testing.T) {
 func TestCredentials_CredentialDescriptors(t *testing.T) {
 	testCases := []struct {
 		name         string
-		rpid         string
 		have         Credentials
 		expected     []protocol.CredentialDescriptor
 		expectedJSON string
 	}{
 		{
 			"ShouldHandleStandard",
-			"example.com",
 			Credentials{
 				Credential{
 					ID: []byte("1234"),
@@ -107,7 +105,6 @@ func TestCredentials_CredentialDescriptors(t *testing.T) {
 		},
 		{
 			"ShouldHandleEmpty",
-			"example.com",
 			Credentials{},
 			[]protocol.CredentialDescriptor{},
 			`[]`,

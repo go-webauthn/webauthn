@@ -29,6 +29,7 @@ type SignalAllAcceptedCredentials struct {
 	UserID                   URLEncodedBase64   `json:"userId"`
 }
 
+// SignalCurrentUserDetails is a struct which represents the CDDL of the same name.
 type SignalCurrentUserDetails struct {
 	DisplayName string           `json:"displayName"`
 	Name        string           `json:"name"`
@@ -36,11 +37,14 @@ type SignalCurrentUserDetails struct {
 	UserID      URLEncodedBase64 `json:"userId"`
 }
 
+// SignalUnknownCredential is a struct which represents the CDDL of the same name.
 type SignalUnknownCredential struct {
 	CredentialID URLEncodedBase64 `json:"credentialId"`
 	RPID         string           `json:"rpId"`
 }
 
+// AllAcceptedCredentialsUser is an interface that can be implemented by a user to provide information about their
+// accepted credentials.
 type AllAcceptedCredentialsUser interface {
 	WebAuthnID() []byte
 	WebAuthnCredentialIDs() [][]byte

@@ -44,7 +44,7 @@ func TestNewSignalAllAcceptedCredentials(t *testing.T) {
 
 			assert.Equal(t, tc.expected, actual)
 
-			data, err := json.Marshal(tc.expected)
+			data, err := json.Marshal(actual)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedJSON, string(data))
 		})
