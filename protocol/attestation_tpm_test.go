@@ -7,6 +7,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/binary"
 	"encoding/pem"
 	"errors"
@@ -21,18 +24,538 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
+func TestForEachSAN(t *testing.T) {
+	t.Run("ShouldReturnErrorWhenAsn1UnmarshalFails", func(t *testing.T) {
+		err := forEachSAN([]byte{0x01, 0x02, 0x03}, func(tag int, data []byte) error {
+			return nil
+		})
+
+		require.Error(t, err)
+	})
+
+	t.Run("ShouldReturnErrorWhenTrailingDataExists", func(t *testing.T) {
+		extension := []byte{0x30, 0x00, 0x00}
+
+		err := forEachSAN(extension, func(tag int, data []byte) error {
+			return nil
+		})
+
+		assert.EqualError(t, err, "x509: trailing data after X.509 extension")
+	})
+
+	t.Run("ShouldReturnStructuralErrorWhenNotACompoundSequence", func(t *testing.T) {
+		extension, marshalErr := asn1.Marshal([]byte{0xAA, 0xBB})
+		require.NoError(t, marshalErr)
+
+		err := forEachSAN(extension, func(tag int, data []byte) error {
+			return nil
+		})
+
+		require.EqualError(t, err, "asn1: structure error: bad SAN sequence")
+
+		var structuralErr asn1.StructuralError
+
+		require.True(t, errors.As(err, &structuralErr))
+	})
+
+	t.Run("ShouldReturnErrorWhenInnerAsn1UnmarshalFails", func(t *testing.T) {
+		extension := []byte{0x30, 0x01, 0xFF}
+
+		err := forEachSAN(extension, func(tag int, data []byte) error {
+			return nil
+		})
+
+		assert.EqualError(t, err, "asn1: syntax error: truncated base 128 integer")
+	})
+}
+
+func TestParseSANExtension(t *testing.T) {
+	makeSANWithDN := func(t *testing.T, dnDER []byte) []byte {
+		t.Helper()
+
+		gn := asn1.RawValue{
+			Class:      asn1.ClassContextSpecific,
+			Tag:        nameTypeDN,
+			IsCompound: true,
+			Bytes:      dnDER,
+		}
+
+		sanDER, err := asn1.Marshal([]asn1.RawValue{gn})
+		require.NoError(t, err)
+
+		return sanDER
+	}
+
+	t.Run("ShouldReturnErrorWhenAsn1UnmarshalOfRdnSequenceFails", func(t *testing.T) {
+		san := makeSANWithDN(t, []byte{0x01, 0x02, 0x03})
+
+		manufacturer, model, version, err := parseSANExtension(san)
+		assert.EqualError(t, err, "asn1: structure error: tags don't match (16 vs {class:0 tag:1 length:2 isCompound:false}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} RDNSequence @2")
+		assert.Empty(t, manufacturer)
+		assert.Empty(t, model)
+		assert.Empty(t, version)
+	})
+
+	t.Run("ShouldSkipEmptyRdnSets", func(t *testing.T) {
+		rdnSeq := pkix.RDNSequence{
+			{},
+			{
+				{
+					Type:  oidTCGAtTpmManufacturer,
+					Value: "id:414D4400",
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: "ModelX",
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: "id:00070002",
+				},
+			},
+		}
+
+		dnDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		san := makeSANWithDN(t, dnDER)
+
+		manufacturer, model, version, err := parseSANExtension(san)
+		require.NoError(t, err)
+
+		assert.Equal(t, "414D4400", manufacturer)
+		assert.Equal(t, "ModelX", model)
+		assert.Equal(t, "00070002", version)
+	})
+
+	t.Run("ShouldSkipNonStringAttributeValues", func(t *testing.T) {
+		rdnSeq := pkix.RDNSequence{
+			{
+				{
+					Type: oidTCGAtTpmManufacturer,
+					Value: asn1.RawValue{
+						Class: asn1.ClassUniversal,
+						Tag:   asn1.TagOctetString,
+						Bytes: []byte{0xAA, 0xBB},
+					},
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: "ModelX",
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: "id:00070002",
+				},
+			},
+		}
+
+		dnDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		san := makeSANWithDN(t, dnDER)
+
+		manufacturer, model, version, err := parseSANExtension(san)
+		require.NoError(t, err)
+
+		assert.Empty(t, manufacturer)
+		assert.Equal(t, "ModelX", model)
+		assert.Equal(t, "00070002", version)
+	})
+}
+
+func TestIsValidTPMManufacturer(t *testing.T) {
+	testCases := []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{
+			name: "ShouldReturnTrueForKnownManufacturer",
+			id:   "414D4400",
+			want: true,
+		},
+		{
+			name: "ShouldReturnFalseForUnknownManufacturer",
+			id:   "DEADBEEF",
+			want: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isValidTPMManufacturer(tc.id))
+		})
+	}
+}
+
+func TestTpmRemoveEKU(t *testing.T) {
+	t.Run("ShouldFailWhenAikEkuMissing", func(t *testing.T) {
+		cert := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				{1, 2, 3, 4},
+			},
+		}
+
+		assert.EqualError(t, tpmRemoveEKU(cert), "Attestation Identity Key certificate missing required Extended Key Usage.")
+	})
+
+	t.Run("ShouldRemoveAikAndMicrosoftEkuButKeepOtherUnknownEku", func(t *testing.T) {
+		other := asn1.ObjectIdentifier{1, 2, 3, 4}
+
+		cert := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidMicrosoftKpPrivacyCA,
+				other,
+				oidTCGKpAIKCertificate,
+			},
+		}
+
+		require.Nil(t, tpmRemoveEKU(cert))
+
+		require.Len(t, cert.UnknownExtKeyUsage, 1)
+		assert.True(t, cert.UnknownExtKeyUsage[0].Equal(other))
+	})
+}
+
+func TestTpmParseSANExtension(t *testing.T) {
+	makeSAN := func(t *testing.T, manufacturer, model, version string) []byte {
+		t.Helper()
+
+		rdnSeq := pkix.RDNSequence{
+			{
+				{
+					Type:  oidTCGAtTpmManufacturer,
+					Value: manufacturer,
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: model,
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: version,
+				},
+			},
+		}
+
+		nameDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		gn := asn1.RawValue{
+			Class:      asn1.ClassContextSpecific,
+			Tag:        nameTypeDN,
+			IsCompound: true,
+			Bytes:      nameDER,
+		}
+
+		sanDER, err := asn1.Marshal([]asn1.RawValue{gn})
+		require.NoError(t, err)
+
+		return sanDER
+	}
+
+	t.Run("ShouldFailWhenSanExtensionMalformed", func(t *testing.T) {
+		cert := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: []byte{0x01, 0x02, 0x03}},
+			},
+		}
+
+		protoErr := tpmParseSANExtension(cert)
+		require.EqualError(t, protoErr, "Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.")
+
+		assert.Equal(t, ErrInvalidAttestation.Type, protoErr.Type)
+	})
+
+	t.Run("ShouldFailWhenSanDataMissing", func(t *testing.T) {
+		cert := &x509.Certificate{
+			Extensions: []pkix.Extension{},
+		}
+
+		assert.EqualError(t, tpmParseSANExtension(cert), "Invalid SAN data in AIK certificate.")
+	})
+
+	t.Run("ShouldRemoveUnhandledCriticalSanExtensionWhenPresent", func(t *testing.T) {
+		san := makeSAN(t, "id:414D4400", "ModelX", "id:00070002")
+		other := asn1.ObjectIdentifier{1, 2, 3, 4}
+
+		cert := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: san},
+			},
+			UnhandledCriticalExtensions: []asn1.ObjectIdentifier{
+				oidExtensionSubjectAltName,
+				other,
+			},
+		}
+
+		protoErr := tpmParseSANExtension(cert)
+		require.Nil(t, protoErr)
+
+		require.Len(t, cert.UnhandledCriticalExtensions, 1)
+		assert.True(t, cert.UnhandledCriticalExtensions[0].Equal(other))
+	})
+}
+
+func TestTpmParseAIKAttCA(t *testing.T) {
+	makeSAN := func(t *testing.T, manufacturer, model, version string) []byte {
+		t.Helper()
+
+		rdnSeq := pkix.RDNSequence{
+			{
+				{
+					Type:  oidTCGAtTpmManufacturer,
+					Value: manufacturer,
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: model,
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: version,
+				},
+			},
+		}
+
+		nameDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		gn := asn1.RawValue{
+			Class:      asn1.ClassContextSpecific,
+			Tag:        nameTypeDN,
+			IsCompound: true,
+			Bytes:      nameDER,
+		}
+
+		sanDER, err := asn1.Marshal([]asn1.RawValue{gn})
+		require.NoError(t, err)
+
+		return sanDER
+	}
+
+	t.Run("ShouldFailWhenSanParsingFails", func(t *testing.T) {
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: []byte{0x01, 0x02, 0x03}},
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, nil)
+		require.Error(t, err)
+
+		assert.Equal(t, ErrInvalidAttestation.Type, err.Type)
+		assert.Contains(t, err.Details, "invalid Authenticator Identity Key SAN data")
+		assert.Contains(t, err.DevInfo, "Error occurred parsing SAN extension")
+	})
+
+	t.Run("ShouldFailWhenParentMissingAikEku", func(t *testing.T) {
+		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
+
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		parent := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing required Extended Key Usage")
+	})
+
+	t.Run("ShouldSucceedAndMutateCertificates", func(t *testing.T) {
+		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
+		otherCritical := asn1.ObjectIdentifier{2, 999, 1}
+
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnhandledCriticalExtensions: []asn1.ObjectIdentifier{
+				oidExtensionSubjectAltName,
+				otherCritical,
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		parent := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		require.Nil(t, err)
+
+		require.Len(t, leaf.UnhandledCriticalExtensions, 1)
+		assert.True(t, leaf.UnhandledCriticalExtensions[0].Equal(otherCritical))
+
+		require.Len(t, leaf.UnknownExtKeyUsage, 1)
+		assert.True(t, leaf.UnknownExtKeyUsage[0].Equal(otherEku))
+
+		require.Len(t, parent.UnknownExtKeyUsage, 1)
+		assert.True(t, parent.UnknownExtKeyUsage[0].Equal(otherEku))
+	})
+
+	t.Run("ShouldFailWhenLeafMissingAikEku", func(t *testing.T) {
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidMicrosoftKpPrivacyCA,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing required Extended Key Usage")
+	})
+}
+
+func TestTpm2Exponent(t *testing.T) {
+	testCases := []struct {
+		name   string
+		params *tpm2.TPMSRSAParms
+		want   uint32
+	}{
+		{
+			name:   "ShouldReturnDefaultWhenExponentIsZero",
+			params: &tpm2.TPMSRSAParms{Exponent: 0},
+			want:   65537,
+		},
+		{
+			name:   "ShouldReturnExponentWhenNonZero",
+			params: &tpm2.TPMSRSAParms{Exponent: 3},
+			want:   3,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tpm2Exponent(tc.params))
+		})
+	}
+}
+
+func TestTpm2NameDigest(t *testing.T) {
+	t.Run("ShouldRejectNameTooShort", func(t *testing.T) {
+		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: []byte{0x00, 0x0B}})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "name too short")
+	})
+
+	t.Run("ShouldRejectInvalidHashAlgorithm", func(t *testing.T) {
+		buf := []byte{0xFF, 0xFF, 0x01}
+		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid hash algorithm")
+	})
+
+	t.Run("ShouldRejectDigestLengthMismatch", func(t *testing.T) {
+		buf := []byte{0x00, 0x0B, 0xAA}
+		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid name digest length")
+	})
+
+	t.Run("ShouldReturnAlgAndDigestWhenValid", func(t *testing.T) {
+		digest := make([]byte, sha256.Size)
+		for i := range digest {
+			digest[i] = byte(i)
+		}
+
+		buf := append([]byte{0x00, 0x0B}, digest...)
+		alg, gotDigest, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
+		require.NoError(t, err)
+		assert.Equal(t, tpm2.TPMAlgSHA256, alg)
+		assert.Equal(t, digest, gotDigest)
+	})
+}
+
+func TestTpm2NameMatch(t *testing.T) {
+	t.Run("ShouldReturnFalseWhenInputsNil", func(t *testing.T) {
+		match, err := tpm2NameMatch(nil, nil)
+		require.NoError(t, err)
+		assert.False(t, match)
+	})
+
+	t.Run("ShouldErrorWhenQualifiedSignerDigestAlgorithmInvalid", func(t *testing.T) {
+		pubArea := makeTPMTPublicRSA(nil)
+
+		certInfo := &tpm2.TPMSAttest{
+			Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](
+				tpm2.TPMSTAttestCertify,
+				&tpm2.TPMSCertifyInfo{
+					Name:          tpm2.TPM2BName{Buffer: []byte{0x00}},
+					QualifiedName: tpm2.TPM2BName{Buffer: []byte{0x00}},
+				},
+			),
+			QualifiedSigner: tpm2.TPM2BName{
+				Buffer: []byte{0xFF, 0xFF, 0x01},
+			},
+		}
+
+		match, err := tpm2NameMatch(certInfo, &pubArea)
+		require.Error(t, err)
+		assert.False(t, match)
+		assert.Contains(t, err.Error(), "invalid name digest algorithm")
+	})
+
+	t.Run("ShouldReturnFalseWhenAttestedNameDoesNotMatchPubArea", func(t *testing.T) {
+		pubArea := makeTPMTPublicRSA(nil)
+
+		qualifiedSigner := tpm2.TPM2BName{
+			Buffer: append([]byte{0x00, 0x0B}, make([]byte, sha256.Size)...),
+		}
+
+		certInfo := &tpm2.TPMSAttest{
+			Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](
+				tpm2.TPMSTAttestCertify,
+				&tpm2.TPMSCertifyInfo{
+					Name:          tpm2.TPM2BName{Buffer: []byte{0xDE, 0xAD, 0xBE, 0xEF}},
+					QualifiedName: tpm2.TPM2BName{Buffer: []byte{0x00}},
+				},
+			),
+			QualifiedSigner: qualifiedSigner,
+		}
+
+		match, err := tpm2NameMatch(certInfo, &pubArea)
+		require.NoError(t, err)
+		assert.False(t, match)
+	})
+}
+
 func TestTPMAttestationVerificationSuccess(t *testing.T) {
 	for i := range testAttestationTPMResponses {
-		t.Run("TPM Positive tests", func(t *testing.T) {
+		t.Run("ShouldPassStandardScenario", func(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
 			attestationType, _, err := attestationFormatValidationHandlerTPM(pcc.Response.AttestationObject, clientDataHash[:], nil)
 			require.NoError(t, err)
-
-			if err != nil {
-				t.Fatalf("Not valid: %+v", err)
-			}
 
 			assert.Equal(t, "attca", attestationType)
 		})
@@ -236,7 +759,6 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
 			if tc.wantErr != "" {
 				assert.EqualError(t, err, tc.wantErr)
-				assert.Contains(t, err.Error(), tc.wantErr)
 			} else {
 				assert.Equal(t, "attca", attestationType)
 			}
