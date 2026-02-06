@@ -11,12 +11,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/binary"
+	"encoding/pem"
 	"errors"
 	"math"
-	"math/big"
 	"testing"
 
-	"github.com/google/go-tpm/legacy/tpm2"
+	"github.com/google/go-tpm/tpm2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -24,22 +24,945 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
+func TestForEachSAN(t *testing.T) {
+	t.Run("ShouldReturnErrorWhenAsn1UnmarshalFails", func(t *testing.T) {
+		err := forEachSAN([]byte{0x01, 0x02, 0x03}, func(tag int, data []byte) error {
+			return nil
+		})
+
+		require.Error(t, err)
+	})
+
+	t.Run("ShouldReturnErrorWhenTrailingDataExists", func(t *testing.T) {
+		extension := []byte{0x30, 0x00, 0x00}
+
+		err := forEachSAN(extension, func(tag int, data []byte) error {
+			return nil
+		})
+
+		assert.EqualError(t, err, "x509: trailing data after X.509 extension")
+	})
+
+	t.Run("ShouldReturnStructuralErrorWhenNotACompoundSequence", func(t *testing.T) {
+		extension, marshalErr := asn1.Marshal([]byte{0xAA, 0xBB})
+		require.NoError(t, marshalErr)
+
+		err := forEachSAN(extension, func(tag int, data []byte) error {
+			return nil
+		})
+
+		require.EqualError(t, err, "asn1: structure error: bad SAN sequence")
+
+		var structuralErr asn1.StructuralError
+
+		require.True(t, errors.As(err, &structuralErr))
+	})
+
+	t.Run("ShouldReturnErrorWhenInnerAsn1UnmarshalFails", func(t *testing.T) {
+		extension := []byte{0x30, 0x01, 0xFF}
+
+		err := forEachSAN(extension, func(tag int, data []byte) error {
+			return nil
+		})
+
+		assert.EqualError(t, err, "asn1: syntax error: truncated base 128 integer")
+	})
+}
+
+func TestParseSANExtension(t *testing.T) {
+	makeSANWithDN := func(t *testing.T, dnDER []byte) []byte {
+		t.Helper()
+
+		gn := asn1.RawValue{
+			Class:      asn1.ClassContextSpecific,
+			Tag:        nameTypeDN,
+			IsCompound: true,
+			Bytes:      dnDER,
+		}
+
+		sanDER, err := asn1.Marshal([]asn1.RawValue{gn})
+		require.NoError(t, err)
+
+		return sanDER
+	}
+
+	t.Run("ShouldReturnErrorWhenAsn1UnmarshalOfRdnSequenceFails", func(t *testing.T) {
+		san := makeSANWithDN(t, []byte{0x01, 0x02, 0x03})
+
+		manufacturer, model, version, err := parseSANExtension(san)
+		assert.EqualError(t, err, "asn1: structure error: tags don't match (16 vs {class:0 tag:1 length:2 isCompound:false}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} RDNSequence @2")
+		assert.Empty(t, manufacturer)
+		assert.Empty(t, model)
+		assert.Empty(t, version)
+	})
+
+	t.Run("ShouldSkipEmptyRdnSets", func(t *testing.T) {
+		rdnSeq := pkix.RDNSequence{
+			{},
+			{
+				{
+					Type:  oidTCGAtTpmManufacturer,
+					Value: "id:414D4400",
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: "ModelX",
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: "id:00070002",
+				},
+			},
+		}
+
+		dnDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		san := makeSANWithDN(t, dnDER)
+
+		manufacturer, model, version, err := parseSANExtension(san)
+		require.NoError(t, err)
+
+		assert.Equal(t, "414D4400", manufacturer)
+		assert.Equal(t, "ModelX", model)
+		assert.Equal(t, "00070002", version)
+	})
+
+	t.Run("ShouldSkipNonStringAttributeValues", func(t *testing.T) {
+		rdnSeq := pkix.RDNSequence{
+			{
+				{
+					Type: oidTCGAtTpmManufacturer,
+					Value: asn1.RawValue{
+						Class: asn1.ClassUniversal,
+						Tag:   asn1.TagOctetString,
+						Bytes: []byte{0xAA, 0xBB},
+					},
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: "ModelX",
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: "id:00070002",
+				},
+			},
+		}
+
+		dnDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		san := makeSANWithDN(t, dnDER)
+
+		manufacturer, model, version, err := parseSANExtension(san)
+		require.NoError(t, err)
+
+		assert.Empty(t, manufacturer)
+		assert.Equal(t, "ModelX", model)
+		assert.Equal(t, "00070002", version)
+	})
+}
+
+func TestIsValidTPMManufacturer(t *testing.T) {
+	testCases := []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{
+			name: "ShouldReturnTrueForKnownManufacturer",
+			id:   "414D4400",
+			want: true,
+		},
+		{
+			name: "ShouldReturnFalseForUnknownManufacturer",
+			id:   "DEADBEEF",
+			want: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, isValidTPMManufacturer(tc.id))
+		})
+	}
+}
+
+func TestTpmRemoveEKU(t *testing.T) {
+	t.Run("ShouldFailWhenAikEkuMissing", func(t *testing.T) {
+		cert := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				{1, 2, 3, 4},
+			},
+		}
+
+		assert.EqualError(t, tpmRemoveEKU(cert), "Attestation Identity Key certificate missing required Extended Key Usage.")
+	})
+
+	t.Run("ShouldRemoveAikAndMicrosoftEkuButKeepOtherUnknownEku", func(t *testing.T) {
+		other := asn1.ObjectIdentifier{1, 2, 3, 4}
+
+		cert := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidMicrosoftKpPrivacyCA,
+				other,
+				oidTCGKpAIKCertificate,
+			},
+		}
+
+		require.Nil(t, tpmRemoveEKU(cert))
+
+		require.Len(t, cert.UnknownExtKeyUsage, 1)
+		assert.True(t, cert.UnknownExtKeyUsage[0].Equal(other))
+	})
+}
+
+func TestTpmParseSANExtension(t *testing.T) {
+	makeSAN := func(t *testing.T, manufacturer, model, version string) []byte {
+		t.Helper()
+
+		rdnSeq := pkix.RDNSequence{
+			{
+				{
+					Type:  oidTCGAtTpmManufacturer,
+					Value: manufacturer,
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: model,
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: version,
+				},
+			},
+		}
+
+		nameDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		gn := asn1.RawValue{
+			Class:      asn1.ClassContextSpecific,
+			Tag:        nameTypeDN,
+			IsCompound: true,
+			Bytes:      nameDER,
+		}
+
+		sanDER, err := asn1.Marshal([]asn1.RawValue{gn})
+		require.NoError(t, err)
+
+		return sanDER
+	}
+
+	t.Run("ShouldFailWhenSanExtensionMalformed", func(t *testing.T) {
+		cert := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: []byte{0x01, 0x02, 0x03}},
+			},
+		}
+
+		protoErr := tpmParseSANExtension(cert)
+		require.EqualError(t, protoErr, "Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.")
+
+		assert.Equal(t, ErrInvalidAttestation.Type, protoErr.Type)
+	})
+
+	t.Run("ShouldFailWhenSanDataMissing", func(t *testing.T) {
+		cert := &x509.Certificate{
+			Extensions: []pkix.Extension{},
+		}
+
+		assert.EqualError(t, tpmParseSANExtension(cert), "Invalid SAN data in AIK certificate.")
+	})
+
+	t.Run("ShouldRemoveUnhandledCriticalSanExtensionWhenPresent", func(t *testing.T) {
+		san := makeSAN(t, "id:414D4400", "ModelX", "id:00070002")
+		other := asn1.ObjectIdentifier{1, 2, 3, 4}
+
+		cert := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: san},
+			},
+			UnhandledCriticalExtensions: []asn1.ObjectIdentifier{
+				oidExtensionSubjectAltName,
+				other,
+			},
+		}
+
+		protoErr := tpmParseSANExtension(cert)
+		require.Nil(t, protoErr)
+
+		require.Len(t, cert.UnhandledCriticalExtensions, 1)
+		assert.True(t, cert.UnhandledCriticalExtensions[0].Equal(other))
+	})
+}
+
+func TestTpmParseAIKAttCA(t *testing.T) {
+	makeSAN := func(t *testing.T, manufacturer, model, version string) []byte {
+		t.Helper()
+
+		rdnSeq := pkix.RDNSequence{
+			{
+				{
+					Type:  oidTCGAtTpmManufacturer,
+					Value: manufacturer,
+				},
+				{
+					Type:  oidTCGAtTpmModel,
+					Value: model,
+				},
+				{
+					Type:  oidTCGAtTPMVersion,
+					Value: version,
+				},
+			},
+		}
+
+		nameDER, err := asn1.Marshal(rdnSeq)
+		require.NoError(t, err)
+
+		gn := asn1.RawValue{
+			Class:      asn1.ClassContextSpecific,
+			Tag:        nameTypeDN,
+			IsCompound: true,
+			Bytes:      nameDER,
+		}
+
+		sanDER, err := asn1.Marshal([]asn1.RawValue{gn})
+		require.NoError(t, err)
+
+		return sanDER
+	}
+
+	t.Run("ShouldFailWhenSanParsingFails", func(t *testing.T) {
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: []byte{0x01, 0x02, 0x03}},
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, nil)
+		require.Error(t, err)
+
+		assert.Equal(t, ErrInvalidAttestation.Type, err.Type)
+		assert.Contains(t, err.Details, "invalid Authenticator Identity Key SAN data")
+		assert.Contains(t, err.DevInfo, "Error occurred parsing SAN extension")
+	})
+
+	t.Run("ShouldFailWhenParentMissingAikEku", func(t *testing.T) {
+		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
+
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		parent := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing required Extended Key Usage")
+	})
+
+	t.Run("ShouldSucceedAndMutateCertificates", func(t *testing.T) {
+		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
+		otherCritical := asn1.ObjectIdentifier{2, 999, 1}
+
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnhandledCriticalExtensions: []asn1.ObjectIdentifier{
+				oidExtensionSubjectAltName,
+				otherCritical,
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		parent := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+				oidMicrosoftKpPrivacyCA,
+				otherEku,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		require.Nil(t, err)
+
+		require.Len(t, leaf.UnhandledCriticalExtensions, 1)
+		assert.True(t, leaf.UnhandledCriticalExtensions[0].Equal(otherCritical))
+
+		require.Len(t, leaf.UnknownExtKeyUsage, 1)
+		assert.True(t, leaf.UnknownExtKeyUsage[0].Equal(otherEku))
+
+		require.Len(t, parent.UnknownExtKeyUsage, 1)
+		assert.True(t, parent.UnknownExtKeyUsage[0].Equal(otherEku))
+	})
+
+	t.Run("ShouldFailWhenLeafMissingAikEku", func(t *testing.T) {
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidMicrosoftKpPrivacyCA,
+			},
+		}
+
+		err := tpmParseAIKAttCA(leaf, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing required Extended Key Usage")
+	})
+}
+
+func TestTpm2Exponent(t *testing.T) {
+	testCases := []struct {
+		name   string
+		params *tpm2.TPMSRSAParms
+		want   uint32
+	}{
+		{
+			name:   "ShouldReturnDefaultWhenExponentIsZero",
+			params: &tpm2.TPMSRSAParms{Exponent: 0},
+			want:   65537,
+		},
+		{
+			name:   "ShouldReturnExponentWhenNonZero",
+			params: &tpm2.TPMSRSAParms{Exponent: 3},
+			want:   3,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tpm2Exponent(tc.params))
+		})
+	}
+}
+
+func TestTpm2NameDigest(t *testing.T) {
+	t.Run("ShouldRejectNameTooShort", func(t *testing.T) {
+		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: []byte{0x00, 0x0B}})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "name too short")
+	})
+
+	t.Run("ShouldRejectInvalidHashAlgorithm", func(t *testing.T) {
+		buf := []byte{0xFF, 0xFF, 0x01}
+		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid hash algorithm")
+	})
+
+	t.Run("ShouldRejectDigestLengthMismatch", func(t *testing.T) {
+		buf := []byte{0x00, 0x0B, 0xAA}
+		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid name digest length")
+	})
+
+	t.Run("ShouldReturnAlgAndDigestWhenValid", func(t *testing.T) {
+		digest := make([]byte, sha256.Size)
+		for i := range digest {
+			digest[i] = byte(i)
+		}
+
+		buf := append([]byte{0x00, 0x0B}, digest...)
+		alg, gotDigest, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
+		require.NoError(t, err)
+		assert.Equal(t, tpm2.TPMAlgSHA256, alg)
+		assert.Equal(t, digest, gotDigest)
+	})
+}
+
+func TestTpm2NameMatch(t *testing.T) {
+	t.Run("ShouldReturnFalseWhenInputsNil", func(t *testing.T) {
+		match, err := tpm2NameMatch(nil, nil)
+		require.NoError(t, err)
+		assert.False(t, match)
+	})
+
+	t.Run("ShouldErrorWhenQualifiedSignerDigestAlgorithmInvalid", func(t *testing.T) {
+		pubArea := makeTPMTPublicRSA(nil)
+
+		certInfo := &tpm2.TPMSAttest{
+			Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](
+				tpm2.TPMSTAttestCertify,
+				&tpm2.TPMSCertifyInfo{
+					Name:          tpm2.TPM2BName{Buffer: []byte{0x00}},
+					QualifiedName: tpm2.TPM2BName{Buffer: []byte{0x00}},
+				},
+			),
+			QualifiedSigner: tpm2.TPM2BName{
+				Buffer: []byte{0xFF, 0xFF, 0x01},
+			},
+		}
+
+		match, err := tpm2NameMatch(certInfo, &pubArea)
+		require.Error(t, err)
+		assert.False(t, match)
+		assert.Contains(t, err.Error(), "invalid name digest algorithm")
+	})
+
+	t.Run("ShouldReturnFalseWhenAttestedNameDoesNotMatchPubArea", func(t *testing.T) {
+		pubArea := makeTPMTPublicRSA(nil)
+
+		qualifiedSigner := tpm2.TPM2BName{
+			Buffer: append([]byte{0x00, 0x0B}, make([]byte, sha256.Size)...),
+		}
+
+		certInfo := &tpm2.TPMSAttest{
+			Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](
+				tpm2.TPMSTAttestCertify,
+				&tpm2.TPMSCertifyInfo{
+					Name:          tpm2.TPM2BName{Buffer: []byte{0xDE, 0xAD, 0xBE, 0xEF}},
+					QualifiedName: tpm2.TPM2BName{Buffer: []byte{0x00}},
+				},
+			),
+			QualifiedSigner: qualifiedSigner,
+		}
+
+		match, err := tpm2NameMatch(certInfo, &pubArea)
+		require.NoError(t, err)
+		assert.False(t, match)
+	})
+}
+
 func TestTPMAttestationVerificationSuccess(t *testing.T) {
 	for i := range testAttestationTPMResponses {
-		t.Run("TPM Positive tests", func(t *testing.T) {
+		t.Run("ShouldPassStandardScenario", func(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
 			attestationType, _, err := attestationFormatValidationHandlerTPM(pcc.Response.AttestationObject, clientDataHash[:], nil)
 			require.NoError(t, err)
 
-			if err != nil {
-				t.Fatalf("Not valid: %+v", err)
-			}
-
 			assert.Equal(t, "attca", attestationType)
 		})
 	}
+}
+
+func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
+	tests := []struct {
+		name            string
+		att             AttestationObject
+		attestationType string
+		x5cs            []any
+		err             string
+	}{
+		{
+			"ShouldNotParseAttStatementMissingVer",
+			AttestationObject{},
+			"",
+			nil,
+			"Error retrieving ver value",
+		},
+		{
+			"ShouldNotParseAttStatementWithVersionNot2Point0",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "foo.bar", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}},
+			"",
+			nil,
+			"WebAuthn only supports TPM 2.0 currently",
+		},
+		{
+			"ShouldNotParseAttStatementWithNoAlg",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0"}},
+			"",
+			nil,
+			"Error retrieving alg value",
+		},
+		{
+			"ShouldNotParseAttStatementWithoutX5C",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}},
+			"",
+			nil,
+			ErrNotImplemented.Details,
+		},
+		{
+			"ShouldNotParseAttStatementWithECDAAKID",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtECDAAKID: []byte{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}},
+			"",
+			nil,
+			ErrNotImplemented.Details,
+		},
+		{
+			"ShouldNotParseAttStatementWithNoSig",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}}},
+			"",
+			nil,
+			"Error retrieving sig value",
+		},
+		{
+			"ShouldNotParseAttStatementCertInfoNotPresent",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}}},
+			"",
+			nil,
+			"Error retrieving certInfo value",
+		},
+		{
+			"ShouldNotParseAttStatementPubAreaNotPresent",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}}},
+			"",
+			nil,
+			"Error retrieving pubArea value",
+		},
+		{
+			"ShouldNotParseAttStatementPubAreaNotCorrectValue",
+			AttestationObject{AttStatement: defaultAttStatement},
+			"",
+			nil,
+			"Unable to decode TPMT_PUBLIC in attestation statement",
+		},
+		{
+			"ShouldNotParseAttStatementUnsupportedPublicKeyType",
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: tpm2.Marshal(makeTPMTPublicRSA(nil))}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
+			"",
+			nil,
+			"Unsupported Public Key Type",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(tc.att, nil, nil)
+
+			assert.Equal(t, tc.attestationType, attestationType)
+			assert.Equal(t, tc.x5cs, x5cs)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
+	epk, rpk, opk, rsaKey, eccKey, err := getTPMAttestionKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	require.GreaterOrEqual(t, rsaKey.E, 0)
+	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
+
+	e := uint32(rsaKey.E) //nolint:gosec
+
+	testCases := []struct {
+		name      string
+		keyType   webauthncose.COSEKeyType
+		rsaParams *TPMRSATestParameters
+		eccParams *TPMECCTestParameters
+		cpk       []byte
+		wantErr   string
+	}{
+		{
+			"CurveMismatch",
+			webauthncose.EllipticKey,
+			nil,
+			&TPMECCTestParameters{Curve: tpm2.TPMECCNistP224, X: eccKey.X.Bytes(), Y: eccKey.Y.Bytes()},
+			epk,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"XMismatch",
+			webauthncose.EllipticKey,
+			nil,
+			&TPMECCTestParameters{X: corruptBytes(eccKey.X.Bytes()), Y: eccKey.Y.Bytes()},
+			epk,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"YMismatch",
+			webauthncose.EllipticKey,
+			nil,
+			&TPMECCTestParameters{X: eccKey.X.Bytes(), Y: corruptBytes(eccKey.Y.Bytes())},
+			epk,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"NMismatch",
+			webauthncose.RSAKey,
+			&TPMRSATestParameters{Modulus: corruptBytes(rsaKey.N.Bytes()), Exponent: e},
+			nil,
+			rpk,
+			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"EMismatch",
+			webauthncose.RSAKey,
+			&TPMRSATestParameters{Modulus: rsaKey.N.Bytes(), Exponent: e + 1},
+			nil,
+			rpk,
+			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"UnsupportedKeyType",
+			webauthncose.OctetKey,
+			nil,
+			nil,
+			opk,
+			"Unsupported Public Key Type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attStmt := make(map[string]any, len(defaultAttStatement))
+			for id, v := range defaultAttStatement {
+				attStmt[id] = v
+			}
+
+			var public tpm2.TPMTPublic
+
+			switch tc.keyType {
+			case webauthncose.EllipticKey:
+				public = makeTPMTPublicECDSA(tc.eccParams)
+			case webauthncose.RSAKey:
+				public = makeTPMTPublicRSA(tc.rsaParams)
+			case webauthncose.OctetKey:
+				public = makeTPMTPublicECDSA(nil)
+			default:
+				t.Fatal("invalid key type")
+			}
+
+			attStmt[stmtPubArea] = tpm2.Marshal(public)
+			att := AttestationObject{
+				AttStatement: attStmt,
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						CredentialPublicKey: tc.cpk,
+					},
+				},
+			}
+
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
+			if tc.wantErr != "" {
+				assert.EqualError(t, err, tc.wantErr)
+			} else {
+				assert.Equal(t, "attca", attestationType)
+			}
+		})
+	}
+}
+
+func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
+	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+	extraData := h.Sum(nil)
+
+	testCases := []struct {
+		name     string
+		certInfo tpm2.TPMSAttest
+		err      string
+	}{
+		{
+			"CertInfoMagicValueNoCorrect",
+			tpm2.TPMSAttest{Magic: 42, Type: tpm2.TPMSTAttestCreation, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCreationInfo](tpm2.TPMSTAttestCreation, &tpm2.TPMSCreationInfo{})},
+			"Magic is not set to TPM_GENERATED_VALUE",
+		},
+		{
+			"CertInfoTypeNotTagAttestCreation",
+			tpm2.TPMSAttest{Magic: tpm2.TPMGeneratedValue, Type: tpm2.TPMSTAttestCreation, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCreationInfo](tpm2.TPMSTAttestCreation, &tpm2.TPMSCreationInfo{})},
+			"Type is not set to TPM_ST_ATTEST_CERTIFY",
+		},
+		{
+			"CertInfoTypeNotTagAttestCertify",
+			tpm2.TPMSAttest{Magic: tpm2.TPMGeneratedValue, Type: tpm2.TPMSTAttestCertify, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{})},
+			"ExtraData is not set to hash of attToBeSigned",
+		},
+		{
+			"CertInfoPubAreaNameMismatch",
+			tpm2.TPMSAttest{Magic: tpm2.TPMGeneratedValue, Type: tpm2.TPMSTAttestCertify, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{Name: tpm2.TPM2BName{Buffer: nil}, QualifiedName: tpm2.TPM2BName{Buffer: nil}}), ExtraData: tpm2.TPM2BData{Buffer: extraData}},
+			"Signature validation error: crypto/rsa: verification error",
+		},
+		{
+			"CertInfoPubAreaHashMismatch",
+			tpm2.TPMSAttest{Magic: tpm2.TPMGeneratedValue, Type: tpm2.TPMSTAttestCertify, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{Name: tpm2.TPM2BName{Buffer: tpm2.Marshal(tpm2.TPMTHA{HashAlg: tpm2.TPMAlgSHA256, Digest: extraData})}, QualifiedName: tpm2.TPM2BName{Buffer: nil}}), ExtraData: tpm2.TPM2BData{Buffer: h.Sum(nil)}},
+			"Signature validation error: crypto/rsa: verification error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attStmt := make(map[string]any, len(defaultAttStatement))
+
+			for id, v := range defaultAttStatement {
+				attStmt[id] = v
+			}
+
+			attStmt[stmtX5C] = []any{mustConvertPEMToPEMBytes(t, certificateAndroidKeyRoot1)}
+
+			rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+			require.GreaterOrEqual(t, rsaKey.E, 0)
+			require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
+
+			e := uint32(rsaKey.E) //nolint:gosec
+
+			r := webauthncose.RSAPublicKeyData{
+				PublicKeyData: webauthncose.PublicKeyData{
+					KeyType:   int64(webauthncose.RSAKey),
+					Algorithm: int64(webauthncose.AlgRS256),
+				},
+				Modulus:  rsaKey.N.Bytes(),
+				Exponent: uint32ToBytes(e),
+			}
+
+			attStmt[stmtPubArea] = tpm2.Marshal(makeTPMTPublicRSA(&TPMRSATestParameters{Modulus: rsaKey.N.Bytes(), Exponent: e}))
+			rpk, _ := webauthncbor.Marshal(r)
+			att := AttestationObject{
+				AttStatement: attStmt,
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						CredentialPublicKey: rpk,
+					},
+				},
+			}
+
+			att.AttStatement[stmtCertInfo] = tpm2.Marshal(tc.certInfo)
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.Equal(t, "attca", attestationType)
+			}
+		})
+	}
+}
+
+func TestTPMAttestationVerificationFailX5c(t *testing.T) {
+	attStmt := make(map[string]any, len(defaultAttStatement))
+
+	for id, v := range defaultAttStatement {
+		attStmt[id] = v
+	}
+
+	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+	require.GreaterOrEqual(t, rsaKey.E, 0)
+	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
+
+	e := uint32(rsaKey.E) //nolint:gosec
+
+	r := webauthncose.RSAPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.RSAKey),
+			Algorithm: int64(webauthncose.AlgRS256),
+		},
+		Modulus:  rsaKey.N.Bytes(),
+		Exponent: uint32ToBytes(e),
+	}
+
+	public := makeTPMTPublicRSA(&TPMRSATestParameters{Modulus: rsaKey.N.Bytes(), Exponent: e})
+
+	pubBytes := tpm2.Marshal(public)
+
+	attStmt[stmtPubArea] = pubBytes
+	rpk, _ := webauthncbor.Marshal(r)
+	att := AttestationObject{
+		AttStatement: attStmt,
+		AuthData: AuthenticatorData{
+			AttData: AttestedCredentialData{
+				CredentialPublicKey: rpk,
+			},
+		},
+	}
+
+	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+
+	h.Write(att.RawAuthData)
+	extraData := h.Sum(nil)
+
+	h.Reset()
+
+	h.Write(pubBytes)
+	pubName := h.Sum(nil)
+
+	certInfo := tpm2.TPMSAttest{
+		Magic: tpm2.TPMGeneratedValue,
+		Type:  tpm2.TPMSTAttestCertify,
+		Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{
+			Name: tpm2.TPM2BName{
+				Buffer: tpm2.Marshal(tpm2.TPMTHA{
+					HashAlg: tpm2.TPMAlgSHA256,
+					Digest:  pubName,
+				}),
+			},
+		}),
+		ExtraData: tpm2.TPM2BData{
+			Buffer: extraData,
+		},
+	}
+
+	attStmt[stmtCertInfo] = tpm2.Marshal(certInfo)
+
+	makeX5c := func(b []byte) []any {
+		q := make([]any, 1)
+		q[0] = b
+
+		return q
+	}
+
+	tests := []struct {
+		name    string
+		x5c     []any
+		wantErr string
+	}{
+		{
+			"TPM Negative Test x5c empty",
+			make([]any, 1),
+			"Error getting certificate from x5c cert chain",
+		},
+		{
+			"TPM Negative Test x5c can't parse",
+			makeX5c(make([]byte, 1)),
+			"Error parsing certificate from ASN.1",
+		},
+	}
+
+	for _, tt := range tests {
+		att.AttStatement[stmtX5C] = tt.x5c
+		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
+
+		if tt.wantErr != "" {
+			assert.Contains(t, err.Error(), tt.wantErr)
+		} else {
+			assert.Equal(t, "attca", attestationType)
+		}
+	}
+}
+
+type TPMECCTestParameters struct {
+	Curve tpm2.TPMECCCurve
+	X     []byte
+	Y     []byte
+}
+
+type TPMRSATestParameters struct {
+	KeyBits  tpm2.TPMIRSAKeyBits
+	Exponent uint32
+	Modulus  []byte
 }
 
 var testAttestationTPMResponses = []string{
@@ -75,133 +998,112 @@ var testAttestationTPMResponses = []string{
 	}`,
 }
 
-func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
-	tests := []struct {
-		name            string
-		att             AttestationObject
-		attestationType string
-		x5cs            []any
-		err             string
-	}{
-		{
-			"ShouldNotParseAttStatementMissingVer",
-			AttestationObject{},
-			"",
-			nil,
-			"Error retrieving ver value",
-		},
-		{
-			"ShouldNotParseAttStatementWithVersionNot2Point0",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "foo.bar"}},
-			"",
-			nil,
-			"WebAuthn only supports TPM 2.0 currently",
-		},
-		{
-			"ShouldNotParseAttStatementWithNoAlg",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0"}},
-			"",
-			nil,
-			"Error retrieving alg value",
-		},
-		{
-			"ShouldNotParseAttStatementWithoutX5C",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0)}},
-			"",
-			nil,
-			ErrNotImplemented.Details,
-		},
-		{
-			"ShouldNotParseAttStatementWithECDAAKID",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtECDAAKID: []byte{}}},
-			"",
-			nil,
-			ErrNotImplemented.Details,
-		},
-		{
-			"ShouldNotParseAttStatementWithNoSig",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}}},
-			"",
-			nil,
-			"Error retrieving sig value",
-		},
-		{
-			"ShouldNotParseAttStatementCertInfoNotPresent",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}}},
-			"",
-			nil,
-			"Error retrieving certInfo value",
-		},
-		{
-			"ShouldNotParseAttStatementPubAreaNotPresent",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}}},
-			"",
-			nil,
-			"Error retrieving pubArea value",
-		},
-		{
-			"ShouldNotParseAttStatementPubAreaNotCorrectValue",
-			AttestationObject{AttStatement: defaultAttStatement},
-			"",
-			nil,
-			"Unable to decode TPMT_PUBLIC in attestation statement",
-		},
-		{
-			"ShouldNotParseAttStatementUnsupportedPublicKeyType",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: makeDefaultRSAPublicBytes()}, AuthData: AuthenticatorData{AttData: AttestedCredentialData{CredentialPublicKey: []byte{}}}},
-			"",
-			nil,
-			"Unsupported Public Key Type",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(tc.att, nil, nil)
+func makeTPMTPublicRSA(params *TPMRSATestParameters) (public tpm2.TPMTPublic) {
+	var (
+		bits   tpm2.TPMIRSAKeyBits
+		unique tpm2.TPMUPublicID
+		exp    uint32
+	)
 
-			assert.Equal(t, tc.attestationType, attestationType)
-			assert.Equal(t, tc.x5cs, x5cs)
+	if params != nil {
+		exp = params.Exponent
 
-			if tc.err != "" {
-				assert.EqualError(t, err, tc.err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+		if params.KeyBits != 0 {
+			bits = params.KeyBits
+		} else {
+			bits = tpm2.TPMIRSAKeyBits(2048)
+		}
+
+		if len(params.Modulus) > 0 {
+			unique = tpm2.NewTPMUPublicID[*tpm2.TPM2BPublicKeyRSA](tpm2.TPMAlgRSA, &tpm2.TPM2BPublicKeyRSA{Buffer: params.Modulus})
+		}
+	} else {
+		bits = tpm2.TPMIRSAKeyBits(2048)
 	}
+
+	public = tpm2.TPMTPublic{
+		Type:    tpm2.TPMAlgRSA,
+		NameAlg: tpm2.TPMAlgSHA256,
+		ObjectAttributes: tpm2.TPMAObject{
+			SignEncrypt:         true,
+			Restricted:          true,
+			FixedTPM:            true,
+			FixedParent:         true,
+			SensitiveDataOrigin: true,
+			UserWithAuth:        true,
+		},
+		AuthPolicy: tpm2.TPM2BDigest{},
+		Parameters: tpm2.NewTPMUPublicParms[*tpm2.TPMSRSAParms](tpm2.TPMAlgRSA, &tpm2.TPMSRSAParms{
+			Symmetric: tpm2.TPMTSymDefObject{
+				Algorithm: tpm2.TPMAlgNull,
+			},
+			Scheme: tpm2.TPMTRSAScheme{
+				Scheme: tpm2.TPMAlgRSASSA,
+				Details: tpm2.NewTPMUAsymScheme[*tpm2.TPMSSigSchemeRSASSA](tpm2.TPMAlgRSASSA, &tpm2.TPMSSigSchemeRSASSA{
+					HashAlg: tpm2.TPMAlgSHA256,
+				}),
+			},
+			Exponent: exp,
+			KeyBits:  bits,
+		}),
+		Unique: unique,
+	}
+
+	return public
 }
 
-func makeDefaultRSAPublicBytes() []byte {
-	r, _ := defaultRSAPublic.Encode()
-	return r
+func makeTPMTPublicECDSA(params *TPMECCTestParameters) tpm2.TPMTPublic {
+	var (
+		curve tpm2.TPMECCCurve
+		x, y  []byte
+	)
+
+	if params != nil {
+		if params.Curve != tpm2.TPMECCNone {
+			curve = params.Curve
+		}
+
+		x, y = params.X, params.Y
+	}
+
+	if curve == tpm2.TPMECCNone {
+		curve = tpm2.TPMECCNistP256
+	}
+
+	return tpm2.TPMTPublic{
+		Type:    tpm2.TPMAlgECC,
+		NameAlg: tpm2.TPMAlgSHA256,
+		ObjectAttributes: tpm2.TPMAObject{
+			SignEncrypt:         true,
+			Restricted:          true,
+			FixedTPM:            true,
+			FixedParent:         true,
+			SensitiveDataOrigin: true,
+			UserWithAuth:        true,
+		},
+		AuthPolicy: tpm2.TPM2BDigest{},
+		Parameters: tpm2.NewTPMUPublicParms[*tpm2.TPMSECCParms](tpm2.TPMAlgECC, &tpm2.TPMSECCParms{
+			Symmetric: tpm2.TPMTSymDefObject{
+				Algorithm: tpm2.TPMAlgNull,
+			},
+			Scheme: tpm2.TPMTECCScheme{
+				Scheme: tpm2.TPMAlgECDSA,
+				Details: tpm2.NewTPMUAsymScheme[*tpm2.TPMSSigSchemeECDSA](tpm2.TPMAlgECDSA, &tpm2.TPMSSigSchemeECDSA{
+					HashAlg: tpm2.TPMAlgSHA256,
+				}),
+			},
+			CurveID: curve,
+			KDF:     tpm2.TPMTKDFScheme{Scheme: tpm2.TPMAlgNull},
+		}),
+		Unique: tpm2.NewTPMUPublicID(
+			tpm2.TPMAlgECC,
+			&tpm2.TPMSECCPoint{
+				X: tpm2.TPM2BECCParameter{Buffer: x},
+				Y: tpm2.TPM2BECCParameter{Buffer: y},
+			},
+		),
+	}
 }
-
-var (
-	defaultRSAPublic = tpm2.Public{
-		Type:       tpm2.AlgRSA,
-		NameAlg:    tpm2.AlgSHA256,
-		Attributes: tpm2.FlagSignerDefault,
-		RSAParameters: &tpm2.RSAParams{
-			Sign: &tpm2.SigScheme{
-				Alg:  tpm2.AlgRSASSA,
-				Hash: tpm2.AlgSHA256,
-			},
-			KeyBits: 2048,
-		},
-	}
-
-	defaultECCPublic = tpm2.Public{
-		Type:       tpm2.AlgECC,
-		NameAlg:    tpm2.AlgSHA256,
-		Attributes: tpm2.FlagSignerDefault,
-		ECCParameters: &tpm2.ECCParams{
-			Sign: &tpm2.SigScheme{
-				Alg:  tpm2.AlgECDSA,
-				Hash: tpm2.AlgSHA256,
-			},
-			CurveID: tpm2.CurveNISTP256,
-		},
-	}
-)
 
 var defaultAttStatement = map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(-257), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}
 
@@ -308,327 +1210,10 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 	return epk, rpk, opk, *rsaKey, *eccKey, err
 }
 
-func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
-	epk, rpk, opk, rsaKey, eccKey, err := getTPMAttestionKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
+func mustConvertPEMToPEMBytes(t *testing.T, in string) []byte {
+	data, rest := pem.Decode([]byte(in))
+	require.NotNil(t, data)
+	require.Len(t, rest, 0)
 
-	require.GreaterOrEqual(t, rsaKey.E, 0)
-	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
-
-	e := uint32(rsaKey.E) //nolint:gosec
-
-	tests := []struct {
-		name      string
-		keyType   webauthncose.COSEKeyType
-		rsaParams tpm2.RSAParams
-		eccParams tpm2.ECCParams
-		cpk       []byte
-		wantErr   string
-	}{
-		{
-			"TPM Negative Test pubArea curve mismatch",
-			webauthncose.EllipticKey,
-			tpm2.RSAParams{},
-			tpm2.ECCParams{CurveID: tpm2.CurveNISTP224, Point: tpm2.ECPoint{XRaw: eccKey.X.Bytes(), YRaw: eccKey.Y.Bytes()}},
-			epk,
-			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
-		},
-		{
-			"TPM Negative Test pubArea X mismatch",
-			webauthncose.EllipticKey,
-			tpm2.RSAParams{},
-			tpm2.ECCParams{CurveID: tpm2.CurveNISTP256, Point: tpm2.ECPoint{XRaw: corruptBytes(eccKey.X.Bytes()), YRaw: eccKey.Y.Bytes()}},
-			epk,
-			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
-		},
-		{
-			"TPM Negative Test pubArea Y mismatch",
-			webauthncose.EllipticKey,
-			tpm2.RSAParams{},
-			tpm2.ECCParams{CurveID: tpm2.CurveNISTP256, Point: tpm2.ECPoint{XRaw: eccKey.X.Bytes(), YRaw: corruptBytes(eccKey.Y.Bytes())}},
-			epk,
-			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
-		},
-		{
-			"TPM Negative Test pubArea N mismatch",
-			webauthncose.RSAKey,
-			tpm2.RSAParams{ModulusRaw: corruptBytes(rsaKey.N.Bytes()), ExponentRaw: e},
-			tpm2.ECCParams{},
-			rpk,
-			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
-		},
-		{
-			"TPM Negative Test pubArea E mismatch",
-			webauthncose.RSAKey,
-			tpm2.RSAParams{ModulusRaw: rsaKey.N.Bytes(), ExponentRaw: e + 1},
-			tpm2.ECCParams{},
-			rpk,
-			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
-		},
-		{
-			"TPM Negative Test pubArea unsupported key type",
-			webauthncose.OctetKey,
-			tpm2.RSAParams{},
-			tpm2.ECCParams{},
-			opk,
-			"Unsupported Public Key Type",
-		},
-	}
-	for _, tt := range tests {
-		attStmt := make(map[string]any, len(defaultAttStatement))
-		for id, v := range defaultAttStatement {
-			attStmt[id] = v
-		}
-
-		public := tpm2.Public{}
-
-		switch tt.keyType {
-		case webauthncose.EllipticKey:
-			public = defaultECCPublic
-			public.ECCParameters.CurveID = tt.eccParams.CurveID
-			public.ECCParameters.Point.XRaw = tt.eccParams.Point.XRaw
-			public.ECCParameters.Point.YRaw = tt.eccParams.Point.YRaw
-		case webauthncose.RSAKey:
-			public = defaultRSAPublic
-			public.RSAParameters.ExponentRaw = tt.rsaParams.ExponentRaw
-			public.RSAParameters.ModulusRaw = tt.rsaParams.ModulusRaw
-		case webauthncose.OctetKey:
-			public = defaultECCPublic
-		}
-
-		attStmt[stmtPubArea], _ = public.Encode()
-		att := AttestationObject{
-			AttStatement: attStmt,
-			AuthData: AuthenticatorData{
-				AttData: AttestedCredentialData{
-					CredentialPublicKey: tt.cpk,
-				},
-			},
-		}
-
-		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
-		if tt.wantErr != "" {
-			assert.Contains(t, err.Error(), tt.wantErr)
-		} else {
-			assert.Equal(t, "attca", attestationType)
-		}
-	}
-}
-
-func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
-	attStmt := make(map[string]any, len(defaultAttStatement))
-
-	for id, v := range defaultAttStatement {
-		attStmt[id] = v
-	}
-
-	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-
-	require.GreaterOrEqual(t, rsaKey.E, 0)
-	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
-
-	e := uint32(rsaKey.E) //nolint:gosec
-
-	r := webauthncose.RSAPublicKeyData{
-		PublicKeyData: webauthncose.PublicKeyData{
-			KeyType:   int64(webauthncose.RSAKey),
-			Algorithm: int64(webauthncose.AlgRS256),
-		},
-		Modulus:  rsaKey.N.Bytes(),
-		Exponent: uint32ToBytes(e),
-	}
-
-	public := defaultRSAPublic
-	public.RSAParameters.ExponentRaw = e
-	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
-	attStmt[stmtPubArea], _ = public.Encode()
-	rpk, _ := webauthncbor.Marshal(r)
-	att := AttestationObject{
-		AttStatement: attStmt,
-		AuthData: AuthenticatorData{
-			AttData: AttestedCredentialData{
-				CredentialPublicKey: rpk,
-			},
-		},
-	}
-
-	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
-	h.Write(att.RawAuthData)
-	extraData := h.Sum(nil)
-
-	tests := []struct {
-		name     string
-		certInfo tpm2.AttestationData
-		wantErr  string
-	}{
-		{
-			"TPM Negative Test CertInfo invalid certInfo",
-			tpm2.AttestationData{},
-			"decoding Magic/Type: EOF",
-		},
-		{
-			"TPM Negative Test CertInfo magic value not 0xff544347",
-			tpm2.AttestationData{Magic: 42, Type: tpm2.TagAttestCreation, AttestedCreationInfo: &tpm2.CreationInfo{}},
-			"incorrect magic value: 2a",
-		},
-		{
-			"TPM Negative Test CertInfo type not TagAttestCertify",
-			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCreation, AttestedCreationInfo: &tpm2.CreationInfo{}},
-			"Type is not set to TPM_ST_ATTEST_CERTIFY",
-		},
-		{
-			"TPM Negative Test CertInfo type not TagAttestCertify",
-			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{}},
-			"ExtraData is not set to hash of attToBeSigned",
-		},
-		{
-			"TPM Negative Test CertInfo Name/pubArea mismatch",
-			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{Name: tpm2.Name{Digest: nil}}, ExtraData: extraData},
-			"Name doesn't have a Digest, can't compare to Public",
-		},
-		{
-			"TPM Negative Test CertInfo Name/pubArea mismatch",
-			tpm2.AttestationData{Magic: 0xff544347, Type: tpm2.TagAttestCertify, AttestedCertifyInfo: &tpm2.CertifyInfo{Name: tpm2.Name{Digest: &tpm2.HashValue{Alg: tpm2.AlgSHA256, Value: extraData}}}, ExtraData: h.Sum(nil)},
-			"Hash value mismatch attested and pubArea",
-		},
-	}
-	for _, tt := range tests {
-		certInfo, err := tt.certInfo.Encode()
-		if tt.certInfo.Magic != 0 && err != nil {
-			t.Fatal(err)
-		}
-
-		att.AttStatement[stmtCertInfo] = certInfo
-		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
-
-		if tt.wantErr != "" {
-			assert.Contains(t, err.Error(), tt.wantErr)
-		} else {
-			assert.Equal(t, "attca", attestationType)
-		}
-	}
-}
-
-var (
-	//nolint:unused
-	x5cTemplate = x509.Certificate{
-		SerialNumber: big.NewInt(0),
-		Version:      3,
-		Subject: pkix.Name{
-			Country:            []string{"US"},
-			Organization:       []string{"Duo Labs"},
-			OrganizationalUnit: []string{"Authenticator Attestation"},
-			CommonName:         "WebAuthn.io",
-		},
-		Extensions: []pkix.Extension{
-			{
-				Id:       asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4},
-				Critical: false,
-				Value: []byte{
-					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-				},
-			},
-		},
-		IsCA: false,
-	}
-)
-
-func TestTPMAttestationVerificationFailX5c(t *testing.T) {
-	attStmt := make(map[string]any, len(defaultAttStatement))
-
-	for id, v := range defaultAttStatement {
-		attStmt[id] = v
-	}
-
-	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-
-	require.GreaterOrEqual(t, rsaKey.E, 0)
-	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
-
-	e := uint32(rsaKey.E) //nolint:gosec
-
-	r := webauthncose.RSAPublicKeyData{
-		PublicKeyData: webauthncose.PublicKeyData{
-			KeyType:   int64(webauthncose.RSAKey),
-			Algorithm: int64(webauthncose.AlgRS256),
-		},
-		Modulus:  rsaKey.N.Bytes(),
-		Exponent: uint32ToBytes(e),
-	}
-
-	public := defaultRSAPublic
-	public.RSAParameters.ExponentRaw = e
-	public.RSAParameters.ModulusRaw = rsaKey.N.Bytes()
-	pubBytes, _ := public.Encode()
-	attStmt[stmtPubArea] = pubBytes
-	rpk, _ := webauthncbor.Marshal(r)
-	att := AttestationObject{
-		AttStatement: attStmt,
-		AuthData: AuthenticatorData{
-			AttData: AttestedCredentialData{
-				CredentialPublicKey: rpk,
-			},
-		},
-	}
-
-	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
-	h.Write(att.RawAuthData)
-	extraData := h.Sum(nil)
-
-	h.Reset()
-	h.Write(pubBytes)
-	pubName := h.Sum(nil)
-
-	certInfo := tpm2.AttestationData{
-		Magic: 0xff544347,
-		Type:  tpm2.TagAttestCertify,
-		AttestedCertifyInfo: &tpm2.CertifyInfo{
-			Name: tpm2.Name{
-				Digest: &tpm2.HashValue{
-					Alg:   tpm2.AlgSHA256,
-					Value: pubName,
-				},
-			},
-		},
-		ExtraData: extraData,
-	}
-	attStmt[stmtCertInfo], _ = certInfo.Encode()
-
-	makeX5c := func(b []byte) []any {
-		q := make([]any, 1)
-		q[0] = b
-
-		return q
-	}
-
-	tests := []struct {
-		name    string
-		x5c     []any
-		wantErr string
-	}{
-		{
-			"TPM Negative Test x5c empty",
-			make([]any, 1),
-			"Error getting certificate from x5c cert chain",
-		},
-		{
-			"TPM Negative Test x5c can't parse",
-			makeX5c(make([]byte, 1)),
-			"Error parsing certificate from ASN.1",
-		},
-	}
-
-	for _, tt := range tests {
-		att.AttStatement[stmtX5C] = tt.x5c
-		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
-
-		if tt.wantErr != "" {
-			assert.Contains(t, err.Error(), tt.wantErr)
-		} else {
-			assert.Equal(t, "attca", attestationType)
-		}
-	}
+	return data.Bytes
 }

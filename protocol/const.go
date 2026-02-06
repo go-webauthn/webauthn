@@ -15,6 +15,10 @@ const (
 )
 
 const (
+	versionTPM20 = "2.0"
+)
+
+const (
 	attStatementAndroidSafetyNetHostname = "attest.android.com"
 )
 
