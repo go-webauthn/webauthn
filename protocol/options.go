@@ -226,6 +226,9 @@ const (
 	// authenticators.
 	AttestationFormatApple AttestationFormat = "apple"
 
+	// AttestationFormatCompound is used to pass multiple, self-contained attestation statements in a single ceremony.
+	AttestationFormatCompound AttestationFormat = "compound"
+
 	// AttestationFormatNone is the attestation statement format that is used to replace any authenticator-provided
 	// attestation statement when a WebAuthn Relying Party indicates it does not wish to receive attestation information.
 	AttestationFormatNone AttestationFormat = "none"
