@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/pem"
 	"errors"
 	"math"
 	"testing"
@@ -244,41 +245,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 }
 
 func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
-	attStmt := make(map[string]any, len(defaultAttStatement))
-
-	for id, v := range defaultAttStatement {
-		attStmt[id] = v
-	}
-
-	rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-
-	require.GreaterOrEqual(t, rsaKey.E, 0)
-	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
-
-	e := uint32(rsaKey.E) //nolint:gosec
-
-	r := webauthncose.RSAPublicKeyData{
-		PublicKeyData: webauthncose.PublicKeyData{
-			KeyType:   int64(webauthncose.RSAKey),
-			Algorithm: int64(webauthncose.AlgRS256),
-		},
-		Modulus:  rsaKey.N.Bytes(),
-		Exponent: uint32ToBytes(e),
-	}
-
-	attStmt[stmtPubArea] = tpm2.Marshal(makeTPMTPublicRSA(&TPMRSATestParameters{Modulus: rsaKey.N.Bytes(), Exponent: e}))
-	rpk, _ := webauthncbor.Marshal(r)
-	att := AttestationObject{
-		AttStatement: attStmt,
-		AuthData: AuthenticatorData{
-			AttData: AttestedCredentialData{
-				CredentialPublicKey: rpk,
-			},
-		},
-	}
-
 	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
-	h.Write(att.RawAuthData)
 	extraData := h.Sum(nil)
 
 	testCases := []struct {
@@ -292,7 +259,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 			"Magic is not set to TPM_GENERATED_VALUE",
 		},
 		{
-			"CertInfoTypeNotTagAttestCertify",
+			"CertInfoTypeNotTagAttestCreation",
 			tpm2.TPMSAttest{Magic: tpm2.TPMGeneratedValue, Type: tpm2.TPMSTAttestCreation, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCreationInfo](tpm2.TPMSTAttestCreation, &tpm2.TPMSCreationInfo{})},
 			"Type is not set to TPM_ST_ATTEST_CERTIFY",
 		},
@@ -304,17 +271,52 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 		{
 			"CertInfoPubAreaNameMismatch",
 			tpm2.TPMSAttest{Magic: tpm2.TPMGeneratedValue, Type: tpm2.TPMSTAttestCertify, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{Name: tpm2.TPM2BName{Buffer: nil}, QualifiedName: tpm2.TPM2BName{Buffer: nil}}), ExtraData: tpm2.TPM2BData{Buffer: extraData}},
-			"Name doesn't have a Digest, can't compare to Public",
+			"Signature validation error: crypto/rsa: verification error",
 		},
 		{
 			"CertInfoPubAreaHashMismatch",
 			tpm2.TPMSAttest{Magic: tpm2.TPMGeneratedValue, Type: tpm2.TPMSTAttestCertify, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{Name: tpm2.TPM2BName{Buffer: tpm2.Marshal(tpm2.TPMTHA{HashAlg: tpm2.TPMAlgSHA256, Digest: extraData})}, QualifiedName: tpm2.TPM2BName{Buffer: nil}}), ExtraData: tpm2.TPM2BData{Buffer: h.Sum(nil)}},
-			"Hash value mismatch attested and pubArea",
+			"Signature validation error: crypto/rsa: verification error",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			attStmt := make(map[string]any, len(defaultAttStatement))
+
+			for id, v := range defaultAttStatement {
+				attStmt[id] = v
+			}
+
+			attStmt[stmtX5C] = []any{mustConvertPEMToPEMBytes(t, certificateAndroidKeyRoot1)}
+
+			rsaKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+
+			require.GreaterOrEqual(t, rsaKey.E, 0)
+			require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
+
+			e := uint32(rsaKey.E) //nolint:gosec
+
+			r := webauthncose.RSAPublicKeyData{
+				PublicKeyData: webauthncose.PublicKeyData{
+					KeyType:   int64(webauthncose.RSAKey),
+					Algorithm: int64(webauthncose.AlgRS256),
+				},
+				Modulus:  rsaKey.N.Bytes(),
+				Exponent: uint32ToBytes(e),
+			}
+
+			attStmt[stmtPubArea] = tpm2.Marshal(makeTPMTPublicRSA(&TPMRSATestParameters{Modulus: rsaKey.N.Bytes(), Exponent: e}))
+			rpk, _ := webauthncbor.Marshal(r)
+			att := AttestationObject{
+				AttStatement: attStmt,
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						CredentialPublicKey: rpk,
+					},
+				},
+			}
+
 			att.AttStatement[stmtCertInfo] = tpm2.Marshal(tc.certInfo)
 			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
 
@@ -684,4 +686,12 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 	opk, err := webauthncbor.Marshal(o)
 
 	return epk, rpk, opk, *rsaKey, *eccKey, err
+}
+
+func mustConvertPEMToPEMBytes(t *testing.T, in string) []byte {
+	data, rest := pem.Decode([]byte(in))
+	require.NotNil(t, data)
+	require.Len(t, rest, 0)
+
+	return data.Bytes
 }
