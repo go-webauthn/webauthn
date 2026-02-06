@@ -40,7 +40,7 @@ func TestNew(t *testing.T) {
 		{
 			"ShouldPassMinimalConfig",
 			&Config{
-				RPID:      "https://example.com/",
+				RPID:      "example.com",
 				RPOrigins: []string{"https://example.com"},
 			},
 			"",
@@ -51,19 +51,19 @@ func TestNew(t *testing.T) {
 				RPID:      "%%&&",
 				RPOrigins: []string{"https://example.com"},
 			},
-			`error occurred validating the configuration: field 'RPID' is not a valid URI: parse "%%&&": invalid URL escape "%%&"`,
+			"error occurred validating the configuration: field 'RPID' is not a valid domain string: parse \"%%&&\": invalid URL escape \"%%&\"",
 		},
 		{
 			"ShouldFailNoRPOrigins",
 			&Config{
-				RPID: "https://example.com/",
+				RPID: "example.com",
 			},
 			"error occurred validating the configuration: must provide at least one value to the 'RPOrigins' field",
 		},
 		{
 			"ShouldAllowEmptyRPTopOriginsExplicit",
 			&Config{
-				RPID:                        "https://example.com/",
+				RPID:                        "example.com",
 				RPOrigins:                   []string{"https://example.com"},
 				RPTopOriginVerificationMode: protocol.TopOriginExplicitVerificationMode,
 			},
