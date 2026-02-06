@@ -1,8 +1,12 @@
 package protocol
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T) {
@@ -54,6 +58,51 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 			if got := a.GetAllowedCredentialIDs(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("PublicKeyCredentialRequestOptions.GetAllowedCredentialIDs() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestCredentialDescriptor_SignalUnknownCredential(t *testing.T) {
+	testCases := []struct {
+		name         string
+		rpid         string
+		have         *CredentialDescriptor
+		expected     *SignalUnknownCredential
+		expectedJSON string
+	}{
+		{
+			"ShouldHandleStandard",
+			"example.com",
+			&CredentialDescriptor{
+				CredentialID: URLEncodedBase64("1234"),
+			},
+			&SignalUnknownCredential{
+				CredentialID: URLEncodedBase64("1234"),
+				RPID:         "example.com",
+			},
+			`{"credentialId":"MTIzNA","rpId":"example.com"}`,
+		},
+		{
+			"ShouldHandleNoID",
+			"example.com",
+			&CredentialDescriptor{},
+			&SignalUnknownCredential{
+				RPID: "example.com",
+			},
+			`{"credentialId":null,"rpId":"example.com"}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.have.SignalUnknownCredential(tc.rpid)
+
+			assert.Equal(t, tc.expected, actual)
+
+			data, err := json.Marshal(actual)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedJSON, string(data))
 		})
 	}
 }
