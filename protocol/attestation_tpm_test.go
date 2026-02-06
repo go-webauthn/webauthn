@@ -55,7 +55,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 		{
 			"ShouldNotParseAttStatementWithVersionNot2Point0",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "foo.bar"}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "foo.bar", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}},
 			"",
 			nil,
 			"WebAuthn only supports TPM 2.0 currently",
@@ -69,14 +69,14 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 		},
 		{
 			"ShouldNotParseAttStatementWithoutX5C",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0)}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}},
 			"",
 			nil,
 			ErrNotImplemented.Details,
 		},
 		{
 			"ShouldNotParseAttStatementWithECDAAKID",
-			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtECDAAKID: []byte{}}},
+			AttestationObject{AttStatement: map[string]any{stmtVersion: "2.0", stmtAlgorithm: int64(0), stmtX5C: []any{}, stmtECDAAKID: []byte{}, stmtSignature: []byte{}, stmtCertInfo: []byte{}, stmtPubArea: []byte{}}},
 			"",
 			nil,
 			ErrNotImplemented.Details,
@@ -289,7 +289,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 		{
 			"CertInfoMagicValueNoCorrect",
 			tpm2.TPMSAttest{Magic: 42, Type: tpm2.TPMSTAttestCreation, Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCreationInfo](tpm2.TPMSTAttestCreation, &tpm2.TPMSCreationInfo{})},
-			"incorrect magic value: 2a",
+			"Magic is not set to TPM_GENERATED_VALUE",
 		},
 		{
 			"CertInfoTypeNotTagAttestCertify",
