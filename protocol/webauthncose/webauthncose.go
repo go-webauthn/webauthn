@@ -7,12 +7,13 @@ import (
 	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
 	"hash"
 	"math"
 	"math/big"
+
+	"github.com/go-webauthn/x/encoding/asn1"
 
 	"github.com/google/go-tpm/tpm2"
 
@@ -98,7 +99,13 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 
 	e := &ECDSASignature{}
 
-	if _, err = asn1.Unmarshal(sig, e); err != nil {
+	var opts []asn1.UnmarshalOpt
+
+	if allowBERIntegers {
+		opts = append(opts, asn1.WithUnmarshalAllowBERIntegers(true))
+	}
+
+	if _, err = asn1.Unmarshal(sig, e, opts...); err != nil {
 		return false, ErrSigNotProvidedOrInvalid
 	}
 
