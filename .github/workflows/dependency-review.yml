@@ -1,6 +1,11 @@
 name: 'Dependency Review'
 on:
-  pull_request: {}
+  pull_request:
+    branches:
+      - 'master'
+  merge_group:
+    branches:
+      - 'master'
 permissions:
   contents: 'read'
 jobs:
