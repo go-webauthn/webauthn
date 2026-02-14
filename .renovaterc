@@ -18,7 +18,8 @@
     "github-actions"
   ],
   "postUpdateOptions": [
-    "gomodTidy"
+    "gomodTidy",
+    "gomodMassage"
   ],
   "branchPrefix": "renovate-",
   "rebaseWhen": "conflicted",
