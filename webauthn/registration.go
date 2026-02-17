@@ -140,11 +140,14 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
 	shouldVerifyUserPresence := session.Mediation != protocol.MediationConditional
 
-	var clientDataHash []byte
+	var (
+		attestationType string
+		clientDataHash  []byte
+	)
 
-	if clientDataHash, err = parsedResponse.Verify(session.Challenge, shouldVerifyUser, shouldVerifyUserPresence, webauthn.Config.RPID, webauthn.Config.RPOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.MDS, session.CredParams); err != nil {
+	if attestationType, clientDataHash, err = parsedResponse.Verify(session.Challenge, shouldVerifyUser, shouldVerifyUserPresence, webauthn.Config.RPID, webauthn.Config.RPOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.MDS, session.CredParams); err != nil {
 		return nil, err
 	}
 
-	return NewCredential(clientDataHash, parsedResponse)
+	return NewCredential(attestationType, clientDataHash, parsedResponse)
 }
