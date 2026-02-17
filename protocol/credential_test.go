@@ -46,7 +46,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 						Type: string(PublicKeyCredentialType),
 					},
 					RawID: byteID,
-					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					ClientExtensionResults: AuthenticationExtensionsClientOutputsLegacy{
 						"appid": true,
 					},
 					AuthenticatorAttachment: Platform,
@@ -80,7 +80,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 							ID:   "6xrtBhJQW6QU4tOaB4rrHaS2Ks0yDDL_q8jDC16DEjZ-VLVf4kCRkvl2xp2D71sTPYns-exsHQHTy3G-zJRK8g",
 						},
 						RawID: byteID,
-						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+						ClientExtensionResults: AuthenticationExtensionsClientOutputsLegacy{
 							"appid": true,
 						},
 						AuthenticatorAttachment: "platform",
