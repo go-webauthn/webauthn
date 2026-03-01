@@ -659,9 +659,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 
 func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 	epk, rpk, opk, rsaKey, eccKey, err := getTPMAttestionKeys()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	require.GreaterOrEqual(t, rsaKey.E, 0)
 	require.LessOrEqual(t, int64(rsaKey.E), int64(4294967295))
