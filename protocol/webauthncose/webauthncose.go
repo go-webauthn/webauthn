@@ -101,7 +101,7 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 
 	var opts []asn1.UnmarshalOpt
 
-	if allowBERIntegers {
+	if allowBERIntegers.Load() {
 		opts = append(opts, asn1.WithUnmarshalAllowBERIntegers(true))
 	}
 

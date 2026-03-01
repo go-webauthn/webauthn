@@ -1,12 +1,13 @@
 package webauthncose
 
-var allowBERIntegers = false
+import "sync/atomic"
+
+var allowBERIntegers atomic.Bool
 
 // SetExperimentalInsecureAllowBERIntegers allows credentials which have BER integer encoding for their signatures
-// which do not conform to the specification. This is an experimental option which may be removed without any notice,
-// and could potentially lead to zero-day exploits due to ambiguity of encoding practices. This is not a recommended
-// option. This function is not safe for concurrent use and must only be called during process initialization,
-// before any verifications are performed, and its value must not be changed thereafter.
+// which do not conform to the specification. This is an experimental option that may be removed without any notice
+// and could potentially lead to zero-day exploits due to the ambiguity of encoding practices. This is not a recommended
+// option.
 func SetExperimentalInsecureAllowBERIntegers(value bool) {
-	allowBERIntegers = value
+	allowBERIntegers.Store(value)
 }
