@@ -23,9 +23,7 @@ import (
 // that the underlying Ed25519 signature verification passes.
 func TestOKPSignatureVerification(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("error creating ed25519 key: %v", err)
-	}
+	require.NoError(t, err)
 
 	data := []byte("Sample data to sign")
 	validSig := ed25519.Sign(priv, data)
@@ -37,23 +35,12 @@ func TestOKPSignatureVerification(t *testing.T) {
 
 	// Test that a valid signature passes.
 	ok, err := key.Verify(data, validSig)
-	if err != nil {
-		t.Fatalf("error verifying okp signature: %v", err)
-	}
+	assert.True(t, ok)
+	assert.NoError(t, err)
 
-	if !ok {
-		t.Fatalf("valid signature wasn't properly verified")
-	}
-
-	// And that an invalid signature fails.
 	ok, err = key.Verify(data, invalidSig)
-	if err != nil {
-		t.Fatalf("error verifying okp signature: %v", err)
-	}
-
-	if ok {
-		t.Fatalf("invalid signature was incorrectly verified")
-	}
+	assert.NoError(t, err)
+	assert.False(t, ok)
 }
 
 func TestP256SignatureVerification(t *testing.T) {
@@ -76,9 +63,10 @@ func TestP256SignatureVerification(t *testing.T) {
 	// NIST CURVE: P-256
 	// ----.
 	pubX, err := hex.DecodeString("f739f8c77b32f4d5f13265861febd76e7a9c61a1140d296b8c16302508870316")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
+
 	pubY, err := hex.DecodeString("c24970ad7811ccd9da7f1b88f202bebac770663ef58ba68346186dd778200dd4")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	key := EC2PublicKeyData{
 		// These constants are from https://datatracker.ietf.org/doc/rfc9053/
@@ -94,20 +82,16 @@ func TestP256SignatureVerification(t *testing.T) {
 
 	data := []byte("webauthnFTW")
 
-	// Valid signature obtained with:
-	// $ echo -n 'webauthnFTW' | openssl dgst -sha256 -sign private_key.pem | xxd -ps | tr -d '\n'.
 	validSig, err := hex.DecodeString("3045022053584980793ee4ec01d583f303604c4f85a7e87df3fe9551962c5ab69a5ce27b022100c801fd6186ca4681e87fbbb97c5cb659f039473995a75a9a9dffea2708d6f8fb")
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
-	// Happy path, verification should succeed.
 	ok, err := VerifySignature(key, data, validSig)
-	assert.True(t, ok, "invalid EC signature")
-	assert.Nil(t, err, "error verifying EC signature")
+	assert.True(t, ok)
+	assert.NoError(t, err)
 
-	// Verification against BAD data should fail.
 	ok, err = VerifySignature(key, []byte("webauthnFTL"), validSig)
-	assert.Nil(t, err, "error verifying EC signature")
-	assert.False(t, ok, "verification against bad data is successful!")
+	assert.NoError(t, err)
+	assert.False(t, ok)
 }
 
 func TestOKPDisplayPublicKey(t *testing.T) {
@@ -128,10 +112,9 @@ MCowBQYDK2VwAyEAe4gQJK3JgtOAuHceO5v45LOZi8fQWDBmAs5NDy/kt4E=
 	// Get the CBOR-encoded representation of the OKPPublicKeyData.
 	buf, _ := webauthncbor.Marshal(key)
 
-	got := DisplayPublicKey(buf)
-	if got != expected {
-		t.Fatalf("incorrect PEM format received for ed25519 public key. expected\n%#v\n got \n%#v\n", expected, got)
-	}
+	actual := DisplayPublicKey(buf)
+
+	assert.Equal(t, expected, actual)
 }
 
 func TestRSAExponent(t *testing.T) {
@@ -444,6 +427,15 @@ func TestParsePublicKey(t *testing.T) {
 			assert.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, tc.expected, result)
+
+			SetExperimentalInsecureAllowBERIntegers(true)
+
+			ok, err = VerifySignature(result, data, signature)
+			assert.NoError(t, err)
+			assert.True(t, ok)
+			assert.Equal(t, tc.expected, result)
+
+			SetExperimentalInsecureAllowBERIntegers(false)
 
 			display := DisplayPublicKey(keyBytes)
 
