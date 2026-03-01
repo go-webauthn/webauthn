@@ -28,12 +28,6 @@ type Credential struct {
 	// field.
 	PublicKey []byte `json:"publicKey"`
 
-	// The AttestationType stores the attestation format used (if any) by the authenticator when creating the
-	// Credential.
-	//
-	// Important Note: This field is named attestationType but this is actually the attestation format.
-	AttestationType string `json:"attestationType"`
-
 	// Transport types the authenticator supports. Described by the Credential Record 'transports' field.
 	Transport []protocol.AuthenticatorTransport `json:"transport"`
 
@@ -42,6 +36,14 @@ type Credential struct {
 
 	// The Authenticator information for a given Credential.
 	Authenticator Authenticator `json:"authenticator"`
+
+	// The AttestationType stores the attestation type used (if any) by the authenticator when performing the
+	// attestation validation during the registration process.
+	AttestationType string `json:"attestationType,omitempty"`
+
+	// The AttestationFormat stores the attestation format used (if any) by the authenticator when performing the
+	// attestation validation during the registration process.
+	AttestationFormat string `json:"attestationFormat,omitempty"`
 
 	// The attestation values that can be used to validate this Credential via the MDS3 at a later date.
 	Attestation CredentialAttestation `json:"attestation"`
@@ -110,6 +112,8 @@ func (f CredentialFlags) ProtocolValue() protocol.AuthenticatorFlags {
 // CredentialAttestation is a decoded representation of the [protocol.AuthenticatorAttestationResponse] in a format that
 // can easily be serialized.
 type CredentialAttestation struct {
+	Type               string `json:"type"`
+	Format             string `json:"format"`
 	ClientDataJSON     []byte `json:"clientDataJSON"`
 	ClientDataHash     []byte `json:"clientDataHash"`
 	AuthenticatorData  []byte `json:"authenticatorData"`
@@ -120,21 +124,22 @@ type CredentialAttestation struct {
 // Descriptor converts a [Credential] into a [protocol.CredentialDescriptor].
 func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 	return protocol.CredentialDescriptor{
-		Type:            protocol.PublicKeyCredentialType,
-		CredentialID:    c.ID,
-		Transport:       c.Transport,
-		AttestationType: c.AttestationType,
+		Type:              protocol.PublicKeyCredentialType,
+		CredentialID:      c.ID,
+		Transport:         c.Transport,
+		AttestationType:   c.AttestationType,
+		AttestationFormat: c.AttestationFormat,
 	}
 }
 
 // NewCredential will return a credential pointer on successful validation of a registration response.
-func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
+func NewCredential(attestationType string, clientDataHash []byte, c *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
 	credential = &Credential{
-		ID:              c.Response.AttestationObject.AuthData.AttData.CredentialID,
-		PublicKey:       c.Response.AttestationObject.AuthData.AttData.CredentialPublicKey,
-		AttestationType: c.Response.AttestationObject.Format,
-		Transport:       c.Response.Transports,
-		Flags:           NewCredentialFlags(c.Response.AttestationObject.AuthData.Flags),
+		ID:                c.Response.AttestationObject.AuthData.AttData.CredentialID,
+		PublicKey:         c.Response.AttestationObject.AuthData.AttData.CredentialPublicKey,
+		AttestationFormat: c.Response.AttestationObject.Format,
+		Transport:         c.Response.Transports,
+		Flags:             NewCredentialFlags(c.Response.AttestationObject.AuthData.Flags),
 		Authenticator: Authenticator{
 			AAGUID:     c.Response.AttestationObject.AuthData.AttData.AAGUID,
 			SignCount:  c.Response.AttestationObject.AuthData.Counter,
@@ -187,7 +192,7 @@ func (c Credential) Verify(mds metadata.Provider) (err error) {
 		clientDataHash = sum[:]
 	}
 
-	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, mds); err != nil {
+	if _, err = attestation.AttestationObject.VerifyAttestation(clientDataHash, mds); err != nil {
 		return fmt.Errorf("error verifying credential: error verifying attestation: %w", err)
 	}
 
