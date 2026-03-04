@@ -183,6 +183,10 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 
 		o.PublicKeyData = pk
 
+		if err = validateOKPPublicKey(&o); err != nil {
+			return nil, err
+		}
+
 		return o, nil
 	case EllipticKey:
 		var e EC2PublicKeyData
@@ -193,6 +197,10 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 
 		e.PublicKeyData = pk
 
+		if err = validateEC2PublicKey(&e); err != nil {
+			return nil, err
+		}
+
 		return e, nil
 	case RSAKey:
 		var r RSAPublicKeyData
@@ -202,6 +210,10 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 		}
 
 		r.PublicKeyData = pk
+
+		if err = validateRSAPublicKey(&r); err != nil {
+			return nil, err
+		}
 
 		return r, nil
 	default:
@@ -506,6 +518,49 @@ func (passedError *Error) WithDetails(details string) *Error {
 	err.Details = details
 
 	return &err
+}
+
+func validateOKPPublicKey(k *OKPPublicKeyData) error {
+	if len(k.XCoord) != ed25519.PublicKeySize {
+		return ErrUnsupportedKey.WithDetails(fmt.Sprintf("OKP key x coordinate has invalid length %d, expected %d", len(k.XCoord), ed25519.PublicKeySize))
+	}
+
+	return nil
+}
+
+func validateEC2PublicKey(k *EC2PublicKeyData) error {
+	curve := ec2AlgCurve(k.Algorithm)
+	if curve == nil {
+		return ErrUnsupportedAlgorithm.WithDetails("Unsupported EC2 algorithm")
+	}
+
+	byteLen := (curve.Params().BitSize + 7) / 8
+
+	if len(k.XCoord) != byteLen || len(k.YCoord) != byteLen {
+		return ErrUnsupportedKey.WithDetails("EC2 key x or y coordinate has invalid length")
+	}
+
+	x := new(big.Int).SetBytes(k.XCoord)
+	y := new(big.Int).SetBytes(k.YCoord)
+
+	if !curve.IsOnCurve(x, y) {
+		return ErrUnsupportedKey.WithDetails("EC2 key point is not on curve")
+	}
+
+	return nil
+}
+
+func validateRSAPublicKey(k *RSAPublicKeyData) error {
+	n := new(big.Int).SetBytes(k.Modulus)
+	if n.Sign() <= 0 {
+		return ErrUnsupportedKey.WithDetails("RSA key contains zero or empty modulus")
+	}
+
+	if _, err := parseRSAPublicKeyDataExponent(k); err != nil {
+		return ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key contains invalid exponent: %v", err))
+	}
+
+	return nil
 }
 
 func parseRSAPublicKeyDataExponent(k *RSAPublicKeyData) (exp int, err error) {
