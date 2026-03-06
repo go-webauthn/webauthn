@@ -74,6 +74,10 @@ type OKPPublicKeyData struct {
 
 // Verify Octet Key Pair (OKP) Public Key Signature.
 func (k *OKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
+	if err := validateOKPPublicKey(k); err != nil {
+		return false, err
+	}
+
 	var key ed25519.PublicKey = make([]byte, ed25519.PublicKeySize)
 
 	copy(key, k.XCoord)
@@ -83,13 +87,12 @@ func (k *OKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 
 // Verify Elliptic Curve Public Key Signature.
 func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err error) {
-	curve := ec2AlgCurve(k.Algorithm)
-	if curve == nil {
-		return false, ErrUnsupportedAlgorithm
+	if err = validateEC2PublicKey(k); err != nil {
+		return false, err
 	}
 
 	pubkey := &ecdsa.PublicKey{
-		Curve: curve,
+		Curve: ec2AlgCurve(k.Algorithm),
 		X:     big.NewInt(0).SetBytes(k.XCoord),
 		Y:     big.NewInt(0).SetBytes(k.YCoord),
 	}
@@ -114,14 +117,12 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 
 // ToECDSA converts the EC2PublicKeyData to an ecdsa.PublicKey.
 func (k *EC2PublicKeyData) ToECDSA() (key *ecdsa.PublicKey, err error) {
-	curve := ec2AlgCurve(k.Algorithm)
-
-	if curve == nil {
-		return nil, ErrUnsupportedAlgorithm
+	if err = validateEC2PublicKey(k); err != nil {
+		return nil, err
 	}
 
 	return &ecdsa.PublicKey{
-		Curve: curve,
+		Curve: ec2AlgCurve(k.Algorithm),
 		X:     big.NewInt(0).SetBytes(k.XCoord),
 		Y:     big.NewInt(0).SetBytes(k.YCoord),
 	}, nil
@@ -129,11 +130,11 @@ func (k *EC2PublicKeyData) ToECDSA() (key *ecdsa.PublicKey, err error) {
 
 // Verify RSA Public Key Signature.
 func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (valid bool, err error) {
-	var e int
-
-	if e, err = parseRSAPublicKeyDataExponent(k); err != nil {
-		return false, ErrUnsupportedKey
+	if err = validateRSAPublicKey(k); err != nil {
+		return false, err
 	}
+
+	e, _ := parseRSAPublicKeyDataExponent(k)
 
 	pubkey := &rsa.PublicKey{
 		N: big.NewInt(0).SetBytes(k.Modulus),
