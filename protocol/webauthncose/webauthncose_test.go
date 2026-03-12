@@ -445,6 +445,102 @@ func TestParsePublicKey(t *testing.T) {
 	}
 }
 
+func TestParsePublicKeyValidation(t *testing.T) {
+	mustMarshalCOSEKey := func(t *testing.T, kty, alg int64, extra map[int64]any) []byte {
+		t.Helper()
+
+		m := map[int64]any{1: kty, 3: alg}
+		for k, v := range extra {
+			m[k] = v
+		}
+
+		data, err := webauthncbor.Marshal(m)
+		require.NoError(t, err)
+
+		return data
+	}
+
+	// Generate valid key material for accept tests.
+	okpPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	ec2Priv, err := ecdh.P256().GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	ec2Pub := ec2Priv.PublicKey().Bytes()
+	ec2X := ec2Pub[1:33]
+	ec2Y := ec2Pub[33:65]
+
+	// COSE Key parameters per RFC 9052 §7 and RFC 9053 §2/§7:
+	//   1 (kty), 3 (alg), -1 (crv / n), -2 (x / e), -3 (y).
+	testCases := []struct {
+		name    string
+		input   []byte
+		wantErr string
+	}{
+		{
+			"ShouldAcceptValidOKPKey",
+			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-2: []byte(okpPub)}),
+			"",
+		},
+		{
+			"ShouldAcceptValidEC2Key",
+			mustMarshalCOSEKey(t, int64(EllipticKey), int64(AlgES256), map[int64]any{-1: int64(P256), -2: ec2X, -3: ec2Y}),
+			"",
+		},
+		{
+			"ShouldAcceptValidRSAKey",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: []byte{0xFF}, -2: []byte{0x01, 0x00, 0x01}}),
+			"",
+		},
+		{
+			"ShouldRejectOKPWithInvalidXCoordLength",
+			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-2: make([]byte, 16)}),
+			"OKP key x coordinate has invalid length",
+		},
+		{
+			"ShouldRejectEC2WithUnsupportedAlgorithm",
+			mustMarshalCOSEKey(t, int64(EllipticKey), int64(999), map[int64]any{-1: int64(P256), -2: make([]byte, 32), -3: make([]byte, 32)}),
+			"Unsupported EC2 algorithm",
+		},
+		{
+			"ShouldRejectEC2WithInvalidCoordLength",
+			mustMarshalCOSEKey(t, int64(EllipticKey), int64(AlgES256), map[int64]any{-1: int64(P256), -2: make([]byte, 48), -3: make([]byte, 48)}),
+			"EC2 key x or y coordinate has invalid length",
+		},
+		{
+			"ShouldRejectEC2WithOffCurvePoint",
+			mustMarshalCOSEKey(t, int64(EllipticKey), int64(AlgES256), map[int64]any{-1: int64(P256), -2: make([]byte, 32), -3: make([]byte, 32)}),
+			"EC2 key point is not on curve",
+		},
+		{
+			"ShouldRejectRSAWithEmptyModulus",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: []byte{}, -2: []byte{0x01, 0x00, 0x01}}),
+			"RSA key contains zero or empty modulus",
+		},
+		{
+			"ShouldRejectRSAWithEmptyExponent",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: []byte{0xFF}, -2: []byte{}}),
+			"RSA key contains invalid exponent",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ParsePublicKey(tc.input)
+
+			if tc.wantErr != "" {
+				assert.Nil(t, result)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
 func MustExtractCBORKeyFromAttestationObject(t *testing.T, have string) []byte {
 	type AttObj struct {
 		AuthData []byte `cbor:"authData"`
