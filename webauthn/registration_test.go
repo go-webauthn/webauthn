@@ -256,9 +256,9 @@ func TestRegistrationOptions(t *testing.T) {
 		},
 		{
 			name: "Extensions",
-			opts: []RegistrationOption{WithExtensions(map[string]any{"appID": "example"})},
+			opts: []RegistrationOption{WithExtensions(map[string]any{protocol.ExtensionAppID: "example"})},
 			expected: protocol.PublicKeyCredentialCreationOptions{
-				Extensions: map[string]any{"appID": "example"},
+				Extensions: map[string]any{protocol.ExtensionAppID: "example"},
 			},
 		},
 		{
@@ -269,13 +269,13 @@ func TestRegistrationOptions(t *testing.T) {
 		{
 			name: "AppIDExcludeExtensionWithExclusions",
 			opts: []RegistrationOption{WithExclusions([]protocol.CredentialDescriptor{
-				{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
+				{Type: protocol.PublicKeyCredentialType, AttestationType: "basic_full", AttestationFormat: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
 			}), WithAppIdExcludeExtension("apple")},
 			expected: protocol.PublicKeyCredentialCreationOptions{
 				CredentialExcludeList: []protocol.CredentialDescriptor{
-					{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
+					{Type: protocol.PublicKeyCredentialType, AttestationType: "basic_full", AttestationFormat: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
 				},
-				Extensions: map[string]any{"appidExclude": "apple"},
+				Extensions: map[string]any{protocol.ExtensionAppIDExclude: "apple"},
 			},
 		},
 	}
