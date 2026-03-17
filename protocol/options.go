@@ -1,9 +1,5 @@
 package protocol
 
-import (
-	"github.com/go-webauthn/webauthn/protocol/webauthncose"
-)
-
 type CredentialCreation struct {
 	Response  PublicKeyCredentialCreationOptions `json:"publicKey"`
 	Mediation CredentialMediationRequirement     `json:"mediation,omitempty"`
@@ -78,13 +74,6 @@ func (c CredentialDescriptor) SignalUnknownCredential(rpid string) *SignalUnknow
 		CredentialID: c.CredentialID,
 		RPID:         rpid,
 	}
-}
-
-// CredentialParameter is the credential type and algorithm
-// that the relying party wants the authenticator to create.
-type CredentialParameter struct {
-	Type      CredentialType                       `json:"type"`
-	Algorithm webauthncose.COSEAlgorithmIdentifier `json:"alg"`
 }
 
 // CredentialType represents the PublicKeyCredentialType IDL and is used with the CredentialDescriptor IDL.
