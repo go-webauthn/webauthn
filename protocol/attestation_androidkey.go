@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/asn1"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
+	"github.com/sirosfoundation/go-cryptoutil"
 )
 
 // attestationFormatValidationHandlerAndroidKey is the handler for the Android Key Attestation Statement Format.
@@ -77,9 +79,18 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 
 	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
 
-	if sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.COSEAlgorithmIdentifier(alg)); sigAlg == x509.UnknownSignatureAlgorithm {
+	sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.COSEAlgorithmIdentifier(alg))
+	if sigAlg == x509.UnknownSignatureAlgorithm {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", alg))
-	} else if err = credCert.CheckSignature(sigAlg, signatureData, sig); err != nil {
+	}
+
+	// Normalize ECDSA signatures to handle BER-encoded signatures from some authenticators.
+	verifyableSig := sig
+	if _, ok := credCert.PublicKey.(*ecdsa.PublicKey); ok {
+		verifyableSig, _ = cryptoutil.NormalizeECDSASignature(sig)
+	}
+
+	if err = credCert.CheckSignature(sigAlg, signatureData, verifyableSig); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 

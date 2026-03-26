@@ -10,6 +10,7 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
+	"github.com/sirosfoundation/go-cryptoutil"
 )
 
 // attestationFormatValidationHandlerFIDOU2F is the handler for the FIDO U2F Attestation Statement Format.
@@ -143,7 +144,10 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 
 	// Step 6. Verify the sig using verificationData and the certificate public key per section 4.1.4 of [SEC1] with
 	// SHA-256 as the hash function used in step two.
-	if err = attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), sig); err != nil {
+	// Normalize ECDSA signatures to handle BER-encoded signatures from some authenticators.
+	verifyableSig, _ := cryptoutil.NormalizeECDSASignature(sig)
+
+	if err = attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), verifyableSig); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
