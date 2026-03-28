@@ -147,10 +147,10 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 // Verify the Client and Attestation data.
 //
 // Specification: §7.1. Registering a New Credential (https://www.w3.org/TR/webauthn/#sctn-registering-a-new-credential)
-func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, verifyUserPresence bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, mds metadata.Provider, credParams []CredentialParameter) (clientDataHash []byte, err error) {
+func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUser bool, verifyUserPresence bool, relyingPartyID string, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, mds metadata.Provider, credParams []CredentialParameter) (attestationType string, clientDataHash []byte, err error) {
 	// Handles steps 3 through 6 - Verifying the Client Data against the Relying Party's stored data.
 	if err = pcc.Response.CollectedClientData.Verify(storedChallenge, CreateCeremony, rpOrigins, rpTopOrigins, rpTopOriginsVerify); err != nil {
-		return nil, err
+		return attestationType, nil, err
 	}
 
 	// Step 7. Compute the hash of response.clientDataJSON using SHA-256.
@@ -163,8 +163,8 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 
 	// We do the above step while parsing and decoding the CredentialCreationResponse
 	// Handle steps 9 through 14 - This verifies the attestation object.
-	if err = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash, verifyUser, verifyUserPresence, mds, credParams); err != nil {
-		return clientDataHash, err
+	if attestationType, err = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash, verifyUser, verifyUserPresence, mds, credParams); err != nil {
+		return attestationType, clientDataHash, err
 	}
 
 	// Step 15. If validation is successful, obtain a list of acceptable trust anchors (attestation root
@@ -203,7 +203,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 
 	// TODO: Not implemented for the reasons mentioned under Step 16.
 
-	return clientDataHash, nil
+	return attestationType, clientDataHash, nil
 }
 
 // GetAppID takes a AuthenticationExtensions object or nil. It then performs the following checks in order:
@@ -217,7 +217,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, verifyUs
 // 7. Check that the Session Data has an appid extension defined and if it doesn't return an error.
 // 8. Check that the appid extension in Session Data is a string and if it isn't return an error.
 // 9. Return the appid extension value from the Session data.
-func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions, credentialAttestationType string) (appID string, err error) {
+func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions, credentialAttestationFormat string) (appID string, err error) {
 	var (
 		value, clientValue interface{}
 		enableAppID, ok    bool
@@ -233,7 +233,7 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 
 	// If the credential does not have the correct attestation type it is assumed to NOT be a fido-u2f credential.
 	// https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
-	if credentialAttestationType != CredentialTypeFIDOU2F {
+	if credentialAttestationFormat != CredentialTypeFIDOU2F {
 		return "", nil
 	}
 
