@@ -102,6 +102,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		var (
 			params  *tpm2.TPMSRSAParms
 			modulus *tpm2.TPM2BPublicKeyRSA
+			exp     uint32
 		)
 
 		if params, err = pubArea.Parameters.RSADetail(); err != nil {
@@ -116,7 +117,10 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
 
-		exp := uint32(k.Exponent[0]) + uint32(k.Exponent[1])<<8 + uint32(k.Exponent[2])<<16
+		for _, b := range k.Exponent {
+			exp = (exp << 8) | uint32(b)
+		}
+
 		if tpm2Exponent(params) != exp {
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
