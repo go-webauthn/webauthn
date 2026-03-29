@@ -460,6 +460,66 @@ func TestTpm2Exponent(t *testing.T) {
 	}
 }
 
+// TestCOSEExponentBigEndianParsing validates that the COSE key exponent byte array is parsed as
+// big-endian. This was a bug where the exponent bytes were previously parsed as little-endian, which
+// happened to produce the correct result for the common exponent 65537 (0x010001) because it is
+// palindromic, but would fail for any non-symmetric exponent.
+func TestCOSEExponentBigEndianParsing(t *testing.T) {
+	testCases := []struct {
+		name     string
+		exponent []byte
+		expected uint32
+	}{
+		{
+			name:     "ShouldParseStandardExponent65537",
+			exponent: []byte{0x01, 0x00, 0x01},
+			expected: 65537,
+		},
+		{
+			name:     "ShouldParseAsymmetricExponent",
+			exponent: []byte{0x01, 0x00, 0x03},
+			expected: 65539,
+		},
+		{
+			name:     "ShouldParseSmallExponent3",
+			exponent: []byte{0x03},
+			expected: 3,
+		},
+		{
+			name:     "ShouldParseTwoByteExponent",
+			exponent: []byte{0x01, 0x01},
+			expected: 257,
+		},
+		{
+			name:     "ShouldParseFourByteExponent",
+			exponent: []byte{0x00, 0x01, 0x00, 0x01},
+			expected: 65537,
+		},
+		{
+			name:     "ShouldParseNonPalindromicThreeBytes",
+			exponent: []byte{0x01, 0x02, 0x03},
+			expected: 0x010203,
+		},
+		{
+			name:     "ShouldReturnZeroForEmpty",
+			exponent: []byte{},
+			expected: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var exp uint32
+
+			for _, b := range tc.exponent {
+				exp = (exp << 8) | uint32(b)
+			}
+
+			assert.Equal(t, tc.expected, exp)
+		})
+	}
+}
+
 func TestTpm2NameDigest(t *testing.T) {
 	t.Run("ShouldRejectNameTooShort", func(t *testing.T) {
 		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: []byte{0x00, 0x0B}})
@@ -713,6 +773,14 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			nil,
 			rpk,
 			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"ECCKeyWithRSAPubAreaParametersMismatch",
+			webauthncose.RSAKey,
+			&TPMRSATestParameters{Modulus: rsaKey.N.Bytes(), Exponent: e},
+			nil,
+			epk,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
 		},
 		{
 			"UnsupportedKeyType",
