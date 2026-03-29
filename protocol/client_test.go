@@ -154,6 +154,69 @@ func TestVerifyCollectedClientDataWithMultipleExpectedOrigins(t *testing.T) {
 	assert.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins, nil, TopOriginIgnoreVerificationMode))
 }
 
+func TestVerifyCollectedClientData_CeremonyMismatch(t *testing.T) {
+	newChallenge, err := CreateChallenge()
+	require.NoError(t, err)
+
+	ccd := setupCollectedClientData(newChallenge, "http://example.com", "", false)
+
+	err = ccd.Verify(newChallenge.String(), AssertCeremony, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode)
+	assert.EqualError(t, err, "Error validating ceremony type")
+	AssertIsProtocolError(t, err, "verification_error", "Error validating ceremony type", fmt.Sprintf("Expected Value: %s, Received: %s", AssertCeremony, ccd.Type))
+}
+
+func TestVerifyCollectedClientData_TokenBinding(t *testing.T) {
+	testCases := []struct {
+		name         string
+		tokenBinding *TokenBinding
+		err          string
+	}{
+		{
+			name:         "ShouldSucceedWithNilTokenBinding",
+			tokenBinding: nil,
+		},
+		{
+			name:         "ShouldSucceedWithPresentStatus",
+			tokenBinding: &TokenBinding{Status: Present, ID: "abc"},
+		},
+		{
+			name:         "ShouldSucceedWithSupportedStatus",
+			tokenBinding: &TokenBinding{Status: Supported},
+		},
+		{
+			name:         "ShouldSucceedWithNotSupportedStatus",
+			tokenBinding: &TokenBinding{Status: NotSupported},
+		},
+		{
+			name:         "ShouldFailWithEmptyStatus",
+			tokenBinding: &TokenBinding{},
+			err:          "Error decoding clientData, token binding present without status",
+		},
+		{
+			name:         "ShouldFailWithInvalidStatus",
+			tokenBinding: &TokenBinding{Status: "invalid-status"},
+			err:          "Error decoding clientData, token binding present with invalid status",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			newChallenge, err := CreateChallenge()
+			require.NoError(t, err)
+
+			ccd := setupCollectedClientData(newChallenge, "http://example.com", "", false)
+			ccd.TokenBinding = tc.tokenBinding
+
+			err = ccd.Verify(newChallenge.String(), CreateCeremony, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestFullyQualifiedOrigin(t *testing.T) {
 	testCases := []struct {
 		name                  string

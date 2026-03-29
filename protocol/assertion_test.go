@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -144,6 +145,124 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 			assert.Equal(t, pkExpected, pkActual)
 			assert.NotEqual(t, nil, pkExpected)
 			assert.NotEqual(t, nil, pkActual)
+		})
+	}
+}
+
+func TestParseCredentialRequestResponse_NilRequest(t *testing.T) {
+	testCases := []struct {
+		name    string
+		request *http.Request
+		err     string
+	}{
+		{
+			name:    "ShouldFailNilRequest",
+			request: nil,
+			err:     "No response given",
+		},
+		{
+			name:    "ShouldFailNilBody",
+			request: &http.Request{},
+			err:     "No response given",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ParseCredentialRequestResponse(tc.request)
+			assert.Nil(t, result)
+			assert.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestParseCredentialRequestResponseBytes(t *testing.T) {
+	testCases := []struct {
+		name       string
+		data       []byte
+		errString  string
+		errType    string
+		errDetails string
+		errInfo    string
+	}{
+		{
+			name:       "ShouldFailInvalidJSON",
+			data:       []byte("not json"),
+			errString:  "Parse error for Assertion",
+			errType:    "invalid_request",
+			errDetails: "Parse error for Assertion",
+			errInfo:    "invalid character 'o' in literal null (expecting 'u')",
+		},
+		{
+			name:       "ShouldFailTrailingData",
+			data:       []byte(testAssertionResponses["trailingData"]),
+			errString:  "Parse error for Assertion",
+			errType:    "invalid_request",
+			errDetails: "Parse error for Assertion",
+			errInfo:    "body contains trailing data",
+		},
+		{
+			name: "ShouldSucceed",
+			data: []byte(testAssertionResponses["success"]),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ParseCredentialRequestResponseBytes(tc.data)
+			if tc.errString != "" {
+				assert.Nil(t, result)
+				assert.EqualError(t, err, tc.errString)
+				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+			}
+		})
+	}
+}
+
+func TestCredentialAssertionResponse_Parse_Errors(t *testing.T) {
+	testCases := []struct {
+		name string
+		car  CredentialAssertionResponse
+		err  string
+	}{
+		{
+			name: "ShouldFailMissingID",
+			car:  CredentialAssertionResponse{},
+			err:  "CredentialAssertionResponse with ID missing",
+		},
+		{
+			name: "ShouldFailIDNotBase64",
+			car: CredentialAssertionResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID: "not valid base64 %%%",
+					},
+				},
+			},
+			err: "CredentialAssertionResponse with ID not base64url encoded",
+		},
+		{
+			name: "ShouldFailBadType",
+			car: CredentialAssertionResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "dGVzdA",
+						Type: "bad-type",
+					},
+				},
+			},
+			err: "CredentialAssertionResponse with bad type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := tc.car.Parse()
+			assert.Nil(t, result)
+			assert.EqualError(t, err, tc.err)
 		})
 	}
 }

@@ -1,7 +1,6 @@
 package protocol
 
 import (
-	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -9,67 +8,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/testing/mocks"
 )
-
-type stubMDS struct {
-	getEntry                func(ctx context.Context, aaguid uuid.UUID) (*metadata.Entry, error)
-	validateEntry           bool
-	permitZeroAAGUID        bool
-	validateTrustAnchor     bool
-	validateStatus          bool
-	validateAttestationType bool
-	validateStatusReports   func(ctx context.Context, reports []metadata.StatusReport) error
-}
-
-func (s stubMDS) GetEntry(ctx context.Context, aaguid uuid.UUID) (*metadata.Entry, error) {
-	if s.getEntry != nil {
-		return s.getEntry(ctx, aaguid)
-	}
-
-	return nil, nil
-}
-
-func (s stubMDS) GetValidateEntry(ctx context.Context) bool { return s.validateEntry }
-
-func (s stubMDS) GetValidateEntryPermitZeroAAGUID(ctx context.Context) bool {
-	return s.permitZeroAAGUID
-}
-
-func (s stubMDS) GetValidateTrustAnchor(ctx context.Context) bool { return s.validateTrustAnchor }
-
-func (s stubMDS) GetValidateStatus(ctx context.Context) bool { return s.validateStatus }
-
-func (s stubMDS) GetValidateAttestationTypes(ctx context.Context) bool {
-	return s.validateAttestationType
-}
-
-func (s stubMDS) ValidateStatusReports(ctx context.Context, reports []metadata.StatusReport) error {
-	if s.validateStatusReports != nil {
-		return s.validateStatusReports(ctx, reports)
-	}
-
-	return nil
-}
-
-func withFreshAttestationRegistry(t *testing.T) {
-	t.Helper()
-
-	orig := make(map[AttestationFormat]attestationFormatValidationHandler, len(attestationRegistry))
-	for k, v := range attestationRegistry {
-		orig[k] = v
-	}
-
-	t.Cleanup(func() {
-		for k := range attestationRegistry {
-			delete(attestationRegistry, k)
-		}
-		for k, v := range orig {
-			attestationRegistry[k] = v
-		}
-	})
-}
 
 func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 	t.Run("ShouldReturnValidationErrors", func(t *testing.T) {
@@ -103,7 +46,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			{
 				name: "ShouldRejectInvalidAaguidBytes",
 				mutate: func(a AttestationObject) AttestationObject {
-					a.AuthData.AttData.AAGUID = []byte{0x01} // uuid.FromBytes requires 16 bytes
+					a.AuthData.AttData.AAGUID = []byte{0x01}
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -113,6 +57,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				name: "ShouldRejectMissingAttStmt",
 				mutate: func(a AttestationObject) AttestationObject {
 					delete(a.AttStatement, stmtAttStmt)
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -122,6 +67,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				name: "ShouldRejectAttStmtNotArray",
 				mutate: func(a AttestationObject) AttestationObject {
 					a.AttStatement[stmtAttStmt] = "nope"
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -133,6 +79,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 					a.AttStatement[stmtAttStmt] = []any{
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 					}
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -145,6 +92,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 						123,
 					}
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -157,6 +105,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 						map[string]any{stmtAttStmt: map[string]any{}},
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 					}
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -169,6 +118,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 						map[string]any{stmtFmt: string(AttestationFormatPacked)},
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 					}
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -181,6 +131,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 						map[string]any{stmtFmt: string(AttestationFormatCompound), stmtAttStmt: map[string]any{}},
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 					}
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -193,6 +144,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 						map[string]any{stmtFmt: "", stmtAttStmt: map[string]any{}},
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 					}
+
 					return a
 				},
 				wantType:  ErrInvalidAttestation.Type,
@@ -205,6 +157,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 						map[string]any{stmtFmt: "definitely-not-registered", stmtAttStmt: map[string]any{}},
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 					}
+
 					return a
 				},
 				wantType:  ErrAttestationFormat.Type,
@@ -253,6 +206,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				auth:    att.AuthData,
 				rawAuth: att.RawAuthData,
 			})
+
 			return "packed-type", []any{[]byte("cert1")}, nil
 		}
 
@@ -263,6 +217,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				auth:    att.AuthData,
 				rawAuth: att.RawAuthData,
 			})
+
 			return "apple-type", []any{[]byte("cert2")}, nil
 		}
 
@@ -341,17 +296,18 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
 			handlerCalls++
+
 			return "some-att-type", []any{[]byte("cert")}, nil
 		}
 
-		mds := stubMDS{
-			validateEntry: true,
-			getEntry: func(ctx context.Context, aaguid uuid.UUID) (*metadata.Entry, error) {
-				return nil, nil
-			},
-		}
+		ctrl := gomock.NewController(t)
+
+		mds := mocks.NewMockMetadataProvider(ctrl)
 
 		u := uuid.New()
+
+		mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(nil, nil)
+		mds.EXPECT().GetValidateEntry(gomock.Any()).Return(true)
 
 		att := AttestationObject{
 			Format: string(AttestationFormatCompound),
@@ -411,5 +367,26 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		assert.Equal(t, string(AttestationFormatCompound), gotType)
 		assert.Nil(t, gotX5Cs)
 		assert.Equal(t, 2, handlerCalls)
+	})
+}
+
+// Supporting functions.
+
+func withFreshAttestationRegistry(t *testing.T) {
+	t.Helper()
+
+	orig := make(map[AttestationFormat]attestationFormatValidationHandler, len(attestationRegistry))
+	for k, v := range attestationRegistry {
+		orig[k] = v
+	}
+
+	t.Cleanup(func() {
+		for k := range attestationRegistry {
+			delete(attestationRegistry, k)
+		}
+
+		for k, v := range orig {
+			attestationRegistry[k] = v
+		}
 	})
 }

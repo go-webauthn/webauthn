@@ -6,19 +6,49 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-webauthn/webauthn/metadata"
 )
 
 func TestAttestationVerify(t *testing.T) {
-	for i := range testAttestationOptions {
-		t.Run(fmt.Sprintf("Running test %d", i), func(t *testing.T) {
+	testCases := []struct {
+		name     string
+		options  string
+		response string
+	}{
+		{
+			name:     "ShouldVerifySelfAttestationEC256MacOS",
+			options:  testAttestationOptions[0],
+			response: testAttestationResponses[0],
+		},
+		{
+			name:     "ShouldVerifyDirectAttestationEC256Titan",
+			options:  testAttestationOptions[1],
+			response: testAttestationResponses[1],
+		},
+		{
+			name:     "ShouldVerifyNoneAttestationEC256Titan",
+			options:  testAttestationOptions[2],
+			response: testAttestationResponses[2],
+		},
+		{
+			name:     "ShouldVerifyPackedAttestationGramThanos",
+			options:  testAttestationOptions[3],
+			response: testAttestationResponses[3],
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			options := CredentialCreation{}
 
-			require.NoError(t, json.Unmarshal([]byte(testAttestationOptions[i]), &options))
+			require.NoError(t, json.Unmarshal([]byte(tc.options), &options))
 
 			ccr := CredentialCreationResponse{}
 
-			require.NoError(t, json.Unmarshal([]byte(testAttestationResponses[i]), &ccr))
+			require.NoError(t, json.Unmarshal([]byte(tc.response), &ccr))
 
 			var pcc ParsedCredentialCreationData
 
@@ -37,7 +67,181 @@ func TestAttestationVerify(t *testing.T) {
 	}
 }
 
+func TestPackedAttestationVerification(t *testing.T) {
+	pcc := attestationTestUnpackResponse(t, testAttestationResponses[0])
+
+	clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+
+	_, _, err := attestationFormatValidationHandlerPacked(pcc.Response.AttestationObject, clientDataHash[:], nil)
+	require.NoError(t, err)
+}
+
+func TestAttestationResponseParse_Errors(t *testing.T) {
+	testCases := []struct {
+		name     string
+		response AuthenticatorAttestationResponse
+		err      string
+	}{
+		{
+			name: "ShouldFailInvalidClientDataJSON",
+			response: AuthenticatorAttestationResponse{
+				AuthenticatorResponse: AuthenticatorResponse{
+					ClientDataJSON: []byte("not-json"),
+				},
+				AttestationObject: []byte{0xa0},
+			},
+			err: "Error parsing the authenticator response",
+		},
+		{
+			name: "ShouldFailInvalidAttestationObjectCBOR",
+			response: AuthenticatorAttestationResponse{
+				AuthenticatorResponse: AuthenticatorResponse{
+					ClientDataJSON: []byte(`{"type":"webauthn.create","challenge":"dGVzdA","origin":"https://example.com"}`),
+				},
+				AttestationObject: []byte("not-cbor"),
+			},
+			err: "Error parsing the authenticator response",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.response.Parse()
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestAttestationObject_VerifyAttestation_Errors(t *testing.T) {
+	testCases := []struct {
+		name string
+		att  AttestationObject
+		err  string
+	}{
+		{
+			name: "ShouldFailNoneFormatWithStatement",
+			att: AttestationObject{
+				Format:       "none",
+				AttStatement: map[string]any{"key": "value"},
+			},
+			err: "Invalid attestation format",
+		},
+		{
+			name: "ShouldFailUnsupportedFormat",
+			att: AttestationObject{
+				Format:       "unsupported-format",
+				AttStatement: map[string]any{},
+			},
+			err: "Invalid attestation format",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.att.VerifyAttestation([]byte("hash"), nil)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestAttestationObject_Verify_AlgorithmMismatch(t *testing.T) {
+	pcc := attestationTestUnpackResponse(t, testAttestationResponses[0])
+	att := pcc.Response.AttestationObject
+	clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+
+	wrongParams := []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: -257}}
+
+	err := att.Verify("localhost", clientDataHash[:], false, false, nil, wrongParams)
+	require.EqualError(t, err, "Invalid attestation format")
+}
+
+func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
+	withFreshAttestationRegistry(t)
+
+	testCases := []struct {
+		name       string
+		format     string
+		handler    attestationFormatValidationHandler
+		authData   AuthenticatorData
+		err        string
+		errType    string
+		errDetails string
+	}{
+		{
+			name:   "ShouldWrapProtocolError",
+			format: "test-format",
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
+				return "basic_full", nil, ErrInvalidAttestation.WithDetails("handler failed")
+			},
+			err:     "handler failed",
+			errType: ErrInvalidAttestation.Type,
+		},
+		{
+			name:   "ShouldWrapNonProtocolError",
+			format: "test-format",
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
+				return "basic_full", nil, fmt.Errorf("stdlib error")
+			},
+			err:     "stdlib error",
+			errType: ErrInvalidAttestation.Type,
+		},
+		{
+			name:   "ShouldReturnNilForCompoundAttestationType",
+			format: "test-format",
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
+				return string(AttestationFormatCompound), nil, nil
+			},
+		},
+		{
+			name:   "ShouldFailWithInvalidAAGUIDLength",
+			format: "test-format",
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
+				return "basic_full", nil, nil
+			},
+			authData: AuthenticatorData{
+				AttData: AttestedCredentialData{
+					AAGUID: []byte{0x01, 0x02, 0x03},
+				},
+			},
+			err:     "invalid UUID (got 3 bytes)",
+			errType: ErrInvalidAttestation.Type,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationRegistry[AttestationFormat(tc.format)] = tc.handler
+
+			att := AttestationObject{
+				Format:       tc.format,
+				AttStatement: map[string]any{},
+				AuthData:     tc.authData,
+			}
+
+			err := att.VerifyAttestation([]byte("hash"), nil)
+
+			if tc.err != "" {
+				require.Error(t, err)
+				assert.EqualError(t, err, tc.err)
+
+				if tc.errType != "" {
+					var protoErr *Error
+
+					require.ErrorAs(t, err, &protoErr)
+					assert.Equal(t, tc.errType, protoErr.Type)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// Supporting functions.
+
 func attestationTestUnpackResponse(t *testing.T, response string) (pcc ParsedCredentialCreationData) {
+	t.Helper()
+
 	ccr := CredentialCreationResponse{}
 
 	require.NoError(t, json.Unmarshal([]byte(response), &ccr))
@@ -53,17 +257,7 @@ func attestationTestUnpackResponse(t *testing.T, response string) (pcc ParsedCre
 	return pcc
 }
 
-func TestPackedAttestationVerification(t *testing.T) {
-	t.Run("Testing Self Packed", func(t *testing.T) {
-		pcc := attestationTestUnpackResponse(t, testAttestationResponses[0])
-
-		// Test Packed Verification. Unpack args.
-		clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
-
-		_, _, err := attestationFormatValidationHandlerPacked(pcc.Response.AttestationObject, clientDataHash[:], nil)
-		require.NoError(t, err)
-	})
-}
+// Test data.
 
 var testAttestationOptions = []string{
 	// Direct Self Attestation with EC256 - MacOS.
@@ -169,7 +363,7 @@ var testAttestationOptions = []string{
 
 var testAttestationResponses = []string{
 	// Self Attestation with EC256 - MacOS.
-	`{ 
+	`{
 		"id": "AOx6vFGGITtlwjhqFFvAkJmBzSzfwE1dBa1fVR_Ltq5L35FJRNdgkXe84v3-0TEVNCSp",
 		"rawId": "AOx6vFGGITtlwjhqFFvAkJmBzSzfwE1dBa1fVR_Ltq5L35FJRNdgkXe84v3-0TEVNCSp",
 		"response": {
@@ -179,7 +373,7 @@ var testAttestationResponses = []string{
 		"type": "public-key"
 	}`,
 	// Direct Attestation with EC256 - Titan.
-	`{ 
+	`{
 		"id": "FOxcmsqPLNCHtyILvbNkrtHMdKAeqSJXYZDbeFd0kc5Enm8Kl6a0Jp0szgLilDw1S4CjZhe9Z2611EUGbjyEmg",
 		"rawId": "FOxcmsqPLNCHtyILvbNkrtHMdKAeqSJXYZDbeFd0kc5Enm8Kl6a0Jp0szgLilDw1S4CjZhe9Z2611EUGbjyEmg",
 		"response": {

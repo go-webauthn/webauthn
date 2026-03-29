@@ -84,6 +84,8 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 //
 // Note: the rpTopOriginsVerify parameter does not accept the TopOriginVerificationMode value of
 // TopOriginDefaultVerificationMode as it's expected this value is updated by the config validation process.
+//
+//nolint:gocyclo
 func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode) (err error) {
 	// Registration Step 3. Verify that the value of C.type is webauthn.create.
 
@@ -126,10 +128,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 					WithInfo("The topOrigin can't have values unless crossOrigin is true.")
 			}
 
-			var (
-				fqTopOrigin        string
-				possibleTopOrigins []string
-			)
+			var possibleTopOrigins []string
 
 			switch rpTopOriginsVerify {
 			case TopOriginExplicitVerificationMode:
@@ -145,7 +144,7 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 			if !IsOriginInHaystack(c.TopOrigin, possibleTopOrigins) {
 				return ErrVerification.
 					WithDetails("Error validating top origin").
-					WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", possibleTopOrigins, fqTopOrigin))
+					WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", possibleTopOrigins, c.TopOrigin))
 			}
 		}
 	}

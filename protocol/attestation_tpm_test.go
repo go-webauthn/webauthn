@@ -1145,7 +1145,7 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 		return nil, nil, nil, rsa.PrivateKey{}, ecdsa.PrivateKey{}, errors.New("invalid E value")
 	}
 
-	exp := uint32(rsaKey.E) //nolint:gosec
+	exp := uint32(rsaKey.E)
 
 	r := webauthncose.RSAPublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{

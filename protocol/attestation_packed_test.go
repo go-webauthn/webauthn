@@ -1,18 +1,24 @@
 package protocol
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func Test_verifyPackedFormat(t *testing.T) {
-	type args struct {
-		att            AttestationObject
-		clientDataHash []byte
-	}
-
+func Test_VerifyPackedFormat(t *testing.T) {
 	successAttResponseES256 := attestationTestUnpackResponse(t, packedTestResponseES256["success"]).Response.AttestationObject
 	successClientDataHashES256 := sha256.Sum256(attestationTestUnpackResponse(t, packedTestResponseES256["success"]).Raw.AttestationResponse.ClientDataJSON)
 	successAttResponseES512 := attestationTestUnpackResponse(t, packedTestResponseES512["success"]).Response.AttestationObject
@@ -20,60 +26,403 @@ func Test_verifyPackedFormat(t *testing.T) {
 	successAttResponseSolo2 := attestationTestUnpackResponse(t, packedTestResponseSolo2["success"]).Response.AttestationObject
 	successClientDataHashSolo2 := sha256.Sum256(attestationTestUnpackResponse(t, packedTestResponseSolo2["success"]).Raw.AttestationResponse.ClientDataJSON)
 
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		want1   []any
-		wantErr bool
+	testCases := []struct {
+		name            string
+		att             AttestationObject
+		clientDataHash  []byte
+		attestationType string
+		err             string
 	}{
 		{
-			"success",
-			args{
-				successAttResponseES256,
-				successClientDataHashES256[:],
-			},
-			string(metadata.BasicFull),
-			nil,
-			false,
+			name:            "ShouldSuccessfullyVerifyES256",
+			att:             successAttResponseES256,
+			clientDataHash:  successClientDataHashES256[:],
+			attestationType: string(metadata.BasicFull),
 		},
 		{
-			"success 512",
-			args{
-				successAttResponseES512,
-				successClientDataHashES512[:],
-			},
-			string(metadata.BasicSurrogate),
-			nil,
-			false,
+			name:            "ShouldSuccessfullyVerifyES512SelfAttestation",
+			att:             successAttResponseES512,
+			clientDataHash:  successClientDataHashES512[:],
+			attestationType: string(metadata.BasicSurrogate),
 		},
 		{
-			"success Solo2",
-			args{
-				successAttResponseSolo2,
-				successClientDataHashSolo2[:],
-			},
-			string(metadata.BasicFull),
-			nil,
-			false,
+			name:            "ShouldSuccessfullyVerifySolo2",
+			att:             successAttResponseSolo2,
+			clientDataHash:  successClientDataHashSolo2[:],
+			attestationType: string(metadata.BasicFull),
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := attestationFormatValidationHandlerPacked(tt.args.att, tt.args.clientDataHash, nil)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("attestationFormatValidationHandlerPacked() error = %v, wantErr %v", err, tt.wantErr)
-				return
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationType, _, err := attestationFormatValidationHandlerPacked(tc.att, tc.clientDataHash, nil)
+
+			if tc.err != "" {
+				require.EqualError(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
 			}
 
-			// TODO: Consider doing something with the second return value from attestationFormatValidationHandlerPacked, x5c.
-			if got != tt.want {
-				t.Errorf("attestationFormatValidationHandlerPacked() got = %v, want %v", got, tt.want)
+			assert.Equal(t, tc.attestationType, attestationType)
+		})
+	}
+}
+
+func TestPackedFormat_HandlerErrors(t *testing.T) {
+	testCases := []struct {
+		name         string
+		attStatement map[string]any
+		err          string
+	}{
+		{
+			name:         "ShouldFailMissingAlg",
+			attStatement: map[string]any{},
+			err:          "Error retrieving alg value",
+		},
+		{
+			name:         "ShouldFailAlgWrongType",
+			attStatement: map[string]any{stmtAlgorithm: "not-int"},
+			err:          "Error retrieving alg value",
+		},
+		{
+			name:         "ShouldFailMissingSig",
+			attStatement: map[string]any{stmtAlgorithm: int64(-7)},
+			err:          "Error retrieving sig value",
+		},
+		{
+			name:         "ShouldFailSigWrongType",
+			attStatement: map[string]any{stmtAlgorithm: int64(-7), stmtSignature: "not-bytes"},
+			err:          "Error retrieving sig value",
+		},
+		{
+			name:         "ShouldReturnECDAANotImplemented",
+			attStatement: map[string]any{stmtAlgorithm: int64(-7), stmtSignature: []byte("sig"), stmtECDAAKID: []byte("keyid")},
+			err:          "This field is not yet supported by the WebAuthn spec",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			att := AttestationObject{
+				Format:       "packed",
+				AttStatement: tc.attStatement,
+			}
+
+			_, _, err := attestationFormatValidationHandlerPacked(att, []byte("hash"), nil)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestPackedFormat_BasicAttestationErrors(t *testing.T) {
+	testCases := []struct {
+		name string
+		x5c  []any
+		alg  int64
+		err  string
+	}{
+		{
+			name: "ShouldFailX5CElementNotBytes",
+			x5c:  []any{"not-bytes"},
+			alg:  int64(-7),
+			err:  "Error getting certificate from x5c cert chain",
+		},
+		{
+			name: "ShouldFailX5CInvalidCert",
+			x5c:  []any{[]byte("not-a-cert")},
+			alg:  int64(-7),
+			err:  "Error parsing certificate from ASN.1 data: x509: malformed certificate",
+		},
+		{
+			name: "ShouldFailEmptyX5C",
+			x5c:  []any{},
+			alg:  int64(-7),
+			err:  "Error getting certificate from x5c cert chain",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := handleBasicAttestation([]byte("sig"), []byte("hash"), []byte("auth"), []byte("aaguid"), tc.alg, tc.x5c, nil)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestPackedFormat_BasicAttestationSignatureAndTimeErrors(t *testing.T) {
+	authData := []byte("fake-auth-data")
+	clientDataHash := []byte("fake-client-hash")
+	signatureData := append(authData, clientDataHash...) //nolint:gocritic
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	validTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Country:            []string{"US"},
+			Organization:       []string{"Test"},
+			OrganizationalUnit: []string{"Authenticator Attestation"},
+			CommonName:         "Test Cert",
+		},
+		NotBefore: time.Now().Add(-time.Hour),
+		NotAfter:  time.Now().Add(time.Hour),
+		KeyUsage:  x509.KeyUsageDigitalSignature,
+	}
+
+	validCertDER, err := x509.CreateCertificate(rand.Reader, validTemplate, validTemplate, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	h := sha256.Sum256(signatureData)
+	validSig, err := key.Sign(rand.Reader, h[:], nil)
+	require.NoError(t, err)
+
+	expiredTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      validTemplate.Subject,
+		NotBefore:    time.Now().Add(-48 * time.Hour),
+		NotAfter:     time.Now().Add(-24 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+
+	expiredCertDER, err := x509.CreateCertificate(rand.Reader, expiredTemplate, expiredTemplate, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	futureTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(3),
+		Subject:      validTemplate.Subject,
+		NotBefore:    time.Now().Add(24 * time.Hour),
+		NotAfter:     time.Now().Add(48 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+
+	futureCertDER, err := x509.CreateCertificate(rand.Reader, futureTemplate, futureTemplate, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name string
+		x5c  []any
+		alg  int64
+		sig  []byte
+		err  string
+	}{
+		{
+			name: "ShouldFailExpiredCert",
+			x5c:  []any{expiredCertDER},
+			alg:  int64(webauthncose.AlgES256),
+			sig:  validSig,
+			err:  "Cert in chain is either no longer valid or not yet valid",
+		},
+		{
+			name: "ShouldFailFutureCert",
+			x5c:  []any{futureCertDER},
+			alg:  int64(webauthncose.AlgES256),
+			sig:  validSig,
+			err:  "Cert in chain is either no longer valid or not yet valid",
+		},
+		{
+			name: "ShouldFailUnsupportedAlgorithm",
+			x5c:  []any{validCertDER},
+			alg:  int64(0),
+			sig:  validSig,
+			err:  "Unsupported COSE alg: 0",
+		},
+		{
+			name: "ShouldFailInvalidSignature",
+			x5c:  []any{validCertDER},
+			alg:  int64(webauthncose.AlgES256),
+			sig:  []byte("bad-signature"),
+			err:  "Signature validation error: x509: ECDSA verification failure",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := handleBasicAttestation(tc.sig, clientDataHash, authData, nil, tc.alg, tc.x5c, nil)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestPackedFormat_SelfAttestationErrors(t *testing.T) {
+	pcc := attestationTestUnpackResponse(t, packedTestResponseES512["success"])
+	validPubKey := pcc.Response.AttestationObject.AuthData.AttData.CredentialPublicKey
+
+	testCases := []struct {
+		name string
+		alg  int64
+		pub  []byte
+		err  string
+	}{
+		{
+			name: "ShouldFailInvalidPublicKey",
+			alg:  int64(-7),
+			pub:  []byte("not-cbor"),
+			err:  "Error parsing the public key: Unsupported Public Key Type",
+		},
+		{
+			name: "ShouldFailAlgorithmMismatch",
+			alg:  int64(-7),
+			pub:  validPubKey,
+			err:  "Public key algorithm does not equal att statement algorithm",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := handleSelfAttestation(tc.alg, tc.pub, []byte("auth"), []byte("hash"), []byte("sig"), nil)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestVerifyKeyAlgorithm(t *testing.T) {
+	testCases := []struct {
+		name   string
+		keyAlg int64
+		attAlg int64
+		err    string
+	}{
+		{
+			name:   "ShouldSucceedWhenMatch",
+			keyAlg: int64(-7),
+			attAlg: int64(-7),
+		},
+		{
+			name:   "ShouldFailWhenMismatch",
+			keyAlg: int64(-7),
+			attAlg: int64(-257),
+			err:    "Public key algorithm does not equal att statement algorithm",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := verifyKeyAlgorithm(tc.keyAlg, tc.attAlg)
+
+			if tc.err != "" {
+				require.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
 }
+
+func TestPackedFormat_BasicAttestationCertRequirements(t *testing.T) {
+	authData := []byte("fake-auth-data")
+	clientDataHash := []byte("fake-client-hash")
+	signatureData := append(authData, clientDataHash...) //nolint:gocritic
+
+	testCases := []struct {
+		name     string
+		template *x509.Certificate
+		err      string
+	}{
+		{
+			name: "ShouldFailMissingCountry",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation Certificate Country Code is invalid",
+		},
+		{
+			name: "ShouldFailMissingOrganization",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"US"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation Certificate Organization is invalid",
+		},
+		{
+			name: "ShouldFailWrongOrganizationalUnit",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"US"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Wrong OU"},
+					CommonName:         "Test",
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation Certificate Organizational Unit is invalid",
+		},
+		{
+			name: "ShouldFailMissingCommonName",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"US"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation Certificate Common Name not set",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			require.NoError(t, err)
+
+			certDER, err := x509.CreateCertificate(rand.Reader, tc.template, tc.template, &key.PublicKey, key)
+			require.NoError(t, err)
+
+			sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.AlgES256)
+			cert, err := x509.ParseCertificate(certDER)
+			require.NoError(t, err)
+
+			sig, err := key.Sign(rand.Reader, packedTestHashForSigAlg(t, sigAlg, signatureData), nil)
+			require.NoError(t, err)
+
+			x5c := []any{certDER}
+
+			_, _, err = handleBasicAttestation(sig, clientDataHash, authData, nil, int64(webauthncose.AlgES256), x5c, nil)
+			require.EqualError(t, err, tc.err)
+
+			_ = cert
+		})
+	}
+}
+
+// Supporting functions.
+
+func packedTestHashForSigAlg(t *testing.T, alg x509.SignatureAlgorithm, data []byte) []byte {
+	t.Helper()
+
+	switch alg {
+	case x509.ECDSAWithSHA256:
+		h := sha256.Sum256(data)
+		return h[:]
+	default:
+		t.Fatalf("unsupported signature algorithm: %v", alg)
+		return nil
+	}
+}
+
+// Test data.
 
 var packedTestResponseES256 = map[string]string{
 	`success`: `{

@@ -42,6 +42,8 @@ import (
 // Specification: §8.3. TPM Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-tpm-attestation
+//
+//nolint:gocyclo
 func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	var statement *tpm2AttStatement
 
@@ -570,7 +572,7 @@ func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
 		return ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate.")
 	}
 
-	var unhandled []asn1.ObjectIdentifier //nolint:prealloc
+	var unhandled []asn1.ObjectIdentifier
 
 	for _, uce := range attestation.UnhandledCriticalExtensions {
 		if uce.Equal(oidExtensionSubjectAltName) {

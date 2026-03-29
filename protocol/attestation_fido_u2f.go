@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/x509"
+	"fmt"
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
@@ -82,8 +83,8 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 	//	    algorithm and return an appropriate error.
 
 	// Step 2.1.
-	if len(x5c) > 1 {
-		return "", nil, ErrAttestationFormat.WithDetails("Received more than one element in x5c values")
+	if len(x5c) != 1 {
+		return "", nil, ErrAttestationFormat.WithDetails("x5c must contain exactly one element")
 	}
 
 	// Step 2.2.
@@ -123,7 +124,7 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate does not contain a P-256 ECDSA public key")
 	}
 
-	if len(key.XCoord) > 32 || len(key.YCoord) > 32 {
+	if len(key.XCoord) != 32 || len(key.YCoord) != 32 {
 		return "", nil, ErrAttestation.WithDetails("X or Y Coordinate for key is invalid length")
 	}
 
@@ -143,7 +144,7 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 	// Step 6. Verify the sig using verificationData and the certificate public key per section 4.1.4 of [SEC1] with
 	// SHA-256 as the hash function used in step two.
 	if err = attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), sig); err != nil {
-		return "", nil, err
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
 	// TODO: Step 7. Optionally, inspect x5c and consult externally provided knowledge to determine whether attStmt

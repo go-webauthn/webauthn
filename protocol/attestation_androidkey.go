@@ -31,6 +31,8 @@ import (
 // Specification: §8.4. Android Key Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-android-key-attestation
+//
+//nolint:gocyclo
 func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	var (
 		alg int64

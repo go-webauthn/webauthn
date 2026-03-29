@@ -1,53 +1,343 @@
 package protocol
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
 func TestVerifyU2FFormat(t *testing.T) {
-	type args struct {
-		att            AttestationObject
-		clientDataHash []byte
-	}
-
 	successAttResponse := attestationTestUnpackResponse(t, u2fTestResponse["success"]).Response.AttestationObject
 	successClientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, u2fTestResponse["success"]).Raw.AttestationResponse.ClientDataJSON)
 
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		want1   []any
-		wantErr bool
+	testCases := []struct {
+		name            string
+		att             AttestationObject
+		clientDataHash  []byte
+		attestationType string
+		err             string
 	}{
 		{
-			"success",
-			args{
-				successAttResponse,
-				successClientDataHash[:],
-			},
-			string(metadata.BasicFull),
-			nil,
-			false,
+			name:            "ShouldSuccessfullyVerifyU2FFormat",
+			att:             successAttResponse,
+			clientDataHash:  successClientDataHash[:],
+			attestationType: string(metadata.BasicFull),
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := attestationFormatValidationHandlerFIDOU2F(tt.args.att, tt.args.clientDataHash, nil)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("attestationFormatValidationHandlerFIDOU2F() error = %v, wantErr %v", err, tt.wantErr)
-				return
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationType, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, tc.clientDataHash, nil)
+
+			if tc.err != "" {
+				require.EqualError(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
 			}
 
-			if got != tt.want {
-				t.Errorf("attestationFormatValidationHandlerFIDOU2F() got = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tc.attestationType, attestationType)
 		})
 	}
+}
+
+func TestVerifyU2FFormat_Errors(t *testing.T) {
+	zeroAAGUID := make([]byte, 16)
+
+	es256Key := []byte{
+		0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01,
+		0x21, 0x58, 0x20,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x22, 0x58, 0x20,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+	}
+
+	testCases := []struct {
+		name string
+		att  AttestationObject
+		err  string
+	}{
+		{
+			name: "ShouldFailNonZeroAAGUID",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+					},
+				},
+			},
+			err: "U2F attestation format AAGUID not set to 0x00",
+		},
+		{
+			name: "ShouldFailInvalidPublicKey",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: []byte("not-cbor"),
+					},
+				},
+			},
+			err: "Error parsing public key",
+		},
+		{
+			name: "ShouldFailNonES256Algorithm",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID: zeroAAGUID,
+						CredentialPublicKey: []byte{
+							0xa3, 0x01, 0x02, 0x03, 0x39, 0x01, 0x00, 0x20, 0x01,
+						},
+					},
+				},
+			},
+			err: "Non-ES256 Public Key algorithm used",
+		},
+		{
+			name: "ShouldFailMissingX5C",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{},
+			},
+			err: "Missing properly formatted x5c data",
+		},
+		{
+			name: "ShouldFailMissingSig",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C: []any{[]byte("cert")},
+				},
+			},
+			err: "Missing sig data",
+		},
+		{
+			name: "ShouldFailX5CNotExactlyOne",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{[]byte("cert1"), []byte("cert2")},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "x5c must contain exactly one element",
+		},
+		{
+			name: "ShouldFailX5CElementNotBytes",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{"not-bytes"},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "Error decoding ASN.1 data from x5c",
+		},
+		{
+			name: "ShouldFailX5CInvalidCert",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{[]byte("not-a-cert")},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "Error parsing certificate from ASN.1 data into certificate",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, []byte("hash"), nil)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestVerifyU2FFormat_CertificateErrors(t *testing.T) {
+	zeroAAGUID := make([]byte, 16)
+
+	es256Key := []byte{
+		0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01,
+		0x21, 0x58, 0x20,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x22, 0x58, 0x20,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+	}
+
+	shortCoordKey := []byte{
+		0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01,
+		0x21, 0x58, 0x10,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+		0x22, 0x58, 0x10,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+	}
+
+	rsaCertDER := u2fTestGenerateRSACert(t)
+	p384CertDER := u2fTestGenerateP384Cert(t)
+	p256CertDER := u2fTestGenerateP256Cert(t)
+
+	testCases := []struct {
+		name string
+		att  AttestationObject
+		err  string
+	}{
+		{
+			name: "ShouldFailNonECDSACert",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{rsaCertDER},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "Attestation certificate public key algorithm is not ECDSA",
+		},
+		{
+			name: "ShouldFailNonP256Curve",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{p384CertDER},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "Attestation certificate does not contain a P-256 ECDSA public key",
+		},
+		{
+			name: "ShouldFailShortCoordinates",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: shortCoordKey,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{p256CertDER},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "X or Y Coordinate for key is invalid length",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, []byte("hash"), nil)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+// Supporting functions.
+
+func u2fTestGenerateRSACert(t *testing.T) []byte {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "Test RSA"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	return der
+}
+
+func u2fTestGenerateP384Cert(t *testing.T) []byte {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "Test P384"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	return der
+}
+
+func u2fTestGenerateP256Cert(t *testing.T) []byte {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "Test P256"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	return der
 }
 
 var u2fTestResponse = map[string]string{

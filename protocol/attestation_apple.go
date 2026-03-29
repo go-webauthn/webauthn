@@ -39,6 +39,10 @@ func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, cli
 		return "", nil, err
 	}
 
+	if len(certs) == 0 {
+		return "", nil, ErrInvalidAttestation.WithDetails("No certificates in x5c")
+	}
+
 	credCert := certs[0]
 
 	if _, err = attStatementCertChainVerify(certs, attAppleHardwareRootsCertPool, true, time.Now().Add(time.Hour*8760).UTC()); err != nil {

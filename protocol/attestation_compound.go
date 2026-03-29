@@ -28,6 +28,8 @@ func init() {
 // Specification: §8.9. Compound Attestation Statement Forma
 //
 // See: https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation
+//
+//nolint:gocyclo
 func attestationFormatValidationHandlerCompound(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
 	var (
 		aaguid   uuid.UUID
@@ -93,8 +95,12 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 			RawAuthData:  att.RawAuthData,
 		}
 
-		var cx5cs []any
-		if _, cx5cs, err = attestationRegistry[AttestationFormat(object.Format)](object, clientDataHash, mds); err != nil {
+		var (
+			cx5cs      []any
+			subAttType string
+		)
+
+		if subAttType, cx5cs, err = attestationRegistry[AttestationFormat(object.Format)](object, clientDataHash, mds); err != nil {
 			return "", nil, err
 		}
 
@@ -102,7 +108,7 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 			continue
 		}
 
-		if e := ValidateMetadata(context.Background(), mds, aaguid, attestationType, object.Format, cx5cs); e != nil {
+		if e := ValidateMetadata(context.Background(), mds, aaguid, subAttType, object.Format, cx5cs); e != nil {
 			return "", nil, ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
 		}
 	}

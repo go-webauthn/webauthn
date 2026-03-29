@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -209,7 +210,13 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
 	if attestationType, x5cs, err = handler(*a, clientDataHash, mds); err != nil {
-		return err.(*Error).WithInfo(attestationType)
+		var e *Error
+
+		if errors.As(err, &e) {
+			return e.WithInfo(attestationType)
+		}
+
+		return ErrInvalidAttestation.WithDetails(err.Error()).WithInfo(attestationType).WithError(err)
 	}
 
 	if attestationType == string(AttestationFormatCompound) {
