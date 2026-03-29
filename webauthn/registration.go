@@ -9,8 +9,9 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
-// RegistrationOption describes a function which modifies the registration
-// [*protocol.PublicKeyCredentialCreationOptions] values.
+// RegistrationOption is a functional option that modifies the [protocol.PublicKeyCredentialCreationOptions] sent
+// to the client during a registration ceremony. Use the With* functions in this package (e.g.
+// [WithConveyancePreference], [WithExclusions], [WithAuthenticatorSelection]) to create registration options.
 type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
 
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator. To set a

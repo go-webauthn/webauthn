@@ -13,33 +13,59 @@ import (
 //
 // Specification: §5.8.1. Client Data Used in WebAuthn Signatures (https://www.w3.org/TR/webauthn/#dictdef-collectedclientdata)
 type CollectedClientData struct {
-	// Type the string "webauthn.create" when creating new credentials,
-	// and "webauthn.get" when getting an assertion from an existing credential. The
-	// purpose of this member is to prevent certain types of signature confusion attacks
-	// (where an attacker substitutes one legitimate signature for another).
-	Type         CeremonyType  `json:"type"`
-	Challenge    string        `json:"challenge"`
-	Origin       string        `json:"origin"`
-	TopOrigin    string        `json:"topOrigin,omitempty"`
-	CrossOrigin  bool          `json:"crossOrigin,omitempty"`
+	// Type contains the string "webauthn.create" when creating new credentials, and "webauthn.get" when getting an
+	// assertion from an existing credential. The purpose of this member is to prevent certain types of signature
+	// confusion attacks (where an attacker substitutes one legitimate signature for another).
+	Type CeremonyType `json:"type"`
+
+	// Challenge contains the base64url encoding of the challenge provided by the Relying Party.
+	Challenge string `json:"challenge"`
+
+	// Origin contains the fully qualified origin of the requester, as provided to the authenticator by the client.
+	Origin string `json:"origin"`
+
+	// TopOrigin contains the fully qualified top-level origin of the requester when the client is cross-origin.
+	// This is only present when CrossOrigin is true.
+	//
+	// WebAuthn Level 3.
+	TopOrigin string `json:"topOrigin,omitempty"`
+
+	// CrossOrigin indicates whether the calling context is an iframe that is not same-origin with its ancestor.
+	//
+	// WebAuthn Level 3.
+	CrossOrigin bool `json:"crossOrigin,omitempty"`
+
+	// TokenBinding contains information about the state of the Token Binding protocol.
 	TokenBinding *TokenBinding `json:"tokenBinding,omitempty"`
 
-	// Chromium (Chrome) returns a hint sometimes about how to handle clientDataJSON in a safe manner.
+	// Hint is an opaque field that may be added by the client. Chromium-based browsers include this field to remind
+	// implementers not to perform string comparison on the clientDataJSON.
 	Hint string `json:"new_keys_may_be_added_here,omitempty"`
 }
 
+// CeremonyType represents the type of WebAuthn ceremony being performed.
+//
+// Specification: §5.8.1. Client Data Used in WebAuthn Signatures (https://www.w3.org/TR/webauthn/#dom-collectedclientdata-type)
 type CeremonyType string
 
 const (
+	// CreateCeremony is the ceremony type for credential registration ("webauthn.create").
 	CreateCeremony CeremonyType = "webauthn.create"
+
+	// AssertCeremony is the ceremony type for authentication assertion ("webauthn.get").
 	AssertCeremony CeremonyType = "webauthn.get"
 )
 
+// TokenBinding contains information about the state of the Token Binding protocol used when communicating with the
+// Relying Party. Its absence indicates that the client doesn't support token binding.
+//
+// Specification: §5.8.1. Client Data Used in WebAuthn Signatures (https://www.w3.org/TR/webauthn/#dom-collectedclientdata-tokenbinding)
 type TokenBinding struct {
 	Status TokenBindingStatus `json:"status"`
 	ID     string             `json:"id,omitempty"`
 }
 
+// TokenBindingStatus represents the state of Token Binding between the client and the Relying Party.
 type TokenBindingStatus string
 
 const (
@@ -47,7 +73,7 @@ const (
 	// Relying Party. In this case, the id member MUST be present.
 	Present TokenBindingStatus = "present"
 
-	// Supported indicates token binding was used when communicating with the
+	// Supported indicates the client supports token binding, but it was not
 	// negotiated when communicating with the Relying Party.
 	Supported TokenBindingStatus = "supported"
 
@@ -169,6 +195,11 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 	return nil
 }
 
+// TopOriginVerificationMode determines how the Relying Party validates the topOrigin field in
+// [CollectedClientData]. This is relevant for cross-origin iframe scenarios where the top-level browsing context's
+// origin differs from the embedded origin making the WebAuthn API call.
+//
+// WebAuthn Level 3.
 type TopOriginVerificationMode int
 
 const (

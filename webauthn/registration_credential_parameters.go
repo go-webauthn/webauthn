@@ -5,7 +5,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-// CredentialParametersDefault is the default [protocol.CredentialParameter] list.
+// CredentialParametersDefault returns the default list of acceptable credential algorithms. This includes ES256,
+// ES384, ES512, RS256, RS384, RS512, PS256, PS384, PS512, and EdDSA. The order indicates preference.
 func CredentialParametersDefault() []protocol.CredentialParameter {
 	return []protocol.CredentialParameter{
 		{
@@ -51,7 +52,9 @@ func CredentialParametersDefault() []protocol.CredentialParameter {
 	}
 }
 
-// CredentialParametersRecommendedL3 is explicitly the Level 3 recommended [protocol.CredentialParameter] list.
+// CredentialParametersRecommendedL3 returns the WebAuthn Level 3 recommended credential algorithm list: EdDSA,
+// ES256, and RS256 (in that order). This is the minimal set recommended by the specification for broad
+// authenticator compatibility.
 func CredentialParametersRecommendedL3() []protocol.CredentialParameter {
 	return []protocol.CredentialParameter{
 		{
@@ -69,8 +72,9 @@ func CredentialParametersRecommendedL3() []protocol.CredentialParameter {
 	}
 }
 
-// CredentialParametersExtendedL3 is the Level 3 recommended [protocol.CredentialParameter] list with all of the other
-// parameters supported by the library.
+// CredentialParametersExtendedL3 returns the WebAuthn Level 3 recommended credential algorithm list (EdDSA, ES256,
+// RS256) extended with all other algorithms supported by this library (ES384, ES512, RS384, RS512, PS256, PS384,
+// PS512). The Level 3 recommended algorithms appear first to indicate preference.
 func CredentialParametersExtendedL3() []protocol.CredentialParameter {
 	return []protocol.CredentialParameter{
 		{

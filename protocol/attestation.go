@@ -79,6 +79,11 @@ type AttestationObject struct {
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
+// NonCompoundAttestationObject is a subset of [AttestationObject] used within compound attestation statements. Each
+// sub-statement in a compound attestation has its own format and attestation statement but shares authenticator data
+// with the parent.
+//
+// Specification: §8.9. Compound Attestation Statement Format (https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation)
 type NonCompoundAttestationObject struct {
 	// The format of the Attestation data.
 	Format string `json:"fmt"`

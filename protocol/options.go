@@ -1,10 +1,20 @@
 package protocol
 
+// CredentialCreation is the top-level request object for credential registration. It wraps
+// [PublicKeyCredentialCreationOptions] and an optional mediation requirement. This is the object that should be
+// serialized and sent to the client to initiate the navigator.credentials.create() call.
+//
+// Specification: §5.4. Options for Credential Creation (https://www.w3.org/TR/webauthn/#dictionary-makecredentialoptions)
 type CredentialCreation struct {
 	Response  PublicKeyCredentialCreationOptions `json:"publicKey"`
 	Mediation CredentialMediationRequirement     `json:"mediation,omitempty"`
 }
 
+// CredentialAssertion is the top-level request object for credential assertion (login). It wraps
+// [PublicKeyCredentialRequestOptions] and an optional mediation requirement. This is the object that should be
+// serialized and sent to the client to initiate the navigator.credentials.get() call.
+//
+// Specification: §5.5. Options for Assertion Generation (https://www.w3.org/TR/webauthn/#dictionary-assertion-options)
 type CredentialAssertion struct {
 	Response  PublicKeyCredentialRequestOptions `json:"publicKey"`
 	Mediation CredentialMediationRequirement    `json:"mediation,omitempty"`
@@ -262,16 +272,27 @@ func (a *PublicKeyCredentialRequestOptions) GetAllowedCredentialIDs() [][]byte {
 	return allowedCredentialIDs
 }
 
+// Extensions is a generic type for WebAuthn extensions. The actual contents are defined by each individual extension.
+//
+// Specification: §9. WebAuthn Extensions (https://www.w3.org/TR/webauthn/#extensions)
 type Extensions any
 
+// ServerResponse is a response from a FIDO conformance server.
 type ServerResponse struct {
-	Status  ServerResponseStatus `json:"status"`
-	Message string               `json:"errorMessage"`
+	// Status indicates whether the operation succeeded or failed.
+	Status ServerResponseStatus `json:"status"`
+
+	// Message provides additional details about an error if Status is "failed".
+	Message string `json:"errorMessage"`
 }
 
+// ServerResponseStatus is the status code returned by a FIDO conformance server.
 type ServerResponseStatus string
 
 const (
-	StatusOk     ServerResponseStatus = "ok"
+	// StatusOk indicates the server operation was successful.
+	StatusOk ServerResponseStatus = "ok"
+
+	// StatusFailed indicates the server operation failed.
 	StatusFailed ServerResponseStatus = "failed"
 )

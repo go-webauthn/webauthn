@@ -12,8 +12,12 @@ import (
 //msgp:replace protocol.AuthenticationExtensions with:map[string]any
 //msgp:replace protocol.CredentialMediationRequirement with:string
 
-// SessionData is the data that should be stored by the Relying Party for the duration of the web authentication
-// ceremony.
+// SessionData is the data that must be stored by the Relying Party between the Begin and Finish steps of a WebAuthn
+// ceremony. It contains the challenge and other parameters needed to verify the authenticator's response.
+//
+// The Relying Party must store this data securely and associate it with the user's session. It should not be
+// modifiable by the client (e.g. store it server-side or in a signed, opaque cookie). After the ceremony completes,
+// the session data should be discarded.
 type SessionData struct {
 	Challenge            string    `json:"challenge" msg:"c"`
 	RelyingPartyID       string    `json:"rpId" msg:"r"`

@@ -8,7 +8,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
-// New creates a new WebAuthn object given the proper Config.
+// New creates a new [WebAuthn] instance from the provided [Config]. The configuration is validated before the
+// instance is returned.
 func New(config *Config) (*WebAuthn, error) {
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf(errFmtConfigValidate, err)
@@ -19,12 +20,16 @@ func New(config *Config) (*WebAuthn, error) {
 	}, nil
 }
 
-// WebAuthn is the primary interface of this package and contains the request handlers that should be called.
+// WebAuthn is the primary interface of this package. It provides methods to begin and finish both registration and
+// login ceremonies. Create an instance using [New] and then call the appropriate Begin/Finish methods for your
+// use case. See the package documentation for detailed ceremony flows.
 type WebAuthn struct {
 	Config *Config
 }
 
-// Config represents the WebAuthn configuration.
+// Config represents the Relying Party configuration for WebAuthn operations. At minimum, RPID and RPOrigins must
+// be configured. The RPID should be the effective domain of the Relying Party (e.g. "example.com") and RPOrigins
+// should contain the fully qualified origins that are permitted (e.g. "https://example.com").
 type Config struct {
 	// RPID configures the Relying Party Server ID. This should generally be the origin without a scheme and port.
 	RPID string
@@ -68,19 +73,23 @@ type Config struct {
 	// Timeouts configures various timeouts.
 	Timeouts TimeoutsConfig
 
-	// MDS is a metadata.Provider and enables various metadata validations if configured.
+	// MDS configures a FIDO Metadata Service provider for authenticator trust validation. When set, the library
+	// validates attestation statements against known authenticator metadata including trust anchors, attestation
+	// types, and authenticator status. Use the providers in [github.com/go-webauthn/webauthn/metadata/providers/memory]
+	// or [github.com/go-webauthn/webauthn/metadata/providers/cached] to create a provider instance.
 	MDS metadata.Provider
 
 	validated bool
 }
 
-// TimeoutsConfig represents the WebAuthn timeouts configuration.
+// TimeoutsConfig configures the timeout durations for both login and registration ceremonies. These values are sent
+// to the client as the timeout field in the credential request/creation options and optionally enforced server-side.
 type TimeoutsConfig struct {
 	Login        TimeoutConfig
 	Registration TimeoutConfig
 }
 
-// TimeoutConfig represents the WebAuthn timeouts configuration for either registration or login..
+// TimeoutConfig configures timeout behavior for a specific WebAuthn ceremony (registration or login).
 type TimeoutConfig struct {
 	// Enforce the timeouts at the Relying Party / Server. This means if enabled and the user takes too long that even
 	// if the browser does not enforce the timeout the Relying Party / Server will.
@@ -138,26 +147,33 @@ func (config *Config) validate() (err error) {
 	return nil
 }
 
+// GetRPID returns the configured Relying Party ID.
 func (c *Config) GetRPID() string {
 	return c.RPID
 }
 
+// GetOrigins returns the configured Relying Party Origins.
 func (c *Config) GetOrigins() []string {
 	return c.RPOrigins
 }
 
+// GetTopOrigins returns the configured Relying Party Top Origins.
 func (c *Config) GetTopOrigins() []string {
 	return c.RPTopOrigins
 }
 
+// GetTopOriginVerificationMode returns the configured Top Origin verification mode.
 func (c *Config) GetTopOriginVerificationMode() protocol.TopOriginVerificationMode {
 	return c.RPTopOriginVerificationMode
 }
 
+// GetMetaDataProvider returns the configured FIDO Metadata Service provider.
 func (c *Config) GetMetaDataProvider() metadata.Provider {
 	return c.MDS
 }
 
+// ConfigProvider is an interface that provides access to the WebAuthn [Config] values. This is useful for
+// implementations that wish to provide configuration from alternative sources.
 type ConfigProvider interface {
 	GetRPID() string
 	GetOrigins() []string

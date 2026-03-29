@@ -31,6 +31,10 @@ type ParsedCredential struct {
 	Type string `cbor:"type"`
 }
 
+// PublicKeyCredential represents the IDL of the same name and contains the raw response returned to the Relying Party
+// from the client's call to navigator.credentials.create() or navigator.credentials.get().
+//
+// Specification: §5.1. PublicKeyCredential Interface (https://www.w3.org/TR/webauthn/#iface-pkcredential)
 type PublicKeyCredential struct {
 	Credential
 
@@ -39,6 +43,7 @@ type PublicKeyCredential struct {
 	AuthenticatorAttachment string                                `json:"authenticatorAttachment,omitempty"`
 }
 
+// ParsedPublicKeyCredential is the parsed form of [PublicKeyCredential] with typed fields.
 type ParsedPublicKeyCredential struct {
 	ParsedCredential
 
@@ -47,12 +52,20 @@ type ParsedPublicKeyCredential struct {
 	AuthenticatorAttachment AuthenticatorAttachment               `json:"authenticatorAttachment,omitempty"`
 }
 
+// CredentialCreationResponse is the raw response returned to the Relying Party from the client for a credential
+// registration ceremony. It contains the [AuthenticatorAttestationResponse] which holds the attestation object
+// and client data.
+//
+// Specification: §5.4. Options for Credential Creation (https://www.w3.org/TR/webauthn/#sctn-credentialcreationoptions-extension)
 type CredentialCreationResponse struct {
 	PublicKeyCredential
 
 	AttestationResponse AuthenticatorAttestationResponse `json:"response"`
 }
 
+// ParsedCredentialCreationData is the parsed form of [CredentialCreationResponse]. It is the result of parsing the
+// raw response from the authenticator and can be used with [ParsedCredentialCreationData.Verify] to complete the
+// registration ceremony verification.
 type ParsedCredentialCreationData struct {
 	ParsedPublicKeyCredential
 
