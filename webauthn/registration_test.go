@@ -3,6 +3,7 @@ package webauthn
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,6 +147,167 @@ func TestEntityEncoding(t *testing.T) {
 			assert.Equal(t, tc.expected, string(data))
 		})
 	}
+}
+
+func TestCreateCredential_Errors(t *testing.T) {
+	testCases := []struct {
+		name    string
+		user    User
+		session SessionData
+		err     string
+	}{
+		{
+			name: "ShouldFailUserIDMismatch",
+			user: &defaultUser{
+				id: []byte("123"),
+			},
+			session: SessionData{
+				UserID: []byte("456"),
+			},
+			err: "ID mismatch for User and Session",
+		},
+		{
+			name: "ShouldFailSessionExpired",
+			user: &defaultUser{
+				id: []byte("123"),
+			},
+			session: SessionData{
+				UserID:  []byte("123"),
+				Expires: time.Now().Add(-time.Hour),
+			},
+			err: "Session has Expired",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &WebAuthn{Config: &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+			}}
+
+			credential, err := w.CreateCredential(tc.user, tc.session, nil)
+			assert.Nil(t, credential)
+			assert.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestBeginRegistration_Timeouts(t *testing.T) {
+	testCases := []struct {
+		name            string
+		config          *Config
+		opts            []RegistrationOption
+		expectedTimeout int
+	}{
+		{
+			name: "ShouldUseDefaultTimeout",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			expectedTimeout: 300000,
+		},
+		{
+			name: "ShouldUseUVDTimeout",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+				AuthenticatorSelection: protocol.AuthenticatorSelection{
+					UserVerification: protocol.VerificationDiscouraged,
+				},
+			},
+			expectedTimeout: 120000,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(tc.config)
+			require.NoError(t, err)
+
+			user := &defaultUser{id: []byte("123")}
+
+			creation, _, err := w.BeginRegistration(user, tc.opts...)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedTimeout, creation.Response.Timeout)
+		})
+	}
+}
+
+func TestBeginRegistration_EncodeUserIDAsString(t *testing.T) {
+	testCases := []struct {
+		name           string
+		encodeAsString bool
+		userID         string
+		expectedIDType string
+	}{
+		{
+			name:           "ShouldEncodeAsBase64",
+			encodeAsString: false,
+			userID:         "testuser",
+			expectedIDType: "protocol.URLEncodedBase64",
+		},
+		{
+			name:           "ShouldEncodeAsString",
+			encodeAsString: true,
+			userID:         "testuser",
+			expectedIDType: "string",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				RPID:                 "example.com",
+				RPDisplayName:        "Test Display Name",
+				RPOrigins:            []string{"https://example.com"},
+				EncodeUserIDAsString: tc.encodeAsString,
+			}
+
+			w, err := New(config)
+			require.NoError(t, err)
+
+			user := &defaultUser{id: []byte(tc.userID)}
+
+			creation, _, err := w.BeginRegistration(user)
+			require.NoError(t, err)
+
+			if tc.encodeAsString {
+				_, ok := creation.Response.User.ID.(string)
+				assert.True(t, ok)
+			} else {
+				_, ok := creation.Response.User.ID.(protocol.URLEncodedBase64)
+				assert.True(t, ok)
+			}
+		})
+	}
+}
+
+func TestBeginMediatedRegistration_EnforceTimeout(t *testing.T) {
+	config := &Config{
+		RPID:          "example.com",
+		RPDisplayName: "Test Display Name",
+		RPOrigins:     []string{"https://example.com"},
+		Timeouts: TimeoutsConfig{
+			Registration: TimeoutConfig{
+				Enforce: true,
+				Timeout: time.Second * 60,
+			},
+		},
+	}
+
+	w, err := New(config)
+	require.NoError(t, err)
+
+	user := &defaultUser{id: []byte("123")}
+
+	_, session, err := w.BeginMediatedRegistration(user, protocol.MediationConditional)
+	require.NoError(t, err)
+	assert.False(t, session.Expires.IsZero())
+	assert.Equal(t, protocol.MediationConditional, session.Mediation)
 }
 
 func TestRegistrationOptions(t *testing.T) {

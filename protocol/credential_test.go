@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
@@ -113,8 +114,10 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, subtest := range []string{"Response", "ResponseBody", "Bytes"} {
 				t.Run(subtest, func(t *testing.T) {
-					var actual *ParsedCredentialCreationData
-					var err error
+					var (
+						actual *ParsedCredentialCreationData
+						err    error
+					)
 
 					switch subtest {
 					case "Response":
@@ -266,6 +269,204 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 			}
 			if _, err := pcc.Verify(tt.args.storedChallenge.String(), tt.args.verifyUser, false, tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, nil, tt.args.credParams); (err != nil) != tt.wantErr {
 				t.Errorf("ParsedCredentialCreationData.Verify() error = %+v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestParseCredentialCreationResponse_NilRequest(t *testing.T) {
+	testCases := []struct {
+		name    string
+		request *http.Request
+		err     string
+	}{
+		{
+			name:    "ShouldFailNilRequest",
+			request: nil,
+			err:     "No response given",
+		},
+		{
+			name:    "ShouldFailNilBody",
+			request: &http.Request{},
+			err:     "No response given",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ParseCredentialCreationResponse(tc.request)
+			assert.Nil(t, result)
+			assert.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestCredentialCreationResponse_Parse_Errors(t *testing.T) {
+	testCases := []struct {
+		name string
+		ccr  CredentialCreationResponse
+		err  string
+	}{
+		{
+			name: "ShouldFailMissingID",
+			ccr:  CredentialCreationResponse{},
+			err:  "Parse error for Registration",
+		},
+		{
+			name: "ShouldFailIDNotBase64",
+			ccr: CredentialCreationResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID: "not valid base64 %%%",
+					},
+				},
+			},
+			err: "Parse error for Registration",
+		},
+		{
+			name: "ShouldFailMissingType",
+			ccr: CredentialCreationResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID: "dGVzdA",
+					},
+				},
+			},
+			err: "Parse error for Registration",
+		},
+		{
+			name: "ShouldFailBadType",
+			ccr: CredentialCreationResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "dGVzdA",
+						Type: "bad-type",
+					},
+				},
+			},
+			err: "Parse error for Registration",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := tc.ccr.Parse()
+			assert.Nil(t, result)
+			assert.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestGetAppID(t *testing.T) {
+	testCases := []struct {
+		name                      string
+		ppkc                      ParsedPublicKeyCredential
+		authExt                   AuthenticationExtensions
+		credentialAttestationType string
+		expectedAppID             string
+		err                       string
+	}{
+		{
+			name:                      "ShouldReturnEmptyWhenAuthExtNil",
+			ppkc:                      ParsedPublicKeyCredential{},
+			authExt:                   nil,
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			expectedAppID:             "",
+		},
+		{
+			name:                      "ShouldReturnEmptyWhenClientExtNil",
+			ppkc:                      ParsedPublicKeyCredential{},
+			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			expectedAppID:             "",
+		},
+		{
+			name: "ShouldReturnEmptyWhenNotFIDOU2F",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					ExtensionAppID: true,
+				},
+			},
+			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			credentialAttestationType: "packed",
+			expectedAppID:             "",
+		},
+		{
+			name: "ShouldReturnEmptyWhenAppIDNotInClientExt",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					"other": "value",
+				},
+			},
+			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			expectedAppID:             "",
+		},
+		{
+			name: "ShouldFailWhenClientAppIDNotBool",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					ExtensionAppID: "not-a-bool",
+				},
+			},
+			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			err:                       "Client Output appid did not have the expected type",
+		},
+		{
+			name: "ShouldReturnEmptyWhenAppIDFalse",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					ExtensionAppID: false,
+				},
+			},
+			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			expectedAppID:             "",
+		},
+		{
+			name: "ShouldFailWhenSessionAppIDMissing",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					ExtensionAppID: true,
+				},
+			},
+			authExt:                   AuthenticationExtensions{},
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			err:                       "Session Data does not have an appid but Client Output indicates it should be set",
+		},
+		{
+			name: "ShouldFailWhenSessionAppIDNotString",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					ExtensionAppID: true,
+				},
+			},
+			authExt:                   AuthenticationExtensions{ExtensionAppID: 123},
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			err:                       "Session Data appid did not have the expected type",
+		},
+		{
+			name: "ShouldReturnAppID",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					ExtensionAppID: true,
+				},
+			},
+			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			credentialAttestationType: CredentialTypeFIDOU2F,
+			expectedAppID:             "https://example.com",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			appID, err := tc.ppkc.GetAppID(tc.authExt, tc.credentialAttestationType)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedAppID, appID)
 			}
 		})
 	}

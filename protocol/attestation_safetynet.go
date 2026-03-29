@@ -39,6 +39,8 @@ import (
 // Specification: §8.5. Android SafetyNet Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation
+//
+//nolint:gocyclo
 func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
@@ -95,10 +97,19 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 	}
 
 	// §8.5.4 Let attestationCert be the attestation certificate (https://www.w3.org/TR/webauthn/#attestation-certificate)
-	certChain := token.Header[stmtX5C].([]any)
-	l := make([]byte, base64.StdEncoding.DecodedLen(len(certChain[0].(string))))
+	certChain, ok := token.Header[stmtX5C].([]any)
+	if !ok || len(certChain) == 0 {
+		return "", nil, ErrInvalidAttestation.WithDetails("Error getting certificate from JWT header x5c")
+	}
 
-	n, err := base64.StdEncoding.Decode(l, []byte(certChain[0].(string)))
+	first, ok := certChain[0].(string)
+	if !ok || first == "" {
+		return "", nil, ErrInvalidAttestation.WithDetails("Error getting first certificate from JWT header x5c")
+	}
+
+	l := make([]byte, base64.StdEncoding.DecodedLen(len(first)))
+
+	n, err := base64.StdEncoding.Decode(l, []byte(first))
 	if err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
 	}

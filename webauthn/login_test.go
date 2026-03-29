@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -343,6 +344,335 @@ func TestFinishLoginFailureCredentialNotOwned(t *testing.T) {
 	_, err = webauthn.FinishLogin(user, session, httpReq)
 
 	require.Equal(t, &protocol.ErrorUnknownCredential{Err: protocol.ErrBadRequest.WithDetails("The credential ID provided is not owned by the user")}, err)
+}
+
+func TestFinishDiscoverableLogin_Failure(t *testing.T) {
+	session := SessionData{}
+	webauthn := &WebAuthn{}
+
+	credential, err := webauthn.FinishDiscoverableLogin(nil, session, nil)
+	assert.Nil(t, credential)
+	assert.Error(t, err)
+}
+
+func TestFinishPasskeyLogin_Failure(t *testing.T) {
+	session := SessionData{}
+	webauthn := &WebAuthn{}
+
+	user, credential, err := webauthn.FinishPasskeyLogin(nil, session, nil)
+	assert.Nil(t, user)
+	assert.Nil(t, credential)
+	assert.Error(t, err)
+}
+
+func TestBeginLogin_EnforceTimeout(t *testing.T) {
+	config := &Config{
+		RPID:          "example.com",
+		RPDisplayName: "Test Display Name",
+		RPOrigins:     []string{"https://example.com"},
+		Timeouts: TimeoutsConfig{
+			Login: TimeoutConfig{
+				Enforce: true,
+				Timeout: time.Second * 60,
+			},
+		},
+	}
+
+	w, err := New(config)
+	require.NoError(t, err)
+
+	user := &defaultUser{
+		credentials: []Credential{{}},
+	}
+
+	_, session, err := w.BeginLogin(user)
+	require.NoError(t, err)
+	assert.False(t, session.Expires.IsZero())
+}
+
+func TestBeginDiscoverableLogin(t *testing.T) {
+	testCases := []struct {
+		name       string
+		config     *Config
+		opts       []LoginOption
+		expectedID string
+		err        string
+	}{
+		{
+			name: "ShouldSucceed",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			expectedID: "example.com",
+		},
+		{
+			name: "ShouldSucceedWithOpts",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			opts:       []LoginOption{WithUserVerification(protocol.VerificationRequired)},
+			expectedID: "example.com",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(tc.config)
+			require.NoError(t, err)
+
+			assertion, session, err := w.BeginDiscoverableLogin(tc.opts...)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, assertion)
+				require.NotNil(t, session)
+				assert.Equal(t, tc.expectedID, assertion.Response.RelyingPartyID)
+				assert.Empty(t, session.UserID)
+				assert.Empty(t, session.AllowedCredentialIDs)
+			}
+		})
+	}
+}
+
+func TestBeginDiscoverableMediatedLogin(t *testing.T) {
+	testCases := []struct {
+		name              string
+		config            *Config
+		mediation         protocol.CredentialMediationRequirement
+		expectedID        string
+		expectedMediation protocol.CredentialMediationRequirement
+	}{
+		{
+			name: "ShouldSucceedConditional",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			mediation:         protocol.MediationConditional,
+			expectedID:        "example.com",
+			expectedMediation: protocol.MediationConditional,
+		},
+		{
+			name: "ShouldSucceedRequired",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			mediation:         protocol.MediationRequired,
+			expectedID:        "example.com",
+			expectedMediation: protocol.MediationRequired,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(tc.config)
+			require.NoError(t, err)
+
+			assertion, session, err := w.BeginDiscoverableMediatedLogin(tc.mediation)
+			require.NoError(t, err)
+			require.NotNil(t, assertion)
+			require.NotNil(t, session)
+			assert.Equal(t, tc.expectedID, assertion.Response.RelyingPartyID)
+			assert.Equal(t, tc.expectedMediation, assertion.Mediation)
+			assert.Empty(t, session.UserID)
+		})
+	}
+}
+
+func TestBeginMediatedLogin_NoCredentials(t *testing.T) {
+	config := &Config{
+		RPID:          "example.com",
+		RPDisplayName: "Test Display Name",
+		RPOrigins:     []string{"https://example.com"},
+	}
+
+	w, err := New(config)
+	require.NoError(t, err)
+
+	user := &defaultUser{
+		id:          []byte("123"),
+		credentials: nil,
+	}
+
+	assertion, session, err := w.BeginMediatedLogin(user, protocol.MediationDefault)
+	assert.Nil(t, assertion)
+	assert.Nil(t, session)
+	assert.EqualError(t, err, "Found no credentials for user")
+}
+
+func TestBeginLogin_Timeouts(t *testing.T) {
+	testCases := []struct {
+		name            string
+		config          *Config
+		opts            []LoginOption
+		expectedTimeout int
+	}{
+		{
+			name: "ShouldUseDefaultTimeout",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+			},
+			expectedTimeout: 300000,
+		},
+		{
+			name: "ShouldUseUVDTimeout",
+			config: &Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+				AuthenticatorSelection: protocol.AuthenticatorSelection{
+					UserVerification: protocol.VerificationDiscouraged,
+				},
+			},
+			expectedTimeout: 120000,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(tc.config)
+			require.NoError(t, err)
+
+			user := &defaultUser{
+				credentials: []Credential{{}},
+			}
+
+			assertion, _, err := w.BeginLogin(user, tc.opts...)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedTimeout, assertion.Response.Timeout)
+		})
+	}
+}
+
+func TestValidateLogin_Errors(t *testing.T) {
+	testCases := []struct {
+		name    string
+		user    User
+		session SessionData
+		err     string
+	}{
+		{
+			name: "ShouldFailUserIDMismatch",
+			user: &defaultUser{
+				id: []byte("123"),
+			},
+			session: SessionData{
+				UserID: []byte("456"),
+			},
+			err: "ID mismatch for User and Session",
+		},
+		{
+			name: "ShouldFailSessionExpired",
+			user: &defaultUser{
+				id: []byte("123"),
+			},
+			session: SessionData{
+				UserID:  []byte("123"),
+				Expires: time.Now().Add(-time.Hour),
+			},
+			err: "Session has Expired",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &WebAuthn{Config: &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+			}}
+
+			credential, err := w.ValidateLogin(tc.user, tc.session, nil)
+			assert.Nil(t, credential)
+			assert.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestValidatePasskeyLogin_Errors(t *testing.T) {
+	testCases := []struct {
+		name    string
+		handler DiscoverableUserHandler
+		session SessionData
+		parsed  *protocol.ParsedCredentialAssertionData
+		err     string
+	}{
+		{
+			name: "ShouldFailSessionNotDiscoverable",
+			session: SessionData{
+				UserID: []byte("123"),
+			},
+			err: "Session was not initiated as a client-side discoverable login",
+		},
+		{
+			name: "ShouldFailSessionExpired",
+			session: SessionData{
+				Expires: time.Now().Add(-time.Hour),
+			},
+			err: "Session has Expired",
+		},
+		{
+			name:    "ShouldFailBlankUserHandle",
+			session: SessionData{},
+			parsed: &protocol.ParsedCredentialAssertionData{
+				ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
+					RawID: []byte("cred-id"),
+				},
+				Response: protocol.ParsedAssertionResponse{},
+			},
+			err: "Client-side Discoverable Assertion was attempted with a blank User Handle",
+		},
+		{
+			name: "ShouldFailHandlerError",
+			handler: func(rawID, userHandle []byte) (User, error) {
+				return nil, fmt.Errorf("user not found")
+			},
+			session: SessionData{},
+			parsed: &protocol.ParsedCredentialAssertionData{
+				ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
+					RawID: []byte("cred-id"),
+				},
+				Response: protocol.ParsedAssertionResponse{
+					UserHandle: []byte("user-handle"),
+				},
+			},
+			err: "Failed to lookup Client-side Discoverable Credential: user not found",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &WebAuthn{Config: &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+			}}
+
+			user, credential, err := w.ValidatePasskeyLogin(tc.handler, tc.session, tc.parsed)
+			assert.Nil(t, user)
+			assert.Nil(t, credential)
+			require.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestValidateDiscoverableLogin_Errors(t *testing.T) {
+	w := &WebAuthn{Config: &Config{
+		RPID:      "example.com",
+		RPOrigins: []string{"https://example.com"},
+	}}
+
+	credential, err := w.ValidateDiscoverableLogin(nil, SessionData{UserID: []byte("123")}, nil)
+	assert.Nil(t, credential)
+	require.EqualError(t, err, "Session was not initiated as a client-side discoverable login")
 }
 
 func TestLoginOptions(t *testing.T) {

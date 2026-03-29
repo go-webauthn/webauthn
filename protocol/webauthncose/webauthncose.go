@@ -29,7 +29,7 @@ import (
 // Specification: §6.4.1.1. Examples of credentialPublicKey Values Encoded in COSE_Key Format (https://www.w3.org/TR/webauthn/#sctn-encoded-credPubKey-examples)
 type PublicKeyData struct {
 	// Decode the results to int by default.
-	_struct bool `cbor:",keyasint" json:"public_key"` //nolint:govet
+	_struct bool `cbor:",keyasint" json:"public_key"` //nolint:govet,staticcheck
 
 	// The type of key created. Should be OKP, EC2, or RSA.
 	KeyType int64 `cbor:"1,keyasint" json:"kty"`

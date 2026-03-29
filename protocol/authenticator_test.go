@@ -179,7 +179,7 @@ func TestAuthenticatorData_Unmarshal(t *testing.T) {
 	badAuthData4[32] |= 0b1000_0000
 
 	// Leftover bytes.
-	badAuthData5 := make([]byte, len(attAuthData))
+	badAuthData5 := make([]byte, len(attAuthData)) //nolint:prealloc
 	copy(badAuthData5, attAuthData)
 	badAuthData5 = append(badAuthData5, []byte("Hello World")...)
 
@@ -315,7 +315,7 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 	binary.BigEndian.PutUint16(badAuthData2[53:], maxCredentialIDLength+1)
 
 	// Malformed public key.
-	badAuthData3 := make([]byte, 119)
+	badAuthData3 := make([]byte, 119) //nolint:prealloc
 	copy(badAuthData3, attAuthData[:119])
 
 	badData, _ := hex.DecodeString("83FF20030102")
@@ -426,6 +426,90 @@ func Test_unmarshalCredentialPublicKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthenticatorFlags_HasBackupEligible(t *testing.T) {
+	testCases := []struct {
+		name     string
+		flag     AuthenticatorFlags
+		expected bool
+	}{
+		{
+			name:     "Present",
+			flag:     FlagBackupEligible,
+			expected: true,
+		},
+		{
+			name:     "PresentWithOtherFlags",
+			flag:     FlagBackupEligible | FlagUserPresent,
+			expected: true,
+		},
+		{
+			name:     "Missing",
+			flag:     FlagUserPresent,
+			expected: false,
+		},
+		{
+			name:     "Zero",
+			flag:     0,
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.flag.HasBackupEligible())
+		})
+	}
+}
+
+func TestAuthenticatorFlags_HasBackupState(t *testing.T) {
+	testCases := []struct {
+		name     string
+		flag     AuthenticatorFlags
+		expected bool
+	}{
+		{
+			name:     "Present",
+			flag:     FlagBackupState,
+			expected: true,
+		},
+		{
+			name:     "PresentWithOtherFlags",
+			flag:     FlagBackupState | FlagBackupEligible,
+			expected: true,
+		},
+		{
+			name:     "Missing",
+			flag:     FlagUserPresent,
+			expected: false,
+		},
+		{
+			name:     "Zero",
+			flag:     0,
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.flag.HasBackupState())
+		})
+	}
+}
+
+func TestResidentKeyRequired(t *testing.T) {
+	result := ResidentKeyRequired()
+
+	require.NotNil(t, result)
+	assert.True(t, *result)
+}
+
+func TestResidentKeyNotRequired(t *testing.T) {
+	result := ResidentKeyNotRequired()
+
+	require.NotNil(t, result)
+	assert.False(t, *result)
 }
 
 func TestAuthenticatorData_Verify(t *testing.T) {

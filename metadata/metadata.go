@@ -444,6 +444,9 @@ type StatementJSON struct {
 	CredentialExportProtocolConfigURL    string                                `json:"cxpConfigURL"`
 }
 
+// Parse converts StatementJSON into a Statement object, validating and parsing its fields. Returns an error on failure.
+//
+//nolint:gocyclo
 func (j StatementJSON) Parse() (statement Statement, err error) {
 	var aaguid uuid.UUID
 

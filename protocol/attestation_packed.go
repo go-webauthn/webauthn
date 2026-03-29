@@ -79,6 +79,8 @@ func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataH
 }
 
 // Handle the attestation steps laid out in the basic format.
+//
+//nolint:gocyclo
 func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg int64, x5c []any, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// Step 2.1. Verify that sig is a valid signature over the concatenation of authenticatorData
 	// and clientDataHash using the attestation public key in attestnCert with the algorithm specified in alg.
@@ -96,7 +98,7 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 		}
 
 		if cert.NotBefore.After(time.Now()) || cert.NotAfter.Before(time.Now()) {
-			return "", x5c, ErrAttestationFormat.WithDetails("Cert in chain not time valid")
+			return "", x5c, ErrAttestationFormat.WithDetails("Cert in chain is either no longer valid or not yet valid")
 		}
 
 		if i == 0 {

@@ -10,6 +10,9 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
+// ValidateMetadata validates the metadata for the given authenticator.
+//
+//nolint:gocyclo
 func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType, attestationFormat string, x5cs []any) (protoErr *Error) {
 	if mds == nil {
 		return nil
@@ -24,7 +27,7 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 		err   error
 	)
 	if entry, err = mds.GetEntry(ctx, aaguid); err != nil {
-		return ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. Error occurred retreiving the metadata entry: %+v", aaguid, err))
+		return ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. Error occurred retrieving the metadata entry: %+v", aaguid, err))
 	}
 
 	if entry == nil {
