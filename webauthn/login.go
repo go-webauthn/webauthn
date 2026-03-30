@@ -267,6 +267,10 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 		return nil, nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err)).WithError(err)
 	}
 
+	if user == nil {
+		return nil, nil, protocol.ErrBadRequest.WithDetails("Failed to lookup Client-side Discoverable Credential: handler returned a nil user")
+	}
+
 	if credential, err = webauthn.validateLogin(user, session, parsedResponse); err != nil {
 		return nil, nil, err
 	}

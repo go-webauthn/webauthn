@@ -647,6 +647,22 @@ func TestValidatePasskeyLogin_Errors(t *testing.T) {
 			},
 			err: "Failed to lookup Client-side Discoverable Credential: user not found",
 		},
+		{
+			name: "ShouldFailHandlerReturnsNilUser",
+			handler: func(rawID, userHandle []byte) (User, error) {
+				return nil, nil
+			},
+			session: SessionData{},
+			parsed: &protocol.ParsedCredentialAssertionData{
+				ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
+					RawID: []byte("cred-id"),
+				},
+				Response: protocol.ParsedAssertionResponse{
+					UserHandle: []byte("user-handle"),
+				},
+			},
+			err: "Failed to lookup Client-side Discoverable Credential: handler returned a nil user",
+		},
 	}
 
 	for _, tc := range testCases {
