@@ -295,10 +295,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	// Step 2. If credential.response.userHandle is present, verify that the user identified by this value is
-	// the owner of the public key credential identified by credential.id.
-
-	// This is in part handled by our Step 1.
-
+	// the owner of the public key credential identified by credential.id. This is in part handled by our Step 1.
 	userHandle := parsedResponse.Response.UserHandle
 	if len(userHandle) > 0 {
 		if !bytes.Equal(userHandle, user.WebAuthnID()) {
@@ -319,8 +316,6 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 			break
 		}
-
-		found = false
 	}
 
 	if !found {
@@ -377,10 +372,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	credential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
 
 	// Update flags from response data.
-	credential.Flags.UserPresent = parsedResponse.Response.AuthenticatorData.Flags.HasUserPresent()
-	credential.Flags.UserVerified = parsedResponse.Response.AuthenticatorData.Flags.HasUserVerified()
-	credential.Flags.BackupEligible = parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible()
-	credential.Flags.BackupState = parsedResponse.Response.AuthenticatorData.Flags.HasBackupState()
+	credential.Flags = NewCredentialFlags(parsedResponse.Response.AuthenticatorData.Flags)
 
 	return &credential, nil
 }
