@@ -11,8 +11,8 @@ import (
 // Credential contains all needed information about a WebAuthn credential for storage. This struct is effectively the
 // Credential Record as described in the specification.
 //
-// Providing this data structure is preserved properly this Credential can be properly verified using the
-// [Credential.Verify] function when provided a [metadata.Provider].
+// Provided this data structure is preserved properly, a Credential can be verified against the FIDO Metadata Service
+// at a later date using the [Credential.Verify] method with a [metadata.Provider].
 //
 // It is strongly recommended for the best security that a [Credential] is encrypted at rest with the exception of the
 // ID and the value you use to lookup the user. This prevents a person with access to the database being able to
@@ -83,7 +83,9 @@ func NewCredentialFlags(flags protocol.AuthenticatorFlags) CredentialFlags {
 	}
 }
 
-// CredentialFlags is a JSON representation of the flags.
+// CredentialFlags contains the boolean flags derived from the authenticator data during registration or login.
+// These flags indicate the state of user presence, user verification, and backup eligibility/state at the time
+// the credential was used.
 type CredentialFlags struct {
 	// Flag UP indicates the users presence.
 	UserPresent bool `json:"userPresent"`
@@ -107,14 +109,23 @@ func (f CredentialFlags) ProtocolValue() protocol.AuthenticatorFlags {
 	return f.raw
 }
 
-// CredentialAttestation is a decoded representation of the [protocol.AuthenticatorAttestationResponse] in a format that
-// can easily be serialized.
+// CredentialAttestation holds the raw attestation data from a registration ceremony. These values are preserved so
+// that the [Credential] can be verified against the FIDO Metadata Service at a later date using [Credential.Verify].
 type CredentialAttestation struct {
-	ClientDataJSON     []byte `json:"clientDataJSON"`
-	ClientDataHash     []byte `json:"clientDataHash"`
-	AuthenticatorData  []byte `json:"authenticatorData"`
-	PublicKeyAlgorithm int64  `json:"publicKeyAlgorithm"`
-	Object             []byte `json:"object"`
+	// ClientDataJSON is the raw JSON-encoded client data from the registration response.
+	ClientDataJSON []byte `json:"clientDataJSON"`
+
+	// ClientDataHash is the SHA-256 hash of ClientDataJSON computed during registration verification.
+	ClientDataHash []byte `json:"clientDataHash"`
+
+	// AuthenticatorData is the raw authenticator data from the registration response.
+	AuthenticatorData []byte `json:"authenticatorData"`
+
+	// PublicKeyAlgorithm is the COSE algorithm identifier for the credential's public key.
+	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm"`
+
+	// Object is the raw CBOR-encoded attestation object from the registration response.
+	Object []byte `json:"object"`
 }
 
 // Descriptor converts a [Credential] into a [protocol.CredentialDescriptor].

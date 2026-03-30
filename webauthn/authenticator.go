@@ -26,7 +26,9 @@ type Authenticator struct {
 	Attachment protocol.AuthenticatorAttachment `json:"attachment"`
 }
 
-// SelectAuthenticator allow for easy marshaling of authenticator options that are provided to the user.
+// SelectAuthenticator is a convenience function that constructs a [protocol.AuthenticatorSelection] from individual
+// string and boolean parameters. Use [protocol.ResidentKeyRequired] or [protocol.ResidentKeyNotRequired] for the rrk
+// parameter.
 func SelectAuthenticator(att string, rrk *bool, uv string) protocol.AuthenticatorSelection {
 	return protocol.AuthenticatorSelection{
 		AuthenticatorAttachment: protocol.AuthenticatorAttachment(att),

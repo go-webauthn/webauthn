@@ -12,10 +12,15 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
-// LoginOption is used to provide parameters that modify the default [Credential] Assertion Payload that is sent to the user.
+// LoginOption is a functional option that modifies the [protocol.PublicKeyCredentialRequestOptions] sent to the
+// client during a login ceremony. Use the With* functions in this package (e.g. [WithUserVerification],
+// [WithAllowedCredentials]) to create login options.
 type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
 
-// DiscoverableUserHandler returns a [*User] given the provided userHandle.
+// DiscoverableUserHandler is a callback function that the Relying Party must provide when performing a discoverable
+// (passkey) login. It is called with the rawID of the credential and the userHandle from the authenticator response,
+// and must return the [User] who owns the credential. This is necessary because in discoverable login flows, the
+// Relying Party does not know which user is authenticating until the authenticator response is received.
 type DiscoverableUserHandler func(rawID, userHandle []byte) (user User, err error)
 
 // BeginLogin creates the [*protocol.CredentialAssertion] data payload that should be sent to the user agent for beginning

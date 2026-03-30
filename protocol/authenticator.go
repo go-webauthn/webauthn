@@ -49,12 +49,20 @@ type AuthenticatorData struct {
 	ExtData  []byte                 `json:"ext_data"`
 }
 
+// AttestedCredentialData is a variable-length byte array added to the authenticator data when generating an attestation
+// object for a credential.
+//
+// Specification: §6.5.2. Attested Credential Data (https://www.w3.org/TR/webauthn/#sctn-attested-credential-data)
 type AttestedCredentialData struct {
-	AAGUID       []byte `json:"aaguid"`
+	// AAGUID is the 16-byte Authenticator Attestation GUID, a unique identifier indicating the type of the
+	// authenticator (e.g. make and model).
+	AAGUID []byte `json:"aaguid"`
+
+	// CredentialID is the credential identifier whose length is prepended as a 16-bit unsigned big-endian integer.
 	CredentialID []byte `json:"credential_id"`
 
-	// The raw credential public key bytes received from the attestation data. This is the CBOR representation of the
-	// credentials public key.
+	// CredentialPublicKey is the CBOR-encoded credential public key using the COSE_Key format defined in
+	// Section 7 of [RFC9052].
 	CredentialPublicKey []byte `json:"public_key"`
 }
 
