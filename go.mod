@@ -5,7 +5,7 @@ go 1.25.0
 toolchain go1.26.1
 
 require (
-	github.com/fxamacker/cbor/v2 v2.9.0
+	github.com/fxamacker/cbor/v2 v2.9.1
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/go-webauthn/x v0.2.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
