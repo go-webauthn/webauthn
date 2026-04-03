@@ -597,7 +597,7 @@ func TestFIDOPublicKey(t *testing.T) {
 			true,
 			EC2PublicKeyData{},
 			0x00,
-			"elliptic unmarshall returned a nil value",
+			"failed to parse FIDO public key: crypto/ecdh: invalid public key",
 		},
 	}
 

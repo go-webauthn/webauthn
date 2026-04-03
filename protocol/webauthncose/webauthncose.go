@@ -2,6 +2,7 @@ package webauthncose
 
 import (
 	"crypto"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -224,11 +225,13 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 
 // ParseFIDOPublicKey is only used when the appID extension is configured by the assertion response.
 func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
-	x, y := elliptic.Unmarshal(elliptic.P256(), keyBytes)
-
-	if x == nil || y == nil {
-		return data, fmt.Errorf("elliptic unmarshall returned a nil value")
+	key, err := ecdh.P256().NewPublicKey(keyBytes)
+	if err != nil {
+		return data, fmt.Errorf("failed to parse FIDO public key: %w", err)
 	}
+
+	// Raw bytes for an uncompressed P-256 point: 0x04 || x(32) || y(32).
+	raw := key.Bytes()
 
 	return EC2PublicKeyData{
 		PublicKeyData: PublicKeyData{
@@ -236,8 +239,8 @@ func ParseFIDOPublicKey(keyBytes []byte) (data EC2PublicKeyData, err error) {
 			Algorithm: int64(AlgES256),
 		},
 		Curve:  int64(P256),
-		XCoord: x.FillBytes(make([]byte, ecCoordSize)),
-		YCoord: y.FillBytes(make([]byte, ecCoordSize)),
+		XCoord: raw[1 : 1+ecCoordSize],
+		YCoord: raw[1+ecCoordSize:],
 	}, nil
 }
 
