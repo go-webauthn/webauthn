@@ -15,6 +15,7 @@ import (
 	"math/big"
 
 	"github.com/go-webauthn/x/encoding/asn1"
+	"github.com/go-webauthn/x/mldsa"
 
 	"github.com/google/go-tpm/tpm2"
 
@@ -69,6 +70,34 @@ type OKPPublicKeyData struct {
 
 	// A byte string that holds the x coordinate of the key.
 	XCoord []byte `cbor:"-2,keyasint,omitempty" json:"x"`
+}
+
+// AKPPublicKeyData represents an Algorithm Key Pair (AKP) public key, used for ML-DSA keys.
+type AKPPublicKeyData struct {
+	PublicKeyData
+
+	// The encoded public key.
+	PubKey []byte `cbor:"-1,keyasint,omitempty" json:"pub"`
+}
+
+// Verify Algorithm Key Pair (AKP) Public Key Signature.
+func (k *AKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
+	if err := validateAKPPublicKey(k); err != nil {
+		return false, err
+	}
+
+	params := mldsaAlgParams(k.Algorithm)
+
+	pub, err := mldsa.NewPublicKey(params, k.PubKey)
+	if err != nil {
+		return false, ErrUnsupportedKey.WithDetails(fmt.Sprintf("AKP key is invalid: %v", err))
+	}
+
+	if err = mldsa.Verify(pub, data, sig, nil); err != nil {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // Verify Octet Key Pair (OKP) Public Key Signature.
@@ -216,6 +245,20 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 		}
 
 		return r, nil
+	case AKP:
+		var a AKPPublicKeyData
+
+		if err = webauthncbor.Unmarshal(keyBytes, &a); err != nil {
+			return nil, err
+		}
+
+		a.PublicKeyData = pk
+
+		if err = validateAKPPublicKey(&a); err != nil {
+			return nil, err
+		}
+
+		return a, nil
 	default:
 		return nil, ErrUnsupportedKey
 	}
@@ -249,6 +292,8 @@ func VerifySignature(key any, data []byte, sig []byte) (bool, error) {
 	case EC2PublicKeyData:
 		return k.Verify(data, sig)
 	case RSAPublicKeyData:
+		return k.Verify(data, sig)
+	case AKPPublicKeyData:
 		return k.Verify(data, sig)
 	default:
 		return false, ErrUnsupportedKey
@@ -418,6 +463,32 @@ func (passedError *Error) WithDetails(details string) *Error {
 	err.Details = details
 
 	return &err
+}
+
+func mldsaAlgParams(coseAlg int64) *mldsa.Parameters {
+	switch COSEAlgorithmIdentifier(coseAlg) {
+	case AlgMLDSA44:
+		return mldsa.MLDSA44()
+	case AlgMLDSA65:
+		return mldsa.MLDSA65()
+	case AlgMLDSA87:
+		return mldsa.MLDSA87()
+	default:
+		return nil
+	}
+}
+
+func validateAKPPublicKey(k *AKPPublicKeyData) error {
+	params := mldsaAlgParams(k.Algorithm)
+	if params == nil {
+		return ErrUnsupportedAlgorithm.WithDetails("Unsupported AKP algorithm")
+	}
+
+	if len(k.PubKey) != params.PublicKeySize() {
+		return ErrUnsupportedKey.WithDetails(fmt.Sprintf("AKP public key has invalid length %d, expected %d", len(k.PubKey), params.PublicKeySize()))
+	}
+
+	return nil
 }
 
 func validateOKPPublicKey(k *OKPPublicKeyData) error {
