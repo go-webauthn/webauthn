@@ -142,196 +142,343 @@ func TestMustParseX509CertificatePEM(t *testing.T) {
 func TestAttStatementParseX5CS(t *testing.T) {
 	cert := testUtilsGenerateSelfSignedCert(t)
 
-	t.Run("ShouldFailNotArray", func(t *testing.T) {
-		attStmt := map[string]any{
-			"x5c": "not an array",
+	testCases := []struct {
+		name string
+		have map[string]any
+		expected struct {
+			count int
+			err   string
 		}
+	}{
+		{
+			name: "ShouldFailNotArray",
+			have: map[string]any{"x5c": "not an array"},
+			expected: struct {
+				count int
+				err   string
+			}{
+				err: "Error retrieving x5c value",
+			},
+		},
+		{
+			name: "ShouldFailEmptyArray",
+			have: map[string]any{"x5c": []any{}},
+			expected: struct {
+				count int
+				err   string
+			}{
+				err: "Error retrieving x5c value: empty array",
+			},
+		},
+		{
+			name: "ShouldFailParseError",
+			have: map[string]any{"x5c": []any{[]byte("not a cert")}},
+			expected: struct {
+				count int
+				err   string
+			}{
+				err: "Error retrieving x5c value: error occurred parsing values",
+			},
+		},
+		{
+			name: "ShouldSucceed",
+			have: map[string]any{"x5c": []any{cert.Raw}},
+			expected: struct {
+				count int
+				err   string
+			}{
+				count: 1,
+			},
+		},
+	}
 
-		x5c, x5cs, err := attStatementParseX5CS(attStmt, "x5c")
-		assert.Nil(t, x5c)
-		assert.Nil(t, x5cs)
-		assert.EqualError(t, err, "Error retrieving x5c value")
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			x5c, x5cs, err := attStatementParseX5CS(tc.have, "x5c")
 
-	t.Run("ShouldFailEmptyArray", func(t *testing.T) {
-		attStmt := map[string]any{
-			"x5c": []any{},
-		}
-
-		x5c, x5cs, err := attStatementParseX5CS(attStmt, "x5c")
-		assert.Nil(t, x5c)
-		assert.Nil(t, x5cs)
-		assert.EqualError(t, err, "Error retrieving x5c value: empty array")
-	})
-
-	t.Run("ShouldFailParseError", func(t *testing.T) {
-		attStmt := map[string]any{
-			"x5c": []any{[]byte("not a cert")},
-		}
-
-		x5c, x5cs, err := attStatementParseX5CS(attStmt, "x5c")
-		assert.Nil(t, x5c)
-		assert.Nil(t, x5cs)
-		assert.EqualError(t, err, "Error retrieving x5c value: error occurred parsing values")
-	})
-
-	t.Run("ShouldSucceed", func(t *testing.T) {
-		attStmt := map[string]any{
-			"x5c": []any{cert.Raw},
-		}
-
-		x5c, x5cs, err := attStatementParseX5CS(attStmt, "x5c")
-		require.NoError(t, err)
-		assert.Len(t, x5c, 1)
-		assert.Len(t, x5cs, 1)
-	})
+			if tc.expected.err == "" {
+				assert.NoError(t, err)
+				assert.Len(t, x5c, tc.expected.count)
+				assert.Len(t, x5cs, tc.expected.count)
+			} else {
+				assert.Nil(t, x5c)
+				assert.Nil(t, x5cs)
+				assert.EqualError(t, err, tc.expected.err)
+			}
+		})
+	}
 }
 
 func TestParseX5C(t *testing.T) {
-	t.Run("ShouldFailNotByteArray", func(t *testing.T) {
-		x5cs, err := parseX5C([]any{"not bytes"})
-		assert.Nil(t, x5cs)
-		assert.EqualError(t, err, "x5c[0] is not a byte array")
-	})
+	cert := testUtilsGenerateSelfSignedCert(t)
 
-	t.Run("ShouldFailInvalidCert", func(t *testing.T) {
-		x5cs, err := parseX5C([]any{[]byte("invalid cert der")})
-		assert.Nil(t, x5cs)
-		assert.EqualError(t, err, "x5c[0] is not a valid certificate: x509: malformed certificate")
-	})
+	testCases := []struct {
+		name     string
+		have     []any
+		expected struct {
+			count int
+			err   string
+		}
+	}{
+		{
+			name: "ShouldFailNotByteArray",
+			have: []any{"not bytes"},
+			expected: struct {
+				count int
+				err   string
+			}{
+				err: "x5c[0] is not a byte array",
+			},
+		},
+		{
+			name: "ShouldFailInvalidCert",
+			have: []any{[]byte("invalid cert der")},
+			expected: struct {
+				count int
+				err   string
+			}{
+				err: "x5c[0] is not a valid certificate: x509: malformed certificate",
+			},
+		},
+		{
+			name: "ShouldSucceed",
+			have: []any{cert.Raw},
+			expected: struct {
+				count int
+				err   string
+			}{
+				count: 1,
+			},
+		},
+	}
 
-	t.Run("ShouldSucceed", func(t *testing.T) {
-		cert := testUtilsGenerateSelfSignedCert(t)
-		x5cs, err := parseX5C([]any{cert.Raw})
-		require.NoError(t, err)
-		assert.Len(t, x5cs, 1)
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			x5cs, err := parseX5C(tc.have)
+
+			if tc.expected.err == "" {
+				assert.NoError(t, err)
+				assert.Len(t, x5cs, tc.expected.count)
+			} else {
+				assert.Nil(t, x5cs)
+				assert.EqualError(t, err, tc.expected.err)
+			}
+		})
+	}
 }
 
 func TestAttStatementCertChainVerify(t *testing.T) {
-	t.Run("ShouldFailEmptyChain", func(t *testing.T) {
-		chains, err := attStatementCertChainVerify(nil, nil, false, time.Time{})
-		assert.Nil(t, chains)
-		assert.EqualError(t, err, "empty chain")
-	})
+	ca := testUtilsGenerateSelfSignedCert(t)
+	leaf := testUtilsGenerateLeafCert(t, ca)
 
-	t.Run("ShouldVerifyChainWithNilRoots", func(t *testing.T) {
-		ca := testUtilsGenerateSelfSignedCert(t)
-		leaf := testUtilsGenerateLeafCert(t, ca)
+	testCases := []struct {
+		name string
+		have struct {
+			certs []*x509.Certificate
+			roots *x509.CertPool
+		}
+		expected struct {
+			empty bool
+			err   string
+		}
+	}{
+		{
+			name: "ShouldFailEmptyChain",
+			have: struct {
+				certs []*x509.Certificate
+				roots *x509.CertPool
+			}{},
+			expected: struct {
+				empty bool
+				err   string
+			}{
+				empty: true,
+				err:   "empty chain",
+			},
+		},
+		{
+			name: "ShouldVerifyChainWithNilRoots",
+			have: struct {
+				certs []*x509.Certificate
+				roots *x509.CertPool
+			}{
+				certs: []*x509.Certificate{leaf, ca},
+			},
+			expected: struct {
+				empty bool
+				err   string
+			}{},
+		},
+	}
 
-		chains, err := attStatementCertChainVerify([]*x509.Certificate{leaf, ca}, nil, false, time.Time{})
-		require.NoError(t, err)
-		assert.NotEmpty(t, chains)
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			chains, err := attStatementCertChainVerify(tc.have.certs, tc.have.roots, false, time.Time{})
+
+			if tc.expected.err == "" {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, chains)
+			} else {
+				assert.EqualError(t, err, tc.expected.err)
+
+				if tc.expected.empty {
+					assert.Nil(t, chains)
+				}
+			}
+		})
+	}
 }
 
 func TestVerifyAttestationECDSAPublicKeyMatch(t *testing.T) {
 	eccKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	coseKey := webauthncose.EC2PublicKeyData{
+	coseKeyBytes, err := webauthncbor.Marshal(webauthncose.EC2PublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{
 			KeyType:   int64(webauthncose.EllipticKey),
 			Algorithm: int64(webauthncose.AlgES256),
 		},
 		Curve:  int64(webauthncose.P256),
-		XCoord: eccKey.PublicKey.X.Bytes(),
-		YCoord: eccKey.PublicKey.Y.Bytes(),
-	}
-
-	coseKeyBytes, err := webauthncbor.Marshal(coseKey)
+		XCoord: padP256Coord(eccKey.PublicKey.X),
+		YCoord: padP256Coord(eccKey.PublicKey.Y),
+	})
 	require.NoError(t, err)
 
-	cert := testUtilsGenerateCertWithKey(t, &eccKey.PublicKey)
-
-	t.Run("ShouldSucceed", func(t *testing.T) {
-		att := AttestationObject{
-			AuthData: AuthenticatorData{
-				AttData: AttestedCredentialData{
-					CredentialPublicKey: coseKeyBytes,
-				},
-			},
-		}
-
-		result, err := verifyAttestationECDSAPublicKeyMatch(att, cert)
-		require.NoError(t, err)
-		assert.Equal(t, int64(webauthncose.AlgES256), result.Algorithm)
+	okpKeyBytes, err := webauthncbor.Marshal(webauthncose.OKPPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.OctetKey),
+			Algorithm: int64(webauthncose.AlgEdDSA),
+		},
+		Curve:  1,
+		XCoord: make([]byte, 32),
 	})
+	require.NoError(t, err)
 
-	t.Run("ShouldFailInvalidPublicKey", func(t *testing.T) {
-		att := AttestationObject{
-			AuthData: AuthenticatorData{
-				AttData: AttestedCredentialData{
-					CredentialPublicKey: []byte("invalid"),
+	matchingCert := testUtilsGenerateCertWithKey(t, &eccKey.PublicKey)
+
+	differentECCKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	differentCert := testUtilsGenerateCertWithKey(t, &differentECCKey.PublicKey)
+
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	rsaCert := testUtilsGenerateCertWithRSAKey(t, &rsaKey.PublicKey)
+
+	testCases := []struct {
+		name string
+		have struct {
+			credentialPublicKey []byte
+			cert                *x509.Certificate
+		}
+		expected struct {
+			algorithm int64
+			err       string
+		}
+	}{
+		{
+			name: "ShouldSucceed",
+			have: struct {
+				credentialPublicKey []byte
+				cert                *x509.Certificate
+			}{
+				credentialPublicKey: coseKeyBytes,
+				cert:                matchingCert,
+			},
+			expected: struct {
+				algorithm int64
+				err       string
+			}{
+				algorithm: int64(webauthncose.AlgES256),
+			},
+		},
+		{
+			name: "ShouldFailInvalidPublicKey",
+			have: struct {
+				credentialPublicKey []byte
+				cert                *x509.Certificate
+			}{
+				credentialPublicKey: []byte("invalid"),
+				cert:                matchingCert,
+			},
+			expected: struct {
+				algorithm int64
+				err       string
+			}{
+				err: "Error parsing public key: Unsupported Public Key Type",
+			},
+		},
+		{
+			name: "ShouldFailNotECDSAKey",
+			have: struct {
+				credentialPublicKey []byte
+				cert                *x509.Certificate
+			}{
+				credentialPublicKey: okpKeyBytes,
+				cert:                matchingCert,
+			},
+			expected: struct {
+				algorithm int64
+				err       string
+			}{
+				err: "Attestation public key is not ECDSA",
+			},
+		},
+		{
+			name: "ShouldFailCertNotECDSA",
+			have: struct {
+				credentialPublicKey []byte
+				cert                *x509.Certificate
+			}{
+				credentialPublicKey: coseKeyBytes,
+				cert:                rsaCert,
+			},
+			expected: struct {
+				algorithm int64
+				err       string
+			}{
+				err: "Credential public key is not ECDSA",
+			},
+		},
+		{
+			name: "ShouldFailKeyMismatch",
+			have: struct {
+				credentialPublicKey []byte
+				cert                *x509.Certificate
+			}{
+				credentialPublicKey: coseKeyBytes,
+				cert:                differentCert,
+			},
+			expected: struct {
+				algorithm int64
+				err       string
+			}{
+				err: "Certificate public key does not match public key in authData",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			att := AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						CredentialPublicKey: tc.have.credentialPublicKey,
+					},
 				},
-			},
-		}
+			}
 
-		_, err := verifyAttestationECDSAPublicKeyMatch(att, cert)
-		assert.EqualError(t, err, "Error parsing public key: Unsupported Public Key Type")
-	})
+			result, err := verifyAttestationECDSAPublicKeyMatch(att, tc.have.cert)
 
-	t.Run("ShouldFailNotECDSAKey", func(t *testing.T) {
-		// Use an OKP key (EdDSA) instead of EC2.
-		okpKey := webauthncose.OKPPublicKeyData{
-			PublicKeyData: webauthncose.PublicKeyData{
-				KeyType:   int64(webauthncose.OctetKey),
-				Algorithm: int64(webauthncose.AlgEdDSA),
-			},
-			Curve:  1,
-			XCoord: make([]byte, 32),
-		}
-
-		okpBytes, err := webauthncbor.Marshal(okpKey)
-		require.NoError(t, err)
-
-		att := AttestationObject{
-			AuthData: AuthenticatorData{
-				AttData: AttestedCredentialData{
-					CredentialPublicKey: okpBytes,
-				},
-			},
-		}
-
-		_, err = verifyAttestationECDSAPublicKeyMatch(att, cert)
-		assert.EqualError(t, err, "Attestation public key is not ECDSA")
-	})
-
-	t.Run("ShouldFailCertNotECDSA", func(t *testing.T) {
-		rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-		require.NoError(t, err)
-
-		rsaCert := testUtilsGenerateCertWithRSAKey(t, &rsaKey.PublicKey)
-
-		att := AttestationObject{
-			AuthData: AuthenticatorData{
-				AttData: AttestedCredentialData{
-					CredentialPublicKey: coseKeyBytes,
-				},
-			},
-		}
-
-		_, err = verifyAttestationECDSAPublicKeyMatch(att, rsaCert)
-		assert.EqualError(t, err, "Credential public key is not ECDSA")
-	})
-
-	t.Run("ShouldFailKeyMismatch", func(t *testing.T) {
-		differentKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		require.NoError(t, err)
-
-		differentCert := testUtilsGenerateCertWithKey(t, &differentKey.PublicKey)
-
-		att := AttestationObject{
-			AuthData: AuthenticatorData{
-				AttData: AttestedCredentialData{
-					CredentialPublicKey: coseKeyBytes,
-				},
-			},
-		}
-
-		_, err = verifyAttestationECDSAPublicKeyMatch(att, differentCert)
-		assert.EqualError(t, err, "Certificate public key does not match public key in authData")
-	})
+			if tc.expected.err == "" {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expected.algorithm, result.Algorithm)
+			} else {
+				assert.EqualError(t, err, tc.expected.err)
+			}
+		})
+	}
 }
 
 func testUtilsGenerateSelfSignedCert(t *testing.T) *x509.Certificate {
@@ -341,12 +488,12 @@ func testUtilsGenerateSelfSignedCert(t *testing.T) *x509.Certificate {
 	require.NoError(t, err)
 
 	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "Test CA"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		IsCA:         true,
-		KeyUsage:     x509.KeyUsageCertSign,
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 	}
 
@@ -424,6 +571,25 @@ func testUtilsGenerateCertWithKey(t *testing.T, pub *ecdsa.PublicKey) *x509.Cert
 	require.NoError(t, err)
 
 	return cert
+}
+
+// padP256Coord left-pads a big.Int coordinate to 32 bytes (the fixed width for P-256).
+// big.Int.Bytes() drops leading zeroes, which would cause COSE EC2 key validation to
+// reject coordinates shorter than 32 bytes.
+func padP256Coord(v *big.Int) []byte {
+	const p256ByteLen = 32
+
+	b := v.Bytes()
+
+	if len(b) >= p256ByteLen {
+		return b
+	}
+
+	padded := make([]byte, p256ByteLen)
+
+	copy(padded[p256ByteLen-len(b):], b)
+
+	return padded
 }
 
 func testUtilsGenerateCertWithRSAKey(t *testing.T, pub *rsa.PublicKey) *x509.Certificate {
