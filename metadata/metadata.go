@@ -35,6 +35,10 @@ func Fetch() (metadata *Metadata, err error) {
 		_ = resp.Body.Close()
 	}()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error occurred fetching metadata: status code %d", resp.StatusCode)
+	}
+
 	if payload, err = decoder.Decode(resp.Body); err != nil {
 		return nil, err
 	}
