@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -161,7 +162,7 @@ func TestStatementJSON_Parse(t *testing.T) {
 		{
 			name: "ShouldFailInvalidAttestationRootCertificate",
 			have: StatementJSON{
-				Description:                  "test",
+				Description:                 "test",
 				AttestationRootCertificates: []string{"not-base64-cert"},
 			},
 			err: "error occurred parsing statement with description 'test': error occurred parsing attestation root certificate 0 value: error occurred parsing *x509.certificate: error occurred decoding base64 data: illegal base64 data at input byte 3",
@@ -201,7 +202,7 @@ func TestStatementJSON_Parse(t *testing.T) {
 		{
 			name: "ShouldFailInvalidCxpConfigURL",
 			have: StatementJSON{
-				Description:                     "test",
+				Description:                       "test",
 				CredentialExportProtocolConfigURL: "://bad",
 			},
 			err: "error occurred parsing statement with description 'test': error occurred parsing cxp config url value: parse \"://bad\": missing protocol scheme",
@@ -254,7 +255,7 @@ func TestBiometricStatusReportJSON_Parse(t *testing.T) {
 			name: "ShouldSucceed",
 			have: BiometricStatusReportJSON{
 				EffectiveDate: "2025-01-01",
-				CertLevel:    1,
+				CertLevel:     1,
 			},
 		},
 	}
@@ -274,9 +275,11 @@ func TestBiometricStatusReportJSON_Parse(t *testing.T) {
 
 func TestStatusReportJSON_Parse(t *testing.T) {
 	testCases := []struct {
-		name string
-		have StatusReportJSON
-		err  string
+		name        string
+		have        StatusReportJSON
+		expected    StatusReport
+		expectedURL string
+		err         string
 	}{
 		{
 			name: "ShouldFailInvalidEffectiveDate",
@@ -322,6 +325,10 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 			have: StatusReportJSON{
 				EffectiveDate: "2025-01-01",
 			},
+			expected: StatusReport{
+				Status:        "",
+				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
 		},
 		{
 			name: "ShouldSucceedWithSunsetDate",
@@ -329,15 +336,77 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 				EffectiveDate: "2025-01-01",
 				SunsetDate:    "2026-06-01",
 			},
+			expected: StatusReport{
+				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				SunsetDate:    timePtr(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)),
+			},
+		},
+		{
+			name: "ShouldPreserveAllFields",
+			have: StatusReportJSON{
+				Status:                           FidoCertifiedL1,
+				EffectiveDate:                    "2025-03-15",
+				AuthenticatorVersion:             42,
+				URL:                              "https://example.com/update",
+				CertificationDescriptor:          "SecurityKey based on CC EAL 5 certified chip",
+				CertificateNumber:                "FIDO2-CERT-001",
+				CertificationPolicyVersion:       "1.4.0",
+				CertificationProfiles:            []string{"consumer", "enterprise"},
+				CertificationRequirementsVersion: "1.2.0",
+				SunsetDate:                       "2030-12-31",
+				FIPSRevision:                     3,
+				FIPSPhysicalSecurityLevel:        2,
+			},
+			expected: StatusReport{
+				Status:                           FidoCertifiedL1,
+				EffectiveDate:                    time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC),
+				AuthenticatorVersion:             42,
+				CertificationDescriptor:          "SecurityKey based on CC EAL 5 certified chip",
+				CertificateNumber:                "FIDO2-CERT-001",
+				CertificationPolicyVersion:       "1.4.0",
+				CertificationProfiles:            []string{"consumer", "enterprise"},
+				CertificationRequirementsVersion: "1.2.0",
+				SunsetDate:                       timePtr(time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC)),
+				FIPSRevision:                     3,
+				FIPSPhysicalSecurityLevel:        2,
+			},
+			expectedURL: "https://example.com/update",
+		},
+		{
+			name: "ShouldSucceedURLWithoutScheme",
+			have: StatusReportJSON{
+				EffectiveDate: "2025-01-01",
+				URL:           "example.com/update",
+			},
+			expected: StatusReport{
+				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			expectedURL: "https://example.com/update",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.have.Parse()
+			result, err := tc.have.Parse()
 
 			if tc.err == "" {
 				assert.NoError(t, err)
+				assert.Equal(t, tc.expected.Status, result.Status)
+				assert.Equal(t, tc.expected.EffectiveDate, result.EffectiveDate)
+				assert.Equal(t, tc.expected.AuthenticatorVersion, result.AuthenticatorVersion)
+				assert.Equal(t, tc.expected.CertificationDescriptor, result.CertificationDescriptor)
+				assert.Equal(t, tc.expected.CertificateNumber, result.CertificateNumber)
+				assert.Equal(t, tc.expected.CertificationPolicyVersion, result.CertificationPolicyVersion)
+				assert.Equal(t, tc.expected.CertificationProfiles, result.CertificationProfiles)
+				assert.Equal(t, tc.expected.CertificationRequirementsVersion, result.CertificationRequirementsVersion)
+				assert.Equal(t, tc.expected.SunsetDate, result.SunsetDate)
+				assert.Equal(t, tc.expected.FIPSRevision, result.FIPSRevision)
+				assert.Equal(t, tc.expected.FIPSPhysicalSecurityLevel, result.FIPSPhysicalSecurityLevel)
+
+				if tc.expectedURL != "" {
+					assert.NotNil(t, result.URL)
+					assert.Equal(t, tc.expectedURL, result.URL.String())
+				}
 			} else {
 				assert.EqualError(t, err, tc.err)
 			}
@@ -381,4 +450,8 @@ func TestAuthenticatorGetInfoJSON_Parse(t *testing.T) {
 			}
 		})
 	}
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
 }

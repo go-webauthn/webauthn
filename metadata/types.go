@@ -62,8 +62,10 @@ func (t AuthenticatorAttestationTypes) HasBasicFull() bool {
 	return false
 }
 
-// AuthenticatorAttestationType - The ATTESTATION constants are 16 bit long integers indicating the specific attestation that authenticator supports.
-// Each constant has a case-sensitive string representation (in quotes), which is used in the authoritative metadata for FIDO authenticators.
+// AuthenticatorAttestationType represents the attestation type supported by an authenticator. Each constant has a
+// case-sensitive string representation used in the authoritative metadata for FIDO authenticators.
+//
+// See: https://fidoalliance.org/specs/common-specs/fido-registry-v2.2-ps-20220523.html#authenticator-attestation-types
 type AuthenticatorAttestationType string
 
 const (
@@ -86,25 +88,50 @@ const (
 	None AuthenticatorAttestationType = "none"
 )
 
+// KeyScope represents the scope of keys generated and maintained by an authenticator model.
+//
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
 type KeyScope string
 
 const (
-	KeyScopeNone                   KeyScope = ""
-	PublicKeyCredentialSource      KeyScope = "public-key-credential-source" //nolint:gosec
-	DeviceSupplementalPublicKeys   KeyScope = "device-spk"
+	// KeyScopeNone is the zero value indicating the field is absent (defaults to PublicKeyCredentialSource).
+	KeyScopeNone KeyScope = ""
+
+	// PublicKeyCredentialSource indicates the authenticator only generates/maintains main FIDO credentials.
+	PublicKeyCredentialSource KeyScope = "public-key-credential-source" //nolint:gosec
+
+	// DeviceSupplementalPublicKeys indicates the authenticator only generates/maintains device-scoped supplemental
+	// public keys (SPK extension).
+	DeviceSupplementalPublicKeys KeyScope = "device-spk"
+
+	// ProviderSupplementalPublicKeys indicates the authenticator only generates/maintains provider-scoped supplemental
+	// public keys (SPK extension).
 	ProviderSupplementalPublicKeys KeyScope = "provider-spk"
 )
 
+// MultiDeviceCredentialSupport describes whether an authenticator supports multi-device credentials (passkeys).
+//
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
 type MultiDeviceCredentialSupport string
 
 const (
+	// MultiDeviceCredentialUnsupported indicates all private keys are designed to stay within the authenticator
+	// boundary. This is the implicit default when the field is absent.
 	MultiDeviceCredentialUnsupported MultiDeviceCredentialSupport = "unsupported"
-	MultiDeviceCredentialExplicit    MultiDeviceCredentialSupport = "explicit"
-	MultiDeviceCredentialImplicit    MultiDeviceCredentialSupport = "implicit"
+
+	// MultiDeviceCredentialExplicit indicates the authenticator explicitly marks keys as multi-device or single-device
+	// via the Backup Eligibility flag.
+	MultiDeviceCredentialExplicit MultiDeviceCredentialSupport = "explicit"
+
+	// MultiDeviceCredentialImplicit indicates all private keys relating to Public Key Credential Source may be backed
+	// up.
+	MultiDeviceCredentialImplicit MultiDeviceCredentialSupport = "implicit"
 )
 
-// AuthenticatorStatus - This enumeration describes the status of an authenticator model as identified by its AAID and potentially some additional information (such as a specific attestation key).
-// https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-authnr-stat
+// AuthenticatorStatus describes the status of an authenticator model as identified by its AAID/AAGUID and potentially
+// some additional information (such as a specific attestation key).
+//
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-authnr-stat
 type AuthenticatorStatus string
 
 const (
@@ -129,6 +156,12 @@ const (
 
 	// UpdateAvailable - A software or firmware update is available for the device. Additional data should be supplied including a URL where users can obtain an update and the date the update was published.
 	UpdateAvailable AuthenticatorStatus = "UPDATE_AVAILABLE"
+
+	// Retired - The authenticator vendor has decided to retire the product, and this authenticator should not be
+	// accepted any longer.
+	//
+	// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#dom-authenticatorstatus-retired
+	Retired AuthenticatorStatus = "RETIRED"
 
 	// Revoked - The FIDO Alliance has determined that this authenticator should not be trusted for any reason, for example if it is known to be a fraudulent product or contain a deliberate backdoor.
 	Revoked AuthenticatorStatus = "REVOKED"
@@ -173,6 +206,7 @@ var defaultUndesiredAuthenticatorStatus = [...]AuthenticatorStatus{
 	UserVerificationBypass,
 	UserKeyRemoteCompromise,
 	UserKeyPhysicalCompromise,
+	Retired,
 	Revoked,
 }
 
@@ -205,6 +239,9 @@ func IsUndesiredAuthenticatorStatusMap(status AuthenticatorStatus, values map[Au
 	return ok
 }
 
+// AuthenticationAlgorithm represents the authentication algorithm supported by an authenticator.
+//
+// See: https://fidoalliance.org/specs/common-specs/fido-registry-v2.2-ps-20220523.html#authentication-algorithms
 type AuthenticationAlgorithm string
 
 const (
@@ -324,6 +361,9 @@ func AlgKeyMatch(key algKeyCose, algs []AuthenticationAlgorithm) bool {
 	return false
 }
 
+// PublicKeyAlgAndEncoding represents the public key format supported by an authenticator during registration.
+//
+// See: https://fidoalliance.org/specs/common-specs/fido-registry-v2.2-ps-20220523.html#public-key-representation-formats
 type PublicKeyAlgAndEncoding string
 
 const (
