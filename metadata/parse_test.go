@@ -275,10 +275,11 @@ func TestBiometricStatusReportJSON_Parse(t *testing.T) {
 
 func TestStatusReportJSON_Parse(t *testing.T) {
 	testCases := []struct {
-		name     string
-		have     StatusReportJSON
-		expected StatusReport
-		err      string
+		name        string
+		have        StatusReportJSON
+		expected    StatusReport
+		expectedURL string
+		err         string
 	}{
 		{
 			name: "ShouldFailInvalidEffectiveDate",
@@ -369,6 +370,18 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 				FIPSRevision:                     3,
 				FIPSPhysicalSecurityLevel:        2,
 			},
+			expectedURL: "https://example.com/update",
+		},
+		{
+			name: "ShouldSucceedURLWithoutScheme",
+			have: StatusReportJSON{
+				EffectiveDate: "2025-01-01",
+				URL:           "example.com/update",
+			},
+			expected: StatusReport{
+				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			expectedURL: "https://example.com/update",
 		},
 	}
 
@@ -390,9 +403,9 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 				assert.Equal(t, tc.expected.FIPSRevision, result.FIPSRevision)
 				assert.Equal(t, tc.expected.FIPSPhysicalSecurityLevel, result.FIPSPhysicalSecurityLevel)
 
-				if tc.have.URL != "" {
+				if tc.expectedURL != "" {
 					assert.NotNil(t, result.URL)
-					assert.Equal(t, tc.have.URL, result.URL.String())
+					assert.Equal(t, tc.expectedURL, result.URL.String())
 				}
 			} else {
 				assert.EqualError(t, err, tc.err)
