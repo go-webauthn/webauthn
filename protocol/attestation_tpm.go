@@ -303,7 +303,7 @@ func tpm2NameMatch(certInfo *tpm2.TPMSAttest, pubArea *tpm2.TPMTPublic) (match b
 
 	// Per the WebAuthn Specification §8.3 step 5:
 	//
-	// Note: The remaining fi	elds in the "Standard Attestation Structure" [TPMv2-Part1] section 31.2, i.e.,
+	// Note: The remaining fields in the "Standard Attestation Structure" [TPMv2-Part1] section 31.2, i.e.,
 	// qualifiedSigner, clockInfo and firmwareVersion are ignored. Depending on the properties of the aikCert key used,
 	// these fields may be obfuscated. If valid, these MAY be used as an input to risk engines.
 	//
