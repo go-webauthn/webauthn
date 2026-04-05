@@ -18,20 +18,28 @@ func Fetch() (metadata *Metadata, err error) {
 	var (
 		decoder *Decoder
 		payload *PayloadJSON
-		res     *http.Response
+		resp    *http.Response
 	)
+
+	client := &http.Client{}
+
+	if resp, err = client.Get(ProductionMDSURL); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error occurred fetching metadata: status code %d", resp.StatusCode)
+	}
 
 	if decoder, err = NewDecoder(WithIgnoreEntryParsingErrors()); err != nil {
 		return nil, err
 	}
 
-	client := &http.Client{}
-
-	if res, err = client.Get(ProductionMDSURL); err != nil {
-		return nil, err
-	}
-
-	if payload, err = decoder.Decode(res.Body); err != nil {
+	if payload, err = decoder.Decode(resp.Body); err != nil {
 		return nil, err
 	}
 

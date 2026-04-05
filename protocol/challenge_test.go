@@ -2,66 +2,43 @@ package protocol
 
 import (
 	"encoding/base64"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreateChallenge(t *testing.T) {
-	tests := []struct {
-		name    string
-		want    URLEncodedBase64
-		wantErr bool
-	}{
-		{
-			"Successful Challenge Creation",
-			URLEncodedBase64{},
-			false,
-		},
-	}
+	challenge, err := CreateChallenge()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := CreateChallenge()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CreateChallenge() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			tt.want = got
-
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("CreateChallenge() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	assert.NoError(t, err)
+	require.NotNil(t, challenge)
+	assert.Len(t, challenge, 32)
 }
 
 func TestChallenge_String(t *testing.T) {
 	newChallenge, err := CreateChallenge()
-	if err != nil {
-		t.Errorf("CreateChallenge() error = %v", err)
-		return
-	}
+	require.NoError(t, err)
 
-	wantChallenge := base64.RawURLEncoding.EncodeToString(newChallenge)
+	assert.NotNil(t, newChallenge)
 
-	tests := []struct {
-		name string
-		c    URLEncodedBase64
-		want string
+	expectedChallenge := base64.RawURLEncoding.EncodeToString(newChallenge)
+
+	testCases := []struct {
+		name     string
+		have     URLEncodedBase64
+		expected string
 	}{
 		{
-			"Successful String",
+			"Successful",
 			newChallenge,
-			wantChallenge,
+			expectedChallenge,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.c.String(); got != tt.want {
-				t.Errorf("Challenge.String() = %v, want %v", got, tt.want)
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.have.String())
 		})
 	}
 }

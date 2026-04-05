@@ -71,35 +71,43 @@ func TestBase64UnmarshalJSON(t *testing.T) {
 		EncodedData URLEncodedBase64 `json:"encoded_data"`
 	}
 
-	tests := []struct {
-		encodedMessage   string
-		expectedTestData testData
+	testCases := []struct {
+		name     string
+		message  string
+		expected testData
+		err      string
 	}{
 		{
-			encodedMessage: "\"" + base64.RawURLEncoding.EncodeToString([]byte("test base64 data")) + "\"",
-			expectedTestData: testData{
+			name:    "ShouldHandleBase64Data",
+			message: "\"" + base64.RawURLEncoding.EncodeToString([]byte("test base64 data")) + "\"",
+			expected: testData{
 				StringData:  "test string",
 				EncodedData: URLEncodedBase64("test base64 data"),
 			},
+			err: "",
 		},
 		{
-			encodedMessage: "null",
-			expectedTestData: testData{
+			name:    "ShouldHandleNull",
+			message: "null",
+			expected: testData{
 				StringData:  "test string",
 				EncodedData: nil,
 			},
+			err: "",
 		},
 	}
 
-	for _, test := range tests {
-		raw := fmt.Sprintf(`{"string_data": "test string", "encoded_data": %s}`, test.encodedMessage)
-		got := testData{}
+	for _, tc := range testCases {
+		raw := fmt.Sprintf(`{"string_data": "test string", "encoded_data": %s}`, tc.message)
+		actual := &testData{}
 
-		t.Logf("%s\n", raw)
+		if tc.err != "" {
+			assert.EqualError(t, json.NewDecoder(strings.NewReader(raw)).Decode(actual), tc.err)
+		} else {
+			assert.NoError(t, json.NewDecoder(strings.NewReader(raw)).Decode(actual))
+		}
 
-		require.NoError(t, json.NewDecoder(strings.NewReader(raw)).Decode(&got))
-
-		assert.Equal(t, test.expectedTestData.EncodedData, got.EncodedData)
-		assert.Equal(t, test.expectedTestData.StringData, got.StringData)
+		assert.Equal(t, tc.expected.EncodedData, actual.EncodedData)
+		assert.Equal(t, tc.expected.StringData, actual.StringData)
 	}
 }

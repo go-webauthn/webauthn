@@ -1,13 +1,21 @@
 package protocol
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/asn1"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
@@ -109,6 +117,206 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 			assert.Equal(t, tc.x5cs, x5cs)
 		})
 	}
+}
+
+func TestAndroidKeyFormat_HandlerErrors(t *testing.T) {
+	// Get a valid attestation object and clientDataHash to use as a base for error tests.
+	successAtt := attestationTestUnpackResponse(t, androidKeyTestResponse0["success"]).Response.AttestationObject
+	successClientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, androidKeyTestResponse0["success"]).Raw.AttestationResponse.ClientDataJSON)
+
+	// Build a valid but wrong x5c (self-signed cert, not from Android chain).
+	selfSignedCert := testUtilsGenerateSelfSignedCert(t)
+
+	// Build a valid CBOR-encoded EC2 COSE key that differs from the attestation certificate key.
+	differentKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	differentCOSEKey, err := webauthncbor.Marshal(webauthncose.EC2PublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.EllipticKey),
+			Algorithm: int64(webauthncose.AlgES256),
+		},
+		Curve:  int64(webauthncose.P256),
+		XCoord: padP256Coord(differentKey.PublicKey.X),
+		YCoord: padP256Coord(differentKey.PublicKey.Y),
+	})
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name           string
+		att            AttestationObject
+		clientDataHash []byte
+		err            string
+	}{
+		{
+			name: "ShouldFailMissingAlg",
+			att: AttestationObject{
+				AttStatement: map[string]any{},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Error retrieving alg value",
+		},
+		{
+			name: "ShouldFailMissingSig",
+			att: AttestationObject{
+				AttStatement: map[string]any{
+					"alg": int64(-7),
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Error retrieving sig value",
+		},
+		{
+			name: "ShouldFailMissingX5C",
+			att: AttestationObject{
+				AttStatement: map[string]any{
+					"alg": int64(-7),
+					"sig": []byte("fake-sig"),
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Error retrieving x5c value",
+		},
+		{
+			name: "ShouldFailEmptyX5C",
+			att: AttestationObject{
+				AttStatement: map[string]any{
+					"alg": int64(-7),
+					"sig": []byte("fake-sig"),
+					"x5c": []any{},
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Error retrieving x5c value: empty array",
+		},
+		{
+			name: "ShouldFailUnsupportedAlg",
+			att: AttestationObject{
+				RawAuthData: successAtt.RawAuthData,
+				AuthData:    successAtt.AuthData,
+				AttStatement: map[string]any{
+					"alg": int64(9999),
+					"sig": successAtt.AttStatement["sig"],
+					"x5c": successAtt.AttStatement["x5c"],
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Unsupported COSE alg: 9999",
+		},
+		{
+			name: "ShouldFailSignatureVerification",
+			att: AttestationObject{
+				RawAuthData: successAtt.RawAuthData,
+				AuthData:    successAtt.AuthData,
+				AttStatement: map[string]any{
+					"alg": int64(-7),
+					"sig": []byte("bad-signature"),
+					"x5c": successAtt.AttStatement["x5c"],
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Signature validation error: x509: ECDSA verification failure",
+		},
+		{
+			name: "ShouldFailUnsupportedKey",
+			att: AttestationObject{
+				RawAuthData: successAtt.RawAuthData,
+				AuthData: AuthenticatorData{
+					RPIDHash: successAtt.AuthData.RPIDHash,
+					Flags:    successAtt.AuthData.Flags,
+					Counter:  successAtt.AuthData.Counter,
+					AttData: AttestedCredentialData{
+						AAGUID:              successAtt.AuthData.AttData.AAGUID,
+						CredentialID:        successAtt.AuthData.AttData.CredentialID,
+						CredentialPublicKey: []byte("invalid-key"),
+					},
+				},
+				AttStatement: map[string]any{
+					"alg": successAtt.AttStatement["alg"],
+					"sig": successAtt.AttStatement["sig"],
+					"x5c": successAtt.AttStatement["x5c"],
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Error parsing public key: Unsupported Public Key Type",
+		},
+		{
+			name: "ShouldFailPublicKeyMismatch",
+			att: AttestationObject{
+				RawAuthData: successAtt.RawAuthData,
+				AuthData: AuthenticatorData{
+					RPIDHash: successAtt.AuthData.RPIDHash,
+					Flags:    successAtt.AuthData.Flags,
+					Counter:  successAtt.AuthData.Counter,
+					AttData: AttestedCredentialData{
+						AAGUID:              successAtt.AuthData.AttData.AAGUID,
+						CredentialID:        successAtt.AuthData.AttData.CredentialID,
+						CredentialPublicKey: differentCOSEKey,
+					},
+				},
+				AttStatement: map[string]any{
+					"alg": successAtt.AttStatement["alg"],
+					"sig": successAtt.AttStatement["sig"],
+					"x5c": successAtt.AttStatement["x5c"],
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Certificate public key does not match public key in authData",
+		},
+		{
+			name: "ShouldFailMissingKeystoreExtension",
+			att: AttestationObject{
+				RawAuthData: successAtt.RawAuthData,
+				AuthData:    successAtt.AuthData,
+				AttStatement: map[string]any{
+					"alg": int64(-7),
+					"sig": successAtt.AttStatement["sig"],
+					"x5c": []any{selfSignedCert.Raw},
+				},
+			},
+			clientDataHash: successClientDataHash[:],
+			err:            "Error validating x5c cert chain",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := attestationFormatValidationHandlerAndroidKey(tc.att, tc.clientDataHash, nil)
+
+			assert.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+func TestAndroidKeyFormat_ExtensionValidationErrors(t *testing.T) {
+	// Build a real attestation and extract the cred cert for manipulation.
+	successAtt := attestationTestUnpackResponse(t, androidKeyTestResponse0["success"]).Response.AttestationObject
+	successClientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, androidKeyTestResponse0["success"]).Raw.AttestationResponse.ClientDataJSON)
+
+	// Parse the x5c certs from the successful attestation.
+	x5cRaw := successAtt.AttStatement["x5c"].([]any)
+	credCertDER := x5cRaw[0].([]byte)
+	credCert, err := x509.ParseCertificate(credCertDER)
+	require.NoError(t, err)
+
+	// Find the Android keystore extension.
+	var keystoreExtBytes []byte
+
+	for _, ext := range credCert.Extensions {
+		if ext.Id.Equal(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 11129, 2, 1, 17}) {
+			keystoreExtBytes = ext.Value
+		}
+	}
+
+	require.NotEmpty(t, keystoreExtBytes)
+
+	// Decode the keystore extension to verify it's valid.
+	decoded := keyDescription{}
+	_, err = asn1.Unmarshal(keystoreExtBytes, &decoded)
+	require.NoError(t, err)
+
+	// Verify the decoded challenge matches the clientDataHash as a sanity check.
+	assert.Equal(t, successClientDataHash[:], decoded.AttestationChallenge)
 }
 
 var androidKeyTestResponse0 = map[string]string{
