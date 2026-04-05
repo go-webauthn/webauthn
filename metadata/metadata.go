@@ -46,7 +46,7 @@ func Fetch() (metadata *Metadata, err error) {
 	return decoder.Parse(payload)
 }
 
-// Metadata represents a MDS3.1 blob in either a fully parsed or partially parsed state.
+// Metadata represents a FIDO Metadata Service BLOB in either a fully parsed or partially parsed state.
 type Metadata struct {
 	Parsed   Parsed
 	Unparsed []EntryError
@@ -64,26 +64,31 @@ func (m *Metadata) ToMap() (metadata map[uuid.UUID]*Entry) {
 	return metadata
 }
 
-// Parsed is a structure representing the MDS3.1 Metadata BLOB Payload dictionary.
+// Parsed is a structure representing the Metadata BLOB Payload dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-payload-blob
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-payload
 type Parsed struct {
-	// The legalHeader, if present, contains a legal guide for accessing and using metadata, which itself MAY contain
-	// URL(s) pointing to further information, such as a full Terms and Conditions statement.
+	// The legalHeader, which MUST be in each BLOB, is an indication of the acceptance of the relevant legal agreement
+	// for using the MDS.
 	LegalHeader string
 
-	// The serial number of this UAF Metadata TOC Payload. Serial numbers MUST be consecutive and strictly monotonic,
-	// i.e. the successor TOC will have a no value exactly incremented by one.
+	// The serial number of this Metadata BLOB Payload. This serial number MUST be incremented whenever the contents
+	// of the BLOB changes. Serial numbers MUST be consecutive and strictly monotonic, i.e. the successor BLOB will
+	// have a no value exactly incremented by one.
 	Number int
 
-	// ISO-8601 formatted date when the next update will be provided at latest.
+	// ISO-8601 formatted date when the next update will be provided at latest. The use of this field is discouraged
+	// and may be removed in a future version of the spec.
 	NextUpdate time.Time
 
-	// List of zero or more MetadataTOCPayloadEntry objects.
+	// List of zero or more MetadataBLOBPayloadEntry objects.
 	Entries []Entry
 }
 
-// PayloadJSON is an intermediary JSON/JWT representation of the [Parsed] struct.
+// PayloadJSON is an intermediary JSON/JWT representation of the Metadata BLOB Payload dictionary and the JSON
+// representation of the [Parsed] struct.
+//
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-payload
 type PayloadJSON struct {
 	LegalHeader string `json:"legalHeader"`
 	Number      int    `json:"no"`
@@ -117,20 +122,22 @@ func (j PayloadJSON) Parse() (payload Parsed, err error) {
 	}, nil
 }
 
-// Entry is a structure representing the MDS3.1 Metadata BLOB Payload Entry dictionary.
+// Entry is a structure representing the Metadata BLOB Payload Entry dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-blob-pe
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-pe
 type Entry struct {
-	// The Authenticator Attestation ID.
+	// Aaid is the AAID of the authenticator this metadata BLOB payload entry relates to. This field MUST be set if
+	// the authenticator implements FIDO UAF.
 	Aaid string
 
-	// The Authenticator Attestation GUID.
+	// AaGUID is the Authenticator Attestation GUID. This field MUST be set if the authenticator implements FIDO2.
 	AaGUID uuid.UUID
 
-	// A list of the attestation certificate public key identifiers encoded as hex string.
+	// AttestationCertificateKeyIdentifiers is a list of the attestation certificate public key identifiers encoded as
+	// hex string. This field MUST be set if neither aaid nor aaguid are set.
 	AttestationCertificateKeyIdentifiers []string
 
-	// The metadataStatement JSON object as defined in FIDOMetadataStatement.
+	// MetadataStatement is the metadataStatement JSON object as defined in FIDOMetadataStatement.
 	MetadataStatement Statement
 
 	// BiometricStatusReports is the status of the FIDO Biometric Certification of one or more biometric components of
@@ -140,7 +147,7 @@ type Entry struct {
 	// StatusReports is an array of status reports applicable to this authenticator.
 	StatusReports []StatusReport
 
-	// TimeOfLastStatusChange is a ISO-8601 formatted date since when the status report array was set to the current
+	// TimeOfLastStatusChange is an ISO-8601 formatted date since when the status report array was set to the current
 	// value.
 	TimeOfLastStatusChange time.Time
 
@@ -148,14 +155,15 @@ type Entry struct {
 	RogueListURL *url.URL
 
 	// RogueListHash is the hash value computed over the Base64url encoding of the UTF-8 representation of the JSON
-	// encoded rogueList available at rogueListURL (with type rogueListEntry[]).
+	// encoded rogueList available at rogueListURL (with type rogueListEntry[]). This hash value MUST be present and
+	// non-empty whenever rogueListURL is present.
 	RogueListHash string
 }
 
-// EntryJSON is an intermediary JSON/JWT structure representing the MDS3.1 Metadata BLOB Payload Entry dictionary and
-// JSON representation of the [Entry] struct.
+// EntryJSON is an intermediary JSON/JWT structure representing the Metadata BLOB Payload Entry dictionary and
+// the JSON representation of the [Entry] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-mds-blob-pe
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-pe
 type EntryJSON struct {
 	Aaid                                 string   `json:"aaid"`
 	AaGUID                               string   `json:"aaguid"`
@@ -238,9 +246,9 @@ func (j EntryJSON) Parse() (entry Entry, err error) {
 	}, nil
 }
 
-// Statement is a structure representing the Statement MDS3.1 dictionary.
-// Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
-// contained in the authoritative statement is used in several other places.
+// Statement is a structure representing the Metadata Statement dictionary. Authenticator metadata statements are used
+// directly by the FIDO server at a relying party, but the information contained in the authoritative statement is used
+// in several other places.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
 type Statement struct {
@@ -330,7 +338,7 @@ type Statement struct {
 	// as text/plain or image/png.
 	TcDisplayContentType string
 
-	// TcDisplayPNGCharacteristics is a list of alternative DisplayPNGCharacteristicsDescriptor. Each of these entries
+	// TcDisplayPNGCharacteristics is a list of alternative [DisplayPNGCharacteristicsDescriptor]. Each of these entries
 	// is one alternative of supported image characteristics for displaying a PNG image.
 	TcDisplayPNGCharacteristics []DisplayPNGCharacteristicsDescriptor
 
@@ -408,51 +416,117 @@ func (s *Statement) Verifier(x5cis []*x509.Certificate) (opts x509.VerifyOptions
 	}
 }
 
-// StatementJSON is an intermediary JSON/JWT structure representing the MetadataStatement MDS3.1 dictionary and the JSON
-// representation of the [Statement] struct.
-// Authenticator metadata statements are used directly by the FIDO server at a relying party, but the information
-// contained in the authoritative statement is used in several other places.
+// StatementJSON is the JSON representation of the [Statement] struct.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
 type StatementJSON struct {
-	LegalHeader                          string                                `json:"legalHeader"`
-	Aaid                                 string                                `json:"aaid"`
-	AaGUID                               string                                `json:"aaguid"`
-	AttestationCertificateKeyIdentifiers []string                              `json:"attestationCertificateKeyIdentifiers"`
-	FriendlyNames                        map[string]string                     `json:"friendlyNames"`
-	Description                          string                                `json:"description"`
-	AlternativeDescriptions              map[string]string                     `json:"alternativeDescriptions"`
-	AuthenticatorVersion                 uint32                                `json:"authenticatorVersion"`
-	ProtocolFamily                       string                                `json:"protocolFamily"`
-	Schema                               uint16                                `json:"schema"`
-	Upv                                  []Version                             `json:"upv"`
-	AuthenticationAlgorithms             []AuthenticationAlgorithm             `json:"authenticationAlgorithms"`
-	PublicKeyAlgAndEncodings             []PublicKeyAlgAndEncoding             `json:"publicKeyAlgAndEncodings"`
-	AttestationTypes                     []AuthenticatorAttestationType        `json:"attestationTypes"`
-	UserVerificationDetails              [][]VerificationMethodDescriptor      `json:"userVerificationDetails"`
-	KeyProtection                        []string                              `json:"keyProtection"`
-	IsKeyRestricted                      bool                                  `json:"isKeyRestricted"`
-	IsFreshUserVerificationRequired      bool                                  `json:"isFreshUserVerificationRequired"`
-	MatcherProtection                    []string                              `json:"matcherProtection"`
-	CryptoStrength                       uint16                                `json:"cryptoStrength"`
-	AttachmentHint                       []string                              `json:"attachmentHint"`
-	TcDisplay                            []string                              `json:"tcDisplay"`
-	TcDisplayContentType                 string                                `json:"tcDisplayContentType"`
-	TcDisplayPNGCharacteristics          []DisplayPNGCharacteristicsDescriptor `json:"tcDisplayPNGCharacteristics"`
-	AttestationRootCertificates          []string                              `json:"attestationRootCertificates"`
-	EcdaaTrustAnchors                    []EcdaaTrustAnchor                    `json:"ecdaaTrustAnchors"`
-	Icon                                 string                                `json:"icon"`
-	IconDark                             string                                `json:"iconDark"`
-	ProviderLogoLight                    string                                `json:"providerLogoLight"`
-	ProviderLogoDark                     string                                `json:"providerLogoDark"`
-	SupportedExtensions                  []ExtensionDescriptor                 `json:"supportedExtensions"`
-	KeyScope                             KeyScope                              `json:"keyScope"`
-	MultiDeviceCredentialSupport         MultiDeviceCredentialSupport          `json:"multiDeviceCredentialSupport"`
-	AuthenticatorGetInfo                 AuthenticatorGetInfoJSON              `json:"authenticatorGetInfo"`
-	CredentialExportProtocolConfigURL    string                                `json:"cxpConfigURL"`
+	// LegalHeader contains a legal guide for accessing and using metadata.
+	LegalHeader string `json:"legalHeader"`
+
+	// Aaid is the Authenticator Attestation ID. Set if the authenticator implements FIDO UAF.
+	Aaid string `json:"aaid"`
+
+	// AaGUID is the Authenticator Attestation GUID. Set if the authenticator implements FIDO2.
+	AaGUID string `json:"aaguid"`
+
+	// AttestationCertificateKeyIdentifiers is a list of attestation certificate public key identifiers (hex).
+	AttestationCertificateKeyIdentifiers []string `json:"attestationCertificateKeyIdentifiers"`
+
+	// FriendlyNames contains friendly names of the authenticator in multiple languages.
+	FriendlyNames map[string]string `json:"friendlyNames"`
+
+	// Description is a human-readable, short description of the authenticator, in English.
+	Description string `json:"description"`
+
+	// AlternativeDescriptions is a list of human-readable short descriptions in different languages.
+	AlternativeDescriptions map[string]string `json:"alternativeDescriptions"`
+
+	// AuthenticatorVersion is the earliest trustworthy authenticatorVersion meeting the requirements in this statement.
+	AuthenticatorVersion uint32 `json:"authenticatorVersion"`
+
+	// ProtocolFamily is the FIDO protocol family. The values "uaf", "u2f", and "fido2" are supported.
+	ProtocolFamily string `json:"protocolFamily"`
+
+	// Schema is the Metadata Schema version.
+	Schema uint16 `json:"schema"`
+
+	// Upv is the FIDO unified protocol version(s) supported by this authenticator.
+	Upv []Version `json:"upv"`
+
+	// AuthenticationAlgorithms is the list of authentication algorithms supported by the authenticator.
+	AuthenticationAlgorithms []AuthenticationAlgorithm `json:"authenticationAlgorithms"`
+
+	// PublicKeyAlgAndEncodings is the list of public key formats supported during registration operations.
+	PublicKeyAlgAndEncodings []PublicKeyAlgAndEncoding `json:"publicKeyAlgAndEncodings"`
+
+	// AttestationTypes is the supported attestation type(s).
+	AttestationTypes []AuthenticatorAttestationType `json:"attestationTypes"`
+
+	// UserVerificationDetails is a list of alternative VerificationMethodANDCombinations.
+	UserVerificationDetails [][]VerificationMethodDescriptor `json:"userVerificationDetails"`
+
+	// KeyProtection is the key protection type(s).
+	KeyProtection []string `json:"keyProtection"`
+
+	// IsKeyRestricted indicates if the Uauth private key is restricted to only sign valid FIDO signature assertions.
+	IsKeyRestricted bool `json:"isKeyRestricted"`
+
+	// IsFreshUserVerificationRequired indicates if Uauth key usage always requires a fresh user verification.
+	IsFreshUserVerificationRequired bool `json:"isFreshUserVerificationRequired"`
+
+	// MatcherProtection is the matcher protection type(s).
+	MatcherProtection []string `json:"matcherProtection"`
+
+	// CryptoStrength is the authenticator's overall claimed cryptographic strength in bits.
+	CryptoStrength uint16 `json:"cryptoStrength"`
+
+	// AttachmentHint is the attachment hint(s).
+	AttachmentHint []string `json:"attachmentHint"`
+
+	// TcDisplay is the transaction confirmation display type(s).
+	TcDisplay []string `json:"tcDisplay"`
+
+	// TcDisplayContentType is the supported MIME content type for the transaction confirmation display.
+	TcDisplayContentType string `json:"tcDisplayContentType"`
+
+	// TcDisplayPNGCharacteristics is a list of alternative DisplayPNGCharacteristicsDescriptor.
+	TcDisplayPNGCharacteristics []DisplayPNGCharacteristicsDescriptor `json:"tcDisplayPNGCharacteristics"`
+
+	// AttestationRootCertificates is a list of base64-encoded trust anchor certificates for this authenticator model.
+	AttestationRootCertificates []string `json:"attestationRootCertificates"`
+
+	// EcdaaTrustAnchors is a list of trust anchors used for ECDAA attestation.
+	EcdaaTrustAnchors []EcdaaTrustAnchor `json:"ecdaaTrustAnchors"`
+
+	// Icon is a data: URL encoded PNG or SVG (light mode) icon for the Authenticator.
+	Icon string `json:"icon"`
+
+	// IconDark is a data: URL encoded SVG dark mode icon for the Authenticator.
+	IconDark string `json:"iconDark"`
+
+	// ProviderLogoLight is a data: URL encoded SVG light mode icon for the provider.
+	ProviderLogoLight string `json:"providerLogoLight"`
+
+	// ProviderLogoDark is a data: URL encoded SVG dark mode icon for the provider.
+	ProviderLogoDark string `json:"providerLogoDark"`
+
+	// SupportedExtensions is a list of extensions supported by the authenticator.
+	SupportedExtensions []ExtensionDescriptor `json:"supportedExtensions"`
+
+	// KeyScope of keys generated and maintained by this authenticator model.
+	KeyScope KeyScope `json:"keyScope"`
+
+	// MultiDeviceCredentialSupport describes the support for multi-device credentials.
+	MultiDeviceCredentialSupport MultiDeviceCredentialSupport `json:"multiDeviceCredentialSupport"`
+
+	// AuthenticatorGetInfo describes supported versions, extensions, AAGUID of the device and its capabilities.
+	AuthenticatorGetInfo AuthenticatorGetInfoJSON `json:"authenticatorGetInfo"`
+
+	// CredentialExportProtocolConfigURL specifies the URL for the credential export protocol (CXP) configuration.
+	CredentialExportProtocolConfigURL string `json:"cxpConfigURL"`
 }
 
-// Parse converts StatementJSON into a Statement object, validating and parsing its fields. Returns an error on failure.
+// Parse converts StatementJSON into a [Statement] object, validating and parsing its fields. Returns an error on failure.
 //
 //nolint:gocyclo
 func (j StatementJSON) Parse() (statement Statement, err error) {
@@ -557,19 +631,19 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 	}, nil
 }
 
-// BiometricStatusReport is a structure representing the BiometricStatusReport MDS3.1 dictionary.
-// Contains the current status of the authenticator's biometric component.
+// BiometricStatusReport is a structure representing the BiometricStatusReport dictionary. Contains the current
+// BiometricStatusReport of one of the authenticator's biometric component.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-bio-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-bio-stat-rep
 type BiometricStatusReport struct {
-	// CertLevel is the achieved level of the biometric certification for this biometric component of the authenticator.
+	// CertLevel is the achieved level of the biometric certification of this biometric component of the authenticator.
 	CertLevel uint16
 
-	// Modality is a single USER_VERIFY constant indicating the modality of the biometric component.
+	// Modality is a single USER_VERIFY short form case-sensitive string name constant, representing biometric modality.
 	Modality string
 
-	// EffectiveDate is a ISO-8601 formatted date since when the certLevel achieved, if applicable. If no date is given,
-	// the status is assumed to be effective while present.
+	// EffectiveDate is an ISO-8601 formatted date since when the certLevel achieved, if applicable. If no date is
+	// given, the status is assumed to be effective while present.
 	EffectiveDate time.Time
 
 	// CertificationDescriptor describes the externally visible aspects of the Biometric Certification evaluation.
@@ -582,24 +656,34 @@ type BiometricStatusReport struct {
 	// to, e.g. "1.0.0".
 	CertificationPolicyVersion string
 
-	// The version of the Biometric Requirements [FIDOBiometricsRequirements] the implementation is certified to, e.g.
-	// "1.0.0".
+	// CertificationRequirementsVersion is the version of the Biometric Requirements [FIDOBiometricsRequirements] the
+	// implementation is certified to, e.g. "1.0.0".
 	CertificationRequirementsVersion string
 }
 
-// BiometricStatusReportJSON is a structure representing the BiometricStatusReport MDS3.1 dictionary and the JSON
-// representation of the [BiometricStatusReport] struct.
-// Contains the current status of the authenticator's biometric component.
+// BiometricStatusReportJSON is the JSON representation of the [BiometricStatusReport] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-bio-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-bio-stat-rep
 type BiometricStatusReportJSON struct {
-	CertLevel               uint16 `json:"certLevel"`
-	Modality                string `json:"modality"`
-	EffectiveDate           string `json:"effectiveDate"`
-	CertificationDescriptor string `json:"certificationDescriptor"`
-	CertificateNumber       string `json:"certificateNumber"`
+	// CertLevel is the achieved level of the biometric certification of this biometric component.
+	CertLevel uint16 `json:"certLevel"`
 
-	CertificationPolicyVersion       string `json:"certificationPolicyVersion"`
+	// Modality is a single USER_VERIFY short form string constant representing the biometric modality.
+	Modality string `json:"modality"`
+
+	// EffectiveDate is an ISO-8601 formatted date since when the certLevel was achieved.
+	EffectiveDate string `json:"effectiveDate"`
+
+	// CertificationDescriptor describes the externally visible aspects of the Biometric Certification evaluation.
+	CertificationDescriptor string `json:"certificationDescriptor"`
+
+	// CertificateNumber is the unique identifier for the issued Biometric Certification.
+	CertificateNumber string `json:"certificateNumber"`
+
+	// CertificationPolicyVersion is the version of the Biometric Certification Policy, e.g. "1.0.0".
+	CertificationPolicyVersion string `json:"certificationPolicyVersion"`
+
+	// CertificationRequirementsVersion is the version of the Biometric Requirements, e.g. "1.0.0".
 	CertificationRequirementsVersion string `json:"certificationRequirementsVersion"`
 }
 
@@ -621,9 +705,10 @@ func (j BiometricStatusReportJSON) Parse() (report BiometricStatusReport, err er
 	}, nil
 }
 
-// StatusReport is a structure representing the StatusReport MDS3.1 dictionary.
+// StatusReport is a structure representing the StatusReport dictionary. Contains an [AuthenticatorStatus] and additional
+// data associated with it, if any.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-stat-rep
 type StatusReport struct {
 	// Status of the authenticator. Additional fields MAY be set depending on this value.
 	Status AuthenticatorStatus
@@ -632,15 +717,16 @@ type StatusReport struct {
 	// given, the status is assumed to be effective while present.
 	EffectiveDate time.Time
 
-	// The AuthenticatorVersion that this status report relates to. In the case of FIDO_CERTIFIED* status values, the
-	// status applies to higher authenticatorVersions until there is a new statusReport.
+	// AuthenticatorVersion is the authenticator version (firmware version) that this status report relates to. In the
+	// case of FIDO_CERTIFIED* status values, the status applies to higher authenticatorVersions until there is a new
+	// statusReport.
 	AuthenticatorVersion uint32
 
-	// BatchCertificate is a base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value
+	// BatchCertificate is a Base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value
 	// related to the current status, if applicable.
 	BatchCertificate *x509.Certificate
 
-	// Certificate is a base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value related to
+	// Certificate is a Base64-encoded [RFC4648] (not base64url!) DER [ITU-X690-2008] PKIX certificate value related to
 	// the current status, if applicable. This field will typically not be present if field batchCertificate is present.
 	Certificate *x509.Certificate
 
@@ -657,43 +743,73 @@ type StatusReport struct {
 	// Certified to, e.g. "1.0.0".
 	CertificationPolicyVersion string
 
+	// CertificationProfiles is a list of certification profile strings. Each entry represents a supported
+	// certification profile, e.g. "consumer" or "enterprise".
+	CertificationProfiles []string
+
 	// CertificationRequirementsVersion is the Document Version of the Authenticator Security Requirements (DV)
 	// [FIDOAuthenticatorSecurityRequirements] the implementation is certified to, e.g. "1.2.0".
 	CertificationRequirementsVersion string
 
-	// SunsetDate is an ISO-8601 formatted date since when the status wil expire, if applicable. If no date is given,
+	// SunsetDate is an ISO-8601 formatted date since when the status will expire, if applicable. If no date is given,
 	// the status is assumed to not have a scheduled expiry.
 	SunsetDate *time.Time
 
-	// FIPSRevision is the revision number of the FIPS 140 specification, e.g. "3" in the case of FIPS 140-3. This entry
-	// MUST be present if and only if the status entry is one of FIPS140_CERTIFIED_L*.
+	// FIPSRevision is the revision number of the FIPS 140 specification, e.g. "3" in the case of FIPS 140-3. This
+	// entry MUST be present if and only if the status entry is one of FIPS140_CERTIFIED_L*.
 	FIPSRevision uint32
 
-	// FIPSPhysicalSecurityLevel is an indicator that in the case the status represents a FIPS certification, this field
-	// contains the "physical security level" of the FIPS certification. This entry MUST be present if and only if the
-	// status entry is one of FIPS140_CERTIFIED_L*. It MUST reflect the physical security level which might deviate from
-	// the overall level.
+	// FIPSPhysicalSecurityLevel is the "physical security level" of the FIPS certification. This entry MUST be present
+	// if and only if the status entry is one of FIPS140_CERTIFIED_L*. It MUST reflect the physical security level
+	// which might deviate from the overall level.
 	FIPSPhysicalSecurityLevel uint32
 }
 
-// StatusReportJSON is an intermediary JSON/JWT structure representing the StatusReport MDS3.1 dictionary and the JSON
-// representation of the [StatusReport] struct.
+// StatusReportJSON is the JSON representation of the [StatusReport] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-stat-rep
 type StatusReportJSON struct {
-	Status                           AuthenticatorStatus `json:"status"`
-	EffectiveDate                    string              `json:"effectiveDate"`
-	AuthenticatorVersion             uint32              `json:"authenticatorVersion"`
-	BatchCertificate                 string              `json:"batchCertificate"`
-	Certificate                      string              `json:"certificate"`
-	URL                              string              `json:"url"`
-	CertificationDescriptor          string              `json:"certificationDescriptor"`
-	CertificateNumber                string              `json:"certificateNumber"`
-	CertificationPolicyVersion       string              `json:"certificationPolicyVersion"`
-	CertificationRequirementsVersion string              `json:"certificationRequirementsVersion"`
-	SunsetDate                       string              `json:"sunsetDate"`
-	FIPSRevision                     uint32              `json:"fipsRevision"`
-	FIPSPhysicalSecurityLevel        uint32              `json:"fipsPhysicalSecurityLevel"`
+	// Status of the authenticator. Additional fields MAY be set depending on this value.
+	Status AuthenticatorStatus `json:"status"`
+
+	// EffectiveDate is an ISO-8601 formatted date since when the status code was set.
+	EffectiveDate string `json:"effectiveDate"`
+
+	// AuthenticatorVersion is the authenticator version (firmware version) that this status report relates to.
+	AuthenticatorVersion uint32 `json:"authenticatorVersion"`
+
+	// BatchCertificate is a Base64-encoded DER PKIX certificate related to the current status.
+	BatchCertificate string `json:"batchCertificate"`
+
+	// Certificate is a Base64-encoded DER PKIX certificate related to the current status.
+	Certificate string `json:"certificate"`
+
+	// URL is a HTTPS URL where additional information may be found related to the current status.
+	URL string `json:"url"`
+
+	// CertificationDescriptor describes the externally visible aspects of the Authenticator Certification evaluation.
+	CertificationDescriptor string `json:"certificationDescriptor"`
+
+	// CertificateNumber is the unique identifier for the issued Certification.
+	CertificateNumber string `json:"certificateNumber"`
+
+	// CertificationPolicyVersion is the version of the Authenticator Certification Policy, e.g. "1.0.0".
+	CertificationPolicyVersion string `json:"certificationPolicyVersion"`
+
+	// CertificationProfiles is a list of supported certification profiles, e.g. "consumer" or "enterprise".
+	CertificationProfiles []string `json:"certificationProfiles"`
+
+	// CertificationRequirementsVersion is the Document Version of the Authenticator Security Requirements, e.g. "1.2.0".
+	CertificationRequirementsVersion string `json:"certificationRequirementsVersion"`
+
+	// SunsetDate is an ISO-8601 formatted date when the status will expire.
+	SunsetDate string `json:"sunsetDate"`
+
+	// FIPSRevision is the revision number of the FIPS 140 specification, e.g. "3" for FIPS 140-3.
+	FIPSRevision uint32 `json:"fipsRevision"`
+
+	// FIPSPhysicalSecurityLevel is the physical security level of the FIPS certification.
+	FIPSPhysicalSecurityLevel uint32 `json:"fipsPhysicalSecurityLevel"`
 }
 
 func (j StatusReportJSON) Parse() (report StatusReport, err error) {
@@ -749,6 +865,7 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 		CertificationDescriptor:          j.CertificationDescriptor,
 		CertificateNumber:                j.CertificateNumber,
 		CertificationPolicyVersion:       j.CertificationPolicyVersion,
+		CertificationProfiles:            j.CertificationProfiles,
 		CertificationRequirementsVersion: j.CertificationRequirementsVersion,
 		SunsetDate:                       sunset,
 		FIPSRevision:                     j.FIPSRevision,
@@ -1043,28 +1160,74 @@ type AuthenticatorGetInfo struct {
 	VendorPrototypeConfigCommands []uint
 }
 
+// AuthenticatorGetInfoJSON is the JSON representation of the [AuthenticatorGetInfo] struct. The members mirror the
+// fields returned by the CTAP authenticatorGetInfo command.
+//
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-agid
 type AuthenticatorGetInfoJSON struct {
-	Versions                         []string                        `json:"versions"`
-	Extensions                       []string                        `json:"extensions"`
-	AaGUID                           string                          `json:"aaguid"`
-	Options                          map[string]bool                 `json:"options"`
-	MaxMsgSize                       uint                            `json:"maxMsgSize"`
-	PivUvAuthProtocols               []uint                          `json:"pinUvAuthProtocols"`
-	MaxCredentialCountInList         uint                            `json:"maxCredentialCountInList"`
-	MaxCredentialIdLength            uint                            `json:"maxCredentialIdLength"`
-	Transports                       []string                        `json:"transports"`
-	Algorithms                       []PublicKeyCredentialParameters `json:"algorithms"`
-	MaxSerializedLargeBlobArray      uint                            `json:"maxSerializedLargeBlobArray"`
-	ForcePINChange                   bool                            `json:"forcePINChange"`
-	MinPINLength                     uint                            `json:"minPINLength"`
-	FirmwareVersion                  uint                            `json:"firmwareVersion"`
-	MaxCredBlobLength                uint                            `json:"maxCredBlobLength"`
-	MaxRPIDsForSetMinPINLength       uint                            `json:"maxRPIDsForSetMinPINLength"`
-	PreferredPlatformUvAttempts      uint                            `json:"preferredPlatformUvAttempts"`
-	UvModality                       uint                            `json:"uvModality"`
-	Certifications                   map[string]float64              `json:"certifications"`
-	RemainingDiscoverableCredentials uint                            `json:"remainingDiscoverableCredentials"`
-	VendorPrototypeConfigCommands    []uint                          `json:"vendorPrototypeConfigCommands"`
+	// Versions is a list of supported CTAP versions.
+	Versions []string `json:"versions"`
+
+	// Extensions is a list of supported extensions.
+	Extensions []string `json:"extensions"`
+
+	// AaGUID is the claimed AAGUID.
+	AaGUID string `json:"aaguid"`
+
+	// Options is a map of supported options.
+	Options map[string]bool `json:"options"`
+
+	// MaxMsgSize is the maximum message size supported by the authenticator.
+	MaxMsgSize uint `json:"maxMsgSize"`
+
+	// PivUvAuthProtocols is a list of supported PIN/UV auth protocols in order of decreasing authenticator preference.
+	PivUvAuthProtocols []uint `json:"pinUvAuthProtocols"`
+
+	// MaxCredentialCountInList is the maximum number of credentials supported in credentialID list at a time.
+	MaxCredentialCountInList uint `json:"maxCredentialCountInList"`
+
+	// MaxCredentialIdLength is the maximum Credential ID Length supported by the authenticator.
+	MaxCredentialIdLength uint `json:"maxCredentialIdLength"`
+
+	// Transports is the list of supported transports.
+	Transports []string `json:"transports"`
+
+	// Algorithms is the list of supported algorithms for credential generation.
+	Algorithms []PublicKeyCredentialParameters `json:"algorithms"`
+
+	// MaxSerializedLargeBlobArray is the maximum size, in bytes, of the serialized large-blob array.
+	MaxSerializedLargeBlobArray uint `json:"maxSerializedLargeBlobArray"`
+
+	// ForcePINChange indicates if the PIN must be changed.
+	ForcePINChange bool `json:"forcePINChange"`
+
+	// MinPINLength specifies the current minimum PIN length, in Unicode code points.
+	MinPINLength uint `json:"minPINLength"`
+
+	// FirmwareVersion indicates the firmware version of the authenticator model identified by AAGUID.
+	FirmwareVersion uint `json:"firmwareVersion"`
+
+	// MaxCredBlobLength indicates the maximum credential blob length in bytes.
+	MaxCredBlobLength uint `json:"maxCredBlobLength"`
+
+	// MaxRPIDsForSetMinPINLength specifies the max number of RP IDs that can be set via setMinPINLength subcommand.
+	MaxRPIDsForSetMinPINLength uint `json:"maxRPIDsForSetMinPINLength"`
+
+	// PreferredPlatformUvAttempts specifies the preferred number of UV attempts before falling back to PIN.
+	PreferredPlatformUvAttempts uint `json:"preferredPlatformUvAttempts"`
+
+	// UvModality specifies the user verification modality supported by the authenticator.
+	UvModality uint `json:"uvModality"`
+
+	// Certifications specifies a map of authenticator certifications.
+	Certifications map[string]float64 `json:"certifications"`
+
+	// RemainingDiscoverableCredentials indicates the estimated number of additional discoverable credentials that
+	// can be stored.
+	RemainingDiscoverableCredentials uint `json:"remainingDiscoverableCredentials"`
+
+	// VendorPrototypeConfigCommands is a list of supported authenticatorConfig vendorCommandId values.
+	VendorPrototypeConfigCommands []uint `json:"vendorPrototypeConfigCommands"`
 }
 
 func (j AuthenticatorGetInfoJSON) Parse() (info AuthenticatorGetInfo, err error) {

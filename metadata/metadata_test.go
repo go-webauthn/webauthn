@@ -191,6 +191,11 @@ func TestIsUndesiredAuthenticatorStatus(t *testing.T) {
 			false,
 		},
 		{
+			"ShouldHandleRetiredUndesired",
+			Retired,
+			true,
+		},
+		{
 			"ShouldHandleRevokedUndesired",
 			Revoked,
 			true,
