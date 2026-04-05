@@ -312,3 +312,7 @@ func TestMetadata_ToMap(t *testing.T) {
 		})
 	}
 }
+
+func ptr[T any](in T) *T {
+	return &in
+}

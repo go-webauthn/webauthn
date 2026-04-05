@@ -10,60 +10,48 @@ type AuthenticationExtensionsClientOutputs struct {
 	PRF               *AuthenticationExtensionsPRFOutputs       `json:"prf,omitempty"`
 	ThirdPartyPayment *bool                                     `json:"thirdPartyPayment,omitempty"`
 
-	Extra map[string]json.RawMessage `json:"-"`
+	Raw json.RawMessage `json:"-"`
 }
 
 func (a *AuthenticationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err error) {
-	type alias AuthenticationExtensionsClientOutputs
+	a.Raw = append(a.Raw, data...)
 
-	var known alias
+	type Alias AuthenticationExtensionsClientOutputs
 
-	if err = json.Unmarshal(data, &known); err != nil {
-		return err
-	}
+	aux := &struct{ *Alias }{Alias: (*Alias)(a)}
 
-	*a = AuthenticationExtensionsClientOutputs(known)
-
-	var m map[string]json.RawMessage
-
-	if err = json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-
-	delete(m, "appid")
-	delete(m, "getCredBlob")
-	delete(m, "hmacGetSecret")
-	delete(m, "largeBlob")
-	delete(m, "prf")
-	delete(m, "thirdPartyPayment")
-
-	if len(m) > 0 {
-		a.Extra = m
-	}
-
-	return nil
+	return json.Unmarshal(data, aux)
 }
 
 func (a AuthenticationExtensionsClientOutputs) MarshalJSON() (data []byte, err error) {
-	type alias AuthenticationExtensionsClientOutputs
+	type Alias AuthenticationExtensionsClientOutputs
 
-	m := map[string]any{}
-
-	if data, err = json.Marshal(alias(a)); err != nil {
+	if data, err = json.Marshal(Alias(a)); err != nil {
 		return nil, err
 	}
 
-	if err = json.Unmarshal(data, &m); err != nil {
+	if len(a.Raw) == 0 {
+		return data, nil
+	}
+
+	var (
+		structMap, rawMap map[string]json.RawMessage
+	)
+
+	if err = json.Unmarshal(data, &structMap); err != nil {
 		return nil, err
 	}
 
-	for k, v := range a.Extra {
-		if _, exists := m[k]; !exists {
-			m[k] = v
-		}
+	if err = json.Unmarshal(a.Raw, &rawMap); err != nil {
+		return nil, err
 	}
 
-	return json.Marshal(m)
+	merged := rawMap
+	for k, v := range structMap {
+		merged[k] = v
+	}
+
+	return json.Marshal(merged)
 }
 
 type HMACGetSecretOutput struct {

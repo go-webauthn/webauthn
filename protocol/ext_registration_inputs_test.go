@@ -22,7 +22,3 @@ func TestRegistrationExtensionsClientInputs_JSON(t *testing.T) {
 
 	assert.Equal(t, have, result)
 }
-
-func ptr[T any](in T) *T {
-	return &in
-}

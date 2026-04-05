@@ -338,7 +338,7 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 			},
 			expected: StatusReport{
 				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-				SunsetDate:    timePtr(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)),
+				SunsetDate:    ptr(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)),
 			},
 		},
 		{
@@ -366,7 +366,7 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 				CertificationPolicyVersion:       "1.4.0",
 				CertificationProfiles:            []string{"consumer", "enterprise"},
 				CertificationRequirementsVersion: "1.2.0",
-				SunsetDate:                       timePtr(time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC)),
+				SunsetDate:                       ptr(time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC)),
 				FIPSRevision:                     3,
 				FIPSPhysicalSecurityLevel:        2,
 			},
@@ -450,8 +450,4 @@ func TestAuthenticatorGetInfoJSON_Parse(t *testing.T) {
 			}
 		})
 	}
-}
-
-func timePtr(t time.Time) *time.Time {
-	return &t
 }

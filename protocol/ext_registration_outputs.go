@@ -12,62 +12,48 @@ type RegistrationExtensionsClientOutputs struct {
 	MinPinLength     *uint                                   `json:"minPinLength,omitempty"`
 	PRF              *RegistrationExtensionsPRFOutputs       `json:"prf,omitempty"`
 
-	Extra map[string]json.RawMessage `json:"-"`
+	Raw json.RawMessage `json:"-"`
 }
 
 func (r *RegistrationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err error) {
-	type alias RegistrationExtensionsClientOutputs
+	r.Raw = append(r.Raw, data...)
 
-	var known alias
+	type Alias RegistrationExtensionsClientOutputs
 
-	if err = json.Unmarshal(data, &known); err != nil {
-		return err
-	}
+	aux := &struct{ *Alias }{Alias: (*Alias)(r)}
 
-	*r = RegistrationExtensionsClientOutputs(known)
-
-	var m map[string]json.RawMessage
-
-	if err = json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-
-	delete(m, "appidExclude")
-	delete(m, "credBlob")
-	delete(m, "credProps")
-	delete(m, "credProtect")
-	delete(m, "hmacCreateSecret")
-	delete(m, "largeBlob")
-	delete(m, "minPinLength")
-	delete(m, "prf")
-
-	if len(m) > 0 {
-		r.Extra = m
-	}
-
-	return nil
+	return json.Unmarshal(data, aux)
 }
 
 func (r RegistrationExtensionsClientOutputs) MarshalJSON() (data []byte, err error) {
-	type alias RegistrationExtensionsClientOutputs
+	type Alias RegistrationExtensionsClientOutputs
 
-	m := map[string]any{}
-
-	if data, err = json.Marshal(alias(r)); err != nil {
+	if data, err = json.Marshal(Alias(r)); err != nil {
 		return nil, err
 	}
 
-	if err = json.Unmarshal(data, &m); err != nil {
+	if len(r.Raw) == 0 {
+		return data, nil
+	}
+
+	var (
+		structMap, rawMap map[string]json.RawMessage
+	)
+
+	if err = json.Unmarshal(data, &structMap); err != nil {
 		return nil, err
 	}
 
-	for k, v := range r.Extra {
-		if _, exists := m[k]; !exists {
-			m[k] = v
-		}
+	if err = json.Unmarshal(r.Raw, &rawMap); err != nil {
+		return nil, err
 	}
 
-	return json.Marshal(m)
+	merged := rawMap
+	for k, v := range structMap {
+		merged[k] = v
+	}
+
+	return json.Marshal(merged)
 }
 
 type RegistrationExtensionsLargeBlobOutputs struct {
