@@ -109,22 +109,35 @@ func (f CredentialFlags) ProtocolValue() protocol.AuthenticatorFlags {
 	return f.raw
 }
 
-// CredentialAttestation holds the raw attestation data from a registration ceremony. These values are preserved so
-// that the [Credential] can be verified against the FIDO Metadata Service at a later date using [Credential.Verify].
+// CredentialAttestation holds the raw attestation data from a registration ceremony. These values are intentionally
+// stored in their original unparsed form rather than as parsed structures. This is critical because:
+//
+//   - It enables the [Credential] to be verified against the FIDO Metadata Service at a later date using
+//     [Credential.Verify], even long after the registration ceremony has completed.
+//   - The WebAuthn specification evolves over time, introducing new validation procedures. Preserving the raw data
+//     ensures that credentials created today can be re-validated against future rules without requiring re-registration.
+//   - Raw data serves as an auditable record of exactly what the authenticator and client provided during registration,
+//     independent of how the library parsed it at that point in time.
+//
+// Implementers MUST persist all fields of this struct. Omitting any field may prevent future verification.
 type CredentialAttestation struct {
-	// ClientDataJSON is the raw JSON-encoded client data from the registration response.
+	// ClientDataJSON is the raw JSON-encoded client data from the registration response. This is the verbatim value
+	// provided by the client and is used to recompute the client data hash during later verification.
 	ClientDataJSON []byte `json:"clientDataJSON"`
 
-	// ClientDataHash is the SHA-256 hash of ClientDataJSON computed during registration verification.
+	// ClientDataHash is the SHA-256 hash of ClientDataJSON computed during registration verification. If empty,
+	// [Credential.Verify] will recompute it from ClientDataJSON.
 	ClientDataHash []byte `json:"clientDataHash"`
 
-	// AuthenticatorData is the raw authenticator data from the registration response.
+	// AuthenticatorData is the raw authenticator data from the registration response as provided in the
+	// RegistrationResponseJSON. This is the unparsed byte representation that can be re-parsed for future validation.
 	AuthenticatorData []byte `json:"authenticatorData"`
 
 	// PublicKeyAlgorithm is the COSE algorithm identifier for the credential's public key.
 	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm"`
 
-	// Object is the raw CBOR-encoded attestation object from the registration response.
+	// Object is the raw CBOR-encoded attestation object from the registration response. This contains the attestation
+	// statement, format, and authenticator data needed by [Credential.Verify] to re-perform attestation verification.
 	Object []byte `json:"object"`
 }
 
@@ -138,7 +151,9 @@ func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 	}
 }
 
-// NewCredential will return a credential pointer on successful validation of a registration response.
+// NewCredential returns a [*Credential] from a successfully validated registration response. The returned Credential
+// includes a populated [CredentialAttestation] containing the raw attestation data needed for future verification;
+// see the [CredentialAttestation] documentation for why these values must be persisted.
 func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
 	credential = &Credential{
 		ID:              c.Response.AttestationObject.AuthData.AttData.CredentialID,
