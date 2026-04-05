@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,13 +18,13 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 		Extensions         AuthenticationExtensions
 	}
 
-	tests := []struct {
-		name   string
-		fields fields
-		want   [][]byte
+	testCases := []struct {
+		name     string
+		fields   fields
+		expected [][]byte
 	}{
 		{
-			"Correct Credential IDs",
+			"CorrectCredentialIDs",
 			fields{
 				Challenge: URLEncodedBase64([]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
 				Timeout:   60,
@@ -44,20 +43,18 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := &PublicKeyCredentialRequestOptions{
-				Challenge:          tt.fields.Challenge,
-				Timeout:            tt.fields.Timeout,
-				RelyingPartyID:     tt.fields.RelyingPartyID,
-				AllowedCredentials: tt.fields.AllowedCredentials,
-				UserVerification:   tt.fields.UserVerification,
-				Extensions:         tt.fields.Extensions,
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			options := &PublicKeyCredentialRequestOptions{
+				Challenge:          tc.fields.Challenge,
+				Timeout:            tc.fields.Timeout,
+				RelyingPartyID:     tc.fields.RelyingPartyID,
+				AllowedCredentials: tc.fields.AllowedCredentials,
+				UserVerification:   tc.fields.UserVerification,
+				Extensions:         tc.fields.Extensions,
 			}
 
-			if got := a.GetAllowedCredentialIDs(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("PublicKeyCredentialRequestOptions.GetAllowedCredentialIDs() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tc.expected, options.GetAllowedCredentialIDs())
 		})
 	}
 }

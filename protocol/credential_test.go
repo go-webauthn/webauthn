@@ -30,7 +30,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 		name       string
 		args       args
 		expected   *ParsedCredentialCreationData
-		errString  string
+		err        string
 		errType    string
 		errDetails string
 		errInfo    string
@@ -95,7 +95,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 					},
 				},
 			},
-			errString: "",
+			err: "",
 		},
 		{
 			name: "ShouldHandleTrailingData",
@@ -103,7 +103,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 				responseName: "trailingData",
 			},
 			expected:   nil,
-			errString:  "Parse error for Registration",
+			err:        "Parse error for Registration",
 			errType:    "invalid_request",
 			errDetails: "Parse error for Registration",
 			errInfo:    "body contains trailing data",
@@ -138,8 +138,8 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 						actual, err = ParseCredentialCreationResponseBytes(body)
 					}
 
-					if tc.errString != "" {
-						assert.EqualError(t, err, tc.errString)
+					if tc.err != "" {
+						assert.EqualError(t, err, tc.err)
 
 						AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
 
@@ -196,14 +196,15 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 		credParams         []CredentialParameter
 	}
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
+	testCases := []struct {
+		name     string
+		fields   fields
+		args     args
+		expected []byte
+		err      string
 	}{
 		{
-			name: "Successful Verification Test",
+			name: "SuccessfulVerificationTest",
 			fields: fields{
 				ParsedPublicKeyCredential: ParsedPublicKeyCredential{
 					ParsedCredential: ParsedCredential{
@@ -256,19 +257,26 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				relyingPartyOrigin: []string{`https://webauthn.io`},
 				credParams:         []CredentialParameter{{Type: "public-key", Algorithm: webauthncose.AlgES256}},
 			},
-			wantErr: false,
+			expected: []byte{0xa, 0xaf, 0x43, 0xda, 0x7e, 0xd3, 0x94, 0x98, 0x9b, 0xbc, 0x47, 0xcb, 0x0, 0x72, 0x6b, 0xbc, 0xf3, 0xa2, 0x4a, 0x49, 0x5f, 0x84, 0x4f, 0x45, 0x97, 0x91, 0x6a, 0x2d, 0xff, 0x47, 0xbc, 0xad},
+			err:      "",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			pcc := &ParsedCredentialCreationData{
-				ParsedPublicKeyCredential: tt.fields.ParsedPublicKeyCredential,
-				Response:                  tt.fields.Response,
-				Raw:                       tt.fields.Raw,
+				ParsedPublicKeyCredential: tc.fields.ParsedPublicKeyCredential,
+				Response:                  tc.fields.Response,
+				Raw:                       tc.fields.Raw,
 			}
-			if _, err := pcc.Verify(tt.args.storedChallenge.String(), tt.args.verifyUser, false, tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, nil, tt.args.credParams); (err != nil) != tt.wantErr {
-				t.Errorf("ParsedCredentialCreationData.Verify() error = %+v, wantErr %v", err, tt.wantErr)
+
+			actual, err := pcc.Verify(tc.args.storedChallenge.String(), tc.args.verifyUser, false, tc.args.relyingPartyID, tc.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, nil, tc.args.credParams)
+
+			assert.Equal(t, tc.expected, actual)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

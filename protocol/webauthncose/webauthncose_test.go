@@ -474,9 +474,9 @@ func TestParsePublicKeyValidation(t *testing.T) {
 	// COSE Key parameters per RFC 9052 §7 and RFC 9053 §2/§7:
 	//   1 (kty), 3 (alg), -1 (crv / n), -2 (x / e), -3 (y).
 	testCases := []struct {
-		name    string
-		input   []byte
-		wantErr string
+		name  string
+		input []byte
+		err   string
 	}{
 		{
 			"ShouldAcceptValidOKPKey",
@@ -496,7 +496,7 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		{
 			"ShouldRejectOKPWithInvalidXCoordLength",
 			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-2: make([]byte, 16)}),
-			"OKP key x coordinate has invalid length",
+			"OKP key x coordinate has invalid length 16, expected 32",
 		},
 		{
 			"ShouldRejectEC2WithUnsupportedAlgorithm",
@@ -521,7 +521,7 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		{
 			"ShouldRejectRSAWithEmptyExponent",
 			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: []byte{0xFF}, -2: []byte{}}),
-			"RSA key contains invalid exponent",
+			"RSA key contains invalid exponent: invalid exponent length",
 		},
 	}
 
@@ -529,10 +529,9 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := ParsePublicKey(tc.input)
 
-			if tc.wantErr != "" {
+			if tc.err != "" {
 				assert.Nil(t, result)
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.wantErr)
+				assert.EqualError(t, err, tc.err)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)

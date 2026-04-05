@@ -1,13 +1,19 @@
 package webauthn
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
+	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
 func TestNewCredentialFlags(t *testing.T) {
@@ -67,23 +73,230 @@ func TestNewCredentialFlags(t *testing.T) {
 }
 
 func TestCredential_Verify(t *testing.T) {
+	assert.EqualError(t, Credential{}.Verify(nil), "error verifying credential: the metadata provider must be provided but it's nil")
+
 	testCases := []struct {
-		name string
-		have Credential
-		err  string
+		name       string
+		credential func(t *testing.T) Credential
+		setup      func(t *testing.T, provider *mocks.MockMetadataProvider)
+		err        string
 	}{
 		{
-			name: "ShouldFailNilProvider",
-			have: Credential{},
-			err:  "error verifying credential: the metadata provider must be provided but it's nil",
+			name: "ShouldFailParseError",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return Credential{
+					Attestation: CredentialAttestation{
+						ClientDataJSON: []byte(`{}`),
+						Object:         []byte("not-valid-cbor"),
+					},
+				}
+			},
+			err: "error verifying credential: error parsing attestation: Error parsing the authenticator response",
+		},
+		{
+			name: "ShouldVerifyNoneFormatWithClientDataHash",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromNoneAttestation(t)
+			},
+		},
+		{
+			name: "ShouldVerifyNoneFormatWithEmptyClientDataHash",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromNoneAttestation(t)
+				credential.Attestation.ClientDataHash = nil
+
+				return credential
+			},
+		},
+		{
+			name: "ShouldVerifyNoneFormatWithTransports",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromNoneAttestation(t)
+				credential.Transport = []protocol.AuthenticatorTransport{protocol.USB, protocol.NFC}
+
+				return credential
+			},
+		},
+		{
+			name: "ShouldVerifyPackedFormatWithMetadataValidation",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromPackedAttestation(t)
+			},
+			setup: func(t *testing.T, provider *mocks.MockMetadataProvider) {
+				t.Helper()
+
+				provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&metadata.Entry{
+					MetadataStatement: metadata.Statement{
+						AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+					},
+				}, nil)
+				provider.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
+				provider.EXPECT().GetValidateStatus(gomock.Any()).Return(false)
+				provider.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)
+			},
+		},
+		{
+			name: "ShouldFailPackedFormatMetadataGetEntryError",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromPackedAttestation(t)
+			},
+			setup: func(t *testing.T, provider *mocks.MockMetadataProvider) {
+				t.Helper()
+
+				provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("entry lookup failed"))
+			},
+			err: "error verifying credential: error verifying attestation: Failed to validate authenticator metadata for Authenticator Attestation GUID '2369d4d0-13ce-48cb-9f26-f7ed8c9a6068'. Error occurred retrieving the metadata entry: entry lookup failed",
+		},
+		{
+			name: "ShouldFailPackedFormatMetadataValidateStatus",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromPackedAttestation(t)
+			},
+			setup: func(t *testing.T, provider *mocks.MockMetadataProvider) {
+				t.Helper()
+
+				provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&metadata.Entry{
+					MetadataStatement: metadata.Statement{
+						AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+					},
+				}, nil)
+				provider.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
+				provider.EXPECT().GetValidateStatus(gomock.Any()).Return(true)
+				provider.EXPECT().ValidateStatusReports(gomock.Any(), gomock.Any()).Return(fmt.Errorf("status report invalid"))
+			},
+			err: "error verifying credential: error verifying attestation: Failed to validate authenticator metadata for Authenticator Attestation GUID '2369d4d0-13ce-48cb-9f26-f7ed8c9a6068'. Error occurred validating the authenticator status: status report invalid",
+		},
+		{
+			name: "ShouldVerifyPackedFormatMetadataEntryNilNoValidation",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromPackedAttestation(t)
+			},
+			setup: func(t *testing.T, provider *mocks.MockMetadataProvider) {
+				t.Helper()
+
+				provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(nil, nil)
+				provider.EXPECT().GetValidateEntry(gomock.Any()).Return(false)
+			},
+		},
+		{
+			name: "ShouldFailPackedFormatMetadataEntryNilValidateEntryRequired",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromPackedAttestation(t)
+			},
+			setup: func(t *testing.T, provider *mocks.MockMetadataProvider) {
+				t.Helper()
+
+				provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(nil, nil)
+				provider.EXPECT().GetValidateEntry(gomock.Any()).Return(true)
+			},
+			err: "error verifying credential: error verifying attestation: Failed to validate authenticator metadata for Authenticator Attestation GUID '2369d4d0-13ce-48cb-9f26-f7ed8c9a6068'. The authenticator has no registered metadata.",
+		},
+		{
+			name: "ShouldVerifyPackedFormatWithAttestationTypeValidation",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromPackedAttestation(t)
+			},
+			setup: func(t *testing.T, provider *mocks.MockMetadataProvider) {
+				t.Helper()
+
+				provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&metadata.Entry{
+					MetadataStatement: metadata.Statement{
+						AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+					},
+				}, nil)
+				provider.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true)
+				provider.EXPECT().GetValidateStatus(gomock.Any()).Return(false)
+				provider.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)
+			},
+		},
+		{
+			name: "ShouldFailPackedFormatAttestationTypeMismatch",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return testCredentialFromPackedAttestation(t)
+			},
+			setup: func(t *testing.T, provider *mocks.MockMetadataProvider) {
+				t.Helper()
+
+				provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&metadata.Entry{
+					MetadataStatement: metadata.Statement{
+						AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicSurrogate},
+					},
+				}, nil)
+				provider.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true)
+			},
+			err: "error verifying credential: error verifying attestation: Failed to validate authenticator metadata for Authenticator Attestation GUID '2369d4d0-13ce-48cb-9f26-f7ed8c9a6068'. The attestation type 'basic_full' is not known to be used by this authenticator.",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.have.Verify(nil)
-			assert.EqualError(t, err, tc.err)
+			ctrl := gomock.NewController(t)
+
+			provider := mocks.NewMockMetadataProvider(ctrl)
+
+			if tc.setup != nil {
+				tc.setup(t, provider)
+			}
+
+			credential := tc.credential(t)
+
+			err := credential.Verify(provider)
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+			}
 		})
+	}
+}
+
+// testCredentialFromNoneAttestation constructs a Credential with valid "none" format attestation data for testing.
+func testCredentialFromNoneAttestation(t *testing.T) Credential {
+	t.Helper()
+
+	attObject, err := base64.RawURLEncoding.DecodeString("o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVjEdKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBBAAAAAAAAAAAAAAAAAAAAAAAAAAAAQOsa7QYSUFukFOLTmgeK6x2ktirNMgwy_6vIwwtegxI2flS1X-JAkZL5dsadg-9bEz2J7PnsbB0B08txvsyUSvKlAQIDJiABIVggLKF5xS0_BntttUIrm2Z2tgZ4uQDwllbdIfrrBMABCNciWCDHwin8Zdkr56iSIh0MrB5qZiEzYLQpEOREhMUkY6q4Vw")
+	require.NoError(t, err)
+
+	clientDataJSON, err := base64.RawURLEncoding.DecodeString("eyJjaGFsbGVuZ2UiOiJXOEd6RlU4cEdqaG9SYldyTERsYW1BZnFfeTRTMUNaRzFWdW9lUkxBUnJFIiwib3JpZ2luIjoiaHR0cHM6Ly93ZWJhdXRobi5pbyIsInR5cGUiOiJ3ZWJhdXRobi5jcmVhdGUifQ")
+	require.NoError(t, err)
+
+	clientDataHash := sha256.Sum256(clientDataJSON)
+
+	credentialPublicKey, err := base64.RawURLEncoding.DecodeString("pSJYIMfCKfxl2SvnqJIiHQysHmpmITNgtCkQ5ESExSRjqrhXAQIDJiABIVggLKF5xS0_BntttUIrm2Z2tgZ4uQDwllbdIfrrBMABCNc")
+	require.NoError(t, err)
+
+	return Credential{
+		ID:              []byte("credential-id"),
+		PublicKey:       credentialPublicKey,
+		AttestationType: "none",
+		Attestation: CredentialAttestation{
+			ClientDataJSON: clientDataJSON,
+			ClientDataHash: clientDataHash[:],
+			Object:         attObject,
+		},
 	}
 }
 
@@ -270,5 +483,43 @@ func TestCredentials_CredentialDescriptors(t *testing.T) {
 
 			assert.Equal(t, tc.expectedJSON, string(data))
 		})
+	}
+}
+
+// testCredentialFromPackedAttestation constructs a Credential with valid "packed" format attestation data for testing.
+func testCredentialFromPackedAttestation(t *testing.T) Credential {
+	t.Helper()
+
+	response := `{
+		"id":"owBY6F5857tda9Pg5iFNCg6ksHpGOYhrNqIn46pkvhEMKIgNGcKS-vDGAUEroq0-VHnl1LhzQkPRQmYBTHjGcpLKZKSLa2m2ANI-91HjXzoJd_zFOiEnu7CDwQTff9KZ6uPlx7kUK-JJOHar-IyRKcNhc_kOJ2ezglmj1JYuIJLoDEyXlKkkviFdwk1vbWLnO3p_oWROUeIgH_S4CLVLPIJXkPe0YvMgp3ESs9CsrN6kvMTysVRIt_h5KUqpZo0TKCL96zwFk1X_2PwCLKWmOxVL35lJfUKOHG9rc3bmKlqZR6aOgZjerY6BpU8BTJkAqfOvdVlqFeEcywJQgveR7FOvnVtoqzd5oaEwjA",
+		"rawId":"owBY6F5857tda9Pg5iFNCg6ksHpGOYhrNqIn46pkvhEMKIgNGcKS-vDGAUEroq0-VHnl1LhzQkPRQmYBTHjGcpLKZKSLa2m2ANI-91HjXzoJd_zFOiEnu7CDwQTff9KZ6uPlx7kUK-JJOHar-IyRKcNhc_kOJ2ezglmj1JYuIJLoDEyXlKkkviFdwk1vbWLnO3p_oWROUeIgH_S4CLVLPIJXkPe0YvMgp3ESs9CsrN6kvMTysVRIt_h5KUqpZo0TKCL96zwFk1X_2PwCLKWmOxVL35lJfUKOHG9rc3bmKlqZR6aOgZjerY6BpU8BTJkAqfOvdVlqFeEcywJQgveR7FOvnVtoqzd5oaEwjA",
+		"response":{
+			"attestationObject":"o2NmbXRmcGFja2VkZ2F0dFN0bXSjY2FsZyZjc2lnWEgwRgIhAIXRMqmC2_bHTkKUwOvLvmAikuQPCk__9clILwjhOz3VAiEApJXTrN4WMiPwFXqTIh0oI8AZBm3vs-y_UotbQFSnX99jeDVjgVkCqzCCAqcwggJMoAMCAQICFGqj6W3EVhRWQJPun0qqCMyTlnqKMAoGCCqGSM49BAMCMC0xETAPBgNVBAoMCFNvbG9LZXlzMQswCQYDVQQGEwJDSDELMAkGA1UEAwwCRjEwIBcNMjEwNTIzMDA1MjA2WhgPMjA3MTA1MTEwMDUyMDZaMIGDMQswCQYDVQQGEwJVUzERMA8GA1UECgwIU29sb0tleXMxIjAgBgNVBAsMGUF1dGhlbnRpY2F0b3IgQXR0ZXN0YXRpb24xPTA7BgNVBAMMNFNvbG8gMiBORkMrVVNCLUMgMjM2OUQ0RDAxM0NFNDhDQjlGMjZGN0VEOEM5QTYwNjggQjIwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAS6N5V2fT-agh34bRiW--Wl6CQPSsnLqqSEID0t5RRKjjl1NDI__mzuyYuOrWyb5yzGZRHgnHq65cm2ROpxo6AOo4HwMIHtMB0GA1UdDgQWBBQ6CEDC5W8_zAMOhVgV8wHJI8n3bzAfBgNVHSMEGDAWgBRBa7ZL76IZDeRiX_0pBJa5gim0-DAJBgNVHRMEAjAAMAsGA1UdDwQEAwIE8DAyBggrBgEFBQcBAQQmMCQwIgYIKwYBBQUHMAKGFmh0dHA6Ly9pLnMycGtpLm5ldC9mMS8wJwYDVR0fBCAwHjAcoBqgGIYWaHR0cDovL2MuczJwa2kubmV0L3IxLzAhBgsrBgEEAYLlHAEBBAQSBBAjadTQE85Iy58m9-2MmmBoMBMGCysGAQQBguUcAgEBBAQDAgQwMAoGCCqGSM49BAMCA0kAMEYCIQCP82Rolr0U2FvOJq53AZYcA6xfC4-cNDczvf0FtU1SQAIhAIvb21Z3D8RCvwk2-Ryn4wpsGnn2vma6Bw3E1f48hyVwaGF1dGhEYXRhWQFtarm78N-aFvkduzO7sTL6-dF8eCxIJsbscOzuWNl-9SpBAAAAJyNp1NATzkjLnyb37YyaYGgBDKMAWOhefOe7XWvT4OYhTQoOpLB6RjmIazaiJ-OqZL4RDCiIDRnCkvrwxgFBK6KtPlR55dS4c0JD0UJmAUx4xnKSymSki2tptgDSPvdR4186CXf8xTohJ7uwg8EE33_Smerj5ce5FCviSTh2q_iMkSnDYXP5Didns4JZo9SWLiCS6AxMl5SpJL4hXcJNb21i5zt6f6FkTlHiIB_0uAi1SzyCV5D3tGLzIKdxErPQrKzepLzE8rFUSLf4eSlKqWaNEygi_es8BZNV_9j8AiylpjsVS9-ZSX1Cjhxva3N25ipamUemjoGY3q2OgaVPAUyZAKnzr3VZahXhHMsCUIL3kexTr51baKs3eaGhMIykAQEDJyAGIVggjz9UkJ7cKooE3blSuzlqxkdLppMuFl3CIiST8odWS6k",
+			"clientDataJSON":"eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiQ1dieENUMEc0TDJ5T1JwQkw2U1dWaWd3ZTJrUUVYQmhvNUw2d0U0Ny1FcyIsIm9yaWdpbiI6Imh0dHBzOi8vd2ViYXV0aG4uZmlyc3R5ZWFyLmlkLmF1IiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ"
+		},
+	"type":"public-key"
+	}`
+
+	var ccr protocol.CredentialCreationResponse
+
+	require.NoError(t, json.Unmarshal([]byte(response), &ccr))
+
+	parsed, err := ccr.AttestationResponse.Parse()
+	require.NoError(t, err)
+
+	clientDataHash := sha256.Sum256(ccr.AttestationResponse.ClientDataJSON)
+
+	return Credential{
+		ID:              ccr.RawID,
+		PublicKey:       parsed.AttestationObject.AuthData.AttData.CredentialPublicKey,
+		AttestationType: "packed",
+		Authenticator: Authenticator{
+			AAGUID: parsed.AttestationObject.AuthData.AttData.AAGUID,
+		},
+		Attestation: CredentialAttestation{
+			ClientDataJSON: ccr.AttestationResponse.ClientDataJSON,
+			ClientDataHash: clientDataHash[:],
+			Object:         ccr.AttestationResponse.AttestationObject,
+		},
 	}
 }

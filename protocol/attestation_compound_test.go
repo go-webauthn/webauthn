@@ -38,10 +38,10 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		}
 
 		testCases := []struct {
-			name      string
-			mutate    func(a AttestationObject) AttestationObject
-			wantType  string
-			wantError string
+			name     string
+			mutate   func(a AttestationObject) AttestationObject
+			expected string
+			err      string
 		}{
 			{
 				name: "ShouldRejectInvalidAaguidBytes",
@@ -50,8 +50,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "Error occurred parsing AAGUID",
+				expected: ErrInvalidAttestation.Type,
+				err:      "Error occurred parsing AAGUID",
 			},
 			{
 				name: "ShouldRejectMissingAttStmt",
@@ -60,8 +60,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "Compound statement missing attStmt",
+				expected: ErrInvalidAttestation.Type,
+				err:      "Compound statement missing attStmt",
 			},
 			{
 				name: "ShouldRejectAttStmtNotArray",
@@ -70,8 +70,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "Compound statement attStmt isn't an array",
+				expected: ErrInvalidAttestation.Type,
+				err:      "Compound statement attStmt isn't an array",
 			},
 			{
 				name: "ShouldRejectAttStmtWithLessThanTwoItems",
@@ -82,8 +82,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "at least two",
+				expected: ErrInvalidAttestation.Type,
+				err:      "at least two",
 			},
 			{
 				name: "ShouldRejectAttStmtContainingNonObject",
@@ -95,8 +95,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "isn't an object",
+				expected: ErrInvalidAttestation.Type,
+				err:      "isn't an object",
 			},
 			{
 				name: "ShouldRejectSubStatementMissingFmt",
@@ -108,8 +108,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "does not have a format",
+				expected: ErrInvalidAttestation.Type,
+				err:      "does not have a format",
 			},
 			{
 				name: "ShouldRejectSubStatementMissingAttStmt",
@@ -121,8 +121,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "does not have an attestation statement",
+				expected: ErrInvalidAttestation.Type,
+				err:      "does not have an attestation statement",
 			},
 			{
 				name: "ShouldRejectSubStatementWithCompoundFmt",
@@ -134,8 +134,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "format of compound",
+				expected: ErrInvalidAttestation.Type,
+				err:      "format of compound",
 			},
 			{
 				name: "ShouldRejectSubStatementWithEmptyFmt",
@@ -147,8 +147,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrInvalidAttestation.Type,
-				wantError: "empty format",
+				expected: ErrInvalidAttestation.Type,
+				err:      "empty format",
 			},
 			{
 				name: "ShouldRejectUnsupportedSubStatementFmt",
@@ -160,8 +160,8 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 					return a
 				},
-				wantType:  ErrAttestationFormat.Type,
-				wantError: "unsupported",
+				expected: ErrAttestationFormat.Type,
+				err:      "unsupported",
 			},
 		}
 
@@ -177,12 +177,12 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				protoErr, ok := err.(*Error)
 				require.True(t, ok, "expected *Error, got %T: %v", err, err)
 
-				if tc.wantType != "" {
-					assert.Equal(t, tc.wantType, protoErr.Type)
+				if tc.expected != "" {
+					assert.Equal(t, tc.expected, protoErr.Type)
 				}
 
 				combined := protoErr.Details + " " + protoErr.DevInfo
-				assert.Contains(t, combined, tc.wantError)
+				assert.Contains(t, combined, tc.err)
 			})
 		}
 	})
@@ -286,7 +286,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
 		require.Error(t, err)
-		assert.True(t, errors.Is(err, subErr), "expected returned error to match subErr; got %T: %v", err, err)
+		assert.True(t, errors.Is(err, subErr))
 	})
 
 	t.Run("ShouldWrapMetadataValidationFailure", func(t *testing.T) {
@@ -328,7 +328,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		require.Error(t, err)
 
 		protoErr, ok := err.(*Error)
-		require.True(t, ok, "expected *Error, got %T: %v", err, err)
+		require.True(t, ok)
 
 		assert.Equal(t, ErrInvalidAttestation.Type, protoErr.Type)
 		assert.Contains(t, protoErr.DevInfo, "Error occurred validating metadata")

@@ -349,8 +349,8 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 		require.Error(t, err)
 
 		assert.Equal(t, ErrInvalidAttestation.Type, err.Type)
-		assert.Contains(t, err.Details, "invalid Authenticator Identity Key SAN data")
-		assert.Contains(t, err.DevInfo, "Error occurred parsing SAN extension")
+		assert.Equal(t, "Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.", err.Details)
+		assert.Equal(t, "Error occurred parsing SAN extension: asn1: syntax error: data truncated", err.DevInfo)
 	})
 
 	t.Run("ShouldFailWhenParentMissingAikEku", func(t *testing.T) {
@@ -375,8 +375,7 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 		}
 
 		err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "missing required Extended Key Usage")
+		assert.EqualError(t, err, "Attestation Identity Key certificate missing required Extended Key Usage.")
 	})
 
 	t.Run("ShouldSucceedAndMutateCertificates", func(t *testing.T) {
@@ -430,8 +429,7 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 		}
 
 		err := tpmParseAIKAttCA(leaf, nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "missing required Extended Key Usage")
+		assert.EqualError(t, err, "Attestation Identity Key certificate missing required Extended Key Usage.")
 	})
 }
 
@@ -463,22 +461,19 @@ func TestTpm2Exponent(t *testing.T) {
 func TestTpm2NameDigest(t *testing.T) {
 	t.Run("ShouldRejectNameTooShort", func(t *testing.T) {
 		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: []byte{0x00, 0x0B}})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "name too short")
+		assert.EqualError(t, err, "name too short")
 	})
 
 	t.Run("ShouldRejectInvalidHashAlgorithm", func(t *testing.T) {
 		buf := []byte{0xFF, 0xFF, 0x01}
 		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid hash algorithm")
+		assert.EqualError(t, err, "invalid hash algorithm: unsupported hash algorithm: 65535")
 	})
 
 	t.Run("ShouldRejectDigestLengthMismatch", func(t *testing.T) {
 		buf := []byte{0x00, 0x0B, 0xAA}
 		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid name digest length")
+		assert.EqualError(t, err, "invalid name digest length: 1")
 	})
 
 	t.Run("ShouldReturnAlgAndDigestWhenValid", func(t *testing.T) {
@@ -519,9 +514,8 @@ func TestTpm2NameMatch(t *testing.T) {
 		}
 
 		match, err := tpm2NameMatch(certInfo, &pubArea)
-		require.Error(t, err)
+		assert.EqualError(t, err, "invalid name digest algorithm: invalid hash algorithm: unsupported hash algorithm: 65535")
 		assert.False(t, match)
-		assert.Contains(t, err.Error(), "invalid name digest algorithm")
 	})
 
 	t.Run("ShouldReturnFalseWhenAttestedNameDoesNotMatchPubArea", func(t *testing.T) {
@@ -563,7 +557,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 }
 
 func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
-	tests := []struct {
+	testCases := []struct {
 		name            string
 		att             AttestationObject
 		attestationType string
@@ -641,7 +635,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 			"Unsupported Public Key Type",
 		},
 	}
-	for _, tc := range tests {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(tc.att, nil, nil)
 
@@ -672,7 +666,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 		rsaParams *TPMRSATestParameters
 		eccParams *TPMECCTestParameters
 		cpk       []byte
-		wantErr   string
+		err       string
 	}{
 		{
 			"CurveMismatch",
@@ -755,8 +749,8 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			}
 
 			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
-			if tc.wantErr != "" {
-				assert.EqualError(t, err, tc.wantErr)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
 			} else {
 				assert.Equal(t, "attca", attestationType)
 			}
@@ -922,32 +916,34 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 		return q
 	}
 
-	tests := []struct {
-		name    string
-		x5c     []any
-		wantErr string
+	testCases := []struct {
+		name string
+		x5c  []any
+		err  string
 	}{
 		{
-			"TPM Negative Test x5c empty",
+			"TPMNegativeTestX5CEmpty",
 			make([]any, 1),
 			"Error getting certificate from x5c cert chain",
 		},
 		{
-			"TPM Negative Test x5c can't parse",
+			"TPMNegativeTestX5CCanNotParse",
 			makeX5c(make([]byte, 1)),
 			"Error parsing certificate from ASN.1",
 		},
 	}
 
-	for _, tt := range tests {
-		att.AttStatement[stmtX5C] = tt.x5c
-		attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			att.AttStatement[stmtX5C] = tc.x5c
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil)
 
-		if tt.wantErr != "" {
-			assert.Contains(t, err.Error(), tt.wantErr)
-		} else {
-			assert.Equal(t, "attca", attestationType)
-		}
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.Equal(t, "attca", attestationType)
+			}
+		})
 	}
 }
 

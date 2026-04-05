@@ -1,10 +1,10 @@
 package webauthn
 
 import (
-	"reflect"
 	"testing"
 
-	p "github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAuthenticator_UpdateCounter(t *testing.T) {
@@ -18,14 +18,14 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 		authDataCount uint32
 	}
 
-	tests := []struct {
-		name        string
-		fields      fields
-		args        args
-		wantWarning bool
+	testCases := []struct {
+		name     string
+		fields   fields
+		args     args
+		expected bool
 	}{
 		{
-			"Increased counter",
+			"IncreasedCounter",
 			fields{
 				AAGUID:       make([]byte, 16),
 				SignCount:    1,
@@ -37,7 +37,7 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 			false,
 		},
 		{
-			"Unchanged counter",
+			"UnchangedCounter",
 			fields{
 				AAGUID:       make([]byte, 16),
 				SignCount:    1,
@@ -49,7 +49,7 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 			true,
 		},
 		{
-			"Decreased counter",
+			"DecreasedCounter",
 			fields{
 				AAGUID:       make([]byte, 16),
 				SignCount:    2,
@@ -61,7 +61,7 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 			true,
 		},
 		{
-			"Zero counter",
+			"ZeroCounter",
 			fields{
 				AAGUID:       make([]byte, 16),
 				SignCount:    0,
@@ -73,7 +73,7 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 			false,
 		},
 		{
-			"Counter returned to zero",
+			"CounterReturnedToZero",
 			fields{
 				AAGUID:       make([]byte, 16),
 				SignCount:    1,
@@ -86,32 +86,23 @@ func TestAuthenticator_UpdateCounter(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := &Authenticator{
-				AAGUID:       tt.fields.AAGUID,
-				SignCount:    tt.fields.SignCount,
-				CloneWarning: tt.fields.CloneWarning,
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			authenticator := &Authenticator{
+				AAGUID:       tc.fields.AAGUID,
+				SignCount:    tc.fields.SignCount,
+				CloneWarning: tc.fields.CloneWarning,
 			}
 
-			previousSignCount := a.SignCount
-			a.UpdateCounter(tt.args.authDataCount)
+			signCount := authenticator.SignCount
+			authenticator.UpdateCounter(tc.args.authDataCount)
 
-			if a.CloneWarning != tt.wantWarning {
-				t.Errorf("Clone warning result [%v] does not match expectation: [%v]", a.CloneWarning, tt.wantWarning)
-				return
-			}
+			assert.Equal(t, tc.expected, authenticator.CloneWarning)
 
-			// If there's no clone warning then, assert that the SignCount is updated.
-			if !a.CloneWarning && a.SignCount != tt.args.authDataCount {
-				t.Errorf("Sign Count value [%v] does not match expectation [%v]", a.SignCount, tt.args.authDataCount)
-				return
-			}
-
-			// If there's clone warning then, assert that the Sign Count remains unchanged.
-			if a.CloneWarning && a.SignCount != previousSignCount {
-				t.Errorf("Sign Count value [%v] does not match expectation [%v]", a.SignCount, tt.args.authDataCount)
-				return
+			if authenticator.CloneWarning {
+				assert.Equal(t, signCount, authenticator.SignCount)
+			} else {
+				assert.Equal(t, tc.args.authDataCount, authenticator.SignCount)
 			}
 		})
 	}
@@ -124,42 +115,40 @@ func TestSelectAuthenticator(t *testing.T) {
 		uv  string
 	}
 
-	tests := []struct {
-		name string
-		args args
-		want p.AuthenticatorSelection
+	testCases := []struct {
+		name     string
+		args     args
+		expected protocol.AuthenticatorSelection
 	}{
-		{"Generate Correct Authenticator Selection",
+		{"GenerateCorrectAuthenticatorSelection",
 			args{
 				att: "platform",
-				rrk: p.ResidentKeyNotRequired(),
+				rrk: protocol.ResidentKeyNotRequired(),
 				uv:  "preferred",
 			},
-			p.AuthenticatorSelection{
-				AuthenticatorAttachment: p.Platform,
-				RequireResidentKey:      p.ResidentKeyNotRequired(),
-				UserVerification:        p.VerificationPreferred,
+			protocol.AuthenticatorSelection{
+				AuthenticatorAttachment: protocol.Platform,
+				RequireResidentKey:      protocol.ResidentKeyNotRequired(),
+				UserVerification:        protocol.VerificationPreferred,
 			},
 		},
-		{"Generate Correct Authenticator Selection",
+		{"GenerateCorrectAuthenticatorSelection",
 			args{
 				att: "cross-platform",
-				rrk: p.ResidentKeyRequired(),
+				rrk: protocol.ResidentKeyRequired(),
 				uv:  "required",
 			},
-			p.AuthenticatorSelection{
-				AuthenticatorAttachment: p.CrossPlatform,
-				RequireResidentKey:      p.ResidentKeyRequired(),
-				UserVerification:        p.VerificationRequired,
+			protocol.AuthenticatorSelection{
+				AuthenticatorAttachment: protocol.CrossPlatform,
+				RequireResidentKey:      protocol.ResidentKeyRequired(),
+				UserVerification:        protocol.VerificationRequired,
 			},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := SelectAuthenticator(tt.args.att, tt.args.rrk, tt.args.uv); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("SelectAuthenticator() = %v, want %v", got, tt.want)
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, SelectAuthenticator(tc.args.att, tc.args.rrk, tc.args.uv))
 		})
 	}
 }

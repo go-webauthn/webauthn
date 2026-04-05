@@ -3,6 +3,8 @@ package webauthn
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,8 +13,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
+	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
 func TestLogin_FinishLoginFailure(t *testing.T) {
@@ -772,4 +777,614 @@ func TestLoginOptions(t *testing.T) {
 			assert.Equal(t, tc.expected, *opts)
 		})
 	}
+}
+
+func TestValidateLogin_Full(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	userID := []byte("test-user-id")
+
+	t.Run("ShouldSucceedNoAllowedCredentials", func(t *testing.T) {
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: credPubKey,
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+		assert.Equal(t, credentialID, credential.ID)
+		assert.True(t, credential.Flags.UserPresent)
+	})
+
+	t.Run("ShouldSucceedWithAllowedCredentials", func(t *testing.T) {
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: credPubKey,
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:               userID,
+			Challenge:            challenge,
+			AllowedCredentialIDs: [][]byte{credentialID},
+		}
+
+		credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+	})
+
+	t.Run("ShouldFailUserHandleMismatch", func(t *testing.T) {
+		parsedWithUserHandle, _, challengeUH, credIDUH := testLoginSpecVectorNoneES256(t)
+		parsedWithUserHandle.Response.UserHandle = []byte("wrong-user-handle")
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credIDUH,
+					PublicKey: credPubKey,
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challengeUH,
+		}
+
+		credential, err := webauthn.ValidateLogin(user, session, parsedWithUserHandle)
+		assert.Nil(t, credential)
+		assert.EqualError(t, err, "User handle and User ID do not match")
+	})
+
+	t.Run("ShouldFailCredentialNotFound", func(t *testing.T) {
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        []byte("different-credential-id"),
+					PublicKey: credPubKey,
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+		assert.Nil(t, credential)
+		assert.EqualError(t, err, "Unable to find the credential for the returned credential ID")
+	})
+
+	t.Run("ShouldFailBackupEligibleFlagMismatch", func(t *testing.T) {
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: credPubKey,
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: false,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+		assert.Nil(t, credential)
+		assert.EqualError(t, err, "Backup Eligible flag inconsistency detected during login validation")
+	})
+
+	t.Run("ShouldFailVerifyError", func(t *testing.T) {
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: []byte("invalid-public-key"),
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+		assert.Nil(t, credential)
+		require.Error(t, err)
+	})
+
+	t.Run("ShouldSucceedWithMDSNilAAGUID", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+				MDS:       provider,
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: credPubKey,
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(nil, nil)
+		provider.EXPECT().GetValidateEntryPermitZeroAAGUID(gomock.Any()).Return(true)
+
+		credential, err := w.ValidateLogin(user, session, parsedResponse)
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+	})
+
+	t.Run("ShouldFailWithMDSGetEntryError", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+				MDS:       provider,
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: credPubKey,
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("entry not found"))
+
+		credential, err := w.ValidateLogin(user, session, parsedResponse)
+		assert.Nil(t, credential)
+		assert.EqualError(t, err, "Failed to validate credential record metadata")
+	})
+
+	t.Run("ShouldSucceedWithMDSAndAAGUID", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+				MDS:       provider,
+			},
+		}
+
+		aaguid := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:              credentialID,
+					PublicKey:       credPubKey,
+					AttestationType: "packed",
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+					Authenticator: Authenticator{
+						AAGUID: aaguid,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(nil, nil)
+		provider.EXPECT().GetValidateEntry(gomock.Any()).Return(false)
+
+		credential, err := w.ValidateLogin(user, session, parsedResponse)
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+	})
+
+	t.Run("ShouldFailWithMDSInvalidAAGUID", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+				MDS:       provider,
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: credPubKey,
+					Authenticator: Authenticator{
+						AAGUID: []byte{0x01, 0x02, 0x03},
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		credential, err := w.ValidateLogin(user, session, parsedResponse)
+		assert.Nil(t, credential)
+		assert.EqualError(t, err, "Failed to decode AAGUID")
+	})
+
+	t.Run("ShouldSucceedWithMDSValidateStatusReports", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+				MDS:       provider,
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:              credentialID,
+					PublicKey:       credPubKey,
+					AttestationType: "packed",
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&metadata.Entry{
+			MetadataStatement: metadata.Statement{
+				AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+			},
+		}, nil)
+		provider.EXPECT().GetValidateStatus(gomock.Any()).Return(true)
+		provider.EXPECT().ValidateStatusReports(gomock.Any(), gomock.Any()).Return(nil)
+		provider.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)
+
+		credential, err := w.ValidateLogin(user, session, parsedResponse)
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+	})
+}
+
+func TestValidatePasskeyLogin_Full(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	userID := []byte("test-user-id")
+	parsedResponse.Response.UserHandle = userID
+
+	t.Run("ShouldSucceed", func(t *testing.T) {
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        credentialID,
+					PublicKey: credPubKey,
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			Challenge: challenge,
+		}
+
+		handler := func(rawID, userHandle []byte) (User, error) {
+			return user, nil
+		}
+
+		returnedUser, credential, err := w.ValidatePasskeyLogin(handler, session, parsedResponse)
+		require.NoError(t, err)
+		require.NotNil(t, returnedUser)
+		require.NotNil(t, credential)
+		assert.Equal(t, credentialID, credential.ID)
+	})
+
+	t.Run("ShouldFailValidateLoginError", func(t *testing.T) {
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:        []byte("different-id"),
+					PublicKey: credPubKey,
+				},
+			},
+		}
+
+		session := SessionData{
+			Challenge: challenge,
+		}
+
+		handler := func(rawID, userHandle []byte) (User, error) {
+			return user, nil
+		}
+
+		returnedUser, credential, err := w.ValidatePasskeyLogin(handler, session, parsedResponse)
+		assert.Nil(t, returnedUser)
+		assert.Nil(t, credential)
+		require.Error(t, err)
+	})
+}
+
+func TestFinishDiscoverableLogin_Success(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	userID := []byte("test-user-id")
+
+	body := map[string]any{
+		"id":    base64.RawURLEncoding.EncodeToString(credentialID),
+		"rawId": base64.RawURLEncoding.EncodeToString(credentialID),
+		"type":  "public-key",
+		"response": map[string]any{
+			"authenticatorData": base64.RawURLEncoding.EncodeToString(parsedResponse.Raw.AssertionResponse.AuthenticatorData),
+			"clientDataJSON":    base64.RawURLEncoding.EncodeToString(parsedResponse.Raw.AssertionResponse.ClientDataJSON),
+			"signature":         base64.RawURLEncoding.EncodeToString(parsedResponse.Response.Signature),
+			"userHandle":        base64.RawURLEncoding.EncodeToString(userID),
+		},
+	}
+
+	data, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	w := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	user := &defaultUser{
+		id: userID,
+		credentials: []Credential{
+			{
+				ID:        credentialID,
+				PublicKey: credPubKey,
+				Flags: CredentialFlags{
+					UserPresent:    true,
+					BackupEligible: true,
+				},
+			},
+		},
+	}
+
+	session := SessionData{
+		Challenge: challenge,
+	}
+
+	handler := func(rawID, userHandle []byte) (User, error) {
+		return user, nil
+	}
+
+	reqBody := io.NopCloser(bytes.NewReader(data))
+	httpReq := &http.Request{Body: reqBody}
+
+	credential, err := w.FinishDiscoverableLogin(handler, session, httpReq)
+	require.NoError(t, err)
+	require.NotNil(t, credential)
+	assert.Equal(t, credentialID, credential.ID)
+}
+
+func TestFinishPasskeyLogin_Success(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	userID := []byte("test-user-id")
+
+	body := map[string]any{
+		"id":    base64.RawURLEncoding.EncodeToString(credentialID),
+		"rawId": base64.RawURLEncoding.EncodeToString(credentialID),
+		"type":  "public-key",
+		"response": map[string]any{
+			"authenticatorData": base64.RawURLEncoding.EncodeToString(parsedResponse.Raw.AssertionResponse.AuthenticatorData),
+			"clientDataJSON":    base64.RawURLEncoding.EncodeToString(parsedResponse.Raw.AssertionResponse.ClientDataJSON),
+			"signature":         base64.RawURLEncoding.EncodeToString(parsedResponse.Response.Signature),
+			"userHandle":        base64.RawURLEncoding.EncodeToString(userID),
+		},
+	}
+
+	data, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	w := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	user := &defaultUser{
+		id: userID,
+		credentials: []Credential{
+			{
+				ID:        credentialID,
+				PublicKey: credPubKey,
+				Flags: CredentialFlags{
+					UserPresent:    true,
+					BackupEligible: true,
+				},
+			},
+		},
+	}
+
+	session := SessionData{
+		Challenge: challenge,
+	}
+
+	handler := func(rawID, userHandle []byte) (User, error) {
+		return user, nil
+	}
+
+	reqBody := io.NopCloser(bytes.NewReader(data))
+	httpReq := &http.Request{Body: reqBody}
+
+	returnedUser, credential, err := w.FinishPasskeyLogin(handler, session, httpReq)
+	require.NoError(t, err)
+	require.NotNil(t, returnedUser)
+	require.NotNil(t, credential)
+	assert.Equal(t, credentialID, credential.ID)
+}
+
+// testLoginSpecVectorNoneES256 returns the spec test vector data for NoneES256 authentication.
+// See: https://www.w3.org/TR/webauthn-3/#sctn-test-vectors-none-es256
+func testLoginSpecVectorNoneES256(t *testing.T) (parsedResponse *protocol.ParsedCredentialAssertionData, credPubKey []byte, challenge string, credentialID []byte) {
+	t.Helper()
+
+	const (
+		authenticatorDataHex = "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b51900000000"
+		clientDataJSONHex    = "7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a224f63446e55685158756c5455506f334a5558543049393770767a7a59425039745a63685879617630314167222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a66616c73657d"
+		signatureHex         = "3046022100f50a4e2e4409249c4a853ba361282f09841df4dd4547a13a87780218deffcd380221008480ac0f0b93538174f575bf11a1dd5d78c6e486013f937295ea13653e331e87"
+		credentialIDHex      = "f91f391db4c9b2fde0ea70189cba3fb63f579ba6122b33ad94ff3ec330084be4" //nolint:gosec
+		challengeHex         = "39c0e7521417ba54d43e8dc95174f423dee9bf3cd804ff6d65c857c9abf4d408"
+		credentialPubKeyHex  = "a5010203262001215820afefa16f97ca9b2d23eb86ccb64098d20db90856062eb249c33a9b672f26df61225820930a56b87a2fca66334b03458abf879717c12cc68ed73290af2e2664796b9220"
+	)
+
+	credentialID, err := hex.DecodeString(credentialIDHex)
+	require.NoError(t, err)
+
+	credPubKey, err = hex.DecodeString(credentialPubKeyHex)
+	require.NoError(t, err)
+
+	challenge = base64.RawURLEncoding.EncodeToString(testDecodeHex(t, challengeHex))
+
+	id := base64.RawURLEncoding.EncodeToString(credentialID)
+	authenticatorData := base64.RawURLEncoding.EncodeToString(testDecodeHex(t, authenticatorDataHex))
+	clientDataJSON := base64.RawURLEncoding.EncodeToString(testDecodeHex(t, clientDataJSONHex))
+	signature := base64.RawURLEncoding.EncodeToString(testDecodeHex(t, signatureHex))
+
+	body := map[string]any{
+		"id":    id,
+		"rawId": id,
+		"type":  "public-key",
+		"response": map[string]any{
+			"authenticatorData": authenticatorData,
+			"clientDataJSON":    clientDataJSON,
+			"signature":         signature,
+		},
+	}
+
+	data, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	parsedResponse, err = protocol.ParseCredentialRequestResponseBytes(data)
+	require.NoError(t, err)
+
+	return parsedResponse, credPubKey, challenge, credentialID
+}
+
+func testDecodeHex(t *testing.T, s string) []byte {
+	t.Helper()
+
+	data, err := hex.DecodeString(s)
+	require.NoError(t, err)
+
+	return data
 }

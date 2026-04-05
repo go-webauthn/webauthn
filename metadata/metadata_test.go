@@ -149,159 +149,176 @@ func TestExampleMetadataTOCParsing(t *testing.T) {
 }
 
 func TestIsUndesiredAuthenticatorStatus(t *testing.T) {
-	tests := []struct {
-		status AuthenticatorStatus
-		fail   bool
+	testCases := []struct {
+		name     string
+		status   AuthenticatorStatus
+		expected bool
 	}{
 		{
+			"ShouldHandleNotFIDOCertifiedNotUndesired",
 			NotFidoCertified,
 			false,
 		},
 		{
+			"ShouldHandleFIDOCertifiedNotUndesired",
 			FidoCertified,
 			false,
 		},
 		{
+			"ShouldHandleUserVerificationBypassUndesired",
 			UserVerificationBypass,
 			true,
 		},
 		{
+			"ShouldHandleAttestationKeyCompromiseUndesired",
 			AttestationKeyCompromise,
 			true,
 		},
 		{
+			"ShouldHandleUserKeyRemoteCompromiseUndesired",
 			UserKeyRemoteCompromise,
 			true,
 		},
+
 		{
+			"ShouldHandleUserKeyPhysicalCompromiseUndesired",
 			UserKeyPhysicalCompromise,
 			true,
 		},
 		{
+			"ShouldHandleUpdateAvailableNotUndesired",
 			UpdateAvailable,
 			false,
 		},
 		{
+			"ShouldHandleRevokedUndesired",
 			Revoked,
 			true,
 		},
 		{
+			"ShouldHandleSelfAssertionSubmittedNotUndesired",
 			SelfAssertionSubmitted,
 			false,
 		},
 		{
+			"ShouldHandleFidoCertifiedL1NotUndesired",
 			FidoCertifiedL1,
 			false,
 		},
 		{
+			"ShouldHandleFidoCertifiedL1plusNotUndesired",
 			FidoCertifiedL1plus,
 			false,
 		},
 		{
+			"ShouldHandleFidoCertifiedL2NotUndesired",
 			FidoCertifiedL2,
 			false,
 		},
 		{
+			"ShouldHandleFidoCertifiedL2plusNotUndesired",
 			FidoCertifiedL2plus,
 			false,
 		},
 		{
+			"ShouldHandleFidoCertifiedL3NotUndesired",
 			FidoCertifiedL3,
 			false,
 		},
 		{
+			"ShouldHandleFidoCertifiedL3plusNotUndesired",
 			FidoCertifiedL3plus,
 			false,
 		},
 		{
+			"ShouldHandleFIPS140CertifiedL1NotUndesired",
 			FIPS140CertifiedL1,
 			false,
 		},
 		{
+			"ShouldHandleFIPS140CertifiedL2NotUndesired",
 			FIPS140CertifiedL2,
 			false,
 		},
 		{
+			"ShouldHandleFIPS140CertifiedL3NotUndesired",
 			FIPS140CertifiedL3,
 			false,
 		},
 		{
+			"ShouldHandleFIPS140CertifiedL4NotUndesired",
 			FIPS140CertifiedL4,
 			false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(string(tt.status), func(t *testing.T) {
-			if tt.fail != IsUndesiredAuthenticatorStatus(tt.status) {
-				t.Fail()
-			}
+	for _, tc := range testCases {
+		t.Run(string(tc.status), func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsUndesiredAuthenticatorStatus(tc.status))
 		})
 	}
 }
 
 func TestAlgKeyMatch(t *testing.T) {
-	tests := []struct {
-		name string
-		alg  algKeyCose
-		algs []AuthenticationAlgorithm
-		fail bool
+	testCases := []struct {
+		name     string
+		alg      algKeyCose
+		algs     []AuthenticationAlgorithm
+		expected bool
 	}{
 		{
-			"Positive match RS256",
+			"ShouldMatchRS256",
 			algKeyCose{KeyType: webauthncose.RSAKey, Algorithm: webauthncose.AlgRS256},
 			[]AuthenticationAlgorithm{ALG_SIGN_RSASSA_PKCSV15_SHA256_RAW},
 			true,
 		},
 		{
-			"Positive match ES256",
+			"ShouldMatchES256",
 			algKeyCose{KeyType: webauthncose.EllipticKey, Algorithm: webauthncose.AlgES256, Curve: webauthncose.P256},
 			[]AuthenticationAlgorithm{ALG_SIGN_SECP256R1_ECDSA_SHA256_RAW, ALG_SIGN_SECP256R1_ECDSA_SHA256_DER},
 			true,
 		},
 		{
-			"Positive match Ed25519",
+			"ShouldMatchEd25519",
 			algKeyCose{KeyType: webauthncose.OctetKey, Algorithm: webauthncose.AlgEdDSA, Curve: webauthncose.Ed25519},
 			[]AuthenticationAlgorithm{ALG_SIGN_SECP256R1_ECDSA_SHA256_RAW, ALG_SIGN_ED25519_EDDSA_SHA512_RAW},
 			true,
 		},
 		{
-			"Negative match Ed25519, array missing Ed25519",
+			"ShouldNotMatchEd25519ArrayMissingEd25519",
 			algKeyCose{KeyType: webauthncose.OctetKey, Algorithm: webauthncose.AlgEdDSA, Curve: webauthncose.Ed25519},
 			[]AuthenticationAlgorithm{ALG_SIGN_RSASSA_PKCSV15_SHA256_RAW, ALG_SIGN_SECP256R1_ECDSA_SHA256_RAW, ALG_SIGN_SECP256R1_ECDSA_SHA256_DER},
 			false,
 		},
 		{
-			"Negative match RS256, array missing RS256",
+			"ShouldNotMatchRS256ArrayMissingRS256",
 			algKeyCose{KeyType: webauthncose.RSAKey, Algorithm: webauthncose.AlgRS256},
 			[]AuthenticationAlgorithm{ALG_SIGN_SECP256R1_ECDSA_SHA256_RAW, ALG_SIGN_SECP256R1_ECDSA_SHA256_DER, ALG_SIGN_ED25519_EDDSA_SHA512_RAW},
 			false,
 		},
 		{
-			"Negative match ES256, array missing ES256",
+			"ShouldNotMatchES256ArrayMissingES256",
 			algKeyCose{KeyType: webauthncose.EllipticKey, Algorithm: webauthncose.AlgES256},
 			[]AuthenticationAlgorithm{ALG_SIGN_RSASSA_PKCSV15_SHA256_RAW, ALG_SIGN_ED25519_EDDSA_SHA512_RAW},
 			false,
 		},
 		{
-			"Negative match, curve/alg mismatch",
+			"ShouldNotMatchCurveAlgMismatch",
 			algKeyCose{KeyType: webauthncose.EllipticKey, Algorithm: webauthncose.AlgES256, Curve: webauthncose.P384},
 			[]AuthenticationAlgorithm{ALG_SIGN_SECP256R1_ECDSA_SHA256_RAW, ALG_SIGN_SECP256R1_ECDSA_SHA256_DER, ALG_SIGN_SECP384R1_ECDSA_SHA384_RAW},
 			false,
 		},
 		{
-			"Negative match, kty/crv mismatch",
+			"ShouldNotMatchKtyCrvMismatch",
 			algKeyCose{KeyType: webauthncose.RSAKey, Algorithm: webauthncose.AlgRS256, Curve: webauthncose.P256},
 			[]AuthenticationAlgorithm{ALG_SIGN_SECP256R1_ECDSA_SHA256_RAW, ALG_SIGN_SECP256R1_ECDSA_SHA256_DER, ALG_SIGN_SECP384R1_ECDSA_SHA384_RAW},
 			false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.fail != AlgKeyMatch(tt.alg, tt.algs) {
-				t.Fail()
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, AlgKeyMatch(tc.alg, tc.algs))
 		})
 	}
 }

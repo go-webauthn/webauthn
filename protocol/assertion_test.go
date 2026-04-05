@@ -3,6 +3,8 @@ package protocol
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"testing"
@@ -31,7 +33,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 		name       string
 		args       args
 		expected   *ParsedCredentialAssertionData
-		errString  string
+		err        string
 		errType    string
 		errDetails string
 		errInfo    string
@@ -93,7 +95,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 					},
 				},
 			},
-			errString: "",
+			err: "",
 		},
 		{
 			name: "ShouldHandleTrailingData",
@@ -101,7 +103,7 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 				"trailingData",
 			},
 			expected:   nil,
-			errString:  "Parse error for Assertion",
+			err:        "Parse error for Assertion",
 			errType:    "invalid_request",
 			errDetails: "Parse error for Assertion",
 			errInfo:    "body contains trailing data",
@@ -116,8 +118,8 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 
 			actual, err := ParseCredentialRequestResponseBody(body)
 
-			if tc.errString != "" {
-				assert.EqualError(t, err, tc.errString)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
 
 				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
 
@@ -180,7 +182,7 @@ func TestParseCredentialRequestResponseBytes(t *testing.T) {
 	testCases := []struct {
 		name       string
 		data       []byte
-		errString  string
+		err        string
 		errType    string
 		errDetails string
 		errInfo    string
@@ -188,7 +190,7 @@ func TestParseCredentialRequestResponseBytes(t *testing.T) {
 		{
 			name:       "ShouldFailInvalidJSON",
 			data:       []byte("not json"),
-			errString:  "Parse error for Assertion",
+			err:        "Parse error for Assertion",
 			errType:    "invalid_request",
 			errDetails: "Parse error for Assertion",
 			errInfo:    "invalid character 'o' in literal null (expecting 'u')",
@@ -196,7 +198,7 @@ func TestParseCredentialRequestResponseBytes(t *testing.T) {
 		{
 			name:       "ShouldFailTrailingData",
 			data:       []byte(testAssertionResponses["trailingData"]),
-			errString:  "Parse error for Assertion",
+			err:        "Parse error for Assertion",
 			errType:    "invalid_request",
 			errDetails: "Parse error for Assertion",
 			errInfo:    "body contains trailing data",
@@ -210,9 +212,9 @@ func TestParseCredentialRequestResponseBytes(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := ParseCredentialRequestResponseBytes(tc.data)
-			if tc.errString != "" {
+			if tc.err != "" {
 				assert.Nil(t, result)
-				assert.EqualError(t, err, tc.errString)
+				assert.EqualError(t, err, tc.err)
 				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
 			} else {
 				require.NoError(t, err)
@@ -268,42 +270,241 @@ func TestCredentialAssertionResponse_Parse_Errors(t *testing.T) {
 }
 
 func TestParsedCredentialAssertionData_Verify(t *testing.T) {
-	type fields struct {
-		ParsedPublicKeyCredential ParsedPublicKeyCredential
-		Response                  ParsedAssertionResponse
-		Raw                       CredentialAssertionResponse
-	}
+	par, credPubKey, challenge := testAssertionSpecVectorNoneES256(t)
 
-	type args struct {
-		storedChallenge    URLEncodedBase64
-		relyingPartyID     string
-		relyingPartyOrigin []string
-		verifyUser         bool
-		credentialBytes    []byte
-	}
+	// Valid but wrong public key (from the packed self ES256 spec test vector).
+	wrongKey, err := hex.DecodeString("a5010203262001215820eb151c8176b225cc651559fecf07af450fd85802046656b34c18f6cf193843c5225820927b8aa427a2be1b8834d233a2d34f61f13bfd44119c325d5896e183fee484f2")
+	require.NoError(t, err)
 
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
+	testCases := []struct {
+		name            string
+		challenge       string
+		relyingPartyID  string
+		rpOrigins       []string
+		appID           string
+		credentialBytes []byte
+		err             string
 	}{
-		// TODO: Add test cases.
+		{
+			name:            "ShouldSucceed",
+			challenge:       challenge,
+			relyingPartyID:  "example.org",
+			rpOrigins:       []string{"https://example.org"},
+			credentialBytes: credPubKey,
+		},
+		{
+			name:            "ShouldFailClientDataVerification",
+			challenge:       "wrong-challenge",
+			relyingPartyID:  "example.org",
+			rpOrigins:       []string{"https://example.org"},
+			credentialBytes: credPubKey,
+			err:             "Error validating challenge",
+		},
+		{
+			name:            "ShouldFailAuthDataVerification",
+			challenge:       challenge,
+			relyingPartyID:  "wrong-rp-id.example.com",
+			rpOrigins:       []string{"https://example.org"},
+			credentialBytes: credPubKey,
+			err:             "Error validating the authenticator response",
+		},
+		{
+			name:            "ShouldFailInvalidPublicKey",
+			challenge:       challenge,
+			relyingPartyID:  "example.org",
+			rpOrigins:       []string{"https://example.org"},
+			credentialBytes: []byte("invalid-key"),
+			err:             "Error parsing the assertion public key: Unsupported Public Key Type",
+		},
+		{
+			name:            "ShouldFailSignatureVerification",
+			challenge:       challenge,
+			relyingPartyID:  "example.org",
+			rpOrigins:       []string{"https://example.org"},
+			credentialBytes: wrongKey,
+			err:             "Error validating the assertion signature: <nil>",
+		},
+		{
+			name:            "ShouldFailWithAppID",
+			challenge:       challenge,
+			relyingPartyID:  "example.org",
+			rpOrigins:       []string{"https://example.org"},
+			appID:           "https://example.org",
+			credentialBytes: credPubKey,
+			err:             "Error parsing the assertion public key: failed to parse FIDO public key: crypto/ecdh: invalid public key",
+		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := &ParsedCredentialAssertionData{
-				ParsedPublicKeyCredential: tt.fields.ParsedPublicKeyCredential,
-				Response:                  tt.fields.Response,
-				Raw:                       tt.fields.Raw,
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := par.Verify(tc.challenge, tc.relyingPartyID, tc.rpOrigins, nil, TopOriginIgnoreVerificationMode, tc.appID, false, true, tc.credentialBytes)
 
-			if err := p.Verify(tt.args.storedChallenge.String(), tt.args.relyingPartyID, tt.args.relyingPartyOrigin, nil, TopOriginIgnoreVerificationMode, "", tt.args.verifyUser, false, tt.args.credentialBytes); (err != nil) != tt.wantErr {
-				t.Errorf("ParsedCredentialAssertionData.Verify() error = %v, wantErr %v", err, tt.wantErr)
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
 			}
 		})
 	}
+}
+
+func TestParseCredentialRequestResponse_Success(t *testing.T) {
+	body := io.NopCloser(bytes.NewReader([]byte(testAssertionResponses["success"])))
+
+	req := &http.Request{Body: body}
+
+	result, err := ParseCredentialRequestResponse(req)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng", result.ID)
+}
+
+func TestCredentialAssertionResponse_Parse_AuthenticatorAttachment(t *testing.T) {
+	testCases := []struct {
+		name               string
+		attachment         string
+		expectedAttachment AuthenticatorAttachment
+	}{
+		{
+			name:               "ShouldHandlePlatform",
+			attachment:         "platform",
+			expectedAttachment: Platform,
+		},
+		{
+			name:               "ShouldHandleCrossPlatform",
+			attachment:         "cross-platform",
+			expectedAttachment: CrossPlatform,
+		},
+		{
+			name:               "ShouldHandleEmpty",
+			attachment:         "",
+			expectedAttachment: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			response := testAssertionResponses["success"]
+
+			var raw map[string]any
+
+			require.NoError(t, json.Unmarshal([]byte(response), &raw))
+
+			if tc.attachment != "" {
+				raw["authenticatorAttachment"] = tc.attachment
+			}
+
+			data, err := json.Marshal(raw)
+			require.NoError(t, err)
+
+			result, err := ParseCredentialRequestResponseBytes(data)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedAttachment, result.AuthenticatorAttachment)
+		})
+	}
+}
+
+func TestCredentialAssertionResponse_Parse_ClientDataJSONError(t *testing.T) {
+	car := CredentialAssertionResponse{
+		PublicKeyCredential: PublicKeyCredential{
+			Credential: Credential{
+				ID:   "dGVzdA",
+				Type: string(PublicKeyCredentialType),
+			},
+		},
+		AssertionResponse: AuthenticatorAssertionResponse{
+			AuthenticatorResponse: AuthenticatorResponse{
+				ClientDataJSON: []byte("not valid json"),
+			},
+			AuthenticatorData: []byte{
+				// Minimal valid auth data: 32 bytes rpIdHash + 1 byte flags + 4 bytes counter = 37 bytes.
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0x01,       // flags: UP
+				0, 0, 0, 0, // counter
+			},
+		},
+	}
+
+	result, err := car.Parse()
+	assert.Nil(t, result)
+	require.Error(t, err)
+}
+
+func TestCredentialAssertionResponse_Parse_AuthDataError(t *testing.T) {
+	car := CredentialAssertionResponse{
+		PublicKeyCredential: PublicKeyCredential{
+			Credential: Credential{
+				ID:   "dGVzdA",
+				Type: string(PublicKeyCredentialType),
+			},
+		},
+		AssertionResponse: AuthenticatorAssertionResponse{
+			AuthenticatorResponse: AuthenticatorResponse{
+				ClientDataJSON: []byte(`{"type":"webauthn.get","challenge":"dGVzdA","origin":"https://example.org"}`),
+			},
+			AuthenticatorData: []byte{0x01, 0x02}, // Too short to be valid.
+		},
+	}
+
+	result, err := car.Parse()
+	assert.Nil(t, result)
+	assert.EqualError(t, err, "Error unmarshalling auth data")
+}
+
+// testAssertionSpecVectorNoneES256 returns a parsed assertion and credentials for testing.
+func testAssertionSpecVectorNoneES256(t *testing.T) (par *ParsedCredentialAssertionData, credPubKey []byte, challenge string) {
+	t.Helper()
+
+	const (
+		authenticatorDataHex = "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b51900000000"
+		clientDataJSONHex    = "7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a224f63446e55685158756c5455506f334a5558543049393770767a7a59425039745a63685879617630314167222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a66616c73657d"
+		signatureHex         = "3046022100f50a4e2e4409249c4a853ba361282f09841df4dd4547a13a87780218deffcd380221008480ac0f0b93538174f575bf11a1dd5d78c6e486013f937295ea13653e331e87"
+		credentialIDHex      = "f91f391db4c9b2fde0ea70189cba3fb63f579ba6122b33ad94ff3ec330084be4" //nolint:gosec
+		challengeHex         = "39c0e7521417ba54d43e8dc95174f423dee9bf3cd804ff6d65c857c9abf4d408"
+		credentialPubKeyHex  = "a5010203262001215820afefa16f97ca9b2d23eb86ccb64098d20db90856062eb249c33a9b672f26df61225820930a56b87a2fca66334b03458abf879717c12cc68ed73290af2e2664796b9220"
+	)
+
+	credentialID, err := hex.DecodeString(credentialIDHex)
+	require.NoError(t, err)
+
+	credPubKey, err = hex.DecodeString(credentialPubKeyHex)
+	require.NoError(t, err)
+
+	challenge = base64.RawURLEncoding.EncodeToString(assertionTestDecodeHex(t, challengeHex))
+
+	id := base64.RawURLEncoding.EncodeToString(credentialID)
+	authenticatorData := base64.RawURLEncoding.EncodeToString(assertionTestDecodeHex(t, authenticatorDataHex))
+	clientDataJSON := base64.RawURLEncoding.EncodeToString(assertionTestDecodeHex(t, clientDataJSONHex))
+	signature := base64.RawURLEncoding.EncodeToString(assertionTestDecodeHex(t, signatureHex))
+
+	body := map[string]any{
+		"id":    id,
+		"rawId": id,
+		"type":  "public-key",
+		"response": map[string]any{
+			"authenticatorData": authenticatorData,
+			"clientDataJSON":    clientDataJSON,
+			"signature":         signature,
+		},
+	}
+
+	data, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	par, err = ParseCredentialRequestResponseBytes(data)
+	require.NoError(t, err)
+
+	return par, credPubKey, challenge
+}
+
+func assertionTestDecodeHex(t *testing.T, s string) []byte {
+	t.Helper()
+
+	data, err := hex.DecodeString(s)
+	require.NoError(t, err)
+
+	return data
 }
 
 var testAssertionResponses = map[string]string{

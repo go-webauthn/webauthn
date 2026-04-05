@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,129 +17,101 @@ const (
 )
 
 func TestAuthenticatorFlags_UserPresent(t *testing.T) {
-	var (
-		goodByte byte = 0x01
-		badByte  byte = 0x10
-	)
-
-	tests := []struct {
-		name string
-		flag AuthenticatorFlags
-		want bool
+	testCases := []struct {
+		name     string
+		flag     AuthenticatorFlags
+		expected bool
 	}{
 		{
 			"Present",
-			AuthenticatorFlags(goodByte),
+			AuthenticatorFlags(0x01),
 			true,
 		},
 		{
 			"Missing",
-			AuthenticatorFlags(badByte),
+			AuthenticatorFlags(0x10),
 			false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.flag.UserPresent(); got != tt.want {
-				t.Errorf("AuthenticatorFlags.UserPresent() = %v, want %v", got, tt.want)
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.flag.UserPresent())
 		})
 	}
 }
 
 func TestAuthenticatorFlags_UserVerified(t *testing.T) {
-	var (
-		goodByte byte = 0x04
-		badByte  byte = 0x02
-	)
-
-	tests := []struct {
-		name string
-		flag AuthenticatorFlags
-		want bool
+	testCases := []struct {
+		name     string
+		flag     AuthenticatorFlags
+		expected bool
 	}{
 		{
 			"Present",
-			AuthenticatorFlags(goodByte),
+			AuthenticatorFlags(0x04),
 			true,
 		},
 		{
 			"Missing",
-			AuthenticatorFlags(badByte),
+			AuthenticatorFlags(0x02),
 			false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.flag.UserVerified(); got != tt.want {
-				t.Errorf("AuthenticatorFlags.UserVerified() = %v, want %v", got, tt.want)
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.flag.UserVerified())
 		})
 	}
 }
 
 func TestAuthenticatorFlags_HasAttestedCredentialData(t *testing.T) {
-	var (
-		goodByte byte = 0x40
-		badByte  byte = 0x01
-	)
-
-	tests := []struct {
-		name string
-		flag AuthenticatorFlags
-		want bool
+	testCases := []struct {
+		name     string
+		flag     AuthenticatorFlags
+		expected bool
 	}{
 		{
 			"Present",
-			AuthenticatorFlags(goodByte),
+			AuthenticatorFlags(0x40),
 			true,
 		},
 		{
 			"Missing",
-			AuthenticatorFlags(badByte),
+			AuthenticatorFlags(0x01),
 			false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.flag.HasAttestedCredentialData(); got != tt.want {
-				t.Errorf("AuthenticatorFlags.HasAttestedCredentialData() = %v, want %v", got, tt.want)
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.flag.HasAttestedCredentialData())
 		})
 	}
 }
 
 func TestAuthenticatorFlags_HasExtensions(t *testing.T) {
-	var (
-		goodByte byte = 0x80
-		badByte  byte = 0x01
-	)
-
-	tests := []struct {
-		name string
-		flag AuthenticatorFlags
-		want bool
+	testCases := []struct {
+		name     string
+		flag     AuthenticatorFlags
+		expected bool
 	}{
 		{
 			"Present",
-			AuthenticatorFlags(goodByte),
+			AuthenticatorFlags(0x80),
 			true,
 		},
 		{
 			"Missing",
-			AuthenticatorFlags(badByte),
+			AuthenticatorFlags(0x01),
 			false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.flag.HasExtensions(); got != tt.want {
-				t.Errorf("AuthenticatorFlags.HasExtensions() = %v, want %v", got, tt.want)
-			}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.flag.HasExtensions())
 		})
 	}
 }
@@ -183,107 +154,105 @@ func TestAuthenticatorData_Unmarshal(t *testing.T) {
 	copy(badAuthData5, attAuthData)
 	badAuthData5 = append(badAuthData5, []byte("Hello World")...)
 
-	tests := []struct {
+	testCases := []struct {
 		name   string
 		fields fields
 		args   args
 
-		errString  string
+		err        string
 		errType    string
 		errDetails string
 		errInfo    string
 	}{
 		{
-			name:   "None Marshall Successfully",
+			name:   "NoneMarshallSuccessfully",
 			fields: fields{},
 			args: args{
 				noneAuthData,
 			},
 		},
 		{
-			name:   "Att Data Marshall Successfully",
+			name:   "AttDataMarshallSuccessfully",
 			fields: fields{},
 			args: args{
 				attAuthData,
 			},
 		},
 		{
-			name:   "Authenticator data too short",
+			name:   "AuthenticatorDataTooShort",
 			fields: fields{},
 			args: args{
 				badAuthData1,
 			},
-			errString:  "Authenticator data length too short",
+			err:        "Authenticator data length too short",
 			errType:    "invalid_request",
 			errDetails: "Authenticator data length too short",
 			errInfo:    fmt.Sprintf("Expected data greater than %d bytes. Got %d bytes", minAuthDataLength, len(badAuthData1)),
 		},
 		{
-			name:   "Attested credential missing",
+			name:   "AttestedCredentialMissing",
 			fields: fields{},
 			args: args{
 				badAuthData2,
 			},
-			errString:  "Attested credential flag set but data is missing",
+			err:        "Attested credential flag set but data is missing",
 			errType:    "invalid_request",
 			errDetails: "Attested credential flag set but data is missing",
 			errInfo:    "",
 		},
 		{
-			name:   "Attested credential missing",
+			name:   "AttestedCredentialMissing",
 			fields: fields{},
 			args: args{
 				badAuthData3,
 			},
-			errString:  "Attested credential flag not set",
+			err:        "Attested credential flag not set",
 			errType:    "invalid_request",
 			errDetails: "Attested credential flag not set",
 			errInfo:    "",
 		},
 		{
-			name:   "Extensions data missing",
+			name:   "ExtensionsDataMissing",
 			fields: fields{},
 			args: args{
 				badAuthData4,
 			},
-			errString:  "Extensions flag set but extensions data is missing",
+			err:        "Extensions flag set but extensions data is missing",
 			errType:    "invalid_request",
 			errDetails: "Extensions flag set but extensions data is missing",
 			errInfo:    "",
 		},
 		{
-			name:   "Leftover bytes",
+			name:   "LeftoverBytes",
 			fields: fields{},
 			args: args{
 				badAuthData5,
 			},
-			errString:  "Leftover bytes decoding AuthenticatorData",
+			err:        "Leftover bytes decoding AuthenticatorData",
 			errType:    "invalid_request",
 			errDetails: "Leftover bytes decoding AuthenticatorData",
 			errInfo:    "",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			a := &AuthenticatorData{
-				RPIDHash: tt.fields.RPIDHash,
-				Flags:    tt.fields.Flags,
-				Counter:  tt.fields.Counter,
-				AttData:  tt.fields.AttData,
-				ExtData:  tt.fields.ExtData,
+				RPIDHash: tc.fields.RPIDHash,
+				Flags:    tc.fields.Flags,
+				Counter:  tc.fields.Counter,
+				AttData:  tc.fields.AttData,
+				ExtData:  tc.fields.ExtData,
 			}
 
-			err := a.Unmarshal(tt.args.rawAuthData)
-			if tt.errString != "" {
-				assert.EqualError(t, err, tt.errString)
+			err := a.Unmarshal(tc.args.rawAuthData)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
 
-				AssertIsProtocolError(t, err, tt.errType, tt.errDetails, tt.errInfo)
-
-				return
+				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
+			} else {
+				assert.NoError(t, err)
 			}
-
-			require.NoError(t, err)
 		})
 	}
 }
@@ -321,11 +290,11 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 	badData, _ := hex.DecodeString("83FF20030102")
 	badAuthData3 = append(badAuthData3, badData...)
 
-	tests := []struct {
+	testCases := []struct {
 		name       string
 		fields     fields
 		args       args
-		errString  string
+		err        string
 		errType    string
 		errDetails string
 		errInfo    string
@@ -350,7 +319,7 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 			args: args{
 				badAuthData1,
 			},
-			errString:  "Authenticator attestation data length too short",
+			err:        "Authenticator attestation data length too short",
 			errType:    "invalid_request",
 			errDetails: "Authenticator attestation data length too short",
 			errInfo:    "",
@@ -361,7 +330,7 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 			args: args{
 				badAuthData2,
 			},
-			errString:  "Authenticator attestation data credential id length too long",
+			err:        "Authenticator attestation data credential id length too long",
 			errType:    "invalid_request",
 			errDetails: "Authenticator attestation data credential id length too long",
 			errInfo:    "",
@@ -372,57 +341,31 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 			args: args{
 				badAuthData3,
 			},
-			errString:  "Could not unmarshal Credential Public Key: cbor: unexpected \"break\" code",
+			err:        "Could not unmarshal Credential Public Key: cbor: unexpected \"break\" code",
 			errType:    "invalid_request",
 			errDetails: "Could not unmarshal Credential Public Key: cbor: unexpected \"break\" code",
 			errInfo:    "",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := &AuthenticatorData{
-				RPIDHash: tt.fields.RPIDHash,
-				Flags:    tt.fields.Flags,
-				Counter:  tt.fields.Counter,
-				AttData:  tt.fields.AttData,
-				ExtData:  tt.fields.ExtData,
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := &AuthenticatorData{
+				RPIDHash: tc.fields.RPIDHash,
+				Flags:    tc.fields.Flags,
+				Counter:  tc.fields.Counter,
+				AttData:  tc.fields.AttData,
+				ExtData:  tc.fields.ExtData,
 			}
 
-			err := a.unmarshalAttestedData(tt.args.rawAuthData)
-			if tt.errString != "" {
-				assert.EqualError(t, err, tt.errString)
+			err := actual.unmarshalAttestedData(tc.args.rawAuthData)
 
-				AssertIsProtocolError(t, err, tt.errType, tt.errDetails, tt.errInfo)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
 
-				return
-			}
-
-			require.NoError(t, err)
-		})
-	}
-}
-
-func Test_unmarshalCredentialPublicKey(t *testing.T) {
-	type args struct {
-		keyBytes []byte
-	}
-
-	tests := []struct {
-		name string
-		args args
-		want []byte
-	}{
-		// TODO: Add test cases.
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := unmarshalCredentialPublicKey(tt.args.keyBytes)
-			if err != nil {
-				t.Errorf("unmarshalCredentialPublicKey() returned err %v", err)
-			} else if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("unmarshalCredentialPublicKey() = %v, want %v", got, tt.want)
+				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -527,11 +470,11 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 		userPresenceRequired     bool
 	}
 
-	tests := []struct {
+	testCases := []struct {
 		name       string
 		fields     fields
 		args       args
-		errString  string
+		err        string
 		errType    string
 		errDetails string
 		errInfo    string
@@ -545,7 +488,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			args: args{
 				rpIdHash: []byte{1, 2, 3},
 			},
-			errString: "",
+			err: "",
 		},
 		{
 			name: "RP hash mismatch",
@@ -555,7 +498,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			args: args{
 				rpIdHash: []byte{0xaa},
 			},
-			errString:  "Error validating the authenticator response",
+			err:        "Error validating the authenticator response",
 			errType:    "verification_error",
 			errDetails: "Error validating the authenticator response",
 			errInfo:    "RP Hash mismatch. Expected ff and Received aa",
@@ -570,7 +513,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 				rpIdHash:             []byte{1, 2, 3},
 				userPresenceRequired: true,
 			},
-			errString:  "Error validating the authenticator response",
+			err:        "Error validating the authenticator response",
 			errType:    "verification_error",
 			errDetails: "Error validating the authenticator response",
 			errInfo:    "User presence required but flag not set by authenticator",
@@ -586,33 +529,32 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 				userVerificationRequired: true,
 				userPresenceRequired:     true,
 			},
-			errString:  "Error validating the authenticator response",
+			err:        "Error validating the authenticator response",
 			errType:    "verification_error",
 			errDetails: "Error validating the authenticator response",
 			errInfo:    "User verification required but flag not set by authenticator",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			a := &AuthenticatorData{
-				RPIDHash: tt.fields.RPIDHash,
-				Flags:    tt.fields.Flags,
-				Counter:  tt.fields.Counter,
-				AttData:  tt.fields.AttData,
-				ExtData:  tt.fields.ExtData,
+				RPIDHash: tc.fields.RPIDHash,
+				Flags:    tc.fields.Flags,
+				Counter:  tc.fields.Counter,
+				AttData:  tc.fields.AttData,
+				ExtData:  tc.fields.ExtData,
 			}
 
-			err := a.Verify(tt.args.rpIdHash, nil, tt.args.userVerificationRequired, tt.args.userPresenceRequired)
-			if tt.errString != "" {
-				assert.EqualError(t, err, tt.errString)
+			err := a.Verify(tc.args.rpIdHash, nil, tc.args.userVerificationRequired, tc.args.userPresenceRequired)
 
-				AssertIsProtocolError(t, err, tt.errType, tt.errDetails, tt.errInfo)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
 
-				return
+				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
+			} else {
+				assert.NoError(t, err)
 			}
-
-			require.NoError(t, err)
 		})
 	}
 }

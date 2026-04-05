@@ -10,7 +10,16 @@ comment:
 coverage:
   precision: 2
   round: down
-  range: "50...90"
+  range: "70...90"
+  status:
+    project:
+      default:
+        base: auto
+        threshold: 1%
+  patch:
+    default:
+      target: 90%
+      threshold: 10%
 
 ignore:
   - "**/coverage.txt"
