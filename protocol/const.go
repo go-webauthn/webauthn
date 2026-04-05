@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"encoding/asn1"
-	"sync/atomic"
 )
 
 const (
@@ -226,8 +225,4 @@ var (
 	oidTCGAtTpmManufacturer               = asn1.ObjectIdentifier{2, 23, 133, 2, 1}
 	oidTCGAtTpmModel                      = asn1.ObjectIdentifier{2, 23, 133, 2, 2}
 	oidTCGAtTPMVersion                    = asn1.ObjectIdentifier{2, 23, 133, 2, 3}
-)
-
-var (
-	testMode atomic.Bool
 )

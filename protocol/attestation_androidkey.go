@@ -134,7 +134,7 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 	}
 
 	// The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN (which == 2).
-	if !contains(decoded.SoftwareEnforced.Purpose, KM_PURPOSE_SIGN) && !contains(decoded.TeeEnforced.Purpose, KM_PURPOSE_SIGN) && !testMode.Load() {
+	if !contains(decoded.SoftwareEnforced.Purpose, KM_PURPOSE_SIGN) && !contains(decoded.TeeEnforced.Purpose, KM_PURPOSE_SIGN) {
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN")
 	}
 

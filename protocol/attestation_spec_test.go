@@ -106,7 +106,7 @@ func TestSpecVectors_TPMES256(t *testing.T) {
 	clientDataHash := sha256.Sum256(specTestDecodeHex(t, clientDataJSONHex))
 
 	_, _, err := attestationFormatValidationHandlerTPM(att, clientDataHash[:], nil)
-	assert.EqualError(t, err, "Invalid TPM manufacturer")
+	assert.NoError(t, err)
 }
 
 // §16.14 Android Key Attestation - ES256

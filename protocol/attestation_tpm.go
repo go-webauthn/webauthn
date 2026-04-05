@@ -532,23 +532,12 @@ var (
 		{"5345414C", "Wisekey", "SEAL"},
 		{"FFFFF1D0", "FIDO Alliance Conformance Testing", "FIDO"},
 	}
-	tpmManufacturersTest = []tpmManufacturer{
-		{"00000000", "WebAuthn Test", "WebAuthnTest"},
-	}
 )
 
 func isValidTPMManufacturer(id string) bool {
 	for _, m := range tpmManufacturers {
 		if m.id == id {
 			return true
-		}
-	}
-
-	if testMode.Load() {
-		for _, m := range tpmManufacturersTest {
-			if m.id == id {
-				return true
-			}
 		}
 	}
 

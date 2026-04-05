@@ -201,6 +201,7 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 			format:                      "android-key",
 			credParams:                  []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			err:                         "Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN",
 		},
 		{
 			// §16.15 Apple Anonymous Attestation - ES256 - Top Origin
@@ -228,10 +229,6 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
 		},
 	}
-
-	testMode.Store(true)
-
-	defer testMode.Store(false)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -604,4 +601,5 @@ func init() {
 
 	attAndroidKeyHardwareRootsCertPool.AddCert(cert)
 	attAppleHardwareRootsCertPool.AddCert(cert)
+	tpmManufacturers = append(tpmManufacturers, tpmManufacturer{"00000000", "WebAuthn Test", "WebAuthnTest"})
 }
