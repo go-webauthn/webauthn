@@ -109,6 +109,9 @@ func handlerExamplePasskeyCreateChallenge(w *webauthn.WebAuthn) func(rw http.Res
 		// session cookie.
 		saveSessionExamplePasskey(s)
 
+		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+		rw.WriteHeader(http.StatusOK)
+
 		encoder := json.NewEncoder(rw)
 
 		if err = encoder.Encode(creation); err != nil {
@@ -116,9 +119,6 @@ func handlerExamplePasskeyCreateChallenge(w *webauthn.WebAuthn) func(rw http.Res
 
 			return
 		}
-
-		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
-		rw.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -180,6 +180,9 @@ func handlerExamplePasskeyLoginChallenge(w *webauthn.WebAuthn) func(rw http.Resp
 		// session cookie.
 		saveSessionExamplePasskey(s)
 
+		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+		rw.WriteHeader(http.StatusOK)
+
 		encoder := json.NewEncoder(rw)
 
 		if err = encoder.Encode(assertion); err != nil {
@@ -187,9 +190,6 @@ func handlerExamplePasskeyLoginChallenge(w *webauthn.WebAuthn) func(rw http.Resp
 
 			return
 		}
-
-		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
-		rw.WriteHeader(http.StatusOK)
 	}
 }
 
