@@ -103,6 +103,9 @@ func handlerExampleMultiFactorCreateChallenge(w *webauthn.WebAuthn) func(rw http
 		// session cookie.
 		saveSessionExampleMultiFactor(s)
 
+		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+		rw.WriteHeader(http.StatusOK)
+
 		encoder := json.NewEncoder(rw)
 
 		if err = encoder.Encode(creation); err != nil {
@@ -110,9 +113,6 @@ func handlerExampleMultiFactorCreateChallenge(w *webauthn.WebAuthn) func(rw http
 
 			return
 		}
-
-		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
-		rw.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -182,6 +182,9 @@ func handlerExampleMultiFactorLoginChallenge(w *webauthn.WebAuthn) func(rw http.
 		// session cookie.
 		saveSessionExampleMultiFactor(s)
 
+		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+		rw.WriteHeader(http.StatusOK)
+
 		encoder := json.NewEncoder(rw)
 
 		if err = encoder.Encode(assertion); err != nil {
@@ -189,9 +192,6 @@ func handlerExampleMultiFactorLoginChallenge(w *webauthn.WebAuthn) func(rw http.
 
 			return
 		}
-
-		rw.Header().Set("Content-Type", "application/json; charset=utf-8")
-		rw.WriteHeader(http.StatusOK)
 	}
 }
 
