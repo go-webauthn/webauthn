@@ -363,7 +363,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	// Handle steps 4 through 16.
-	if err = parsedResponse.Verify(session.Challenge, rpID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, appID, shouldVerifyUser, shouldVerifyUserPresence, credential.PublicKey); err != nil {
+	if err = parsedResponse.Verify(session.Challenge, rpID, appID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, credential.PublicKey); err != nil {
 		return nil, err
 	}
 

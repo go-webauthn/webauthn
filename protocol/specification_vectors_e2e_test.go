@@ -39,6 +39,7 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 		credParams                  []CredentialParameter
 		rpTopOrigins                []string
 		rpTopOriginVerificationMode TopOriginVerificationMode
+		allowCrossOrigin            bool
 		mds                         metadata.Provider
 		err                         string
 	}{
@@ -72,6 +73,21 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 		{
 			// §16.4 None Attestation - ES256 - Cross Origin
 			// See: https://w3c.github.io/webauthn/#sctn-test-vectors-none-es256-crossOrigin
+			name:                        "NoneES256CrossOriginNotAllowed",
+			attestationObject:           "a363666d74646e6f6e656761747453746d74a068617574684461746158a4bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b54500000000883f4f6014f19c09d87aa38123be48d000206e1050c0d2ca2f07c755cb2c66a74c64fa43065c18f938354d9915db2bd5ce57a501020326200121582022200a473f90b11078851550d03b4e44a2279f8c4eca27b3153dedfe03e4e97d225820cbd0be95e746ad6f5a8191be11756e4c0420e72f65b466d39bc56b8b123a9c6e",
+			clientDataJSON:              "7b2274797065223a22776562617574686e2e637265617465222c226368616c6c656e6765223a224f2d57717a514e5463554a484930437257576e7951504859647862694332674872434d475666704c4f306b222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a747275652c22657874726144617461223a22636c69656e74446174614a534f4e206d617920626520657874656e6465642077697468206164646974696f6e616c206669656c647320696e20746865206675747572652c207375636820617320746869733a207a5a7175457444523944577170573574425754467567227d",
+			credentialID:                "6e1050c0d2ca2f07c755cb2c66a74c64fa43065c18f938354d9915db2bd5ce57",
+			challenge:                   "3be5aacd03537142472340ab5969f240f1d87716e20b6807ac230655fa4b3b49",
+			format:                      "none",
+			credParams:                  []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
+			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            false,
+			err:                         "Error validating cross origin flag",
+		},
+		//nolint:gosec
+		{
+			// §16.4 None Attestation - ES256 - Cross Origin
+			// See: https://w3c.github.io/webauthn/#sctn-test-vectors-none-es256-crossOrigin
 			name:                        "NoneES256CrossOrigin",
 			attestationObject:           "a363666d74646e6f6e656761747453746d74a068617574684461746158a4bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b54500000000883f4f6014f19c09d87aa38123be48d000206e1050c0d2ca2f07c755cb2c66a74c64fa43065c18f938354d9915db2bd5ce57a501020326200121582022200a473f90b11078851550d03b4e44a2279f8c4eca27b3153dedfe03e4e97d225820cbd0be95e746ad6f5a8191be11756e4c0420e72f65b466d39bc56b8b123a9c6e",
 			clientDataJSON:              "7b2274797065223a22776562617574686e2e637265617465222c226368616c6c656e6765223a224f2d57717a514e5463554a484930437257576e7951504859647862694332674872434d475666704c4f306b222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a747275652c22657874726144617461223a22636c69656e74446174614a534f4e206d617920626520657874656e6465642077697468206164646974696f6e616c206669656c647320696e20746865206675747572652c207375636820617320746869733a207a5a7175457444523944577170573574425754467567227d",
@@ -80,6 +96,23 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 			format:                      "none",
 			credParams:                  []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            true,
+		},
+		//nolint:gosec
+		{
+			// §16.5 None Attestation - ES256 - Top Origin
+			// See: https://w3c.github.io/webauthn/#sctn-test-vectors-none-es256-topOrigin
+			name:                        "NoneES256TopOriginNotAllowed",
+			attestationObject:           "a363666d74646e6f6e656761747453746d74a068617574684461746158a4bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b5410000000097586fd09799a76401c200455099ef2a0020b8ad59b996047ab18e2ceb57206c362da57458793481f4a8ebf101c7ca7cc0f1a5010203262001215820a1c47c1d82da4ebe82cd72207102b380670701993bc35398ae2e5726427fe01d22582086c1080d82987028c7f54ecb1b01185de243b359294a0ed210cd47480f0adc88",
+			clientDataJSON:              "7b2274797065223a22776562617574686e2e637265617465222c226368616c6c656e6765223a225468394d595a68706e6a504254786b68555f53646667364f4e58665672454673587a72636b7151664a2d55222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a747275652c22746f704f726967696e223a2268747470733a2f2f6578616d706c652e636f6d227d",
+			credentialID:                "b8ad59b996047ab18e2ceb57206c362da57458793481f4a8ebf101c7ca7cc0f1",
+			challenge:                   "4e1f4c6198699e33c14f192153f49d7e0e8e3577d5ac416c5f3adc92a41f27e5",
+			format:                      "none",
+			credParams:                  []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
+			rpTopOrigins:                []string{"https://example.com/"},
+			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            false,
+			err:                         "Error validating cross origin flag",
 		},
 		//nolint:gosec
 		{
@@ -94,6 +127,7 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 			credParams:                  []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
 			rpTopOrigins:                []string{"https://example.com/"},
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            true,
 		},
 		//nolint:gosec
 		{
@@ -239,7 +273,7 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 
 			challenge := base64.RawURLEncoding.EncodeToString(specTestDecodeHex(t, tc.challenge))
 
-			_, err = pcc.Verify(challenge, false, true, specTestRPID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.mds, tc.credParams)
+			_, err = pcc.Verify(challenge, specTestRPID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, tc.mds, tc.credParams)
 
 			if tc.err == "" {
 				assert.NoError(t, err)
@@ -263,9 +297,11 @@ func TestSpecVectors_Authentication_E2E(t *testing.T) {
 		credentialID                string
 		challenge                   string
 		credentialPubKey            string
+		appID                       string
 		rpTopOrigins                []string
 		rpTopOriginVerificationMode TopOriginVerificationMode
-		appID                       string
+		allowCrossOrigin            bool
+		err                         string
 	}{
 		//nolint:gosec
 		{
@@ -297,6 +333,21 @@ func TestSpecVectors_Authentication_E2E(t *testing.T) {
 		{
 			// §16.4 None Attestation - ES256 - Cross Origin
 			// See: https://w3c.github.io/webauthn/#sctn-test-vectors-none-es256-crossOrigin
+			name:                        "NoneES256CrossOriginNotAllowed",
+			authenticatorData:           "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000000",
+			clientDataJSON:              "7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226832716c463771445f65356c5f505f62796b7945377135645650674547685f49584a6b655737736e4d5463222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a747275652c22657874726144617461223a22636c69656e74446174614a534f4e206d617920626520657874656e6465642077697468206164646974696f6e616c206669656c647320696e20746865206675747572652c207375636820617320746869733a2039327063545644304162792d713464746d6a36656667227d",
+			signature:                   "3046022100eb12fcf23b12764c0f122e22371fab92e283879fd798f38ee1841c951b6e40e7022100c76237ff9db77b3c56f30837cda6a09acfa2e915544e609c0733b1184036d1cf",
+			credentialID:                "6e1050c0d2ca2f07c755cb2c66a74c64fa43065c18f938354d9915db2bd5ce57",
+			challenge:                   "876aa517ba83fdee65fcffdbca4c84eeae5d54f8041a1fc85c991e5bbb273137",
+			credentialPubKey:            "a501020326200121582022200a473f90b11078851550d03b4e44a2279f8c4eca27b3153dedfe03e4e97d225820cbd0be95e746ad6f5a8191be11756e4c0420e72f65b466d39bc56b8b123a9c6e",
+			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            false,
+			err:                         "Error validating cross origin flag",
+		},
+		//nolint:gosec
+		{
+			// §16.4 None Attestation - ES256 - Cross Origin
+			// See: https://w3c.github.io/webauthn/#sctn-test-vectors-none-es256-crossOrigin
 			name:                        "NoneES256CrossOrigin",
 			authenticatorData:           "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000000",
 			clientDataJSON:              "7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a226832716c463771445f65356c5f505f62796b7945377135645650674547685f49584a6b655737736e4d5463222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a747275652c22657874726144617461223a22636c69656e74446174614a534f4e206d617920626520657874656e6465642077697468206164646974696f6e616c206669656c647320696e20746865206675747572652c207375636820617320746869733a2039327063545644304162792d713464746d6a36656667227d",
@@ -305,6 +356,7 @@ func TestSpecVectors_Authentication_E2E(t *testing.T) {
 			challenge:                   "876aa517ba83fdee65fcffdbca4c84eeae5d54f8041a1fc85c991e5bbb273137",
 			credentialPubKey:            "a501020326200121582022200a473f90b11078851550d03b4e44a2279f8c4eca27b3153dedfe03e4e97d225820cbd0be95e746ad6f5a8191be11756e4c0420e72f65b466d39bc56b8b123a9c6e",
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            true,
 		},
 		//nolint:gosec
 		{
@@ -319,6 +371,22 @@ func TestSpecVectors_Authentication_E2E(t *testing.T) {
 			credentialPubKey:            "a5010203262001215820a1c47c1d82da4ebe82cd72207102b380670701993bc35398ae2e5726427fe01d22582086c1080d82987028c7f54ecb1b01185de243b359294a0ed210cd47480f0adc88",
 			rpTopOrigins:                []string{"https://example.com/"},
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            false,
+			err:                         "Error validating cross origin flag",
+		},
+		{
+			// §16.5 None Attestation - ES256 - Top Origin
+			// See: https://w3c.github.io/webauthn/#sctn-test-vectors-none-es256-topOrigin
+			name:                        "NoneES256TopOrigin",
+			authenticatorData:           "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000000",
+			clientDataJSON:              "7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a22315570636a4b53324b6f34377379486a7372787a68572d466f51465132796b3572426c584f6573656f4759222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a747275652c22746f704f726967696e223a2268747470733a2f2f6578616d706c652e636f6d222c22657874726144617461223a22636c69656e74446174614a534f4e206d617920626520657874656e6465642077697468206164646974696f6e616c206669656c647320696e20746865206675747572652c207375636820617320746869733a205569466f4a4d56525148444146574669347678557051227d",
+			signature:                   "3045022100b5a70c81780d5fcc9a4f2ae9caae99058f8accaf58b91fb59329646c28ac6ffc022012e101c165db3c8e9957f0c54dd6ca9b56bc3bd2f280bd2faa6c1d02c6e5c171",
+			credentialID:                "b8ad59b996047ab18e2ceb57206c362da57458793481f4a8ebf101c7ca7cc0f1",
+			challenge:                   "d54a5c8ca4b62a8e3bb321e3b2bc73856f85a10150db2939ac195739eb1ea066",
+			credentialPubKey:            "a5010203262001215820a1c47c1d82da4ebe82cd72207102b380670701993bc35398ae2e5726427fe01d22582086c1080d82987028c7f54ecb1b01185de243b359294a0ed210cd47480f0adc88",
+			rpTopOrigins:                []string{"https://example.com/"},
+			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
+			allowCrossOrigin:            true,
 		},
 		//nolint:gosec
 		{
@@ -462,7 +530,13 @@ func TestSpecVectors_Authentication_E2E(t *testing.T) {
 			challenge := base64.RawURLEncoding.EncodeToString(specTestDecodeHex(t, tc.challenge))
 			credPubKey := specTestDecodeHex(t, tc.credentialPubKey)
 
-			assert.NoError(t, par.Verify(challenge, specTestRPID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.appID, false, true, credPubKey))
+			err = par.Verify(challenge, specTestRPID, tc.appID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, credPubKey)
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+			}
 		})
 	}
 }

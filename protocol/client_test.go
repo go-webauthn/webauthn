@@ -8,161 +8,193 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupCollectedClientData(challenge URLEncodedBase64, origin, topOrigin string, crossOrigin bool) *CollectedClientData { //nolint:unparam
-	ccd := &CollectedClientData{
-		Type:        CreateCeremony,
-		Origin:      origin,
-		TopOrigin:   topOrigin,
-		CrossOrigin: crossOrigin,
-		Challenge:   challenge.String(),
+func TestVerifyCollectedClientData(t *testing.T) {
+	testCases := []struct {
+		name            string
+		origin          string
+		topOrigin       string
+		crossOrigin     bool
+		rpOrigins       []string
+		rpTopOrigins    []string
+		topOriginMode   TopOriginVerificationMode
+		allowCrossOrign bool
+		ceremony        CeremonyType
+		err             string
+		errType         string
+		errDetails      string
+		errInfo         string
+	}{
+		{
+			name:            "ShouldSucceed",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			allowCrossOrign: true,
+		},
+		{
+			name:            "ShouldSucceedNoTopOrigin",
+			origin:          "http://example.com",
+			crossOrigin:     true,
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			allowCrossOrign: true,
+		},
+		{
+			name:            "ShouldSucceedTopOriginDifferentFromOrigin",
+			origin:          "http://example.com",
+			topOrigin:       "http://example2.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			topOriginMode:   TopOriginExplicitVerificationMode,
+		},
+		{
+			name:            "ShouldFailTopOriginMismatch",
+			origin:          "http://example.com",
+			topOrigin:       "http://example2.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpTopOrigins:    []string{"https://example3.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			err:             "Error validating top origin",
+		},
+		{
+			name:            "ShouldSucceedTopOriginImplicit",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			topOriginMode:   TopOriginImplicitVerificationMode,
+		},
+		{
+			name:            "ShouldSucceedTopOriginAuto",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginAutoVerificationMode,
+		},
+		{
+			name:            "ShouldSucceedMultipleExpectedOrigins",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpOrigins:       []string{"https://exmaple.com", "9C:B4:AE:EF:05:53:6E:73:0E:C4:B8:02:E7:67:F6:7D:A4:E7:BC:26:D7:42:B5:27:FF:01:7D:68:2A:EB:FA:1D", "http://example.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+		},
+		{
+			name:            "ShouldFailTopOriginInvalidMode",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   -1,
+			errType:       "not_implemented",
+			errDetails:    "Error handling unknown Top Origin verification mode",
+		},
+		{
+			name:            "ShouldFailCrossOriginNotAllowed",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			allowCrossOrign: false,
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			errType:         "verification_error",
+			errDetails:      "Error validating cross origin flag",
+			errInfo:         "The cross origin flag is invalid due to the configuration.",
+		},
+		{
+			name:            "ShouldFailUnexpectedOrigin",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpOrigins:       []string{"http://different.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			errType:       "verification_error",
+			errDetails:    "Error validating origin",
+			errInfo:       "Expected Values: [http://different.com], Received: http://example.com",
+		},
+		{
+			name:          "ShouldFailTopOriginWithoutCrossOrigin",
+			origin:        "http://example.com",
+			topOrigin:     "http://example2.com",
+			crossOrigin:   false,
+			topOriginMode: TopOriginExplicitVerificationMode,
+			errType:       "verification_error",
+			errDetails:    "Error validating topOrigin",
+			errInfo:       "The topOrigin can't have values unless crossOrigin is true.",
+		},
+		{
+			name:            "ShouldFailUnexpectedTopOrigin",
+			origin:          "http://example.com",
+			topOrigin:       "http://example.com",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpOrigins:       []string{"http://example.com"},
+			rpTopOrigins:    []string{"http://different.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			err:             "Error validating top origin",
+		},
+		{
+			name:          "ShouldFailCeremonyMismatch",
+			origin:        "http://example.com",
+			crossOrigin:   false,
+			topOriginMode: TopOriginExplicitVerificationMode,
+			ceremony:      AssertCeremony,
+			errType:       "verification_error",
+			errDetails:    "Error validating ceremony type",
+			errInfo:       fmt.Sprintf("Expected Value: %s, Received: %s", AssertCeremony, CreateCeremony),
+		},
 	}
 
-	return ccd
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			challenge, err := CreateChallenge()
+			require.NoError(t, err)
+
+			ccd := setupCollectedClientData(challenge, tc.origin, tc.topOrigin, tc.crossOrigin)
+
+			rpOrigins := tc.rpOrigins
+			if rpOrigins == nil {
+				rpOrigins = []string{ccd.Origin}
+			}
+
+			rpTopOrigins := tc.rpTopOrigins
+			if rpTopOrigins == nil {
+				rpTopOrigins = []string{ccd.TopOrigin}
+			}
+
+			ceremony := tc.ceremony
+			if ceremony == "" {
+				ceremony = ccd.Type
+			}
+
+			err = ccd.Verify(challenge.String(), ceremony, rpOrigins, rpTopOrigins, tc.topOriginMode, tc.allowCrossOrign)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+			} else if tc.errType != "" {
+				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestVerifyCollectedClientData(t *testing.T) {
-	newChallenge, err := CreateChallenge()
+func TestVerifyCollectedClientData_IncorrectChallenge(t *testing.T) {
+	challenge, err := CreateChallenge()
 	require.NoError(t, err)
 
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
-
-	var storedChallenge = newChallenge
-
-	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode))
-}
-
-func TestVerifyCollectedClientDataNoTopOrigin(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "", true)
-
-	var storedChallenge = newChallenge
-
-	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode))
-}
-
-func TestVerifyCollectedClientDataTopOrigin(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example2.com", true)
-
-	var storedChallenge = newChallenge
-
-	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode))
-}
-
-func TestVerifyCollectedClientDataTopOriginIgnore(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example2.com", true)
-
-	var storedChallenge = newChallenge
-
-	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{"https://example3.com"}, TopOriginIgnoreVerificationMode))
-}
-
-func TestVerifyCollectedClientDataTopOriginImplicit(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
-
-	var storedChallenge = newChallenge
-
-	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, TopOriginImplicitVerificationMode))
-}
-
-func TestVerifyCollectedClientDataTopOriginAuto(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
-
-	var storedChallenge = newChallenge
-
-	require.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{"https://example.com"}, TopOriginAutoVerificationMode))
-}
-
-func TestVerifyCollectedClientDataTopOriginInvalidValue(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
-
-	var storedChallenge = newChallenge
-
-	AssertIsProtocolError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{"https://example.com"}, -1), "not_implemented", "Error handling unknown Top Origin verification mode", "")
-}
-
-func TestVerifyCollectedClientDataIncorrectChallenge(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
+	ccd := setupCollectedClientData(challenge, "http://example.com", "http://example.com", true)
 
 	bogusChallenge, err := CreateChallenge()
 	require.NoError(t, err)
 
-	AssertIsProtocolError(t, ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode), "verification_error", "Error validating challenge", fmt.Sprintf("Expected b Value: \"%s\"\nReceived b: \"%s\"\n", bogusChallenge.String(), newChallenge.String()))
-}
-
-func TestVerifyCollectedClientDataUnexpectedOrigin(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
-	storedChallenge := newChallenge
-	expectedOrigins := []string{"http://different.com"}
-
-	AssertIsProtocolError(t, ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins, nil, TopOriginExplicitVerificationMode), "verification_error", "Error validating origin", "Expected Values: [http://different.com], Received: http://example.com")
-}
-
-func TestVerifyCollectedClientDataUnexpectedTopOriginCrossOrigin(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example2.com", false)
-	storedChallenge := newChallenge
-
-	AssertIsProtocolError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode), "verification_error", "Error validating topOrigin", "The topOrigin can't have values unless crossOrigin is true.")
-}
-
-func TestVerifyCollectedClientDataUnexpectedTopOrigin(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
-	storedChallenge := newChallenge
-	expectedOrigins := []string{"http://different.com"}
-
-	assert.EqualError(t, ccd.Verify(storedChallenge.String(), ccd.Type, []string{ccd.TopOrigin}, expectedOrigins, TopOriginExplicitVerificationMode), "Error validating top origin")
-}
-
-func TestVerifyCollectedClientDataWithMultipleExpectedOrigins(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "http://example.com", true)
-
-	var storedChallenge = newChallenge
-
-	expectedOrigins := []string{"https://exmaple.com", "9C:B4:AE:EF:05:53:6E:73:0E:C4:B8:02:E7:67:F6:7D:A4:E7:BC:26:D7:42:B5:27:FF:01:7D:68:2A:EB:FA:1D", ccd.Origin}
-
-	assert.NoError(t, ccd.Verify(storedChallenge.String(), ccd.Type, expectedOrigins, nil, TopOriginIgnoreVerificationMode))
-}
-
-func TestVerifyCollectedClientData_CeremonyMismatch(t *testing.T) {
-	newChallenge, err := CreateChallenge()
-	require.NoError(t, err)
-
-	ccd := setupCollectedClientData(newChallenge, "http://example.com", "", false)
-
-	err = ccd.Verify(newChallenge.String(), AssertCeremony, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode)
-	assert.EqualError(t, err, "Error validating ceremony type")
-	AssertIsProtocolError(t, err, "verification_error", "Error validating ceremony type", fmt.Sprintf("Expected Value: %s, Received: %s", AssertCeremony, ccd.Type))
+	AssertIsProtocolError(t, ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode, true), "verification_error", "Error validating challenge", fmt.Sprintf("Expected b Value: \"%s\"\nReceived b: \"%s\"\n", bogusChallenge.String(), challenge.String()))
 }
 
 func TestVerifyCollectedClientData_TokenBinding(t *testing.T) {
@@ -207,7 +239,7 @@ func TestVerifyCollectedClientData_TokenBinding(t *testing.T) {
 			ccd := setupCollectedClientData(newChallenge, "http://example.com", "", false)
 			ccd.TokenBinding = tc.tokenBinding
 
-			err = ccd.Verify(newChallenge.String(), CreateCeremony, []string{ccd.Origin}, nil, TopOriginIgnoreVerificationMode)
+			err = ccd.Verify(newChallenge.String(), CreateCeremony, []string{ccd.Origin}, nil, TopOriginExplicitVerificationMode, false)
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
 			} else {
@@ -402,4 +434,16 @@ func TestIsOriginInHaystack(t *testing.T) {
 			assert.Equal(t, tc.expected, IsOriginInHaystack(tc.origin, tc.haystack))
 		})
 	}
+}
+
+func setupCollectedClientData(challenge URLEncodedBase64, origin, topOrigin string, crossOrigin bool) *CollectedClientData { //nolint:unparam
+	ccd := &CollectedClientData{
+		Type:        CreateCeremony,
+		Origin:      origin,
+		TopOrigin:   topOrigin,
+		CrossOrigin: crossOrigin,
+		Challenge:   challenge.String(),
+	}
+
+	return ccd
 }
