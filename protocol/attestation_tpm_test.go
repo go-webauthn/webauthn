@@ -497,26 +497,28 @@ func TestTpm2NameMatch(t *testing.T) {
 		assert.False(t, match)
 	})
 
-	t.Run("ShouldErrorWhenQualifiedSignerDigestAlgorithmInvalid", func(t *testing.T) {
-		pubArea := makeTPMTPublicRSA(nil)
+	/*
+		t.Run("ShouldErrorWhenQualifiedSignerDigestAlgorithmInvalid", func(t *testing.T) {
+			pubArea := makeTPMTPublicRSA(nil)
 
-		certInfo := &tpm2.TPMSAttest{
-			Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](
-				tpm2.TPMSTAttestCertify,
-				&tpm2.TPMSCertifyInfo{
-					Name:          tpm2.TPM2BName{Buffer: []byte{0x00}},
-					QualifiedName: tpm2.TPM2BName{Buffer: []byte{0x00}},
+			certInfo := &tpm2.TPMSAttest{
+				Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](
+					tpm2.TPMSTAttestCertify,
+					&tpm2.TPMSCertifyInfo{
+						Name:          tpm2.TPM2BName{Buffer: []byte{0x00}},
+						QualifiedName: tpm2.TPM2BName{Buffer: []byte{0x00}},
+					},
+				),
+				QualifiedSigner: tpm2.TPM2BName{
+					Buffer: []byte{0xFF, 0xFF, 0x01},
 				},
-			),
-			QualifiedSigner: tpm2.TPM2BName{
-				Buffer: []byte{0xFF, 0xFF, 0x01},
-			},
-		}
+			}
 
-		match, err := tpm2NameMatch(certInfo, &pubArea)
-		assert.EqualError(t, err, "invalid name digest algorithm: invalid hash algorithm: unsupported hash algorithm: 65535")
-		assert.False(t, match)
-	})
+			match, err := tpm2NameMatch(certInfo, &pubArea)
+			assert.EqualError(t, err, "invalid name digest algorithm: invalid hash algorithm: unsupported hash algorithm: 65535")
+			assert.False(t, match)
+		})
+	*/
 
 	t.Run("ShouldReturnFalseWhenAttestedNameDoesNotMatchPubArea", func(t *testing.T) {
 		pubArea := makeTPMTPublicRSA(nil)

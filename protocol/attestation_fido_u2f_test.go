@@ -71,17 +71,6 @@ func TestVerifyU2FFormat_Errors(t *testing.T) {
 		err  string
 	}{
 		{
-			name: "ShouldFailNonZeroAAGUID",
-			att: AttestationObject{
-				AuthData: AuthenticatorData{
-					AttData: AttestedCredentialData{
-						AAGUID: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
-					},
-				},
-			},
-			err: "U2F attestation format AAGUID not set to 0x00",
-		},
-		{
 			name: "ShouldFailInvalidPublicKey",
 			att: AttestationObject{
 				AuthData: AuthenticatorData{

@@ -301,9 +301,13 @@ func tpm2NameMatch(certInfo *tpm2.TPMSAttest, pubArea *tpm2.TPMTPublic) (match b
 		return false, err
 	}
 
-	if _, _, err = tpm2NameDigest(certInfo.QualifiedSigner); err != nil {
-		return false, fmt.Errorf("invalid name digest algorithm: %w", err)
-	}
+	// Per the WebAuthn Specification §8.3 step 5:
+	//
+	// Note: The remaining fi	elds in the "Standard Attestation Structure" [TPMv2-Part1] section 31.2, i.e.,
+	// qualifiedSigner, clockInfo and firmwareVersion are ignored. Depending on the properties of the aikCert key used,
+	// these fields may be obfuscated. If valid, these MAY be used as an input to risk engines.
+	//
+	// See: https://w3c.github.io/webauthn/#sctn-tpm-attestation
 
 	return subtle.ConstantTimeCompare(certifyInfo.Name.Buffer, name.Buffer) == 1, nil
 }
@@ -487,49 +491,64 @@ func parseSANExtension(value []byte) (manufacturer string, model string, version
 	return
 }
 
-// See https://trustedcomputinggroup.org/resource/vendor-id-registry/ for registry contents.
-var tpmManufacturers = []struct {
+type tpmManufacturer struct {
 	id   string
 	name string
 	code string
-}{
-	{"414D4400", "AMD", "AMD"},
-	{"414E5400", "Ant Group", "ANT"},
-	{"41544D4C", "Atmel", "ATML"},
-	{"4252434D", "Broadcom", "BRCM"},
-	{"4353434F", "Cisco", "CSCO"},
-	{"464C5953", "Flyslice Technologies", "FLYS"},
-	{"524F4343", "Fuzhou Rockchip", "ROCC"},
-	{"474F4F47", "Google", "GOOG"},
-	{"48504900", "HPI", "HPI"},
-	{"48504500", "HPE", "HPE"},
-	{"48495349", "Huawei", "HISI"},
-	{"49424d00", "IBM", "IBM"},
-	{"49424D00", "IBM", "IBM"},
-	{"49465800", "Infineon", "IFX"},
-	{"494E5443", "Intel", "INTC"},
-	{"4C454E00", "Lenovo", "LEN"},
-	{"4D534654", "Microsoft", "MSFT"},
-	{"4E534D20", "National Semiconductor", "NSM"},
-	{"4E545A00", "Nationz", "NTZ"},
-	{"4E534700", "NSING", "NSG"},
-	{"4E544300", "Nuvoton Technology", "NTC"},
-	{"51434F4D", "Qualcomm", "QCOM"},
-	{"534D534E", "Samsung", "SECE"},
-	{"53454345", "SecEdge", "SecEdge"},
-	{"534E5300", "Sinosun", "SNS"},
-	{"534D5343", "SMSC", "SMSC"},
-	{"53544D20", "ST Microelectronics", "STM"},
-	{"54584E00", "Texas Instruments", "TXN"},
-	{"57454300", "Winbond", "WEC"},
-	{"5345414C", "Wisekey", "SEAL"},
-	{"FFFFF1D0", "FIDO Alliance Conformance Testing", "FIDO"},
 }
+
+// See https://trustedcomputinggroup.org/resource/vendor-id-registry/ for registry contents.
+var (
+	tpmManufacturers = []tpmManufacturer{
+		{"414D4400", "AMD", "AMD"},
+		{"414E5400", "Ant Group", "ANT"},
+		{"41544D4C", "Atmel", "ATML"},
+		{"4252434D", "Broadcom", "BRCM"},
+		{"4353434F", "Cisco", "CSCO"},
+		{"464C5953", "Flyslice Technologies", "FLYS"},
+		{"524F4343", "Fuzhou Rockchip", "ROCC"},
+		{"474F4F47", "Google", "GOOG"},
+		{"48504900", "HPI", "HPI"},
+		{"48504500", "HPE", "HPE"},
+		{"48495349", "Huawei", "HISI"},
+		{"49424d00", "IBM", "IBM"},
+		{"49424D00", "IBM", "IBM"},
+		{"49465800", "Infineon", "IFX"},
+		{"494E5443", "Intel", "INTC"},
+		{"4C454E00", "Lenovo", "LEN"},
+		{"4D534654", "Microsoft", "MSFT"},
+		{"4E534D20", "National Semiconductor", "NSM"},
+		{"4E545A00", "Nationz", "NTZ"},
+		{"4E534700", "NSING", "NSG"},
+		{"4E544300", "Nuvoton Technology", "NTC"},
+		{"51434F4D", "Qualcomm", "QCOM"},
+		{"534D534E", "Samsung", "SECE"},
+		{"53454345", "SecEdge", "SecEdge"},
+		{"534E5300", "Sinosun", "SNS"},
+		{"534D5343", "SMSC", "SMSC"},
+		{"53544D20", "ST Microelectronics", "STM"},
+		{"54584E00", "Texas Instruments", "TXN"},
+		{"57454300", "Winbond", "WEC"},
+		{"5345414C", "Wisekey", "SEAL"},
+		{"FFFFF1D0", "FIDO Alliance Conformance Testing", "FIDO"},
+	}
+	tpmManufacturersTest = []tpmManufacturer{
+		{"00000000", "WebAuthn Test", "WebAuthnTest"},
+	}
+)
 
 func isValidTPMManufacturer(id string) bool {
 	for _, m := range tpmManufacturers {
 		if m.id == id {
 			return true
+		}
+	}
+
+	if testMode.Load() {
+		for _, m := range tpmManufacturersTest {
+			if m.id == id {
+				return true
+			}
 		}
 	}
 
