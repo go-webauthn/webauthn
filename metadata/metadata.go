@@ -18,7 +18,7 @@ func Fetch() (metadata *Metadata, err error) {
 	var (
 		decoder *Decoder
 		payload *PayloadJSON
-		res     *http.Response
+		resp    *http.Response
 	)
 
 	if decoder, err = NewDecoder(WithIgnoreEntryParsingErrors()); err != nil {
@@ -27,11 +27,15 @@ func Fetch() (metadata *Metadata, err error) {
 
 	client := &http.Client{}
 
-	if res, err = client.Get(ProductionMDSURL); err != nil {
+	if resp, err = client.Get(ProductionMDSURL); err != nil {
 		return nil, err
 	}
 
-	if payload, err = decoder.Decode(res.Body); err != nil {
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if payload, err = decoder.Decode(resp.Body); err != nil {
 		return nil, err
 	}
 
