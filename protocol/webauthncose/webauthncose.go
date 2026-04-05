@@ -333,11 +333,11 @@ func (k *EC2PublicKeyData) TPMCurveID() tpm2.TPMECCCurve {
 
 func ec2AlgCurve(coseAlg int64) elliptic.Curve {
 	switch COSEAlgorithmIdentifier(coseAlg) {
-	case AlgES512: // IANA COSE code for ECDSA w/ SHA-512.
+	case AlgES512, AlgESP512:
 		return elliptic.P521()
-	case AlgES384: // IANA COSE code for ECDSA w/ SHA-384.
+	case AlgES384, AlgESP384:
 		return elliptic.P384()
-	case AlgES256: // IANA COSE code for ECDSA w/ SHA-256.
+	case AlgES256, AlgESP256:
 		return elliptic.P256()
 	default:
 		return nil
@@ -370,17 +370,21 @@ var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
 	hash   crypto.Hash
 	sigAlg x509.SignatureAlgorithm
 }{
-	AlgRS1:   {"SHA1-RSA", crypto.SHA1, x509.SHA1WithRSA},
-	AlgRS256: {"SHA256-RSA", crypto.SHA256, x509.SHA256WithRSA},
-	AlgRS384: {"SHA384-RSA", crypto.SHA384, x509.SHA384WithRSA},
-	AlgRS512: {"SHA512-RSA", crypto.SHA512, x509.SHA512WithRSA},
-	AlgPS256: {"SHA256-RSAPSS", crypto.SHA256, x509.SHA256WithRSAPSS},
-	AlgPS384: {"SHA384-RSAPSS", crypto.SHA384, x509.SHA384WithRSAPSS},
-	AlgPS512: {"SHA512-RSAPSS", crypto.SHA512, x509.SHA512WithRSAPSS},
-	AlgES256: {"ECDSA-SHA256", crypto.SHA256, x509.ECDSAWithSHA256},
-	AlgES384: {"ECDSA-SHA384", crypto.SHA384, x509.ECDSAWithSHA384},
-	AlgES512: {"ECDSA-SHA512", crypto.SHA512, x509.ECDSAWithSHA512},
-	AlgEdDSA: {"EdDSA", crypto.SHA512, x509.PureEd25519},
+	AlgRS1:     {"SHA1-RSA", crypto.SHA1, x509.SHA1WithRSA},
+	AlgRS256:   {"SHA256-RSA", crypto.SHA256, x509.SHA256WithRSA},
+	AlgRS384:   {"SHA384-RSA", crypto.SHA384, x509.SHA384WithRSA},
+	AlgRS512:   {"SHA512-RSA", crypto.SHA512, x509.SHA512WithRSA},
+	AlgPS256:   {"SHA256-RSAPSS", crypto.SHA256, x509.SHA256WithRSAPSS},
+	AlgPS384:   {"SHA384-RSAPSS", crypto.SHA384, x509.SHA384WithRSAPSS},
+	AlgPS512:   {"SHA512-RSAPSS", crypto.SHA512, x509.SHA512WithRSAPSS},
+	AlgES256:   {"ECDSA-SHA256", crypto.SHA256, x509.ECDSAWithSHA256},
+	AlgESP256:  {"ECDSA-SHA256-Prehashed", crypto.SHA256, x509.ECDSAWithSHA256},
+	AlgES384:   {"ECDSA-SHA384", crypto.SHA384, x509.ECDSAWithSHA384},
+	AlgESP384:  {"ECDSA-SHA384-Prehashed", crypto.SHA384, x509.ECDSAWithSHA384},
+	AlgES512:   {"ECDSA-SHA512", crypto.SHA512, x509.ECDSAWithSHA512},
+	AlgESP512:  {"ECDSA-SHA512-Prehashed", crypto.SHA512, x509.ECDSAWithSHA512},
+	AlgEdDSA:   {"EdDSA", crypto.SHA512, x509.PureEd25519},
+	AlgEd25519: {"Ed25519", crypto.SHA512, x509.PureEd25519},
 }
 
 type Error struct {

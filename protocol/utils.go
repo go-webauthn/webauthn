@@ -141,7 +141,7 @@ func isSelfSigned(c *x509.Certificate) bool {
 //
 // WARNING: Setting mangle=true weakens security by accepting expired certificates.
 func certInsecureConditionalNotAfterMangle(cert *x509.Certificate, mangle bool, safe time.Time) (out *x509.Certificate) {
-	if !mangle || cert.NotAfter.After(safe) {
+	if !mangle || cert.NotAfter.After(time.Now().Add(time.Minute)) {
 		return cert
 	}
 

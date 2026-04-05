@@ -1,6 +1,8 @@
 package protocol
 
-import "encoding/asn1"
+import (
+	"encoding/asn1"
+)
 
 const (
 	stmtAttStmt   = "attStmt"

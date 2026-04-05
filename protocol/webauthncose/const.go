@@ -20,6 +20,13 @@ const (
 	// AlgEdDSA EdDSA.
 	AlgEdDSA COSEAlgorithmIdentifier = -8
 
+	// AlgESP256 is ECDSA using P-256 curve with pre-hashed SHA-256 input.
+	AlgESP256 COSEAlgorithmIdentifier = -9
+
+	// AlgEd25519 is EdDSA using the Ed25519 curve specifically. Unlike [AlgEdDSA] which is the generic EdDSA
+	// identifier, this explicitly specifies the Ed25519 curve.
+	AlgEd25519 COSEAlgorithmIdentifier = -19
+
 	// AlgES384 ECDSA with SHA-384.
 	AlgES384 COSEAlgorithmIdentifier = -35
 
@@ -46,6 +53,12 @@ const (
 
 	// AlgMLDSA87 is ML-DSA with parameter set ML-DSA-87 (FIPS 204).
 	AlgMLDSA87 COSEAlgorithmIdentifier = -50
+
+	// AlgESP384 is ECDSA using P-384 curve with pre-hashed SHA-384 input.
+	AlgESP384 COSEAlgorithmIdentifier = -51
+
+	// AlgESP512 is ECDSA using P-521 curve with pre-hashed SHA-512 input.
+	AlgESP512 COSEAlgorithmIdentifier = -52
 
 	// AlgRS256 RSASSA-PKCS1-v1_5 with SHA-256.
 	AlgRS256 COSEAlgorithmIdentifier = -257

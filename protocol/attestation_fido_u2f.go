@@ -31,11 +31,6 @@ import (
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
 func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
-	// Non-normative verification procedure of expected requirement.
-	if !bytes.Equal(att.AuthData.AttData.AAGUID, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}) {
-		return "", nil, ErrUnsupportedAlgorithm.WithDetails("U2F attestation format AAGUID not set to 0x00")
-	}
-
 	// Signing procedure. Non-normative verification procedure of expected requirement.
 	// If the credential public key of the attested credential is not of algorithm -7 ("ES256"), stop and return an error.
 	var key webauthncose.EC2PublicKeyData
