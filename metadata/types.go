@@ -45,9 +45,16 @@ var (
 	ErrNotInitialized = errors.New("metadata: not initialized")
 )
 
+// PublicKeyCredentialParameters describes a credential type and algorithm pair per the WebAuthn specification. It is
+// used in [AuthenticatorGetInfo] to describe the algorithms supported by an authenticator.
+//
+// See: https://www.w3.org/TR/webauthn-3/#dictdef-publickeycredentialparameters
 type PublicKeyCredentialParameters struct {
-	Type string                               `json:"type"`
-	Alg  webauthncose.COSEAlgorithmIdentifier `json:"alg"`
+	// Type is the credential type, typically "public-key".
+	Type string `json:"type"`
+
+	// Alg is the COSE algorithm identifier.
+	Alg webauthncose.COSEAlgorithmIdentifier `json:"alg"`
 }
 
 type AuthenticatorAttestationTypes []AuthenticatorAttestationType

@@ -48,7 +48,10 @@ func Fetch() (metadata *Metadata, err error) {
 
 // Metadata represents a FIDO Metadata Service BLOB in either a fully parsed or partially parsed state.
 type Metadata struct {
-	Parsed   Parsed
+	// Parsed contains the successfully parsed BLOB payload entries.
+	Parsed Parsed
+
+	// Unparsed contains entries that failed to parse, along with their errors.
 	Unparsed []EntryError
 }
 
@@ -90,10 +93,16 @@ type Parsed struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-payload
 type PayloadJSON struct {
+	// LegalHeader is an indication of the acceptance of the relevant legal agreement for using the MDS.
 	LegalHeader string `json:"legalHeader"`
-	Number      int    `json:"no"`
-	NextUpdate  string `json:"nextUpdate"`
 
+	// Number is the serial number of this Metadata BLOB Payload.
+	Number int `json:"no"`
+
+	// NextUpdate is an ISO-8601 formatted date when the next update will be provided at latest.
+	NextUpdate string `json:"nextUpdate"`
+
+	// Entries is a list of zero or more MetadataBLOBPayloadEntry objects.
 	Entries []EntryJSON `json:"entries"`
 }
 
@@ -165,17 +174,32 @@ type Entry struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-pe
 type EntryJSON struct {
-	Aaid                                 string   `json:"aaid"`
-	AaGUID                               string   `json:"aaguid"`
+	// Aaid is the AAID of the authenticator. Set if the authenticator implements FIDO UAF.
+	Aaid string `json:"aaid"`
+
+	// AaGUID is the Authenticator Attestation GUID. Set if the authenticator implements FIDO2.
+	AaGUID string `json:"aaguid"`
+
+	// AttestationCertificateKeyIdentifiers is a list of attestation certificate public key identifiers (hex).
 	AttestationCertificateKeyIdentifiers []string `json:"attestationCertificateKeyIdentifiers"`
 
-	MetadataStatement      StatementJSON               `json:"metadataStatement"`
-	BiometricStatusReports []BiometricStatusReportJSON `json:"biometricStatusReports"`
-	StatusReports          []StatusReportJSON          `json:"statusReports"`
+	// MetadataStatement is the metadataStatement JSON object as defined in FIDOMetadataStatement.
+	MetadataStatement StatementJSON `json:"metadataStatement"`
 
+	// BiometricStatusReports is the biometric certification status of one or more biometric components.
+	BiometricStatusReports []BiometricStatusReportJSON `json:"biometricStatusReports"`
+
+	// StatusReports is an array of status reports applicable to this authenticator.
+	StatusReports []StatusReportJSON `json:"statusReports"`
+
+	// TimeOfLastStatusChange is an ISO-8601 formatted date since when the status report array was set.
 	TimeOfLastStatusChange string `json:"timeOfLastStatusChange"`
-	RogueListURL           string `json:"rogueListURL"`
-	RogueListHash          string `json:"rogueListHash"`
+
+	// RogueListURL is a URL of a list of rogue (i.e. untrusted) individual authenticators.
+	RogueListURL string `json:"rogueListURL"`
+
+	// RogueListHash is the hash value computed over the Base64url encoding of the rogueList at rogueListURL.
+	RogueListHash string `json:"rogueListHash"`
 }
 
 func (j EntryJSON) Parse() (entry Entry, err error) {
@@ -873,9 +897,9 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 	}, nil
 }
 
-// RogueListEntry is a structure representing the RogueListEntry MDS3.1 dictionary.
+// RogueListEntry is a structure representing the RogueListEntry dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1-ps-20250521.html#sctn-rogue-list-entry
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-rogue-list-entry
 type RogueListEntry struct {
 	// Sk is the base64url encoding of the rogue authenticator's secret key.
 	Sk string `json:"sk"`
@@ -884,7 +908,7 @@ type RogueListEntry struct {
 	Date string `json:"date"`
 }
 
-// CodeAccuracyDescriptor is a structure representing the CodeAccuracyDescriptor MDS3.1 dictionary.
+// CodeAccuracyDescriptor is a structure representing the CodeAccuracyDescriptor dictionary.
 // It describes the relevant accuracy/complexity aspects of passcode user verification methods.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-cad
@@ -907,7 +931,7 @@ type CodeAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// BiometricAccuracyDescriptor is a structure representing the BiometricAccuracyDescriptor MDS3.1 dictionary.
+// BiometricAccuracyDescriptor is a structure representing the BiometricAccuracyDescriptor dictionary.
 // It describes relevant accuracy/complexity aspects in the case of a biometric user verification method.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-bad
@@ -941,7 +965,7 @@ type BiometricAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// PatternAccuracyDescriptor is a structure representing the PatternAccuracyDescriptor MDS3.1 dictionary.
+// PatternAccuracyDescriptor is a structure representing the PatternAccuracyDescriptor dictionary.
 // It describes relevant accuracy/complexity aspects in the case that a pattern is used as the user verification method.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-pad
@@ -961,7 +985,7 @@ type PatternAccuracyDescriptor struct {
 	BlockSlowdown uint16 `json:"blockSlowdown"`
 }
 
-// VerificationMethodDescriptor is a structure representing the VerificationMethodDescriptor MDS3.1 dictionary.
+// VerificationMethodDescriptor is a structure representing the VerificationMethodDescriptor dictionary.
 // It describes a descriptor for a specific base user verification method as implemented by the authenticator.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-vmd
@@ -981,7 +1005,7 @@ type VerificationMethodDescriptor struct {
 	PaDesc PatternAccuracyDescriptor `json:"paDesc"`
 }
 
-// RGBPaletteEntry is a structure representing the RGBPaletteEntry MDS3.1 dictionary.
+// RGBPaletteEntry is a structure representing the RGBPaletteEntry dictionary.
 // It describes an RGB three-sample tuple palette entry.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-rgbpe
@@ -1027,7 +1051,7 @@ type DisplayPNGCharacteristicsDescriptor struct {
 	Plte []RGBPaletteEntry `json:"plte"`
 }
 
-// EcdaaTrustAnchor is a structure representing the EcdaaTrustAnchor MDS3.1 dictionary.
+// EcdaaTrustAnchor is a structure representing the EcdaaTrustAnchor dictionary.
 // In the case of ECDAA attestation, the ECDAA-Issuer's trust anchor MUST be specified in this field.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ecdaata
@@ -1052,7 +1076,7 @@ type EcdaaTrustAnchor struct {
 	G1Curve string `json:"G1Curve"`
 }
 
-// ExtensionDescriptor is a structure representing the ExtensionDescriptor MDS3.1 dictionary.
+// ExtensionDescriptor is a structure representing the ExtensionDescriptor dictionary.
 // This descriptor contains an extension supported by the authenticator.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ed
@@ -1084,7 +1108,7 @@ type Version struct {
 	Minor uint16 `json:"minor"`
 }
 
-// AuthenticatorGetInfo is a structure representing the AuthenticatorGetInfo MDS3.1 dictionary.
+// AuthenticatorGetInfo is a structure representing the AuthenticatorGetInfo dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-agid
 type AuthenticatorGetInfo struct {
@@ -1288,7 +1312,11 @@ func DefaultUndesiredAuthenticatorStatuses() []AuthenticatorStatus {
 	return undesired
 }
 
+// EntryError represents an [EntryJSON] that failed to parse, along with the error that occurred.
 type EntryError struct {
+	// Error is the parsing error that occurred.
 	Error error
+
+	// EntryJSON is the raw JSON entry that failed to parse.
 	EntryJSON
 }
