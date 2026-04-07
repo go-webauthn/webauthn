@@ -6,6 +6,8 @@ github.com/go-viper/mapstructure/v2 v2.5.0 h1:vM5IJoUAy3d7zRSVtIwQgBj7BiWtMPfmPE
 github.com/go-viper/mapstructure/v2 v2.5.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
 github.com/go-webauthn/x v0.2.2 h1:zIiipvMbr48CXi5RG0XdBJR94kd8I5LfzHPb/q+YYmk=
 github.com/go-webauthn/x v0.2.2/go.mod h1:IpJ5qyWB9NRhLX3C7gIfjTU7RZLXEP6kzFkoVSE7Fz4=
+github.com/go-webauthn/x v0.2.3-0.20260403140929-a24bfe17cec1 h1:Acwk6lUm2y8Zno/GsZsBK9qS0OvmEkJhdWrfPht9vnM=
+github.com/go-webauthn/x v0.2.3-0.20260403140929-a24bfe17cec1/go.mod h1:IpJ5qyWB9NRhLX3C7gIfjTU7RZLXEP6kzFkoVSE7Fz4=
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=
 github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
 github.com/google/go-tpm v0.9.8 h1:slArAR9Ft+1ybZu0lBwpSmpwhRXaa85hWtMinMyRAWo=
