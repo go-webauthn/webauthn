@@ -143,8 +143,8 @@ func TestAttStatementParseX5CS(t *testing.T) {
 	cert := testUtilsGenerateSelfSignedCert(t)
 
 	testCases := []struct {
-		name string
-		have map[string]any
+		name     string
+		have     map[string]any
 		expected struct {
 			count int
 			err   string
@@ -612,4 +612,8 @@ func testUtilsGenerateCertWithRSAKey(t *testing.T, pub *rsa.PublicKey) *x509.Cer
 	require.NoError(t, err)
 
 	return cert
+}
+
+func ptr[T any](in T) *T {
+	return &in
 }
