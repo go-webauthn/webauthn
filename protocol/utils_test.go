@@ -143,8 +143,8 @@ func TestAttStatementParseX5CS(t *testing.T) {
 	cert := testUtilsGenerateSelfSignedCert(t)
 
 	testCases := []struct {
-		name string
-		have map[string]any
+		name     string
+		have     map[string]any
 		expected struct {
 			count int
 			err   string

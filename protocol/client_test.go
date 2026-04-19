@@ -91,8 +91,8 @@ func TestVerifyCollectedClientData(t *testing.T) {
 			allowCrossOrign: true,
 			rpTopOrigins:    []string{"https://example.com"},
 			topOriginMode:   -1,
-			errType:       "not_implemented",
-			errDetails:    "Error handling unknown Top Origin verification mode",
+			errType:         "not_implemented",
+			errDetails:      "Error handling unknown Top Origin verification mode",
 		},
 		{
 			name:            "ShouldFailCrossOriginNotAllowed",
@@ -113,9 +113,9 @@ func TestVerifyCollectedClientData(t *testing.T) {
 			allowCrossOrign: true,
 			rpOrigins:       []string{"http://different.com"},
 			topOriginMode:   TopOriginExplicitVerificationMode,
-			errType:       "verification_error",
-			errDetails:    "Error validating origin",
-			errInfo:       "Expected Values: [http://different.com], Received: http://example.com",
+			errType:         "verification_error",
+			errDetails:      "Error validating origin",
+			errInfo:         "Expected Values: [http://different.com], Received: http://example.com",
 		},
 		{
 			name:          "ShouldFailTopOriginWithoutCrossOrigin",
