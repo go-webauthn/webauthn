@@ -10,6 +10,11 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
+//go:generate msgp
+
+//msgp:replace protocol.AuthenticatorTransport with:string
+//msgp:shim CredentialFlags as:byte using:(CredentialFlags).MsgpByte/CredentialFlagsFromMsgpByte
+
 // NewCredential returns a [*Credential] from a successfully validated registration response. The returned Credential
 // includes a populated [CredentialAttestation] containing the raw attestation data needed for future verification;
 // see the [CredentialAttestation] documentation for why these values must be persisted.
@@ -52,35 +57,35 @@ func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationDa
 // See: §4. Terminology: Credential Record (https://www.w3.org/TR/webauthn-3/#credential-record)
 type Credential struct {
 	// The ID is the ID of the public key credential source. Described by the Credential Record 'id' field.
-	ID []byte `json:"id"`
+	ID []byte `json:"id" msg:"id"`
 
 	// The credential public key of the public key credential source. Described by the Credential Record 'publicKey'
 	// field.
-	PublicKey []byte `json:"publicKey"`
+	PublicKey []byte `json:"publicKey" msg:"pk"`
 
 	// AttestationType is the attestation type as conveyed by the authenticator during the registration ceremonyl
 	// one of the values defined by [metadata.AuthenticatorAttestationType] ("basic_full", "basic_surrogate",
 	// "attca", "anonca", "ecdaa", "none"). Prior releases incorrectly stored the attestation FORMAT here; see the
 	// custom [Credential.UnmarshalJSON] for the backward-compatibility migration applied when decoding such
 	// records.
-	AttestationType string `json:"attestationType"`
+	AttestationType string `json:"attestationType" msg:"atttype"`
 
 	// AttestationFormat is the attestation statement format identifier ("packed", "tpm", "android-key",
 	// "android-safetynet", "fido-u2f", "apple", "compound", "none"); see §8 of the WebAuthn specification and
 	// the AttestationFormat constants in the protocol package.
-	AttestationFormat string `json:"attestationFormat"`
+	AttestationFormat string `json:"attestationFormat" msg:"attfmt"`
 
 	// Transport types the authenticator supports. Described by the Credential Record 'transports' field.
-	Transport []protocol.AuthenticatorTransport `json:"transport"`
+	Transport []protocol.AuthenticatorTransport `json:"transport" msg:"t"`
 
 	// Flags represent the commonly stored flags.
-	Flags CredentialFlags `json:"flags"`
+	Flags CredentialFlags `json:"flags" msg:"flg"`
 
 	// The Authenticator information for a given Credential.
-	Authenticator Authenticator `json:"authenticator"`
+	Authenticator Authenticator `json:"authenticator" msg:"a"`
 
 	// The attestation values that can be used to validate this Credential via the MDS3 at a later date.
-	Attestation CredentialAttestation `json:"attestation"`
+	Attestation CredentialAttestation `json:"attestation" msg:"att"`
 }
 
 // UnmarshalJSON decodes a [Credential] from JSON, applying a backward-compatibility migration for records produced
@@ -245,6 +250,13 @@ func NewCredentialFlags(flags protocol.AuthenticatorFlags) CredentialFlags {
 	}
 }
 
+// CredentialFlagsFromMsgpByte reconstructs a [CredentialFlags] from the single-byte representation produced by
+// [CredentialFlags.MsgpByte]. It is intended for use by the msgp-generated serialization layer; normal callers
+// should prefer [NewCredentialFlags].
+func CredentialFlagsFromMsgpByte(b byte) CredentialFlags {
+	return NewCredentialFlags(protocol.AuthenticatorFlags(b))
+}
+
 // CredentialFlags contains the boolean flags derived from the authenticator data during registration or login.
 // These flags indicate the state of user presence, user verification, and backup eligibility/state at the time
 // the credential was used.
@@ -271,6 +283,13 @@ func (f CredentialFlags) ProtocolValue() protocol.AuthenticatorFlags {
 	return f.raw
 }
 
+// MsgpByte returns the [CredentialFlags] encoded as a single byte, equivalent to the raw
+// [protocol.AuthenticatorFlags] value. It is intended for use by the msgp-generated serialization layer (see the
+// //msgp:shim directive in this file); normal callers should prefer [CredentialFlags.ProtocolValue].
+func (f CredentialFlags) MsgpByte() byte {
+	return byte(f.raw)
+}
+
 // CredentialAttestation holds the raw attestation data from a registration ceremony. These values are intentionally
 // stored in their original unparsed form rather than as parsed structures. This is critical because:
 //
@@ -285,20 +304,20 @@ func (f CredentialFlags) ProtocolValue() protocol.AuthenticatorFlags {
 type CredentialAttestation struct {
 	// ClientDataJSON is the raw JSON-encoded client data from the registration response. This is the verbatim value
 	// provided by the client and is used to recompute the client data hash during later verification.
-	ClientDataJSON []byte `json:"clientDataJSON"`
+	ClientDataJSON []byte `json:"clientDataJSON" msg:"cdj"`
 
 	// ClientDataHash is the SHA-256 hash of ClientDataJSON computed during registration verification. If empty,
 	// [Credential.Verify] will recompute it from ClientDataJSON.
-	ClientDataHash []byte `json:"clientDataHash"`
+	ClientDataHash []byte `json:"clientDataHash" msg:"cdh"`
 
 	// AuthenticatorData is the raw authenticator data from the registration response as provided in the
 	// RegistrationResponseJSON. This is the unparsed byte representation that can be re-parsed for future validation.
-	AuthenticatorData []byte `json:"authenticatorData"`
+	AuthenticatorData []byte `json:"authenticatorData" msg:"data"`
 
 	// PublicKeyAlgorithm is the COSE algorithm identifier for the credential's public key.
-	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm"`
+	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm" msg:"alg"`
 
 	// Object is the raw CBOR-encoded attestation object from the registration response. This contains the attestation
 	// statement, format, and authenticator data needed by [Credential.Verify] to re-perform attestation verification.
-	Object []byte `json:"object"`
+	Object []byte `json:"object" msg:"obj"`
 }

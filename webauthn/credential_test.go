@@ -1,14 +1,17 @@
 package webauthn
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinylib/msgp/msgp"
 	"go.uber.org/mock/gomock"
 
 	"github.com/go-webauthn/webauthn/metadata"
@@ -708,3 +711,445 @@ func testCredentialFromPackedAttestation(t *testing.T) Credential {
 		},
 	}
 }
+
+func TestCredential_MsgpRoundTrip(t *testing.T) {
+	// Exercises the Marshal/Unmarshal and Encode/Decode paths of every top-level field branch on Credential,
+	// including the Transport slice element, the CredentialFlags shim, and the nested Authenticator /
+	// CredentialAttestation structs. The generated TestMarshalUnmarshalCredential only covers the zero value.
+	original := newPopulatedCredential()
+
+	t.Run("MarshalUnmarshalPreservesFields", func(t *testing.T) {
+		data, err := original.MarshalMsg(nil)
+		require.NoError(t, err)
+
+		var decoded Credential
+
+		left, err := decoded.UnmarshalMsg(data)
+		require.NoError(t, err)
+		assert.Empty(t, left, "UnmarshalMsg should consume all bytes")
+		assert.Equal(t, original, decoded)
+
+		// Msgsize returns an upper-bound estimate; marshalled output must fit within it.
+		assert.LessOrEqual(t, len(data), original.Msgsize())
+	})
+
+	t.Run("EncodeDecodePreservesFields", func(t *testing.T) {
+		var buf bytes.Buffer
+
+		err := msgp.Encode(&buf, &original) //nolint:gosec
+		require.NoError(t, err)
+
+		var decoded Credential
+
+		require.NoError(t, msgp.Decode(&buf, &decoded))
+		assert.Equal(t, original, decoded)
+	})
+
+	t.Run("UnmarshalSkipsUnknownKeysAlongsideKnown", func(t *testing.T) {
+		data, err := original.MarshalMsg(nil)
+		require.NoError(t, err)
+
+		size, rest, err := msgp.ReadMapHeaderBytes(data)
+		require.NoError(t, err)
+
+		spliced := msgp.AppendMapHeader(nil, size+1)
+		spliced = msgp.AppendString(spliced, "xyz")
+		spliced = msgp.AppendBool(spliced, true)
+		spliced = append(spliced, rest...)
+
+		var decoded Credential
+
+		left, err := decoded.UnmarshalMsg(spliced)
+		require.NoError(t, err)
+		assert.Empty(t, left)
+		assert.Equal(t, original, decoded)
+	})
+
+	t.Run("UnmarshalSkipsUnknownKeysOnly", func(t *testing.T) {
+		tiny := []byte{0x81, 0xa3, 'x', 'y', 'z', 0xc3}
+
+		var decoded Credential
+
+		left, err := decoded.UnmarshalMsg(tiny)
+		require.NoError(t, err)
+		assert.Empty(t, left)
+		assert.Equal(t, Credential{}, decoded)
+	})
+}
+
+func TestCredentialAttestation_MsgpRoundTrip(t *testing.T) {
+	original := CredentialAttestation{
+		ClientDataJSON:     []byte(`{"type":"webauthn.create"}`),
+		ClientDataHash:     bytes.Repeat([]byte{0x01}, 32),
+		AuthenticatorData:  []byte{0xff, 0xee, 0xdd},
+		PublicKeyAlgorithm: -257,
+		Object:             []byte{0xca, 0xfe, 0xba, 0xbe},
+	}
+
+	data, err := original.MarshalMsg(nil)
+	require.NoError(t, err)
+
+	var decoded CredentialAttestation
+
+	left, err := decoded.UnmarshalMsg(data)
+	require.NoError(t, err)
+	assert.Empty(t, left)
+	assert.Equal(t, original, decoded)
+	assert.LessOrEqual(t, len(data), original.Msgsize())
+
+	// EncodeMsg / DecodeMsg via msgp.Writer and msgp.Reader path.
+	var buf bytes.Buffer
+
+	require.NoError(t, msgp.Encode(&buf, &original))
+
+	var streamDecoded CredentialAttestation
+
+	require.NoError(t, msgp.Decode(&buf, &streamDecoded))
+	assert.Equal(t, original, streamDecoded)
+}
+
+func TestCredentialFlags_MsgpRoundTrip(t *testing.T) {
+	// The //msgp:shim directive makes CredentialFlags encode as a single msgpack byte via MsgpByte and decode via
+	// CredentialFlagsFromMsgpByte. Generated code for CredentialFlags has the smallest surface of any msgp method
+	// pair in this package and was 0%-covered before this test.
+	testCases := []struct {
+		name  string
+		flags protocol.AuthenticatorFlags
+	}{
+		{"Zero", 0},
+		{"UserPresent", protocol.FlagUserPresent},
+		{"UserVerified", protocol.FlagUserVerified},
+		{"AllKnownFlags", protocol.FlagUserPresent | protocol.FlagUserVerified | protocol.FlagBackupEligible | protocol.FlagBackupState},
+		{"AllBitsSet", protocol.AuthenticatorFlags(0xFF)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			original := NewCredentialFlags(tc.flags)
+
+			data, err := original.MarshalMsg(nil)
+			require.NoError(t, err)
+			// msgpack encodes a byte as either a 1-byte positive fixint (values 0x00-0x7f) or a 2-byte uint 8
+			// (0xcc + payload) for values ≥ 0x80; either is acceptable.
+			assert.LessOrEqual(t, len(data), 2, "CredentialFlags should encode in at most 2 msgpack bytes")
+			assert.GreaterOrEqual(t, len(data), 1)
+
+			var decoded CredentialFlags
+
+			left, err := decoded.UnmarshalMsg(data)
+			require.NoError(t, err)
+			assert.Empty(t, left)
+			assert.Equal(t, original, decoded)
+			assert.Equal(t, original.ProtocolValue(), decoded.ProtocolValue())
+
+			// Stream path via msgp.Writer / msgp.Reader.
+			var buf bytes.Buffer
+
+			require.NoError(t, msgp.Encode(&buf, original))
+
+			var streamDecoded CredentialFlags
+
+			require.NoError(t, msgp.Decode(&buf, &streamDecoded))
+			assert.Equal(t, original, streamDecoded)
+		})
+	}
+
+	// Truncated-input error path.
+	var decoded CredentialFlags
+
+	_, err := decoded.UnmarshalMsg(nil)
+	require.Error(t, err)
+}
+
+func TestCredentials_MsgpRoundTrip(t *testing.T) {
+	testCases := []struct {
+		name     string
+		original Credentials
+	}{
+		{"Empty", Credentials{}},
+		{"Single", Credentials{newPopulatedCredential()}},
+		{"Multiple", Credentials{newPopulatedCredential(), newPopulatedCredential(), newPopulatedCredential()}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := tc.original.MarshalMsg(nil)
+			require.NoError(t, err)
+
+			var decoded Credentials
+
+			left, err := decoded.UnmarshalMsg(data)
+			require.NoError(t, err)
+			assert.Empty(t, left)
+
+			if len(tc.original) == 0 {
+				assert.Empty(t, decoded)
+			} else {
+				assert.Equal(t, tc.original, decoded)
+			}
+			assert.LessOrEqual(t, len(data), tc.original.Msgsize())
+		})
+	}
+}
+
+func newPopulatedCredential() Credential {
+	return Credential{
+		ID:                []byte{0x01, 0x02, 0x03, 0x04},
+		PublicKey:         []byte{0xa5, 0x01, 0x02, 0x03, 0x26},
+		AttestationType:   "basic_full",
+		AttestationFormat: "packed",
+		Transport:         []protocol.AuthenticatorTransport{protocol.USB, protocol.NFC, protocol.Hybrid},
+		Flags:             NewCredentialFlags(protocol.FlagUserPresent | protocol.FlagUserVerified | protocol.FlagBackupEligible),
+		Authenticator: Authenticator{
+			AAGUID:       bytes.Repeat([]byte{0x11}, 16),
+			SignCount:    42,
+			CloneWarning: true,
+			Attachment:   protocol.Platform,
+		},
+		Attestation: CredentialAttestation{
+			ClientDataJSON:     []byte(`{"type":"webauthn.create","challenge":"abc","origin":"https://example.com"}`),
+			ClientDataHash:     bytes.Repeat([]byte{0xde}, 32),
+			AuthenticatorData:  bytes.Repeat([]byte{0xaa}, 64),
+			PublicKeyAlgorithm: -7,
+			Object:             bytes.Repeat([]byte{0xbb}, 128),
+		},
+	}
+}
+
+func TestCredential_MsgpEncodeErrorPaths(t *testing.T) {
+	v := newPopulatedCredential()
+
+	data, err := v.MarshalMsg(nil)
+	require.NoError(t, err)
+
+	exerciseEncodeMsgErrorPaths(t, &v, data)
+}
+
+func TestCredentialAttestation_MsgpEncodeErrorPaths(t *testing.T) {
+	v := CredentialAttestation{
+		ClientDataJSON:     []byte(`{"type":"webauthn.create"}`),
+		ClientDataHash:     bytes.Repeat([]byte{0x01}, 32),
+		AuthenticatorData:  []byte{0xff, 0xee, 0xdd},
+		PublicKeyAlgorithm: -257,
+		Object:             []byte{0xca, 0xfe, 0xba, 0xbe},
+	}
+
+	data, err := v.MarshalMsg(nil)
+	require.NoError(t, err)
+
+	exerciseEncodeMsgErrorPaths(t, &v, data)
+}
+
+func TestCredentialFlags_MsgpEncodeErrorPaths(t *testing.T) {
+	v := NewCredentialFlags(protocol.FlagUserPresent | protocol.FlagUserVerified | protocol.FlagBackupEligible | protocol.FlagBackupState)
+
+	data, err := v.MarshalMsg(nil)
+	require.NoError(t, err)
+
+	exerciseEncodeMsgErrorPaths(t, v, data)
+}
+
+func TestCredentials_MsgpEncodeErrorPaths(t *testing.T) {
+	v := Credentials{newPopulatedCredential(), newPopulatedCredential()}
+
+	data, err := v.MarshalMsg(nil)
+	require.NoError(t, err)
+
+	exerciseEncodeMsgErrorPaths(t, v, data)
+}
+
+func TestCredential_DecodeMsgInvalidTypes(t *testing.T) {
+	t.Run("NotAMap", func(t *testing.T) {
+		var c Credential
+
+		_, err := c.UnmarshalMsg(msgpString("not a map"))
+		require.Error(t, err)
+
+		var c2 Credential
+
+		require.Error(t, msgp.Decode(bytes.NewReader(msgpString("not a map")), &c2))
+	})
+
+	testCases := []struct {
+		name    string
+		data    []byte
+		wantSub string
+	}{
+		{"IDAsBool", msgpOneFieldMap("id", msgpBool(true)), "ID"},
+		{"PublicKeyAsInt", msgpOneFieldMap("pk", msgpInt64(42)), "PublicKey"},
+		{"AttestationTypeAsInt", msgpOneFieldMap("atttype", msgpInt64(42)), "AttestationType"},
+		{"AttestationFormatAsBool", msgpOneFieldMap("attfmt", msgpBool(true)), "AttestationFormat"},
+		{"TransportNotArray", msgpOneFieldMap("t", msgpBool(true)), "Transport"},
+		{"TransportElementNotString", msgpOneFieldMap("t", func() []byte {
+			b := msgp.AppendArrayHeader(nil, 1)
+
+			return append(b, msgpBool(true)...)
+		}()), "Transport"},
+		{"FlagsAsString", msgpOneFieldMap("flg", msgpString("x")), "Flags"},
+		{"AuthenticatorAsBool", msgpOneFieldMap("a", msgpBool(true)), "Authenticator"},
+		{"AttestationAsBool", msgpOneFieldMap("att", msgpBool(true)), "Attestation"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var c Credential
+
+			_, err := c.UnmarshalMsg(tc.data)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantSub)
+
+			var c2 Credential
+
+			streamErr := msgp.Decode(bytes.NewReader(tc.data), &c2)
+			require.Error(t, streamErr)
+			assert.Contains(t, streamErr.Error(), tc.wantSub)
+		})
+	}
+}
+
+func TestCredentialAttestation_DecodeMsgInvalidTypes(t *testing.T) {
+	t.Run("NotAMap", func(t *testing.T) {
+		var c CredentialAttestation
+
+		_, err := c.UnmarshalMsg(msgpString("not a map"))
+		require.Error(t, err)
+
+		var c2 CredentialAttestation
+
+		require.Error(t, msgp.Decode(bytes.NewReader(msgpString("not a map")), &c2))
+	})
+
+	testCases := []struct {
+		name    string
+		data    []byte
+		wantSub string
+	}{
+		{"ClientDataJSONAsInt", msgpOneFieldMap("cdj", msgpInt64(42)), "ClientDataJSON"},
+		{"ClientDataHashAsBool", msgpOneFieldMap("cdh", msgpBool(true)), "ClientDataHash"},
+		{"AuthenticatorDataAsInt", msgpOneFieldMap("data", msgpInt64(42)), "AuthenticatorData"},
+		{"PublicKeyAlgorithmAsString", msgpOneFieldMap("alg", msgpString("x")), "PublicKeyAlgorithm"},
+		{"ObjectAsBool", msgpOneFieldMap("obj", msgpBool(true)), "Object"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var c CredentialAttestation
+
+			_, err := c.UnmarshalMsg(tc.data)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantSub)
+
+			var c2 CredentialAttestation
+
+			streamErr := msgp.Decode(bytes.NewReader(tc.data), &c2)
+			require.Error(t, streamErr)
+			assert.Contains(t, streamErr.Error(), tc.wantSub)
+		})
+	}
+}
+
+func TestCredentialFlags_DecodeMsgInvalidTypes(t *testing.T) {
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"AsString", msgpString("x")},
+		{"AsBool", msgpBool(true)},
+		{"AsNil", msgp.AppendNil(nil)},
+		{"Truncated", nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var f CredentialFlags
+
+			_, err := f.UnmarshalMsg(tc.data)
+			require.Error(t, err)
+
+			if len(tc.data) > 0 {
+				var f2 CredentialFlags
+
+				require.Error(t, msgp.Decode(bytes.NewReader(tc.data), &f2))
+			}
+		})
+	}
+}
+
+func TestCredentials_DecodeMsgInvalidTypes(t *testing.T) {
+	t.Run("NotAnArray", func(t *testing.T) {
+		var c Credentials
+
+		_, err := c.UnmarshalMsg(msgpString("not an array"))
+		require.Error(t, err)
+
+		var c2 Credentials
+
+		require.Error(t, msgp.Decode(bytes.NewReader(msgpString("not an array")), &c2))
+	})
+
+	t.Run("ElementNotAMap", func(t *testing.T) {
+		b := msgp.AppendArrayHeader(nil, 1)
+		b = append(b, msgpBool(true)...)
+
+		var c Credentials
+
+		_, err := c.UnmarshalMsg(b)
+		require.Error(t, err)
+
+		var c2 Credentials
+
+		require.Error(t, msgp.Decode(bytes.NewReader(b), &c2))
+	})
+}
+
+type failingWriter struct {
+	limit int
+	count int
+}
+
+func (w *failingWriter) Write(p []byte) (int, error) {
+	remaining := w.limit - w.count
+	if remaining <= 0 {
+		return 0, errors.New("failingWriter: exhausted")
+	}
+
+	if len(p) > remaining {
+		w.count = w.limit
+
+		return remaining, errors.New("failingWriter: exhausted")
+	}
+
+	w.count += len(p)
+
+	return len(p), nil
+}
+
+func exerciseEncodeMsgErrorPaths(t *testing.T, enc msgp.Encodable, marshalled []byte) {
+	t.Helper()
+
+	for limit := 0; limit <= len(marshalled); limit++ {
+		fw := &failingWriter{limit: limit}
+		wr := msgp.NewWriterSize(fw, 18)
+
+		err := enc.EncodeMsg(wr)
+		if err == nil {
+			err = wr.Flush()
+		}
+
+		if limit < len(marshalled) {
+			require.Errorf(t, err, "EncodeMsg should fail when underlying writer errors after %d bytes", limit)
+		}
+	}
+}
+
+func msgpOneFieldMap(key string, value []byte) []byte {
+	b := msgp.AppendMapHeader(nil, 1)
+	b = msgp.AppendString(b, key)
+
+	return append(b, value...)
+}
+
+func msgpBool(v bool) []byte     { return msgp.AppendBool(nil, v) }
+func msgpInt64(v int64) []byte   { return msgp.AppendInt64(nil, v) }
+func msgpString(v string) []byte { return msgp.AppendString(nil, v) }
+func msgpBytes(v []byte) []byte  { return msgp.AppendBytes(nil, v) }
