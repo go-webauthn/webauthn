@@ -2,10 +2,23 @@ package webauthn
 
 import "github.com/go-webauthn/webauthn/protocol"
 
-// WithChallenge overrides the default random challenge with a user supplied value.
-// In order to prevent replay attacks, the challenges MUST contain enough entropy to make guessing them infeasible.
-// Challenges SHOULD therefore be at least 16 bytes long.
-// This function is EXPERIMENTAL and can be removed without warning.
+// WithChallenge overrides the random challenge that [WebAuthn.BeginLogin] would otherwise generate for this
+// ceremony. The supplied value is used verbatim.
+//
+// The only safe reason to call this is when the relying party needs to record the challenge in a server-side store
+// before the ceremony is initiated; for example to maintain a set of previously-issued challenges so it can
+// reject a replay that reuses one. Generating the challenge inside a separate step lets the RP persist it
+// atomically before it is ever handed to the client.
+//
+// If you have that need, the supplied challenge MUST be produced by [protocol.CreateChallenge] (32 bytes from
+// crypto/rand). Do not use timestamps, counters, UUIDs, hashed user inputs, or any other deterministic or
+// partially-predictable source; these defeat the cryptographic guarantees the challenge provides and open the
+// ceremony to replay and guessing attacks. [WebAuthn.BeginLogin] enforces a minimum length of
+// [protocol.MinimumChallengeLength] bytes, but that check is a backstop only and is not a substitute for using a
+// CSPRNG.
+//
+// If you do not have a specific persistence requirement, do not use this function; let the library generate the
+// challenge automatically.
 //
 // Specification: §5.5. Options for Assertion Generation (https://www.w3.org/TR/webauthn/#dom-publickeycredentialrequestoptions-challenge)
 //
