@@ -61,6 +61,8 @@ func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, cli
 	for _, ext := range credCert.Extensions {
 		if ext.Id.Equal(oidExtensionAppleAnonymousAttestation) {
 			attExtBytes = ext.Value
+
+			break
 		}
 	}
 
