@@ -335,6 +335,54 @@ func TestPackedFormat_BasicAttestationCertRequirements(t *testing.T) {
 			err: "Attestation Certificate Country Code is invalid",
 		},
 		{
+			name: "ShouldFailUnassignedCountry",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"ZI"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation Certificate Country Code is invalid",
+		},
+		{
+			name: "ShouldFailWrongCaseCountry",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"us"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation Certificate Country Code is invalid",
+		},
+		{
+			name: "ShouldFailAlpha3Country",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"USA"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation Certificate Country Code is invalid",
+		},
+		{
 			name: "ShouldFailMissingOrganization",
 			template: &x509.Certificate{
 				SerialNumber: big.NewInt(1),

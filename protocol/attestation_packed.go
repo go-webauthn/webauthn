@@ -129,16 +129,13 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 	// Step 2.2.2 (from §8.2.1) Subject field MUST be set to:
 	// 	Subject-C
 	// 	ISO 3166 code specifying the country where the Authenticator vendor is incorporated (PrintableString).
-
-	//  TODO: Find a good, usable, country code library. For now, check stringy-ness
-	subjectString := strings.Join(attestnCert.Subject.Country, "")
-	if subjectString == "" {
+	if len(attestnCert.Subject.Country) != 1 || !isISO3166Alpha2(attestnCert.Subject.Country[0]) {
 		return "", x5c, ErrAttestationCertificate.WithDetails("Attestation Certificate Country Code is invalid")
 	}
 
 	// 	Subject-O
 	// 	Legal name of the Authenticator vendor (UTF8String).
-	subjectString = strings.Join(attestnCert.Subject.Organization, "")
+	subjectString := strings.Join(attestnCert.Subject.Organization, "")
 	if subjectString == "" {
 		return "", x5c, ErrAttestationCertificate.WithDetails("Attestation Certificate Organization is invalid")
 	}
