@@ -140,23 +140,23 @@ func (c *Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 //
 //   - The mds argument must be a non-nil [metadata.Provider]; a nil provider returns an error.
 //
-//   - [CredentialAttestation.ClientDataJSON] must be preserved byte-for-byte — it is re-parsed for its collected
+//   - [CredentialAttestation.ClientDataJSON] must be preserved byte-for-byte; it is re-parsed for its collected
 //     client data fields and re-hashed when [CredentialAttestation.ClientDataHash] is absent.
 //
-//   - [CredentialAttestation.Object] must be preserved byte-for-byte — it is the raw CBOR attestation object and
+//   - [CredentialAttestation.Object] must be preserved byte-for-byte; it is the raw CBOR attestation object and
 //     is decoded to recover the authenticator data, statement format, and statement for full re-verification.
 //
 //   - [Credential.PublicKey] must be populated with the CBOR-encoded COSE key as emitted by the authenticator at
 //     registration. As an integrity check, Verify compares this value byte-for-byte against the credential public
 //     key carried inside the attestation object and returns an error on mismatch.
 //
-//   - [CredentialAttestation.ClientDataHash] is optional — if empty it is recomputed as the SHA-256 of
+//   - [CredentialAttestation.ClientDataHash] is optional; if empty it is recomputed as the SHA-256 of
 //     ClientDataJSON.
 //
 //   - [Credential.Transport], [CredentialAttestation.AuthenticatorData], and [CredentialAttestation.PublicKeyAlgorithm]
 //     are not read by the current Verify implementation (the authenticator data is re-derived from the attestation
 //     object, and the top-level AuthenticatorData / PublicKeyAlgorithm convenience fields are informational). They
-//     are still stored so future versions of this library, or alternative verification paths, can consume them —
+//     are still stored so future versions of this library, or alternative verification paths, can consume them;
 //     see [CredentialAttestation] for why every field should be persisted.
 //
 // As a side-effect, a successful Verify call will populate [Credential.AttestationType] from the re-derived value
