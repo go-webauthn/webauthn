@@ -51,10 +51,17 @@ type Config struct {
 	// is utilized to determine equality.
 	RPTopOrigins []string
 
-	// RPTopOriginVerificationMode determines the verification mode for the Top Origin value. By default the
-	// TopOriginIgnoreVerificationMode is used however this is going to change at such a time as WebAuthn Level 3
-	// becomes recommended, implementers should explicitly set this value if they want stability.
+	// RPTopOriginVerificationMode determines the verification mode for the Top Origin value used in cross-origin
+	// ceremonies. When the zero value ([protocol.TopOriginDefaultVerificationMode]) is provided, the config
+	// validator coerces this field to [protocol.TopOriginExplicitVerificationMode] — i.e. any Top Origin supplied
+	// by the client must appear in [Config.RPTopOrigins]. Set this field explicitly to
+	// [protocol.TopOriginAutoVerificationMode] or [protocol.TopOriginImplicitVerificationMode] if you need
+	// different matching semantics; there is no longer a mode that disables verification entirely.
 	RPTopOriginVerificationMode protocol.TopOriginVerificationMode
+
+	// RPAllowCrossOrigin determines whether the RP is allowed to be used in cross-origin contexts. This is disabled
+	// by default.
+	RPAllowCrossOrigin bool
 
 	// AttestationPreference sets the default attestation conveyance preferences.
 	AttestationPreference protocol.ConveyancePreference
@@ -139,7 +146,7 @@ func (config *Config) validate() (err error) {
 	}
 
 	if config.RPTopOriginVerificationMode == protocol.TopOriginDefaultVerificationMode {
-		config.RPTopOriginVerificationMode = protocol.TopOriginIgnoreVerificationMode
+		config.RPTopOriginVerificationMode = protocol.TopOriginExplicitVerificationMode
 	}
 
 	config.validated = true

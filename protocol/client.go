@@ -112,7 +112,7 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 // TopOriginDefaultVerificationMode as it's expected this value is updated by the config validation process.
 //
 //nolint:gocyclo
-func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode) (err error) {
+func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, allowCrossOrigin bool) (err error) {
 	// Registration Step 3. Verify that the value of C.type is webauthn.create.
 
 	// Assertion Step 7. Verify that the value of C.type is the string webauthn.get.
@@ -143,35 +143,41 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 			WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", rpOrigins, c.Origin))
 	}
 
-	if rpTopOriginsVerify != TopOriginIgnoreVerificationMode {
-		switch len(c.TopOrigin) {
-		case 0:
-			break
+	if !allowCrossOrigin && c.CrossOrigin {
+		return ErrVerification.
+			WithDetails("Error validating cross origin flag").
+			WithInfo("The cross origin flag is invalid due to the configuration.")
+	}
+
+	switch len(c.TopOrigin) {
+	case 0:
+		break
+	default:
+		if !c.CrossOrigin {
+			return ErrVerification.
+				WithDetails("Error validating topOrigin").
+				WithInfo("The topOrigin can't have values unless crossOrigin is true.")
+		}
+
+		var possibleTopOrigins []string
+
+		switch rpTopOriginsVerify {
+		case TopOriginExplicitVerificationMode:
+			possibleTopOrigins = rpTopOrigins
+		case TopOriginAutoVerificationMode:
+			possibleTopOrigins = make([]string, 0, len(rpTopOrigins)+len(rpOrigins))
+			possibleTopOrigins = append(possibleTopOrigins, rpTopOrigins...)
+			possibleTopOrigins = append(possibleTopOrigins, rpOrigins...)
+		case TopOriginImplicitVerificationMode:
+			possibleTopOrigins = rpOrigins
 		default:
-			if !c.CrossOrigin {
-				return ErrVerification.
-					WithDetails("Error validating topOrigin").
-					WithInfo("The topOrigin can't have values unless crossOrigin is true.")
-			}
+			return ErrNotImplemented.WithDetails("Error handling unknown Top Origin verification mode")
+		}
 
-			var possibleTopOrigins []string
-
-			switch rpTopOriginsVerify {
-			case TopOriginExplicitVerificationMode:
-				possibleTopOrigins = rpTopOrigins
-			case TopOriginAutoVerificationMode:
-				possibleTopOrigins = append(rpTopOrigins, rpOrigins...) //nolint:gocritic // This is intentional.
-			case TopOriginImplicitVerificationMode:
-				possibleTopOrigins = rpOrigins
-			default:
-				return ErrNotImplemented.WithDetails("Error handling unknown Top Origin verification mode")
-			}
-
-			if !IsOriginInHaystack(c.TopOrigin, possibleTopOrigins) {
-				return ErrVerification.
-					WithDetails("Error validating top origin").
-					WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", possibleTopOrigins, c.TopOrigin))
-			}
+		if !IsOriginInHaystack(c.TopOrigin, possibleTopOrigins) {
+			return ErrVerification.
+				WithDetails("Error validating top origin").
+				WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", possibleTopOrigins, c.TopOrigin))
 		}
 	}
 
@@ -203,25 +209,25 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 type TopOriginVerificationMode int
 
 const (
-	// TopOriginDefaultVerificationMode represents the default verification mode for the Top Origin. At this time this
-	// mode is the same as TopOriginIgnoreVerificationMode until such a time as the specification becomes stable. This
-	// value is intended as a fallback value and implementers should very intentionally pick another option if they want
-	// stability.
+	// TopOriginDefaultVerificationMode is the zero value of [TopOriginVerificationMode] and has no matching rule in
+	// the verifier; passing it directly to [CollectedClientData.Verify] returns an "unknown Top Origin verification
+	// mode" error. High-level callers using [webauthn.Config] have this value coerced to
+	// [TopOriginExplicitVerificationMode] by config validation, which is the recommended default.
 	TopOriginDefaultVerificationMode TopOriginVerificationMode = iota
 
-	// TopOriginIgnoreVerificationMode ignores verification entirely.
-	TopOriginIgnoreVerificationMode
-
-	// TopOriginAutoVerificationMode represents the automatic verification mode for the Top Origin. In this mode the
-	// If the Top Origins parameter has values it checks against this, otherwise it checks against the Origins parameter.
+	// TopOriginAutoVerificationMode accepts the Top Origin if it matches any entry in either the allowed Top Origins
+	// list or the allowed Origins list. The two lists are unioned (RPTopOrigins ∪ RPOrigins). This is the most
+	// permissive of the three active modes and should only be used when an RP deliberately wants cross-origin and
+	// same-origin embeddings to share an allow-list.
 	TopOriginAutoVerificationMode
 
-	// TopOriginImplicitVerificationMode represents the implicit verification mode for the Top Origin. In this mode the
-	// Top Origin is verified against the allowed Origins values.
+	// TopOriginImplicitVerificationMode accepts the Top Origin only if it matches an entry in the allowed Origins
+	// list (RPOrigins). The RPTopOrigins list is ignored in this mode.
 	TopOriginImplicitVerificationMode
 
-	// TopOriginExplicitVerificationMode represents the explicit verification mode for the Top Origin. In this mode the
-	// Top Origin is verified against the allowed Top Origins values.
+	// TopOriginExplicitVerificationMode accepts the Top Origin only if it matches an entry in the allowed Top Origins
+	// list (RPTopOrigins). The RPOrigins list is ignored in this mode. This is the strictest mode and the one
+	// [webauthn.Config] coerces the zero value to.
 	TopOriginExplicitVerificationMode
 )
 

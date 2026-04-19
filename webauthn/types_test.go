@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -114,6 +115,68 @@ func TestNew(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfig_Validate_DefaultsRPTopOriginVerificationModeToExplicit(t *testing.T) {
+	testCases := []struct {
+		name   string
+		input  protocol.TopOriginVerificationMode
+		expect protocol.TopOriginVerificationMode
+	}{
+		{
+			name:   "ShouldCoerceZeroValueToExplicit",
+			input:  protocol.TopOriginVerificationMode(0),
+			expect: protocol.TopOriginExplicitVerificationMode,
+		},
+		{
+			name:   "ShouldCoerceDefaultToExplicit",
+			input:  protocol.TopOriginDefaultVerificationMode,
+			expect: protocol.TopOriginExplicitVerificationMode,
+		},
+		{
+			name:   "ShouldPreserveExplicit",
+			input:  protocol.TopOriginExplicitVerificationMode,
+			expect: protocol.TopOriginExplicitVerificationMode,
+		},
+		{
+			name:   "ShouldPreserveAuto",
+			input:  protocol.TopOriginAutoVerificationMode,
+			expect: protocol.TopOriginAutoVerificationMode,
+		},
+		{
+			name:   "ShouldPreserveImplicit",
+			input:  protocol.TopOriginImplicitVerificationMode,
+			expect: protocol.TopOriginImplicitVerificationMode,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				RPID:                        "example.com",
+				RPOrigins:                   []string{"https://example.com"},
+				RPTopOriginVerificationMode: tc.input,
+			}
+
+			w, err := New(config)
+			assert.NoError(t, err)
+			assert.NotNil(t, w)
+			assert.Equal(t, tc.expect, config.RPTopOriginVerificationMode,
+				"Config.RPTopOriginVerificationMode should be %v after New(), got %v", tc.expect, config.RPTopOriginVerificationMode)
+			assert.Equal(t, tc.expect, config.GetTopOriginVerificationMode())
+		})
+	}
+
+	t.Run("ShouldCoerceDirectValidateCall", func(t *testing.T) {
+		config := &Config{
+			RPID:                        "example.com",
+			RPOrigins:                   []string{"https://example.com"},
+			RPTopOriginVerificationMode: protocol.TopOriginDefaultVerificationMode,
+		}
+
+		require.NoError(t, config.validate())
+		assert.Equal(t, protocol.TopOriginExplicitVerificationMode, config.RPTopOriginVerificationMode)
+	})
 }
 
 // Supporting test types and functions.
