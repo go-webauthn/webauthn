@@ -27,12 +27,14 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
 	}
 
-	challenge, err := protocol.CreateChallenge()
-	if err != nil {
+	var (
+		challenge    protocol.URLEncodedBase64
+		entityUserID any
+	)
+
+	if challenge, err = protocol.CreateChallenge(); err != nil {
 		return nil, nil, err
 	}
-
-	var entityUserID any
 
 	if webauthn.Config.EncodeUserIDAsString {
 		entityUserID = string(user.WebAuthnID())
@@ -83,6 +85,10 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf("error generating credential creation: the relying party display name must be provided via the configuration or a functional option for a creation")
 	}
 
+	if len(creation.Response.Challenge) < protocol.MinimumChallengeLength {
+		return nil, nil, fmt.Errorf("error generating credential creation: the challenge must be at least 16 bytes")
+	}
+
 	if creation.Response.Timeout == 0 {
 		switch creation.Response.AuthenticatorSelection.UserVerification {
 		case protocol.VerificationDiscouraged:
@@ -93,7 +99,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	session = &SessionData{
-		Challenge:        challenge.String(),
+		Challenge:        creation.Response.Challenge.String(),
 		RelyingPartyID:   creation.Response.RelyingParty.ID,
 		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,

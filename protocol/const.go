@@ -24,6 +24,14 @@ const (
 	attStatementAndroidSafetyNetHostname = "attest.android.com"
 )
 
+const (
+	// MinimumChallengeLength defines the minimum length of the challenge.
+	MinimumChallengeLength = 16
+
+	// DefaultChallengeLength defines the default length of the challenge.
+	DefaultChallengeLength = 32
+)
+
 var (
 	// internalRemappedAuthenticatorTransport handles remapping of AuthenticatorTransport values. Specifically it is
 	// intentional on remapping only transports that never made recommendation but are being used in the wild. It
