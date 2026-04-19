@@ -1138,6 +1138,8 @@ func exerciseEncodeMsgErrorPaths(t *testing.T, enc msgp.Encodable, marshalled []
 
 		if limit < len(marshalled) {
 			require.Errorf(t, err, "EncodeMsg should fail when underlying writer errors after %d bytes", limit)
+		} else {
+			require.NoError(t, err)
 		}
 	}
 }
