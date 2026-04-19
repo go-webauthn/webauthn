@@ -295,6 +295,92 @@ func TestBeginRegistration_EncodeUserIDAsString(t *testing.T) {
 	}
 }
 
+func TestBeginMediatedRegistration_ChallengeLength(t *testing.T) {
+	// withTestChallenge is a test-only RegistrationOption that overrides the generated challenge. It mirrors the
+	// WithChallenge login option; no equivalent is exported for registration, so we synthesise one here to exercise
+	// the minimum-length guard.
+	withTestChallenge := func(challenge []byte) RegistrationOption {
+		return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+			cco.Challenge = challenge
+		}
+	}
+
+	config := &Config{
+		RPID:          "example.com",
+		RPDisplayName: "Test Display Name",
+		RPOrigins:     []string{"https://example.com"},
+	}
+
+	testCases := []struct {
+		name   string
+		opts   []RegistrationOption
+		expLen int
+		err    string
+	}{
+		{
+			name:   "ShouldSucceedWithDefaultChallenge",
+			opts:   nil,
+			expLen: 32,
+		},
+		{
+			name: "ShouldFailNilChallenge",
+			opts: []RegistrationOption{withTestChallenge(nil)},
+			err:  "error generating credential creation: the challenge must be at least 16 bytes",
+		},
+		{
+			name: "ShouldFailEmptyChallenge",
+			opts: []RegistrationOption{withTestChallenge([]byte{})},
+			err:  "error generating credential creation: the challenge must be at least 16 bytes",
+		},
+		{
+			name: "ShouldFailEightByteChallenge",
+			opts: []RegistrationOption{withTestChallenge(bytes.Repeat([]byte{0xab}, 8))},
+			err:  "error generating credential creation: the challenge must be at least 16 bytes",
+		},
+		{
+			name: "ShouldFailFifteenByteChallenge",
+			opts: []RegistrationOption{withTestChallenge(bytes.Repeat([]byte{0xab}, 15))},
+			err:  "error generating credential creation: the challenge must be at least 16 bytes",
+		},
+		{
+			name:   "ShouldSucceedSixteenByteChallenge",
+			opts:   []RegistrationOption{withTestChallenge(bytes.Repeat([]byte{0xab}, 16))},
+			expLen: 16,
+		},
+		{
+			name:   "ShouldSucceedThirtyTwoByteChallenge",
+			opts:   []RegistrationOption{withTestChallenge(bytes.Repeat([]byte{0xab}, 32))},
+			expLen: 32,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(config)
+			require.NoError(t, err)
+
+			user := &defaultUser{id: []byte("123")}
+
+			creation, session, err := w.BeginMediatedRegistration(user, protocol.MediationDefault, tc.opts...)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.Nil(t, creation)
+				assert.Nil(t, session)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, creation)
+			require.NotNil(t, session)
+			assert.Len(t, []byte(creation.Response.Challenge), tc.expLen)
+			assert.NotEmpty(t, session.Challenge)
+			assert.Equal(t, creation.Response.Challenge.String(), session.Challenge)
+		})
+	}
+}
+
 func TestBeginMediatedRegistration_EnforceTimeout(t *testing.T) {
 	config := &Config{
 		RPID:          "example.com",
