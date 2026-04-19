@@ -113,5 +113,5 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 		}
 	}
 
-	return string(AttestationFormatCompound), nil, nil
+	return "none", nil, nil
 }

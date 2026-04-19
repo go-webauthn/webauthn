@@ -2,7 +2,7 @@ package protocol
 
 // isISO3166Alpha2 reports whether code is a valid ISO 3166-1 alpha-2 country code.
 // Officially-assigned codes and user-assigned codes (AA, QM–QZ, XA–XZ, ZZ) are both
-// accepted — the W3C WebAuthn test vectors use AA, so rejecting user-assigned codes
+// accepted; the W3C WebAuthn test vectors use AA, so rejecting user-assigned codes
 // would fail §16 conformance. Codes of the wrong length, wrong case, or containing
 // non-letters are rejected.
 func isISO3166Alpha2(code string) bool {

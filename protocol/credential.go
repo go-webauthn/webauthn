@@ -209,7 +209,7 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, relyingP
 
 	// Step 17. Check that the credentialId is not yet registered to any other user. If registration is
 	// requested for a credential that is already registered to a different user, the Relying Party SHOULD
-	// fail this registration ceremony, or it MAY decide to accept the registration, e.g. while deleting
+	// fail this registration ceremony, or it MAY decide to accept the registration, i.e. while deleting
 	// the older registration.
 
 	// TODO: We can't support this in the code's current form, the Relying Party would need to check for this
@@ -232,14 +232,14 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, relyingP
 //
 // 1. Check that the Session Data's AuthenticationExtensions has been provided and if it hasn't return an error.
 // 2. Check that the AuthenticationExtensionsClientOutputs contains the extensions output and return an empty string if it doesn't.
-// 3. Check that the Credential AttestationType is `fido-u2f` and return an empty string if it isn't.
+// 3. Check that the Credential AttestationFormat is `fido-u2f` and return an empty string if it isn't.
 // 4. Check that the AuthenticationExtensionsClientOutputs contains the appid key and if it doesn't return an empty string.
 // 5. Check that the AuthenticationExtensionsClientOutputs appid is a bool and if it isn't return an error.
 // 6. Check that the appid output is true and if it isn't return an empty string.
 // 7. Check that the Session Data has an appid extension defined and if it doesn't return an error.
 // 8. Check that the appid extension in Session Data is a string and if it isn't return an error.
 // 9. Return the appid extension value from the Session data.
-func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions, credentialAttestationType string) (appID string, err error) {
+func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions, credentialAttestationFormat string) (appID string, err error) {
 	var (
 		value, clientValue interface{}
 		enableAppID, ok    bool
@@ -253,9 +253,9 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 		return "", nil
 	}
 
-	// If the credential does not have the correct attestation type it is assumed to NOT be a fido-u2f credential.
+	// If the credential is not in the fido-u2f attestation FORMAT it is assumed to NOT be a fido-u2f credential.
 	// https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
-	if credentialAttestationType != CredentialTypeFIDOU2F {
+	if credentialAttestationFormat != string(AttestationFormatFIDOUniversalSecondFactor) {
 		return "", nil
 	}
 
@@ -281,7 +281,3 @@ func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions,
 
 	return appID, nil
 }
-
-const (
-	CredentialTypeFIDOU2F = "fido-u2f"
-)

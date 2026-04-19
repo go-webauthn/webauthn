@@ -248,7 +248,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, string(AttestationFormatCompound), gotType)
+		assert.Equal(t, "none", gotType)
 		assert.Nil(t, gotX5Cs)
 
 		require.Len(t, calls, 2)
@@ -364,7 +364,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, string(AttestationFormatCompound), gotType)
+		assert.Equal(t, "none", gotType)
 		assert.Nil(t, gotX5Cs)
 		assert.Equal(t, 2, handlerCalls)
 	})

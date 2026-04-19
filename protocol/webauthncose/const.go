@@ -98,7 +98,7 @@ const (
 	// WalnutDSA is the public key for Walnut Digital Signature Algorithm.
 	WalnutDSA
 
-	// AKP is the key type for algorithm key pairs (e.g. ML-DSA).
+	// AKP is the key type for algorithm key pairs (i.e. ML-DSA).
 	AKP
 )
 

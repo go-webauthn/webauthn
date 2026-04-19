@@ -290,7 +290,7 @@ type Statement struct {
 	// hex string.
 	AttestationCertificateKeyIdentifiers []string
 
-	// FriendlyNames contains friendly names (e.g., public trade name) of the authenticator in multiple languages.
+	// FriendlyNames contains friendly names (i.e., public trade name) of the authenticator in multiple languages.
 	FriendlyNames map[string]string
 
 	// Description is a human-readable, short description of the authenticator, in English.
@@ -338,7 +338,7 @@ type Statement struct {
 
 	// IsFreshUserVerificationRequired is set to true or it is omitted, if Uauth key usage always requires a fresh user
 	// verification. This entry is set to false, if the Uauth key can be used without requiring a fresh user
-	// verification, e.g. without any additional user interaction, if the user was verified a (potentially configurable)
+	// verification, i.e. without any additional user interaction, if the user was verified a (potentially configurable)
 	// caching time ago.
 	IsFreshUserVerificationRequired bool
 
@@ -378,24 +378,24 @@ type Statement struct {
 	// if attestationType includes ATTESTATION_ECDAA.
 	EcdaaTrustAnchors []EcdaaTrustAnchor
 
-	// Icon is a 'data:' url [RFC2397] encoded [PNG] or [SVG11] (light mode) icon for the Authenticator (e.g., depicting
+	// Icon is a 'data:' url [RFC2397] encoded [PNG] or [SVG11] (light mode) icon for the Authenticator (i.e., depicting
 	// the security key). This icon is intended to be shown to users by RPs. Use of [SVG11] format is mandatory if any
 	// of the iconDark, providerLogoLight and/or providerLogoDark is used in addition to icon. Use of [SVG11] is
 	// recommended if only icon is used. The icon is more specific than the provider logo and should be shown if
 	// present.
 	Icon *url.URL
 
-	// IconDark is a 'data:' url [RFC2397] encoded [SVG11] dark mode icon for the Authenticator (e.g., depicting the
+	// IconDark is a 'data:' url [RFC2397] encoded [SVG11] dark mode icon for the Authenticator (i.e., depicting the
 	// security key). This icon is intended to be shown to users by RPs. The icon is more specific than the provider
 	// logo and should be shown if present.
 	IconDark *url.URL
 
-	// ProviderLogoLight is a 'data:' url [RFC2397] encoded [SVG11] light mode icon for the provider (e.g., logomark of
+	// ProviderLogoLight is a 'data:' url [RFC2397] encoded [SVG11] light mode icon for the provider (i.e., logomark of
 	// the passkey provider). The SVG MUST meet all of the requirements defined in § 4.1 SVG requirements. This icon
 	// is intended to be shown to users by RPs.
 	ProviderLogoLight *url.URL
 
-	// ProviderLogoDark is a 'data:' url [RFC2397] encoded [SVG11] dark mode icon for the provider (e.g., logomark of
+	// ProviderLogoDark is a 'data:' url [RFC2397] encoded [SVG11] dark mode icon for the provider (i.e., logomark of
 	// the passkey provider). The SVG MUST meet all of the requirements defined in § 4.1 SVG requirements. This icon
 	// is intended to be shown to users by RPs.
 	ProviderLogoDark *url.URL
@@ -677,11 +677,11 @@ type BiometricStatusReport struct {
 	CertificateNumber string
 
 	// CertificationPolicyVersion is the version of the Biometric Certification Policy the implementation is Certified
-	// to, e.g. "1.0.0".
+	// to, i.e. "1.0.0".
 	CertificationPolicyVersion string
 
 	// CertificationRequirementsVersion is the version of the Biometric Requirements [FIDOBiometricsRequirements] the
-	// implementation is certified to, e.g. "1.0.0".
+	// implementation is certified to, i.e. "1.0.0".
 	CertificationRequirementsVersion string
 }
 
@@ -704,10 +704,10 @@ type BiometricStatusReportJSON struct {
 	// CertificateNumber is the unique identifier for the issued Biometric Certification.
 	CertificateNumber string `json:"certificateNumber"`
 
-	// CertificationPolicyVersion is the version of the Biometric Certification Policy, e.g. "1.0.0".
+	// CertificationPolicyVersion is the version of the Biometric Certification Policy, i.e. "1.0.0".
 	CertificationPolicyVersion string `json:"certificationPolicyVersion"`
 
-	// CertificationRequirementsVersion is the version of the Biometric Requirements, e.g. "1.0.0".
+	// CertificationRequirementsVersion is the version of the Biometric Requirements, i.e. "1.0.0".
 	CertificationRequirementsVersion string `json:"certificationRequirementsVersion"`
 }
 
@@ -764,22 +764,22 @@ type StatusReport struct {
 	CertificateNumber string
 
 	// CertificationPolicyVersion is the version of the Authenticator Certification Policy the implementation is
-	// Certified to, e.g. "1.0.0".
+	// Certified to, i.e. "1.0.0".
 	CertificationPolicyVersion string
 
 	// CertificationProfiles is a list of certification profile strings. Each entry represents a supported
-	// certification profile, e.g. "consumer" or "enterprise".
+	// certification profile, i.e. "consumer" or "enterprise".
 	CertificationProfiles []string
 
 	// CertificationRequirementsVersion is the Document Version of the Authenticator Security Requirements (DV)
-	// [FIDOAuthenticatorSecurityRequirements] the implementation is certified to, e.g. "1.2.0".
+	// [FIDOAuthenticatorSecurityRequirements] the implementation is certified to, i.e. "1.2.0".
 	CertificationRequirementsVersion string
 
 	// SunsetDate is an ISO-8601 formatted date since when the status will expire, if applicable. If no date is given,
 	// the status is assumed to not have a scheduled expiry.
 	SunsetDate *time.Time
 
-	// FIPSRevision is the revision number of the FIPS 140 specification, e.g. "3" in the case of FIPS 140-3. This
+	// FIPSRevision is the revision number of the FIPS 140 specification, i.e. "3" in the case of FIPS 140-3. This
 	// entry MUST be present if and only if the status entry is one of FIPS140_CERTIFIED_L*.
 	FIPSRevision uint32
 
@@ -817,19 +817,19 @@ type StatusReportJSON struct {
 	// CertificateNumber is the unique identifier for the issued Certification.
 	CertificateNumber string `json:"certificateNumber"`
 
-	// CertificationPolicyVersion is the version of the Authenticator Certification Policy, e.g. "1.0.0".
+	// CertificationPolicyVersion is the version of the Authenticator Certification Policy, i.e. "1.0.0".
 	CertificationPolicyVersion string `json:"certificationPolicyVersion"`
 
-	// CertificationProfiles is a list of supported certification profiles, e.g. "consumer" or "enterprise".
+	// CertificationProfiles is a list of supported certification profiles, i.e. "consumer" or "enterprise".
 	CertificationProfiles []string `json:"certificationProfiles"`
 
-	// CertificationRequirementsVersion is the Document Version of the Authenticator Security Requirements, e.g. "1.2.0".
+	// CertificationRequirementsVersion is the Document Version of the Authenticator Security Requirements, i.e. "1.2.0".
 	CertificationRequirementsVersion string `json:"certificationRequirementsVersion"`
 
 	// SunsetDate is an ISO-8601 formatted date when the status will expire.
 	SunsetDate string `json:"sunsetDate"`
 
-	// FIPSRevision is the revision number of the FIPS 140 specification, e.g. "3" for FIPS 140-3.
+	// FIPSRevision is the revision number of the FIPS 140 specification, i.e. "3" for FIPS 140-3.
 	FIPSRevision uint32 `json:"fipsRevision"`
 
 	// FIPSPhysicalSecurityLevel is the physical security level of the FIPS certification.
@@ -913,10 +913,10 @@ type RogueListEntry struct {
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-cad
 type CodeAccuracyDescriptor struct {
-	// Base is the numeric system base (radix) of the code, e.g. 10 in the case of decimal digits.
+	// Base is the numeric system base (radix) of the code, i.e. 10 in the case of decimal digits.
 	Base uint16 `json:"base"`
 
-	// MinLength is the minimum number of digits of the given base required for that code, e.g. 4 in the case of 4
+	// MinLength is the minimum number of digits of the given base required for that code, i.e. 4 in the case of 4
 	// digits.
 	MinLength uint16 `json:"minLength"`
 
@@ -924,7 +924,7 @@ type CodeAccuracyDescriptor struct {
 	// some time). 0 means it will never block.
 	MaxRetries uint16 `json:"maxRetries"`
 
-	// BlockSlowdown is the enforced minimum number of seconds wait time after blocking (e.g. due to forced reboot or
+	// BlockSlowdown is the enforced minimum number of seconds wait time after blocking (i.e. due to forced reboot or
 	// similar). 0 means this user verification method will be blocked, either permanently, or until an alternative user
 	// verification method method succeeded. All alternative user verification methods MUST be specified appropriately
 	// in the Metadata in userVerificationDetails.
@@ -958,7 +958,7 @@ type BiometricAccuracyDescriptor struct {
 	// some time). 0 means it will never block.
 	MaxRetries uint16 `json:"maxRetries"`
 
-	// BlockSlowdown is the enforced minimum number of seconds wait time after blocking (e.g. due to forced reboot or
+	// BlockSlowdown is the enforced minimum number of seconds wait time after blocking (i.e. due to forced reboot or
 	// similar).0 means that this user verification method will be blocked either permanently or until an alternative
 	// user verification method succeeded. All alternative user verification methods MUST be specified appropriately in
 	// the metadata in userVerificationDetails.
@@ -1290,7 +1290,7 @@ func (j AuthenticatorGetInfoJSON) Parse() (info AuthenticatorGetInfo, err error)
 
 // MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint.
 type MDSGetEndpointsRequest struct {
-	// Endpoint is the URL of the local server endpoint, e.g. https://webauthn.io/
+	// Endpoint is the URL of the local server endpoint, i.e. https://webauthn.io/
 	Endpoint string `json:"endpoint"`
 }
 

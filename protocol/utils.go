@@ -251,3 +251,22 @@ func ValidateRPID(value string) (err error) {
 
 	return nil
 }
+
+// IsAttestationFormatString reports whether s is one of the WebAuthn-defined attestation statement format
+// identifiers. Used to detect and migrate records from prior releases which stored
+// the format string in the AttestationType field.
+func IsAttestationFormatString(s string) bool {
+	switch AttestationFormat(s) {
+	case AttestationFormatPacked,
+		AttestationFormatTPM,
+		AttestationFormatAndroidKey,
+		AttestationFormatAndroidSafetyNet,
+		AttestationFormatFIDOUniversalSecondFactor,
+		AttestationFormatApple,
+		AttestationFormatCompound,
+		AttestationFormatNone:
+		return true
+	default:
+		return false
+	}
+}

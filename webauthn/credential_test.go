@@ -73,7 +73,7 @@ func TestNewCredentialFlags(t *testing.T) {
 }
 
 func TestCredential_Verify(t *testing.T) {
-	assert.EqualError(t, Credential{}.Verify(nil), "error verifying credential: the metadata provider must be provided but it's nil")
+	assert.EqualError(t, (&Credential{}).Verify(nil), "error verifying credential: the metadata provider must be provided but it's nil")
 
 	testCases := []struct {
 		name       string
@@ -273,6 +273,60 @@ func TestCredential_Verify(t *testing.T) {
 	}
 }
 
+func TestCredential_Verify_RestoresAttestationType(t *testing.T) {
+	credential := testCredentialFromNoneAttestation(t)
+	credential.AttestationType = ""
+	credential.AttestationFormat = "none"
+
+	ctrl := gomock.NewController(t)
+	provider := mocks.NewMockMetadataProvider(ctrl)
+
+	require.NoError(t, credential.Verify(provider))
+	assert.Equal(t, "none", credential.AttestationType)
+	assert.Equal(t, "none", credential.AttestationFormat)
+}
+
+func TestCredential_Verify_LeavesExistingAttestationTypeAlone(t *testing.T) {
+	// The self-heal must not overwrite a caller-supplied AttestationType. If the field is already populated,
+	// Verify leaves it alone.
+	credential := testCredentialFromNoneAttestation(t)
+	credential.AttestationType = "caller-set-value"
+
+	ctrl := gomock.NewController(t)
+	provider := mocks.NewMockMetadataProvider(ctrl)
+
+	require.NoError(t, credential.Verify(provider))
+	assert.Equal(t, "caller-set-value", credential.AttestationType)
+}
+
+func TestCredential_Verify_RejectsTamperedPublicKey(t *testing.T) {
+	t.Run("MismatchReturnsError", func(t *testing.T) {
+		credential := testCredentialFromNoneAttestation(t)
+
+		tampered := make([]byte, len(credential.PublicKey))
+		copy(tampered, credential.PublicKey)
+		tampered[0] ^= 0xFF
+		credential.PublicKey = tampered
+
+		ctrl := gomock.NewController(t)
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		err := credential.Verify(provider)
+		assert.EqualError(t, err, "error verifying credential: stored public key does not match the credential public key embedded in the attestation object")
+	})
+
+	t.Run("EmptyPublicKeyReturnsError", func(t *testing.T) {
+		credential := testCredentialFromNoneAttestation(t)
+		credential.PublicKey = nil
+
+		ctrl := gomock.NewController(t)
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		err := credential.Verify(provider)
+		assert.EqualError(t, err, "error verifying credential: stored public key does not match the credential public key embedded in the attestation object")
+	})
+}
+
 // testCredentialFromNoneAttestation constructs a Credential with valid "none" format attestation data for testing.
 func testCredentialFromNoneAttestation(t *testing.T) Credential {
 	t.Helper()
@@ -285,12 +339,17 @@ func testCredentialFromNoneAttestation(t *testing.T) Credential {
 
 	clientDataHash := sha256.Sum256(clientDataJSON)
 
-	credentialPublicKey, err := base64.RawURLEncoding.DecodeString("pSJYIMfCKfxl2SvnqJIiHQysHmpmITNgtCkQ5ESExSRjqrhXAQIDJiABIVggLKF5xS0_BntttUIrm2Z2tgZ4uQDwllbdIfrrBMABCNc")
+	parsed := (&protocol.AuthenticatorAttestationResponse{
+		AuthenticatorResponse: protocol.AuthenticatorResponse{ClientDataJSON: clientDataJSON},
+		AttestationObject:     attObject,
+	})
+
+	parsedResponse, err := parsed.Parse()
 	require.NoError(t, err)
 
 	return Credential{
 		ID:              []byte("credential-id"),
-		PublicKey:       credentialPublicKey,
+		PublicKey:       parsedResponse.AttestationObject.AuthData.AttData.CredentialPublicKey,
 		AttestationType: "none",
 		Attestation: CredentialAttestation{
 			ClientDataJSON: clientDataJSON,
@@ -317,6 +376,7 @@ func TestNewCredential(t *testing.T) {
 				Response: protocol.ParsedAttestationResponse{
 					AttestationObject: protocol.AttestationObject{
 						Format: "packed",
+						Type:   string(metadata.BasicFull),
 						AuthData: protocol.AuthenticatorData{
 							Counter: 1,
 							Flags:   protocol.FlagUserPresent | protocol.FlagUserVerified,
@@ -341,11 +401,12 @@ func TestNewCredential(t *testing.T) {
 				},
 			},
 			expected: &Credential{
-				ID:              []byte("credential-id"),
-				PublicKey:       []byte("public-key"),
-				AttestationType: "packed",
-				Transport:       []protocol.AuthenticatorTransport{protocol.USB},
-				Flags:           NewCredentialFlags(protocol.FlagUserPresent | protocol.FlagUserVerified),
+				ID:                []byte("credential-id"),
+				PublicKey:         []byte("public-key"),
+				AttestationType:   string(metadata.BasicFull),
+				AttestationFormat: "packed",
+				Transport:         []protocol.AuthenticatorTransport{protocol.USB},
+				Flags:             NewCredentialFlags(protocol.FlagUserPresent | protocol.FlagUserVerified),
 				Authenticator: Authenticator{
 					AAGUID:     []byte("aaguid-value-here"),
 					SignCount:  1,
@@ -367,6 +428,7 @@ func TestNewCredential(t *testing.T) {
 				Response: protocol.ParsedAttestationResponse{
 					AttestationObject: protocol.AttestationObject{
 						Format: "none",
+						Type:   string(metadata.None),
 						AuthData: protocol.AuthenticatorData{
 							AttData: protocol.AttestedCredentialData{
 								CredentialID:        []byte("cred-2"),
@@ -378,12 +440,13 @@ func TestNewCredential(t *testing.T) {
 				Raw: protocol.CredentialCreationResponse{},
 			},
 			expected: &Credential{
-				ID:              []byte("cred-2"),
-				PublicKey:       []byte("pub-2"),
-				AttestationType: "none",
-				Flags:           CredentialFlags{},
-				Authenticator:   Authenticator{},
-				Attestation:     CredentialAttestation{},
+				ID:                []byte("cred-2"),
+				PublicKey:         []byte("pub-2"),
+				AttestationType:   string(metadata.None),
+				AttestationFormat: "none",
+				Flags:             CredentialFlags{},
+				Authenticator:     Authenticator{},
+				Attestation:       CredentialAttestation{},
 			},
 		},
 	}
@@ -484,6 +547,128 @@ func TestCredentials_CredentialDescriptors(t *testing.T) {
 			assert.Equal(t, tc.expectedJSON, string(data))
 		})
 	}
+}
+
+func TestCredential_UnmarshalJSON(t *testing.T) {
+	testCases := []struct {
+		name              string
+		input             string
+		attestationType   string
+		attestationFormat string
+	}{
+		{
+			name:              "ShouldMigrateLegacyRecordWithPackedFormat",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"packed"}`,
+			attestationType:   "",
+			attestationFormat: "packed",
+		},
+		{
+			name:              "ShouldMigrateLegacyRecordWithNoneFormat",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"none"}`,
+			attestationType:   "",
+			attestationFormat: "none",
+		},
+		{
+			name:              "ShouldMigrateLegacyRecordWithFIDOU2FFormat",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"fido-u2f"}`,
+			attestationType:   "",
+			attestationFormat: "fido-u2f",
+		},
+		{
+			name:              "ShouldMigrateLegacyRecordWithAndroidKeyFormat",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"android-key"}`,
+			attestationType:   "",
+			attestationFormat: "android-key",
+		},
+		{
+			name:              "ShouldPreserveNewRecordWithBothFields",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"basic_full","attestationFormat":"packed"}`,
+			attestationType:   "basic_full",
+			attestationFormat: "packed",
+		},
+		{
+			name:              "ShouldPreserveNewRecordWithSurrogate",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"basic_surrogate","attestationFormat":"packed"}`,
+			attestationType:   "basic_surrogate",
+			attestationFormat: "packed",
+		},
+		{
+			name:              "ShouldPreserveTypeValueThatIsNotAFormat",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"basic_full"}`,
+			attestationType:   "basic_full",
+			attestationFormat: "",
+		},
+		{
+			name:              "ShouldHandleEmptyBothFields",
+			input:             `{"id":"MTIz","publicKey":"YWJj"}`,
+			attestationType:   "",
+			attestationFormat: "",
+		},
+		{
+			name:              "ShouldHandleUnknownTypeString",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"something-unrecognised"}`,
+			attestationType:   "something-unrecognised",
+			attestationFormat: "",
+		},
+		{
+			name:              "ShouldNotMigrateWhenFormatAlreadyPresent",
+			input:             `{"id":"MTIz","publicKey":"YWJj","attestationType":"packed","attestationFormat":"tpm"}`,
+			attestationType:   "packed",
+			attestationFormat: "tpm",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var c Credential
+
+			require.NoError(t, json.Unmarshal([]byte(tc.input), &c))
+			assert.Equal(t, tc.attestationType, c.AttestationType)
+			assert.Equal(t, tc.attestationFormat, c.AttestationFormat)
+		})
+	}
+
+	t.Run("ShouldRejectMalformedJSON", func(t *testing.T) {
+		var c Credential
+
+		assert.Error(t, json.Unmarshal([]byte(`{not-json`), &c))
+	})
+}
+
+func TestCredential_RoundTripJSON(t *testing.T) {
+	// Marshal -> Unmarshal produces an equivalent record (no lossy migration applied to a record already carrying
+	// both fields).
+	original := Credential{
+		ID:                []byte("cred-id"),
+		AttestationType:   "basic_surrogate",
+		AttestationFormat: "packed",
+	}
+
+	data, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var round Credential
+
+	require.NoError(t, json.Unmarshal(data, &round))
+	assert.Equal(t, original.AttestationType, round.AttestationType)
+	assert.Equal(t, original.AttestationFormat, round.AttestationFormat)
+}
+
+func TestCredential_Descriptor_PopulatesBothFields(t *testing.T) {
+	// Descriptor() mirrors Credential's attestation type / format split into the descriptor. The format field is
+	// what GetAppID and the option helpers key on (against the "fido-u2f" format string); the type field carries
+	// the real attestation type for completeness.
+	c := Credential{
+		ID:                []byte("cred-id"),
+		AttestationType:   "basic_full",
+		AttestationFormat: "fido-u2f",
+	}
+
+	descriptor := c.Descriptor()
+
+	assert.Equal(t, protocol.PublicKeyCredentialType, descriptor.Type)
+	assert.Equal(t, "basic_full", descriptor.AttestationType)
+	assert.Equal(t, "fido-u2f", descriptor.AttestationFormat)
 }
 
 // testCredentialFromPackedAttestation constructs a Credential with valid "packed" format attestation data for testing.

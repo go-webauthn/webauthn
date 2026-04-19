@@ -55,7 +55,7 @@ type AuthenticatorData struct {
 // Specification: §6.5.2. Attested Credential Data (https://www.w3.org/TR/webauthn/#sctn-attested-credential-data)
 type AttestedCredentialData struct {
 	// AAGUID is the 16-byte Authenticator Attestation GUID, a unique identifier indicating the type of the
-	// authenticator (e.g. make and model).
+	// authenticator (i.e. make and model).
 	AAGUID []byte `json:"aaguid"`
 
 	// CredentialID is the credential identifier whose length is prepended as a 16-bit unsigned big-endian integer.
