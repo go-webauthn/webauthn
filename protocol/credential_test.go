@@ -367,26 +367,26 @@ func TestCredentialCreationResponse_Parse_Errors(t *testing.T) {
 
 func TestGetAppID(t *testing.T) {
 	testCases := []struct {
-		name                      string
-		ppkc                      ParsedPublicKeyCredential
-		authExt                   AuthenticationExtensions
+		name                        string
+		ppkc                        ParsedPublicKeyCredential
+		authExt                     AuthenticationExtensions
 		credentialAttestationFormat string
-		expectedAppID             string
-		err                       string
+		expectedAppID               string
+		err                         string
 	}{
 		{
-			name:                      "ShouldReturnEmptyWhenAuthExtNil",
-			ppkc:                      ParsedPublicKeyCredential{},
-			authExt:                   nil,
+			name:                        "ShouldReturnEmptyWhenAuthExtNil",
+			ppkc:                        ParsedPublicKeyCredential{},
+			authExt:                     nil,
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			expectedAppID:             "",
+			expectedAppID:               "",
 		},
 		{
-			name:                      "ShouldReturnEmptyWhenClientExtNil",
-			ppkc:                      ParsedPublicKeyCredential{},
-			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			name:                        "ShouldReturnEmptyWhenClientExtNil",
+			ppkc:                        ParsedPublicKeyCredential{},
+			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			expectedAppID:             "",
+			expectedAppID:               "",
 		},
 		{
 			name: "ShouldReturnEmptyWhenNotFIDOU2F",
@@ -395,9 +395,9 @@ func TestGetAppID(t *testing.T) {
 					ExtensionAppID: true,
 				},
 			},
-			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
 			credentialAttestationFormat: "packed",
-			expectedAppID:             "",
+			expectedAppID:               "",
 		},
 		{
 			name: "ShouldReturnEmptyWhenAppIDNotInClientExt",
@@ -406,9 +406,9 @@ func TestGetAppID(t *testing.T) {
 					"other": "value",
 				},
 			},
-			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			expectedAppID:             "",
+			expectedAppID:               "",
 		},
 		{
 			name: "ShouldFailWhenClientAppIDNotBool",
@@ -417,9 +417,9 @@ func TestGetAppID(t *testing.T) {
 					ExtensionAppID: "not-a-bool",
 				},
 			},
-			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			err:                       "Client Output appid did not have the expected type",
+			err:                         "Client Output appid did not have the expected type",
 		},
 		{
 			name: "ShouldReturnEmptyWhenAppIDFalse",
@@ -428,9 +428,9 @@ func TestGetAppID(t *testing.T) {
 					ExtensionAppID: false,
 				},
 			},
-			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			expectedAppID:             "",
+			expectedAppID:               "",
 		},
 		{
 			name: "ShouldFailWhenSessionAppIDMissing",
@@ -439,9 +439,9 @@ func TestGetAppID(t *testing.T) {
 					ExtensionAppID: true,
 				},
 			},
-			authExt:                   AuthenticationExtensions{},
+			authExt:                     AuthenticationExtensions{},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			err:                       "Session Data does not have an appid but Client Output indicates it should be set",
+			err:                         "Session Data does not have an appid but Client Output indicates it should be set",
 		},
 		{
 			name: "ShouldFailWhenSessionAppIDNotString",
@@ -450,9 +450,9 @@ func TestGetAppID(t *testing.T) {
 					ExtensionAppID: true,
 				},
 			},
-			authExt:                   AuthenticationExtensions{ExtensionAppID: 123},
+			authExt:                     AuthenticationExtensions{ExtensionAppID: 123},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			err:                       "Session Data appid did not have the expected type",
+			err:                         "Session Data appid did not have the expected type",
 		},
 		{
 			name: "ShouldReturnAppID",
@@ -461,9 +461,9 @@ func TestGetAppID(t *testing.T) {
 					ExtensionAppID: true,
 				},
 			},
-			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			expectedAppID:             "https://example.com",
+			expectedAppID:               "https://example.com",
 		},
 	}
 

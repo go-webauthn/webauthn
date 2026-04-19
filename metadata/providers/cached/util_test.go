@@ -177,8 +177,8 @@ func TestDefaultNew(t *testing.T) {
 
 func TestProviderOutdated(t *testing.T) {
 	testCases := []struct {
-		name     string
-		have     struct {
+		name string
+		have struct {
 			update  bool
 			clockAt time.Time
 			nextUpd time.Time
