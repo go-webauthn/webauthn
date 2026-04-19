@@ -370,7 +370,7 @@ func TestGetAppID(t *testing.T) {
 		name                      string
 		ppkc                      ParsedPublicKeyCredential
 		authExt                   AuthenticationExtensions
-		credentialAttestationType string
+		credentialAttestationFormat string
 		expectedAppID             string
 		err                       string
 	}{
@@ -378,14 +378,14 @@ func TestGetAppID(t *testing.T) {
 			name:                      "ShouldReturnEmptyWhenAuthExtNil",
 			ppkc:                      ParsedPublicKeyCredential{},
 			authExt:                   nil,
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:             "",
 		},
 		{
 			name:                      "ShouldReturnEmptyWhenClientExtNil",
 			ppkc:                      ParsedPublicKeyCredential{},
 			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:             "",
 		},
 		{
@@ -396,7 +396,7 @@ func TestGetAppID(t *testing.T) {
 				},
 			},
 			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
-			credentialAttestationType: "packed",
+			credentialAttestationFormat: "packed",
 			expectedAppID:             "",
 		},
 		{
@@ -407,7 +407,7 @@ func TestGetAppID(t *testing.T) {
 				},
 			},
 			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:             "",
 		},
 		{
@@ -418,7 +418,7 @@ func TestGetAppID(t *testing.T) {
 				},
 			},
 			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			err:                       "Client Output appid did not have the expected type",
 		},
 		{
@@ -429,7 +429,7 @@ func TestGetAppID(t *testing.T) {
 				},
 			},
 			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:             "",
 		},
 		{
@@ -440,7 +440,7 @@ func TestGetAppID(t *testing.T) {
 				},
 			},
 			authExt:                   AuthenticationExtensions{},
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			err:                       "Session Data does not have an appid but Client Output indicates it should be set",
 		},
 		{
@@ -451,7 +451,7 @@ func TestGetAppID(t *testing.T) {
 				},
 			},
 			authExt:                   AuthenticationExtensions{ExtensionAppID: 123},
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			err:                       "Session Data appid did not have the expected type",
 		},
 		{
@@ -462,14 +462,14 @@ func TestGetAppID(t *testing.T) {
 				},
 			},
 			authExt:                   AuthenticationExtensions{ExtensionAppID: "https://example.com"},
-			credentialAttestationType: CredentialTypeFIDOU2F,
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:             "https://example.com",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			appID, err := tc.ppkc.GetAppID(tc.authExt, tc.credentialAttestationType)
+			appID, err := tc.ppkc.GetAppID(tc.authExt, tc.credentialAttestationFormat)
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
 			} else {

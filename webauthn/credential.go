@@ -1,12 +1,42 @@
 package webauthn
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
 )
+
+// NewCredential returns a [*Credential] from a successfully validated registration response. The returned Credential
+// includes a populated [CredentialAttestation] containing the raw attestation data needed for future verification;
+// see the [CredentialAttestation] documentation for why these values must be persisted.
+func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
+	credential = &Credential{
+		ID:                c.Response.AttestationObject.AuthData.AttData.CredentialID,
+		PublicKey:         c.Response.AttestationObject.AuthData.AttData.CredentialPublicKey,
+		AttestationType:   c.Response.AttestationObject.Type,
+		AttestationFormat: c.Response.AttestationObject.Format,
+		Transport:         c.Response.Transports,
+		Flags:             NewCredentialFlags(c.Response.AttestationObject.AuthData.Flags),
+		Authenticator: Authenticator{
+			AAGUID:     c.Response.AttestationObject.AuthData.AttData.AAGUID,
+			SignCount:  c.Response.AttestationObject.AuthData.Counter,
+			Attachment: c.AuthenticatorAttachment,
+		},
+		Attestation: CredentialAttestation{
+			ClientDataJSON:     c.Raw.AttestationResponse.ClientDataJSON,
+			ClientDataHash:     clientDataHash,
+			AuthenticatorData:  c.Raw.AttestationResponse.AuthenticatorData,
+			PublicKeyAlgorithm: c.Raw.AttestationResponse.PublicKeyAlgorithm,
+			Object:             c.Raw.AttestationResponse.AttestationObject,
+		},
+	}
+
+	return credential, nil
+}
 
 // Credential contains all needed information about a WebAuthn credential for storage. This struct is effectively the
 // Credential Record as described in the specification.
@@ -28,11 +58,17 @@ type Credential struct {
 	// field.
 	PublicKey []byte `json:"publicKey"`
 
-	// The AttestationType stores the attestation format used (if any) by the authenticator when creating the
-	// Credential.
-	//
-	// Important Note: This field is named attestationType but this is actually the attestation format.
+	// AttestationType is the attestation type as conveyed by the authenticator during the registration ceremonyl
+	// one of the values defined by [metadata.AuthenticatorAttestationType] ("basic_full", "basic_surrogate",
+	// "attca", "anonca", "ecdaa", "none"). Prior releases incorrectly stored the attestation FORMAT here; see the
+	// custom [Credential.UnmarshalJSON] for the backward-compatibility migration applied when decoding such
+	// records.
 	AttestationType string `json:"attestationType"`
+
+	// AttestationFormat is the attestation statement format identifier ("packed", "tpm", "android-key",
+	// "android-safetynet", "fido-u2f", "apple", "compound", "none"); see §8 of the WebAuthn specification and
+	// the AttestationFormat constants in the protocol package.
+	AttestationFormat string `json:"attestationFormat"`
 
 	// Transport types the authenticator supports. Described by the Credential Record 'transports' field.
 	Transport []protocol.AuthenticatorTransport `json:"transport"`
@@ -47,10 +83,136 @@ type Credential struct {
 	Attestation CredentialAttestation `json:"attestation"`
 }
 
+// UnmarshalJSON decodes a [Credential] from JSON, applying a backward-compatibility migration for records produced
+// by earlier versions of this library: if the decoded record has no AttestationFormat and the AttestationType value
+// is a recognised attestation FORMAT identifier (i.e. "packed", "tpm", "none"), the value is moved to
+// AttestationFormat and AttestationType is cleared so callers can re-derive the true attestation type by calling
+// [Credential.Verify]. Records that already carry an AttestationFormat are untouched.
+func (c *Credential) UnmarshalJSON(data []byte) error {
+	type credentialAlias Credential
+
+	var tmp credentialAlias
+
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+
+	*c = Credential(tmp)
+
+	if c.AttestationFormat == "" && protocol.IsAttestationFormatString(c.AttestationType) {
+		c.AttestationFormat = c.AttestationType
+		c.AttestationType = ""
+	}
+
+	return nil
+}
+
 // SignalUnknownCredential creates a struct that can easily be marshaled to JSON which indicates this is an unknown
 // Credential.
-func (c Credential) SignalUnknownCredential(rpid string) *protocol.SignalUnknownCredential {
+func (c *Credential) SignalUnknownCredential(rpid string) *protocol.SignalUnknownCredential {
 	return c.Descriptor().SignalUnknownCredential(rpid)
+}
+
+// Descriptor converts a [Credential] into a [protocol.CredentialDescriptor].
+func (c *Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
+	return protocol.CredentialDescriptor{
+		Type:              protocol.PublicKeyCredentialType,
+		CredentialID:      c.ID,
+		Transport:         c.Transport,
+		AttestationType:   c.AttestationType,
+		AttestationFormat: c.AttestationFormat,
+	}
+}
+
+// Verify re-runs the full attestation verification for this credential against the given [metadata.Provider]. The
+// stored raw attestation bytes are re-parsed, the attestation signature is re-verified, and the authenticator is
+// validated against the MDS via [protocol.AttestationObject.VerifyAttestation] (which internally dispatches
+// [protocol.ValidateMetadata]). This is the canonical audit path and is at least as strong as the original
+// registration-time verification; call it on a schedule (i.e. on login or periodically) to catch MDS status changes
+// such as a newly-revoked authenticator model or a compromise advisory published after registration.
+//
+// Requirements:
+//
+//   - The mds argument must be a non-nil [metadata.Provider]; a nil provider returns an error.
+//
+//   - [CredentialAttestation.ClientDataJSON] must be preserved byte-for-byte — it is re-parsed for its collected
+//     client data fields and re-hashed when [CredentialAttestation.ClientDataHash] is absent.
+//
+//   - [CredentialAttestation.Object] must be preserved byte-for-byte — it is the raw CBOR attestation object and
+//     is decoded to recover the authenticator data, statement format, and statement for full re-verification.
+//
+//   - [Credential.PublicKey] must be populated with the CBOR-encoded COSE key as emitted by the authenticator at
+//     registration. As an integrity check, Verify compares this value byte-for-byte against the credential public
+//     key carried inside the attestation object and returns an error on mismatch.
+//
+//   - [CredentialAttestation.ClientDataHash] is optional — if empty it is recomputed as the SHA-256 of
+//     ClientDataJSON.
+//
+//   - [Credential.Transport], [CredentialAttestation.AuthenticatorData], and [CredentialAttestation.PublicKeyAlgorithm]
+//     are not read by the current Verify implementation (the authenticator data is re-derived from the attestation
+//     object, and the top-level AuthenticatorData / PublicKeyAlgorithm convenience fields are informational). They
+//     are still stored so future versions of this library, or alternative verification paths, can consume them —
+//     see [CredentialAttestation] for why every field should be persisted.
+//
+// As a side-effect, a successful Verify call will populate [Credential.AttestationType] from the re-derived value
+// when the field is empty (i.e. on a record migrated from a pre-split JSON layout by [Credential.UnmarshalJSON]);
+// the next marshal of the Credential will then carry the correct attestation type. For this reason Verify uses a
+// pointer receiver.
+//
+// See [CredentialAttestation] for guidance on persisting these raw values securely.
+func (c *Credential) Verify(mds metadata.Provider) (err error) {
+	if mds == nil {
+		return fmt.Errorf("error verifying credential: the metadata provider must be provided but it's nil")
+	}
+
+	raw := c.toAuthenticatorAttestationResponse()
+
+	var attestation *protocol.ParsedAttestationResponse
+
+	if attestation, err = raw.Parse(); err != nil {
+		return fmt.Errorf("error verifying credential: error parsing attestation: %w", err)
+	}
+
+	if !bytes.Equal(c.PublicKey, attestation.AttestationObject.AuthData.AttData.CredentialPublicKey) {
+		return fmt.Errorf("error verifying credential: stored public key does not match the credential public key embedded in the attestation object")
+	}
+
+	clientDataHash := c.Attestation.ClientDataHash
+
+	if len(clientDataHash) == 0 {
+		sum := sha256.Sum256(c.Attestation.ClientDataJSON)
+
+		clientDataHash = sum[:]
+	}
+
+	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, mds); err != nil {
+		return fmt.Errorf("error verifying credential: error verifying attestation: %w", err)
+	}
+
+	if c.AttestationType == "" {
+		c.AttestationType = attestation.AttestationObject.Type
+	}
+
+	return nil
+}
+
+func (c *Credential) toAuthenticatorAttestationResponse() *protocol.AuthenticatorAttestationResponse {
+	raw := &protocol.AuthenticatorAttestationResponse{
+		AuthenticatorResponse: protocol.AuthenticatorResponse{
+			ClientDataJSON: c.Attestation.ClientDataJSON,
+		},
+		Transports:         make([]string, len(c.Transport)),
+		AuthenticatorData:  c.Attestation.AuthenticatorData,
+		PublicKey:          c.PublicKey,
+		PublicKeyAlgorithm: c.Attestation.PublicKeyAlgorithm,
+		AttestationObject:  c.Attestation.Object,
+	}
+
+	for i, transport := range c.Transport {
+		raw.Transports[i] = string(transport)
+	}
+
+	return raw
 }
 
 // Credentials is a decorator type which allows easily converting a [Credential] slice into a
@@ -139,83 +301,4 @@ type CredentialAttestation struct {
 	// Object is the raw CBOR-encoded attestation object from the registration response. This contains the attestation
 	// statement, format, and authenticator data needed by [Credential.Verify] to re-perform attestation verification.
 	Object []byte `json:"object"`
-}
-
-// Descriptor converts a [Credential] into a [protocol.CredentialDescriptor].
-func (c Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
-	return protocol.CredentialDescriptor{
-		Type:            protocol.PublicKeyCredentialType,
-		CredentialID:    c.ID,
-		Transport:       c.Transport,
-		AttestationType: c.AttestationType,
-	}
-}
-
-// NewCredential returns a [*Credential] from a successfully validated registration response. The returned Credential
-// includes a populated [CredentialAttestation] containing the raw attestation data needed for future verification;
-// see the [CredentialAttestation] documentation for why these values must be persisted.
-func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
-	credential = &Credential{
-		ID:              c.Response.AttestationObject.AuthData.AttData.CredentialID,
-		PublicKey:       c.Response.AttestationObject.AuthData.AttData.CredentialPublicKey,
-		AttestationType: c.Response.AttestationObject.Format,
-		Transport:       c.Response.Transports,
-		Flags:           NewCredentialFlags(c.Response.AttestationObject.AuthData.Flags),
-		Authenticator: Authenticator{
-			AAGUID:     c.Response.AttestationObject.AuthData.AttData.AAGUID,
-			SignCount:  c.Response.AttestationObject.AuthData.Counter,
-			Attachment: c.AuthenticatorAttachment,
-		},
-		Attestation: CredentialAttestation{
-			ClientDataJSON:     c.Raw.AttestationResponse.ClientDataJSON,
-			ClientDataHash:     clientDataHash,
-			AuthenticatorData:  c.Raw.AttestationResponse.AuthenticatorData,
-			PublicKeyAlgorithm: c.Raw.AttestationResponse.PublicKeyAlgorithm,
-			Object:             c.Raw.AttestationResponse.AttestationObject,
-		},
-	}
-
-	return credential, nil
-}
-
-// Verify this credentials against the metadata.Provider given.
-func (c Credential) Verify(mds metadata.Provider) (err error) {
-	if mds == nil {
-		return fmt.Errorf("error verifying credential: the metadata provider must be provided but it's nil")
-	}
-
-	raw := &protocol.AuthenticatorAttestationResponse{
-		AuthenticatorResponse: protocol.AuthenticatorResponse{
-			ClientDataJSON: c.Attestation.ClientDataJSON,
-		},
-		Transports:         make([]string, len(c.Transport)),
-		AuthenticatorData:  c.Attestation.AuthenticatorData,
-		PublicKey:          c.PublicKey,
-		PublicKeyAlgorithm: c.Attestation.PublicKeyAlgorithm,
-		AttestationObject:  c.Attestation.Object,
-	}
-
-	for i, transport := range c.Transport {
-		raw.Transports[i] = string(transport)
-	}
-
-	var attestation *protocol.ParsedAttestationResponse
-
-	if attestation, err = raw.Parse(); err != nil {
-		return fmt.Errorf("error verifying credential: error parsing attestation: %w", err)
-	}
-
-	clientDataHash := c.Attestation.ClientDataHash
-
-	if len(clientDataHash) == 0 {
-		sum := sha256.Sum256(c.Attestation.ClientDataJSON)
-
-		clientDataHash = sum[:]
-	}
-
-	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, mds); err != nil {
-		return fmt.Errorf("error verifying credential: error verifying attestation: %w", err)
-	}
-
-	return nil
 }

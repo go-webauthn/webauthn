@@ -75,8 +75,15 @@ type CredentialDescriptor struct {
 	// The authenticator transports that can be used.
 	Transport []AuthenticatorTransport `json:"transports,omitempty"`
 
-	// The AttestationType from the Credential. Used internally only.
+	// AttestationType is the attestation type from the originating Credential (one of "basic_full",
+	// "basic_surrogate", "attca", "anonca", "ecdaa", "none"). Used internally only; not serialized.
 	AttestationType string `json:"-"`
+
+	// AttestationFormat is the attestation statement format from the originating Credential (one of "packed",
+	// "tpm", "android-key", "android-safetynet", "fido-u2f", "apple", "compound", "none"). Used internally only;
+	// not serialized. Prior releases overloaded [CredentialDescriptor.AttestationType] with this value; callers
+	// that construct descriptors directly should populate this field instead.
+	AttestationFormat string `json:"-"`
 }
 
 func (c CredentialDescriptor) SignalUnknownCredential(rpid string) *SignalUnknownCredential {
@@ -202,7 +209,7 @@ type AttestationFormat string
 const (
 	// AttestationFormatPacked is the "packed" attestation statement format is a WebAuthn-optimized format for
 	// attestation. It uses a very compact but still extensible encoding method. This format is implementable by
-	// authenticators with limited resources (e.g., secure elements).
+	// authenticators with limited resources (i.e., secure elements).
 	AttestationFormatPacked AttestationFormat = "packed"
 
 	// AttestationFormatTPM is the TPM attestation statement format returns an attestation statement in the same format

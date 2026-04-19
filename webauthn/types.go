@@ -28,8 +28,8 @@ type WebAuthn struct {
 }
 
 // Config represents the Relying Party configuration for WebAuthn operations. At minimum, RPID and RPOrigins must
-// be configured. The RPID should be the effective domain of the Relying Party (e.g. "example.com") and RPOrigins
-// should contain the fully qualified origins that are permitted (e.g. "https://example.com").
+// be configured. The RPID should be the effective domain of the Relying Party (i.e. "example.com") and RPOrigins
+// should contain the fully qualified origins that are permitted (i.e. "https://example.com").
 type Config struct {
 	// RPID configures the Relying Party Server ID. This should generally be the origin without a scheme and port.
 	RPID string
@@ -53,7 +53,7 @@ type Config struct {
 
 	// RPTopOriginVerificationMode determines the verification mode for the Top Origin value used in cross-origin
 	// ceremonies. When the zero value ([protocol.TopOriginDefaultVerificationMode]) is provided, the config
-	// validator coerces this field to [protocol.TopOriginExplicitVerificationMode] — i.e. any Top Origin supplied
+	// validator coerces this field to [protocol.TopOriginExplicitVerificationMode]; i.e. any Top Origin supplied
 	// by the client must appear in [Config.RPTopOrigins]. Set this field explicitly to
 	// [protocol.TopOriginAutoVerificationMode] or [protocol.TopOriginImplicitVerificationMode] if you need
 	// different matching semantics; there is no longer a mode that disables verification entirely.

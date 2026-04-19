@@ -357,7 +357,7 @@ func getTestMetadata(s string, c *http.Client) (StatementJSON, error) {
 
 	// MDSGetEndpointsRequest is the request sent to the conformance metadata getEndpoints endpoint.
 	type MDSGetTestMetadata struct {
-		// The URL of the local server endpoint, e.g. https://webauthn.io/
+		// The URL of the local server endpoint, i.e. https://webauthn.io/
 		Endpoint string `json:"endpoint"`
 		TestCase string `json:"testcase"`
 	}

@@ -744,9 +744,9 @@ func TestLoginOptions(t *testing.T) {
 		},
 		{
 			name: "AppIDExtensionWithU2F",
-			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}}), WithAppIdExtension("example")},
+			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor), CredentialID: []byte("123")}}), WithAppIdExtension("example")},
 			expected: protocol.PublicKeyCredentialRequestOptions{
-				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123")}},
+				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor), CredentialID: []byte("123")}},
 				Extensions:         protocol.AuthenticationExtensions{protocol.ExtensionAppID: "example"},
 			},
 		},
@@ -1109,9 +1109,10 @@ func TestValidateLogin_Full(t *testing.T) {
 			id: userID,
 			credentials: []Credential{
 				{
-					ID:              credentialID,
-					PublicKey:       credPubKey,
-					AttestationType: "packed",
+					ID:                credentialID,
+					PublicKey:         credPubKey,
+					AttestationType:   "basic_full",
+					AttestationFormat: "packed",
 					Flags: CredentialFlags{
 						UserPresent:    true,
 						BackupEligible: true,
@@ -1130,6 +1131,8 @@ func TestValidateLogin_Full(t *testing.T) {
 				AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
 			},
 		}, nil)
+
+		provider.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true)
 		provider.EXPECT().GetValidateStatus(gomock.Any()).Return(true)
 		provider.EXPECT().ValidateStatusReports(gomock.Any(), gomock.Any()).Return(nil)
 		provider.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)

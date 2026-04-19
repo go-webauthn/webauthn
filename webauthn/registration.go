@@ -10,7 +10,7 @@ import (
 )
 
 // RegistrationOption is a functional option that modifies the [protocol.PublicKeyCredentialCreationOptions] sent
-// to the client during a registration ceremony. Use the With* functions in this package (e.g.
+// to the client during a registration ceremony. Use the With* functions in this package (i.e.
 // [WithConveyancePreference], [WithExclusions], [WithAuthenticatorSelection]) to create registration options.
 type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
 

@@ -16,7 +16,7 @@ import (
 // ceremony. It contains the challenge and other parameters needed to verify the authenticator's response.
 //
 // The Relying Party must store this data securely and associate it with the user's session. It should not be
-// modifiable by the client (e.g. store it server-side or in a signed, opaque cookie). After the ceremony completes,
+// modifiable by the client (i.e. store it server-side or in a signed, opaque cookie). After the ceremony completes,
 // the session data should be discarded.
 type SessionData struct {
 	Challenge            string    `json:"challenge" msg:"c"`

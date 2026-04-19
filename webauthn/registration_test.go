@@ -526,11 +526,11 @@ func TestRegistrationOptions(t *testing.T) {
 		{
 			name: "AppIDExcludeExtensionWithExclusions",
 			opts: []RegistrationOption{WithExclusions([]protocol.CredentialDescriptor{
-				{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
+				{Type: protocol.PublicKeyCredentialType, AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor), CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
 			}), WithAppIdExcludeExtension("apple")},
 			expected: protocol.PublicKeyCredentialCreationOptions{
 				CredentialExcludeList: []protocol.CredentialDescriptor{
-					{Type: protocol.PublicKeyCredentialType, AttestationType: protocol.CredentialTypeFIDOU2F, CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
+					{Type: protocol.PublicKeyCredentialType, AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor), CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
 				},
 				Extensions: map[string]any{"appidExclude": "apple"},
 			},
@@ -562,8 +562,9 @@ func TestCreateCredential_Full(t *testing.T) {
 			setup      func(t *testing.T, provider *mocks.MockMetadataProvider)
 		}
 		expected struct {
-			attestationType string
-			err             string
+			attestationType   string
+			attestationFormat string
+			err               string
 		}
 	}{
 		{
@@ -577,10 +578,12 @@ func TestCreateCredential_Full(t *testing.T) {
 				specVector: testRegistrationSpecVectorNoneES256,
 			},
 			expected: struct {
-				attestationType string
-				err             string
+				attestationType   string
+				attestationFormat string
+				err               string
 			}{
-				attestationType: "none",
+				attestationType:   "none",
+				attestationFormat: "none",
 			},
 		},
 		{
@@ -594,10 +597,12 @@ func TestCreateCredential_Full(t *testing.T) {
 				specVector: testRegistrationSpecVectorPackedSelfES256,
 			},
 			expected: struct {
-				attestationType string
-				err             string
+				attestationType   string
+				attestationFormat string
+				err               string
 			}{
-				attestationType: "packed",
+				attestationType:   "basic_surrogate",
+				attestationFormat: "packed",
 			},
 		},
 		{
@@ -617,10 +622,12 @@ func TestCreateCredential_Full(t *testing.T) {
 				},
 			},
 			expected: struct {
-				attestationType string
-				err             string
+				attestationType   string
+				attestationFormat string
+				err               string
 			}{
-				attestationType: "packed",
+				attestationType:   "basic_surrogate",
+				attestationFormat: "packed",
 			},
 		},
 		{
@@ -639,8 +646,9 @@ func TestCreateCredential_Full(t *testing.T) {
 				},
 			},
 			expected: struct {
-				attestationType string
-				err             string
+				attestationType   string
+				attestationFormat string
+				err               string
 			}{
 				err: "Failed to validate authenticator metadata for Authenticator Attestation GUID 'df850e09-db6a-fbdf-ab51-697791506cfc'. Error occurred retrieving the metadata entry: entry lookup failed",
 			},
@@ -669,10 +677,12 @@ func TestCreateCredential_Full(t *testing.T) {
 				},
 			},
 			expected: struct {
-				attestationType string
-				err             string
+				attestationType   string
+				attestationFormat string
+				err               string
 			}{
-				attestationType: "packed",
+				attestationType:   "basic_surrogate",
+				attestationFormat: "packed",
 			},
 		},
 		{
@@ -687,8 +697,9 @@ func TestCreateCredential_Full(t *testing.T) {
 				challenge:  "wrong-challenge",
 			},
 			expected: struct {
-				attestationType string
-				err             string
+				attestationType   string
+				attestationFormat string
+				err               string
 			}{
 				err: "Error validating challenge",
 			},
@@ -705,10 +716,12 @@ func TestCreateCredential_Full(t *testing.T) {
 				mediation:  protocol.MediationConditional,
 			},
 			expected: struct {
-				attestationType string
-				err             string
+				attestationType   string
+				attestationFormat string
+				err               string
 			}{
-				attestationType: "none",
+				attestationType:   "none",
+				attestationFormat: "none",
 			},
 		},
 	}
@@ -762,6 +775,7 @@ func TestCreateCredential_Full(t *testing.T) {
 				require.NotNil(t, credential)
 				assert.Equal(t, credentialID, credential.ID)
 				assert.Equal(t, tc.expected.attestationType, credential.AttestationType)
+				assert.Equal(t, tc.expected.attestationFormat, credential.AttestationFormat)
 			}
 		})
 	}
@@ -796,6 +810,7 @@ func TestFinishRegistration_Success(t *testing.T) {
 	require.NotNil(t, credential)
 	assert.Equal(t, credentialID, credential.ID)
 	assert.Equal(t, "none", credential.AttestationType)
+	assert.Equal(t, "none", credential.AttestationFormat)
 }
 
 // testRegistrationSpecVectorNoneES256 returns the spec test vector data for NoneES256 registration.
