@@ -103,7 +103,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		assertion.Response.Challenge = challenge
 	}
 
-	if len(assertion.Response.Challenge) < 16 {
+	if len(assertion.Response.Challenge) < protocol.MinimumChallengeLength {
 		return nil, nil, fmt.Errorf("error generating assertion: the challenge must be at least 16 bytes")
 	}
 
