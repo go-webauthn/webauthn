@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
-	"github.com/google/uuid"
 )
 
 // New creates a new [WebAuthn] instance from the provided [Config]. The configuration is validated before the

@@ -201,7 +201,7 @@ func TestAuthenticator_MsgpRoundTrip(t *testing.T) {
 
 			var buf bytes.Buffer
 
-			require.NoError(t, msgp.Encode(&buf, &tc.original)) //nolint:gosec
+			require.NoError(t, msgp.Encode(&buf, &tc.original))
 
 			var streamDecoded Authenticator
 
@@ -211,7 +211,7 @@ func TestAuthenticator_MsgpRoundTrip(t *testing.T) {
 	}
 
 	t.Run("UnmarshalSkipsUnknownKeys", func(t *testing.T) {
-		tiny := []byte{0x81, 0xa3, 'x', 'y', 'z', 0xc3} // map(1){"xyz": true}
+		tiny := []byte{0x81, 0xa3, 'x', 'y', 'z', 0xc3}
 
 		var decoded Authenticator
 

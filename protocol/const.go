@@ -5,6 +5,9 @@ import (
 )
 
 const (
+	none          = "none"
+	stmtFmtNone   = none
+	stmtTypNone   = none
 	stmtAttStmt   = "attStmt"
 	stmtFmt       = "fmt"
 	stmtX5C       = "x5c"

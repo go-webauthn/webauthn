@@ -248,7 +248,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, "none", gotType)
+		assert.Equal(t, stmtTypNone, gotType)
 		assert.Nil(t, gotX5Cs)
 
 		require.Len(t, calls, 2)
@@ -297,7 +297,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
 			handlerCalls++
 
-			return "some-att-type", []any{[]byte("cert")}, nil
+			return testAttTypeSome, []any{[]byte("cert")}, nil
 		}
 
 		ctrl := gomock.NewController(t)
@@ -343,7 +343,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
 			handlerCalls++
-			return "some-att-type", []any{[]byte("cert")}, nil
+			return testAttTypeSome, []any{[]byte("cert")}, nil
 		}
 
 		att := AttestationObject{
@@ -364,7 +364,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, "none", gotType)
+		assert.Equal(t, stmtTypNone, gotType)
 		assert.Nil(t, gotX5Cs)
 		assert.Equal(t, 2, handlerCalls)
 	})

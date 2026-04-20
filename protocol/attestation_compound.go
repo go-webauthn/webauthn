@@ -113,5 +113,5 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 		}
 	}
 
-	return "none", nil, nil
+	return stmtTypNone, nil, nil
 }

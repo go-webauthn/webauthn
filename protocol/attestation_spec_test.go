@@ -31,7 +31,7 @@ func TestSpecVectors_NoneES256(t *testing.T) {
 
 	att := specTestParseAndVerify(t, attObjHex, clientDataJSONHex, specCredParamsES256)
 
-	assert.Equal(t, "none", att.Format)
+	assert.Equal(t, stmtFmtNone, att.Format)
 	assert.True(t, att.AuthData.Flags.HasUserPresent())
 	assert.True(t, att.AuthData.Flags.HasAttestedCredentialData())
 	assert.Empty(t, att.AttStatement)

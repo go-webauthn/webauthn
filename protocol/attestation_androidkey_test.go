@@ -137,8 +137,8 @@ func TestAndroidKeyFormat_HandlerErrors(t *testing.T) {
 			Algorithm: int64(webauthncose.AlgES256),
 		},
 		Curve:  int64(webauthncose.P256),
-		XCoord: padP256Coord(differentKey.PublicKey.X),
-		YCoord: padP256Coord(differentKey.PublicKey.Y),
+		XCoord: padP256Coord(differentKey.X),
+		YCoord: padP256Coord(differentKey.Y),
 	})
 	require.NoError(t, err)
 

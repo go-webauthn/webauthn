@@ -273,6 +273,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 			actual, err := pcc.Verify(tc.args.storedChallenge.String(), tc.args.relyingPartyID, tc.args.relyingPartyOrigin, nil, TopOriginExplicitVerificationMode, false, tc.args.verifyUser, false, nil, tc.args.credParams)
 
 			assert.Equal(t, tc.expected, actual)
+
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
 			} else {

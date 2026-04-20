@@ -19,16 +19,19 @@ func isISO3166Alpha2UserAssigned(code string) bool {
 	if len(code) != 2 {
 		return false
 	}
+
 	switch code {
 	case "AA", "ZZ":
 		return true
 	}
+
 	switch code[0] {
 	case 'Q':
 		return code[1] >= 'M' && code[1] <= 'Z'
 	case 'X':
 		return code[1] >= 'A' && code[1] <= 'Z'
 	}
+
 	return false
 }
 
