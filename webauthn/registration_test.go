@@ -11,13 +11,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/go-webauthn/webauthn/testing/mocks"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 )
 
 func TestWithRegistrationRelyingPartyID(t *testing.T) {
@@ -811,6 +813,155 @@ func TestFinishRegistration_Success(t *testing.T) {
 	assert.Equal(t, credentialID, credential.ID)
 	assert.Equal(t, "none", credential.AttestationType)
 	assert.Equal(t, "none", credential.AttestationFormat)
+}
+
+func TestValidateFilteredCredential(t *testing.T) {
+	aaguidA := uuid.MustParse("00000000-0000-0000-0000-00000000000a")
+	aaguidB := uuid.MustParse("00000000-0000-0000-0000-00000000000b")
+	aaguidC := uuid.MustParse("00000000-0000-0000-0000-00000000000c")
+
+	credentialWith := func(aaguid uuid.UUID, backupEligible bool) *Credential {
+		b, _ := aaguid.MarshalBinary()
+
+		flags := protocol.FlagUserPresent
+		if backupEligible {
+			flags |= protocol.FlagBackupEligible
+		}
+
+		return &Credential{
+			Flags:         NewCredentialFlags(flags),
+			Authenticator: Authenticator{AAGUID: b},
+		}
+	}
+
+	testCases := []struct {
+		name       string
+		filtering  *FilteringConfig
+		credential *Credential
+		err        string
+	}{
+		{
+			name:       "ShouldAllowWhenFilteringNil",
+			filtering:  nil,
+			credential: credentialWith(aaguidA, true),
+		},
+		{
+			name:       "ShouldAllowNilCredentialWhenFilteringNil",
+			filtering:  nil,
+			credential: nil,
+		},
+		{
+			name:       "ShouldRejectNilCredentialWhenFilteringSet",
+			filtering:  &FilteringConfig{},
+			credential: nil,
+			err:        "Error reading the request data",
+		},
+		{
+			name:       "ShouldRejectNilCredentialWhenFilteringHasPermittedList",
+			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA}},
+			credential: nil,
+			err:        "Error reading the request data",
+		},
+		{
+			name:       "ShouldAllowWhenFilteringAllZeroValues",
+			filtering:  &FilteringConfig{},
+			credential: credentialWith(aaguidA, true),
+		},
+		{
+			name:       "ShouldRejectBackupEligibleWhenProhibited",
+			filtering:  &FilteringConfig{ProhibitBackupEligibility: true},
+			credential: credentialWith(aaguidA, true),
+			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
+			name:       "ShouldAllowNonBackupEligibleWhenProhibited",
+			filtering:  &FilteringConfig{ProhibitBackupEligibility: true},
+			credential: credentialWith(aaguidA, false),
+		},
+		{
+			name:       "ShouldAllowBackupEligibleWhenNotProhibited",
+			filtering:  &FilteringConfig{ProhibitBackupEligibility: false},
+			credential: credentialWith(aaguidA, true),
+		},
+		{
+			name:      "ShouldRejectMalformedAAGUID",
+			filtering: &FilteringConfig{},
+			credential: &Credential{
+				Authenticator: Authenticator{AAGUID: []byte{0x01, 0x02, 0x03}},
+			},
+			err: "Error reading the request data",
+		},
+		{
+			name:       "ShouldAllowPermittedAAGUID",
+			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA, aaguidB}},
+			credential: credentialWith(aaguidA, false),
+		},
+		{
+			name:       "ShouldRejectAAGUIDNotInPermitList",
+			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA, aaguidB}},
+			credential: credentialWith(aaguidC, false),
+			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
+			name:       "ShouldAllowZeroAAGUIDEvenWhenNotInPermitList",
+			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA}},
+			credential: credentialWith(uuid.Nil, false),
+		},
+		{
+			name:       "ShouldAllowZeroAAGUIDWhenExplicitlyInPermitList",
+			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{uuid.Nil, aaguidA}},
+			credential: credentialWith(uuid.Nil, false),
+		},
+		{
+			name:       "ShouldRejectProhibitedAAGUID",
+			filtering:  &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{aaguidB, aaguidC}},
+			credential: credentialWith(aaguidB, false),
+			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
+			name:       "ShouldAllowAAGUIDNotInProhibitList",
+			filtering:  &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{aaguidB, aaguidC}},
+			credential: credentialWith(aaguidA, false),
+		},
+		{
+			name: "ShouldApplyBothPermittedAndProhibitedListsWhenSet",
+			filtering: &FilteringConfig{
+				PermittedAAGUIDs:  []uuid.UUID{aaguidA, aaguidB},
+				ProhibitedAAGUIDs: []uuid.UUID{aaguidB},
+			},
+			credential: credentialWith(aaguidB, false),
+			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
+			name: "ShouldAllowWhenPermittedAndNotProhibited",
+			filtering: &FilteringConfig{
+				PermittedAAGUIDs:  []uuid.UUID{aaguidA, aaguidB},
+				ProhibitedAAGUIDs: []uuid.UUID{aaguidC},
+			},
+			credential: credentialWith(aaguidA, false),
+		},
+		{
+			name: "ShouldCheckBackupEligibilityBeforeAAGUID",
+			filtering: &FilteringConfig{
+				ProhibitBackupEligibility: true,
+				PermittedAAGUIDs:          []uuid.UUID{aaguidA},
+			},
+			credential: credentialWith(aaguidC, true),
+			err:        "Policy restriction prevented the operation from completing",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateFilteredCredential(tc.credential, tc.filtering)
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+			}
+		})
+	}
 }
 
 // testRegistrationSpecVectorNoneES256 returns the spec test vector data for NoneES256 registration.

@@ -91,6 +91,10 @@ var (
 		Type:    "invalid_request",
 		Details: "Error reading the request data",
 	}
+	ErrPolicyRestriction = &Error{
+		Type:    "policy_restriction",
+		Details: "Policy restriction prevented the operation from completing",
+	}
 	ErrChallengeMismatch = &Error{
 		Type:    "challenge_mismatch",
 		Details: "Stored challenge and received challenge do not match",

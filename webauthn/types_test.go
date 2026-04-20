@@ -3,6 +3,7 @@ package webauthn
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -176,6 +177,101 @@ func TestConfig_Validate_DefaultsRPTopOriginVerificationModeToExplicit(t *testin
 
 		require.NoError(t, config.validate())
 		assert.Equal(t, protocol.TopOriginExplicitVerificationMode, config.RPTopOriginVerificationMode)
+	})
+}
+
+func TestConfig_Validate_FilteringMutuallyExclusive(t *testing.T) {
+	aaguidA := uuid.MustParse("00000000-0000-0000-0000-00000000000a")
+	aaguidB := uuid.MustParse("00000000-0000-0000-0000-00000000000b")
+
+	testCases := []struct {
+		name      string
+		filtering *FilteringConfig
+		err       string
+	}{
+		{
+			name:      "ShouldAllowNilFiltering",
+			filtering: nil,
+		},
+		{
+			name:      "ShouldAllowEmptyFiltering",
+			filtering: &FilteringConfig{},
+		},
+		{
+			name:      "ShouldAllowPermittedOnly",
+			filtering: &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA}},
+		},
+		{
+			name:      "ShouldAllowProhibitedOnly",
+			filtering: &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{aaguidB}},
+		},
+		{
+			name:      "ShouldAllowProhibitBackupEligibilityOnly",
+			filtering: &FilteringConfig{ProhibitBackupEligibility: true},
+		},
+		{
+			name: "ShouldAllowProhibitBackupEligibilityWithPermittedList",
+			filtering: &FilteringConfig{
+				ProhibitBackupEligibility: true,
+				PermittedAAGUIDs:          []uuid.UUID{aaguidA},
+			},
+		},
+		{
+			name: "ShouldAllowProhibitBackupEligibilityWithProhibitedList",
+			filtering: &FilteringConfig{
+				ProhibitBackupEligibility: true,
+				ProhibitedAAGUIDs:         []uuid.UUID{aaguidB},
+			},
+		},
+		{
+			name: "ShouldRejectBothPermittedAndProhibited",
+			filtering: &FilteringConfig{
+				PermittedAAGUIDs:  []uuid.UUID{aaguidA},
+				ProhibitedAAGUIDs: []uuid.UUID{aaguidB},
+			},
+			err: "cannot set both 'PermittedAAGUIDs' and 'ProhibitedAAGUIDs' in the filtering config",
+		},
+		{
+			name: "ShouldRejectBothPermittedAndProhibitedAlongsideBackupEligibility",
+			filtering: &FilteringConfig{
+				ProhibitBackupEligibility: true,
+				PermittedAAGUIDs:          []uuid.UUID{aaguidA},
+				ProhibitedAAGUIDs:         []uuid.UUID{aaguidB},
+			},
+			err: "cannot set both 'PermittedAAGUIDs' and 'ProhibitedAAGUIDs' in the filtering config",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+				Filtering: tc.filtering,
+			}
+
+			err := config.validate()
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+			}
+		})
+	}
+
+	t.Run("ShouldRejectViaNew", func(t *testing.T) {
+		w, err := New(&Config{
+			RPID:      "example.com",
+			RPOrigins: []string{"https://example.com"},
+			Filtering: &FilteringConfig{
+				PermittedAAGUIDs:  []uuid.UUID{aaguidA},
+				ProhibitedAAGUIDs: []uuid.UUID{aaguidB},
+			},
+		})
+
+		assert.Nil(t, w)
+		assert.EqualError(t, err, "error occurred validating the configuration: cannot set both 'PermittedAAGUIDs' and 'ProhibitedAAGUIDs' in the filtering config")
 	})
 }
 
