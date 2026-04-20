@@ -1,4 +1,4 @@
-# [0.17.0](https://github.com/go-webauthn/webauthn/compare/v0.16.5...v0.17.0) (2026-04-20)
+# [0.17.0](https://github.com/go-webauthn/webauthn/compare/v0.16.5...v0.17.0) (2026-04-21)
 
 
 * fix!: split attestation type and format (#658) ([3c1e870](https://github.com/go-webauthn/webauthn/commit/3c1e8703d88f7c00ddf1a2946603d5c3641ef199)), closes [#658](https://github.com/go-webauthn/webauthn/issues/658) [#476](https://github.com/go-webauthn/webauthn/issues/476)
@@ -45,7 +45,7 @@
 
   - The Credential.Verify method has been updated and may fail in
     previous scenarios where it passed previously. It will also update
-    the AttestationFormat value as a side-effect when used.
+    the AttestationType value as a side-effect when used.
 
 * The Cross-Origin verification semantics have changed
   significantly due to the stabilization of the WebAuthn Level 3
