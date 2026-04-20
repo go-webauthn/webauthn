@@ -41,7 +41,7 @@ func TestSessionData_MsgpRoundTrip(t *testing.T) {
 	t.Run("EncodeDecodePreservesFields", func(t *testing.T) {
 		var buf bytes.Buffer
 
-		require.NoError(t, msgp.Encode(&buf, &original)) //nolint:gosec
+		require.NoError(t, msgp.Encode(&buf, &original))
 
 		var decoded SessionData
 

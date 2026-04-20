@@ -420,8 +420,8 @@ func TestCredentialAssertionResponse_Parse_ClientDataJSONError(t *testing.T) {
 				// Minimal valid auth data: 32 bytes rpIdHash + 1 byte flags + 4 bytes counter = 37 bytes.
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0x01,       // flags: UP
-				0, 0, 0, 0, // counter
+				0x01,                   // Flags Value: UP.
+				0, 0, 0, 0, 0, 0, 0, 0, // Counter Value.
 			},
 		},
 	}

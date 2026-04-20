@@ -1,6 +1,10 @@
 package protocol
 
 const (
+	testAttTypeSome = "some-att-type"
+)
+
+const (
 	certificateAndroidKeyIntermediateFAKE1 = `-----BEGIN CERTIFICATE-----
 MIIC6jCCApGgAwIBAgIBAjAKBggqhkjOPQQDAjCBxjE9MDsGA1UEAww0RkFLRSBB
 bmRyb2lkIEtleXN0b3JlIFNvZnR3YXJlIEF0dGVzdGF0aW9uIFJvb3QgRkFLRTEx

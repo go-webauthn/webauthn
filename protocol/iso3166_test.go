@@ -18,7 +18,7 @@ func TestIsISO3166Alpha2(t *testing.T) {
 		{"UserAssigned-QZ", "QZ", true},
 		{"UserAssigned-XA", "XA", true},
 		{"UserAssigned-XZ", "XZ", true},
-		{"NotUserAssigned-QA", "QA", true}, // QA = Qatar (officially assigned)
+		{"NotUserAssigned-QA", "QA", true},
 		{"NotUserAssigned-QL", "QL", false},
 		{"LowerCase-us", "us", false},
 		{"MixedCase-Us", "Us", false},

@@ -736,7 +736,7 @@ func TestCredential_MsgpRoundTrip(t *testing.T) {
 	t.Run("EncodeDecodePreservesFields", func(t *testing.T) {
 		var buf bytes.Buffer
 
-		err := msgp.Encode(&buf, &original) //nolint:gosec
+		err := msgp.Encode(&buf, &original)
 		require.NoError(t, err)
 
 		var decoded Credential
@@ -887,6 +887,7 @@ func TestCredentials_MsgpRoundTrip(t *testing.T) {
 			} else {
 				assert.Equal(t, tc.original, decoded)
 			}
+
 			assert.LessOrEqual(t, len(data), tc.original.Msgsize())
 		})
 	}
@@ -1151,7 +1152,6 @@ func msgpOneFieldMap(key string, value []byte) []byte {
 	return append(b, value...)
 }
 
-func msgpBool(v bool) []byte     { return msgp.AppendBool(nil, v) }
-func msgpInt64(v int64) []byte   { return msgp.AppendInt64(nil, v) }
+func msgpBool(v bool) []byte     { return msgp.AppendBool(nil, v) }  //nolint:unparam
+func msgpInt64(v int64) []byte   { return msgp.AppendInt64(nil, v) } //nolint:unparam
 func msgpString(v string) []byte { return msgp.AppendString(nil, v) }
-func msgpBytes(v []byte) []byte  { return msgp.AppendBytes(nil, v) }

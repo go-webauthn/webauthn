@@ -171,7 +171,7 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 			name:   "ShouldWrapProtocolError",
 			format: "test-format",
 			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
-				return "basic_full", nil, ErrInvalidAttestation.WithDetails("handler failed")
+				return string(metadata.BasicFull), nil, ErrInvalidAttestation.WithDetails("handler failed")
 			},
 			err:     "handler failed",
 			errType: ErrInvalidAttestation.Type,
@@ -180,7 +180,7 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 			name:   "ShouldWrapNonProtocolError",
 			format: "test-format",
 			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
-				return "basic_full", nil, fmt.Errorf("stdlib error")
+				return string(metadata.BasicFull), nil, fmt.Errorf("stdlib error")
 			},
 			err:     "stdlib error",
 			errType: ErrInvalidAttestation.Type,
@@ -196,7 +196,7 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 			name:   "ShouldFailWithInvalidAAGUIDLength",
 			format: "test-format",
 			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
-				return "basic_full", nil, nil
+				return string(metadata.BasicFull), nil, nil
 			},
 			authData: AuthenticatorData{
 				AttData: AttestedCredentialData{

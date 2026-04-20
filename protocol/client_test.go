@@ -174,11 +174,12 @@ func TestVerifyCollectedClientData(t *testing.T) {
 
 			err = ccd.Verify(challenge.String(), ceremony, rpOrigins, rpTopOrigins, tc.topOriginMode, tc.allowCrossOrign)
 
-			if tc.err != "" {
+			switch {
+			case tc.err != "":
 				assert.EqualError(t, err, tc.err)
-			} else if tc.errType != "" {
+			case tc.errType != "":
 				AssertIsProtocolError(t, err, tc.errType, tc.errDetails, tc.errInfo)
-			} else {
+			default:
 				assert.NoError(t, err)
 			}
 		})
@@ -436,7 +437,7 @@ func TestIsOriginInHaystack(t *testing.T) {
 	}
 }
 
-func setupCollectedClientData(challenge URLEncodedBase64, origin, topOrigin string, crossOrigin bool) *CollectedClientData { //nolint:unparam
+func setupCollectedClientData(challenge URLEncodedBase64, origin, topOrigin string, crossOrigin bool) *CollectedClientData {
 	ccd := &CollectedClientData{
 		Type:        CreateCeremony,
 		Origin:      origin,

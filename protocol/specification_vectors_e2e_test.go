@@ -624,11 +624,11 @@ func specTestMDSProvider(t *testing.T) metadata.Provider {
 	t.Helper()
 
 	knownAAGUIDs := map[uuid.UUID]bool{
-		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "876ca4f52071c3e9b25509ef2cdf7ed6"))): true, // ES256
-		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "e950dcda3bdae1d087cda380a897848b"))): true, // ES384
-		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "39d8ce6a3cf61025775083a738e5c254"))): true, // ES512
-		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "428f8878298b9862a36ad8c7527bfef2"))): true, // RS256
-		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "d5aa33581e8ca478e20fe713f5d32ff2"))): true, // EdDSA
+		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "876ca4f52071c3e9b25509ef2cdf7ed6"))): true, // ES256.
+		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "e950dcda3bdae1d087cda380a897848b"))): true, // ES384.
+		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "39d8ce6a3cf61025775083a738e5c254"))): true, // ES512.
+		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "428f8878298b9862a36ad8c7527bfef2"))): true, // RS256.
+		uuid.Must(uuid.FromBytes(specTestDecodeHex(t, "d5aa33581e8ca478e20fe713f5d32ff2"))): true, // EdDSA.
 	}
 
 	entry := &metadata.Entry{
@@ -675,5 +675,6 @@ func init() {
 
 	attAndroidKeyHardwareRootsCertPool.AddCert(cert)
 	attAppleHardwareRootsCertPool.AddCert(cert)
+
 	tpmManufacturers = append(tpmManufacturers, tpmManufacturer{"00000000", "WebAuthn Test", "WebAuthnTest"})
 }

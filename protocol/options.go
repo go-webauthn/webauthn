@@ -161,7 +161,7 @@ const (
 	// This is the default value.
 	//
 	// Specification: §5.4.7. Attestation Conveyance Preference Enumeration (https://www.w3.org/TR/webauthn/#dom-attestationconveyancepreference-none)
-	PreferNoAttestation ConveyancePreference = "none"
+	PreferNoAttestation ConveyancePreference = none
 
 	// PreferIndirectAttestation is a ConveyancePreference value.
 	//
@@ -237,7 +237,7 @@ const (
 
 	// AttestationFormatNone is the attestation statement format that is used to replace any authenticator-provided
 	// attestation statement when a WebAuthn Relying Party indicates it does not wish to receive attestation information.
-	AttestationFormatNone AttestationFormat = "none"
+	AttestationFormatNone AttestationFormat = none
 )
 
 type PublicKeyCredentialHints string

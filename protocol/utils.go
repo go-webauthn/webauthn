@@ -76,8 +76,6 @@ func parseX5C(x5c []any) (x5cs []*x509.Certificate, err error) {
 // general.
 //
 // WARNING: Setting mangleNotAfter=true weakens security by accepting expired certificates.
-//
-//nolint:unparam
 func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool, mangleNotAfter bool, mangleNotAfterSafeTime time.Time) (chains [][]*x509.Certificate, err error) {
 	if len(certs) == 0 {
 		return nil, errors.New("empty chain")

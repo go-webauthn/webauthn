@@ -339,8 +339,8 @@ func TestVerifyAttestationECDSAPublicKeyMatch(t *testing.T) {
 			Algorithm: int64(webauthncose.AlgES256),
 		},
 		Curve:  int64(webauthncose.P256),
-		XCoord: padP256Coord(eccKey.PublicKey.X),
-		YCoord: padP256Coord(eccKey.PublicKey.Y),
+		XCoord: padP256Coord(eccKey.X),
+		YCoord: padP256Coord(eccKey.Y),
 	})
 	require.NoError(t, err)
 
