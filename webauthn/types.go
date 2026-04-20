@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/google/uuid"
 )
 
 // New creates a new [WebAuthn] instance from the provided [Config]. The configuration is validated before the
@@ -86,7 +87,27 @@ type Config struct {
 	// or [github.com/go-webauthn/webauthn/metadata/providers/cached] to create a provider instance.
 	MDS metadata.Provider
 
+	// Filtering configures the filtering of authenticators based on their AAGUIDs. This is useful for enforcing
+	// policy on the authenticators that are available to be registered with the Relying Party.
+	Filtering *FilteringConfig
+
 	validated bool
+}
+
+// FilteringConfig configures the filtering of authenticators based on their AAGUIDs. This is useful for enforcing
+// policy on the authenticators that are available to be registered with the Relying Party.
+type FilteringConfig struct {
+	// ProhibitBackupEligibility if set will prohibit the use of authenticators with the backup eligible flag set.
+	ProhibitBackupEligibility bool
+
+	// PermittedAAGUIDs if set is used to filter authenticators by their AAGUID only allowing specific values. This
+	// option is mutually exclusive with ProhibitedAAGUIDs and will never exclude a zero AAGUID. To prohibit the use
+	// of Zero AAGUIDs, use [Config.MDS] or [FilteringConfig.ProhibitedAAGUIDs].
+	PermittedAAGUIDs []uuid.UUID
+
+	// ProhibitedAAGUIDs if set is used to filter authenticators by their AAGUID only prohibiting specific values. This
+	// option is mutually exclusive with PermittedAAGUIDs.
+	ProhibitedAAGUIDs []uuid.UUID
 }
 
 // TimeoutsConfig configures the timeout durations for both login and registration ceremonies. These values are sent
@@ -147,6 +168,12 @@ func (config *Config) validate() (err error) {
 
 	if config.RPTopOriginVerificationMode == protocol.TopOriginDefaultVerificationMode {
 		config.RPTopOriginVerificationMode = protocol.TopOriginExplicitVerificationMode
+	}
+
+	if config.Filtering != nil {
+		if len(config.Filtering.PermittedAAGUIDs) > 0 && len(config.Filtering.ProhibitedAAGUIDs) > 0 {
+			return fmt.Errorf("cannot set both 'PermittedAAGUIDs' and 'ProhibitedAAGUIDs' in the filtering config")
+		}
 	}
 
 	config.validated = true
