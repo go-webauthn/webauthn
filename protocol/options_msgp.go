@@ -6,6 +6,7 @@ import "github.com/go-webauthn/webauthn/protocol/webauthncose"
 
 //msgp:replace webauthncose.COSEAlgorithmIdentifier with:int
 //msgp:replace CredentialType with:string
+//msgp:clearomitted
 
 // CredentialParameter is the credential type and algorithm
 // that the relying party wants the authenticator to create.

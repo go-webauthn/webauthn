@@ -14,6 +14,7 @@ import (
 
 //msgp:replace protocol.AuthenticatorTransport with:string
 //msgp:shim CredentialFlags as:byte using:(CredentialFlags).MsgpByte/CredentialFlagsFromMsgpByte
+//msgp:clearomitted
 
 // NewCredential returns a [*Credential] from a successfully validated registration response. The returned Credential
 // includes a populated [CredentialAttestation] containing the raw attestation data needed for future verification;
@@ -74,15 +75,15 @@ type Credential struct {
 	// "attca", "anonca", "ecdaa", "none"). Prior releases incorrectly stored the attestation FORMAT here; see the
 	// custom [Credential.UnmarshalJSON] for the backward-compatibility migration applied when decoding such
 	// records.
-	AttestationType string `json:"attestationType" msg:"atttype"`
+	AttestationType string `json:"attestationType" msg:"atttype,omitempty"`
 
 	// AttestationFormat is the attestation statement format identifier ("packed", "tpm", "android-key",
 	// "android-safetynet", "fido-u2f", "apple", "compound", "none"); see §8 of the WebAuthn specification and
 	// the AttestationFormat constants in the protocol package.
-	AttestationFormat string `json:"attestationFormat" msg:"attfmt"`
+	AttestationFormat string `json:"attestationFormat" msg:"attfmt,omitempty"`
 
 	// Transport types the authenticator supports. Described by the Credential Record 'transports' field.
-	Transport []protocol.AuthenticatorTransport `json:"transport" msg:"t"`
+	Transport []protocol.AuthenticatorTransport `json:"transport" msg:"t,omitempty"`
 
 	// Flags represent the commonly stored flags.
 	Flags CredentialFlags `json:"flags" msg:"flg"`
@@ -310,20 +311,20 @@ func (f CredentialFlags) MsgpByte() byte {
 type CredentialAttestation struct {
 	// ClientDataJSON is the raw JSON-encoded client data from the registration response. This is the verbatim value
 	// provided by the client and is used to recompute the client data hash during later verification.
-	ClientDataJSON []byte `json:"clientDataJSON" msg:"cdj"`
+	ClientDataJSON []byte `json:"clientDataJSON" msg:"cdj,omitempty"`
 
 	// ClientDataHash is the SHA-256 hash of ClientDataJSON computed during registration verification. If empty,
 	// [Credential.Verify] will recompute it from ClientDataJSON.
-	ClientDataHash []byte `json:"clientDataHash" msg:"cdh"`
+	ClientDataHash []byte `json:"clientDataHash" msg:"cdh,omitempty"`
 
 	// AuthenticatorData is the raw authenticator data from the registration response as provided in the
 	// RegistrationResponseJSON. This is the unparsed byte representation that can be re-parsed for future validation.
-	AuthenticatorData []byte `json:"authenticatorData" msg:"data"`
+	AuthenticatorData []byte `json:"authenticatorData" msg:"data,omitempty"`
 
 	// PublicKeyAlgorithm is the COSE algorithm identifier for the credential's public key.
-	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm" msg:"alg"`
+	PublicKeyAlgorithm int64 `json:"publicKeyAlgorithm" msg:"alg,omitempty"`
 
 	// Object is the raw CBOR-encoded attestation object from the registration response. This contains the attestation
 	// statement, format, and authenticator data needed by [Credential.Verify] to re-perform attestation verification.
-	Object []byte `json:"object" msg:"obj"`
+	Object []byte `json:"object" msg:"obj,omitempty"`
 }

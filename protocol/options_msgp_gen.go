@@ -17,6 +17,8 @@ func (z *CredentialParameter) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -35,6 +37,7 @@ func (z *CredentialParameter) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Type = CredentialType(zb0002)
 			}
+			zb0001Mask |= 0x1
 		case "alg":
 			{
 				var zb0003 int
@@ -45,12 +48,22 @@ func (z *CredentialParameter) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Algorithm = webauthncose.COSEAlgorithmIdentifier(zb0003)
 			}
+			zb0001Mask |= 0x2
 		default:
 			err = dc.Skip()
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x3 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Type = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Algorithm = 0
 		}
 	}
 	return
@@ -150,6 +163,8 @@ func (z *CredentialParameter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -168,6 +183,7 @@ func (z *CredentialParameter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Type = CredentialType(zb0002)
 			}
+			zb0001Mask |= 0x1
 		case "alg":
 			{
 				var zb0003 int
@@ -178,12 +194,22 @@ func (z *CredentialParameter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Algorithm = webauthncose.COSEAlgorithmIdentifier(zb0003)
 			}
+			zb0001Mask |= 0x2
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x3 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Type = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Algorithm = 0
 		}
 	}
 	o = bts

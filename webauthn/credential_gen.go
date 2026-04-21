@@ -17,6 +17,8 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 3 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -43,12 +45,14 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "AttestationType")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "attfmt":
 			z.AttestationFormat, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "AttestationFormat")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "t":
 			var zb0002 uint32
 			zb0002, err = dc.ReadArrayHeader()
@@ -72,6 +76,7 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 					z.Transport[za0001] = protocol.AuthenticatorTransport(zb0003)
 				}
 			}
+			zb0001Mask |= 0x4
 		case "flg":
 			{
 				var zb0004 byte
@@ -102,98 +107,140 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x7 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AttestationType = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.AttestationFormat = ""
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.Transport = nil
+		}
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z *Credential) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 8
-	// write "id"
-	err = en.Append(0x88, 0xa2, 0x69, 0x64)
+	// check for omitted fields
+	zb0001Len := uint32(8)
+	var zb0001Mask uint8 /* 8 bits */
+	_ = zb0001Mask
+	if z.AttestationType == "" {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.AttestationFormat == "" {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.Transport == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes(z.ID)
-	if err != nil {
-		err = msgp.WrapError(err, "ID")
-		return
-	}
-	// write "pk"
-	err = en.Append(0xa2, 0x70, 0x6b)
-	if err != nil {
-		return
-	}
-	err = en.WriteBytes(z.PublicKey)
-	if err != nil {
-		err = msgp.WrapError(err, "PublicKey")
-		return
-	}
-	// write "atttype"
-	err = en.Append(0xa7, 0x61, 0x74, 0x74, 0x74, 0x79, 0x70, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.AttestationType)
-	if err != nil {
-		err = msgp.WrapError(err, "AttestationType")
-		return
-	}
-	// write "attfmt"
-	err = en.Append(0xa6, 0x61, 0x74, 0x74, 0x66, 0x6d, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.AttestationFormat)
-	if err != nil {
-		err = msgp.WrapError(err, "AttestationFormat")
-		return
-	}
-	// write "t"
-	err = en.Append(0xa1, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(len(z.Transport)))
-	if err != nil {
-		err = msgp.WrapError(err, "Transport")
-		return
-	}
-	for za0001 := range z.Transport {
-		err = en.WriteString(string(z.Transport[za0001]))
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// write "id"
+		err = en.Append(0xa2, 0x69, 0x64)
 		if err != nil {
-			err = msgp.WrapError(err, "Transport", za0001)
 			return
 		}
-	}
-	// write "flg"
-	err = en.Append(0xa3, 0x66, 0x6c, 0x67)
-	if err != nil {
-		return
-	}
-	err = en.WriteByte((CredentialFlags).MsgpByte(z.Flags))
-	if err != nil {
-		err = msgp.WrapError(err, "Flags")
-		return
-	}
-	// write "a"
-	err = en.Append(0xa1, 0x61)
-	if err != nil {
-		return
-	}
-	err = z.Authenticator.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "Authenticator")
-		return
-	}
-	// write "att"
-	err = en.Append(0xa3, 0x61, 0x74, 0x74)
-	if err != nil {
-		return
-	}
-	err = z.Attestation.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "Attestation")
-		return
+		err = en.WriteBytes(z.ID)
+		if err != nil {
+			err = msgp.WrapError(err, "ID")
+			return
+		}
+		// write "pk"
+		err = en.Append(0xa2, 0x70, 0x6b)
+		if err != nil {
+			return
+		}
+		err = en.WriteBytes(z.PublicKey)
+		if err != nil {
+			err = msgp.WrapError(err, "PublicKey")
+			return
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// write "atttype"
+			err = en.Append(0xa7, 0x61, 0x74, 0x74, 0x74, 0x79, 0x70, 0x65)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.AttestationType)
+			if err != nil {
+				err = msgp.WrapError(err, "AttestationType")
+				return
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// write "attfmt"
+			err = en.Append(0xa6, 0x61, 0x74, 0x74, 0x66, 0x6d, 0x74)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.AttestationFormat)
+			if err != nil {
+				err = msgp.WrapError(err, "AttestationFormat")
+				return
+			}
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// write "t"
+			err = en.Append(0xa1, 0x74)
+			if err != nil {
+				return
+			}
+			err = en.WriteArrayHeader(uint32(len(z.Transport)))
+			if err != nil {
+				err = msgp.WrapError(err, "Transport")
+				return
+			}
+			for za0001 := range z.Transport {
+				err = en.WriteString(string(z.Transport[za0001]))
+				if err != nil {
+					err = msgp.WrapError(err, "Transport", za0001)
+					return
+				}
+			}
+		}
+		// write "flg"
+		err = en.Append(0xa3, 0x66, 0x6c, 0x67)
+		if err != nil {
+			return
+		}
+		err = en.WriteByte((CredentialFlags).MsgpByte(z.Flags))
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		// write "a"
+		err = en.Append(0xa1, 0x61)
+		if err != nil {
+			return
+		}
+		err = z.Authenticator.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "Authenticator")
+			return
+		}
+		// write "att"
+		err = en.Append(0xa3, 0x61, 0x74, 0x74)
+		if err != nil {
+			return
+		}
+		err = z.Attestation.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "Attestation")
+			return
+		}
 	}
 	return
 }
@@ -201,41 +248,68 @@ func (z *Credential) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 8
-	// string "id"
-	o = append(o, 0x88, 0xa2, 0x69, 0x64)
-	o = msgp.AppendBytes(o, z.ID)
-	// string "pk"
-	o = append(o, 0xa2, 0x70, 0x6b)
-	o = msgp.AppendBytes(o, z.PublicKey)
-	// string "atttype"
-	o = append(o, 0xa7, 0x61, 0x74, 0x74, 0x74, 0x79, 0x70, 0x65)
-	o = msgp.AppendString(o, z.AttestationType)
-	// string "attfmt"
-	o = append(o, 0xa6, 0x61, 0x74, 0x74, 0x66, 0x6d, 0x74)
-	o = msgp.AppendString(o, z.AttestationFormat)
-	// string "t"
-	o = append(o, 0xa1, 0x74)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Transport)))
-	for za0001 := range z.Transport {
-		o = msgp.AppendString(o, string(z.Transport[za0001]))
+	// check for omitted fields
+	zb0001Len := uint32(8)
+	var zb0001Mask uint8 /* 8 bits */
+	_ = zb0001Mask
+	if z.AttestationType == "" {
+		zb0001Len--
+		zb0001Mask |= 0x4
 	}
-	// string "flg"
-	o = append(o, 0xa3, 0x66, 0x6c, 0x67)
-	o = msgp.AppendByte(o, (CredentialFlags).MsgpByte(z.Flags))
-	// string "a"
-	o = append(o, 0xa1, 0x61)
-	o, err = z.Authenticator.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Authenticator")
-		return
+	if z.AttestationFormat == "" {
+		zb0001Len--
+		zb0001Mask |= 0x8
 	}
-	// string "att"
-	o = append(o, 0xa3, 0x61, 0x74, 0x74)
-	o, err = z.Attestation.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Attestation")
-		return
+	if z.Transport == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// string "id"
+		o = append(o, 0xa2, 0x69, 0x64)
+		o = msgp.AppendBytes(o, z.ID)
+		// string "pk"
+		o = append(o, 0xa2, 0x70, 0x6b)
+		o = msgp.AppendBytes(o, z.PublicKey)
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// string "atttype"
+			o = append(o, 0xa7, 0x61, 0x74, 0x74, 0x74, 0x79, 0x70, 0x65)
+			o = msgp.AppendString(o, z.AttestationType)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// string "attfmt"
+			o = append(o, 0xa6, 0x61, 0x74, 0x74, 0x66, 0x6d, 0x74)
+			o = msgp.AppendString(o, z.AttestationFormat)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// string "t"
+			o = append(o, 0xa1, 0x74)
+			o = msgp.AppendArrayHeader(o, uint32(len(z.Transport)))
+			for za0001 := range z.Transport {
+				o = msgp.AppendString(o, string(z.Transport[za0001]))
+			}
+		}
+		// string "flg"
+		o = append(o, 0xa3, 0x66, 0x6c, 0x67)
+		o = msgp.AppendByte(o, (CredentialFlags).MsgpByte(z.Flags))
+		// string "a"
+		o = append(o, 0xa1, 0x61)
+		o, err = z.Authenticator.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Authenticator")
+			return
+		}
+		// string "att"
+		o = append(o, 0xa3, 0x61, 0x74, 0x74)
+		o, err = z.Attestation.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Attestation")
+			return
+		}
 	}
 	return
 }
@@ -250,6 +324,8 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 3 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -276,12 +352,14 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "AttestationType")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "attfmt":
 			z.AttestationFormat, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "AttestationFormat")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "t":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -305,6 +383,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					z.Transport[za0001] = protocol.AuthenticatorTransport(zb0003)
 				}
 			}
+			zb0001Mask |= 0x4
 		case "flg":
 			{
 				var zb0004 byte
@@ -335,6 +414,18 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x7 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AttestationType = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.AttestationFormat = ""
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.Transport = nil
+		}
+	}
 	o = bts
 	return
 }
@@ -359,6 +450,8 @@ func (z *CredentialAttestation) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 5 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -373,30 +466,35 @@ func (z *CredentialAttestation) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "ClientDataJSON")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "cdh":
 			z.ClientDataHash, err = dc.ReadBytes(z.ClientDataHash)
 			if err != nil {
 				err = msgp.WrapError(err, "ClientDataHash")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "data":
 			z.AuthenticatorData, err = dc.ReadBytes(z.AuthenticatorData)
 			if err != nil {
 				err = msgp.WrapError(err, "AuthenticatorData")
 				return
 			}
+			zb0001Mask |= 0x4
 		case "alg":
 			z.PublicKeyAlgorithm, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "PublicKeyAlgorithm")
 				return
 			}
+			zb0001Mask |= 0x8
 		case "obj":
 			z.Object, err = dc.ReadBytes(z.Object)
 			if err != nil {
 				err = msgp.WrapError(err, "Object")
 				return
 			}
+			zb0001Mask |= 0x10
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -405,61 +503,121 @@ func (z *CredentialAttestation) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1f {
+		if (zb0001Mask & 0x1) == 0 {
+			z.ClientDataJSON = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.ClientDataHash = nil
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.AuthenticatorData = nil
+		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.PublicKeyAlgorithm = 0
+		}
+		if (zb0001Mask & 0x10) == 0 {
+			z.Object = nil
+		}
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z *CredentialAttestation) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
-	// write "cdj"
-	err = en.Append(0x85, 0xa3, 0x63, 0x64, 0x6a)
+	// check for omitted fields
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
+	_ = zb0001Mask
+	if z.ClientDataJSON == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.ClientDataHash == nil {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.AuthenticatorData == nil {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.PublicKeyAlgorithm == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.Object == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes(z.ClientDataJSON)
-	if err != nil {
-		err = msgp.WrapError(err, "ClientDataJSON")
-		return
-	}
-	// write "cdh"
-	err = en.Append(0xa3, 0x63, 0x64, 0x68)
-	if err != nil {
-		return
-	}
-	err = en.WriteBytes(z.ClientDataHash)
-	if err != nil {
-		err = msgp.WrapError(err, "ClientDataHash")
-		return
-	}
-	// write "data"
-	err = en.Append(0xa4, 0x64, 0x61, 0x74, 0x61)
-	if err != nil {
-		return
-	}
-	err = en.WriteBytes(z.AuthenticatorData)
-	if err != nil {
-		err = msgp.WrapError(err, "AuthenticatorData")
-		return
-	}
-	// write "alg"
-	err = en.Append(0xa3, 0x61, 0x6c, 0x67)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.PublicKeyAlgorithm)
-	if err != nil {
-		err = msgp.WrapError(err, "PublicKeyAlgorithm")
-		return
-	}
-	// write "obj"
-	err = en.Append(0xa3, 0x6f, 0x62, 0x6a)
-	if err != nil {
-		return
-	}
-	err = en.WriteBytes(z.Object)
-	if err != nil {
-		err = msgp.WrapError(err, "Object")
-		return
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not omitted
+			// write "cdj"
+			err = en.Append(0xa3, 0x63, 0x64, 0x6a)
+			if err != nil {
+				return
+			}
+			err = en.WriteBytes(z.ClientDataJSON)
+			if err != nil {
+				err = msgp.WrapError(err, "ClientDataJSON")
+				return
+			}
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// write "cdh"
+			err = en.Append(0xa3, 0x63, 0x64, 0x68)
+			if err != nil {
+				return
+			}
+			err = en.WriteBytes(z.ClientDataHash)
+			if err != nil {
+				err = msgp.WrapError(err, "ClientDataHash")
+				return
+			}
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// write "data"
+			err = en.Append(0xa4, 0x64, 0x61, 0x74, 0x61)
+			if err != nil {
+				return
+			}
+			err = en.WriteBytes(z.AuthenticatorData)
+			if err != nil {
+				err = msgp.WrapError(err, "AuthenticatorData")
+				return
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// write "alg"
+			err = en.Append(0xa3, 0x61, 0x6c, 0x67)
+			if err != nil {
+				return
+			}
+			err = en.WriteInt64(z.PublicKeyAlgorithm)
+			if err != nil {
+				err = msgp.WrapError(err, "PublicKeyAlgorithm")
+				return
+			}
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// write "obj"
+			err = en.Append(0xa3, 0x6f, 0x62, 0x6a)
+			if err != nil {
+				return
+			}
+			err = en.WriteBytes(z.Object)
+			if err != nil {
+				err = msgp.WrapError(err, "Object")
+				return
+			}
+		}
 	}
 	return
 }
@@ -467,22 +625,61 @@ func (z *CredentialAttestation) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *CredentialAttestation) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
-	// string "cdj"
-	o = append(o, 0x85, 0xa3, 0x63, 0x64, 0x6a)
-	o = msgp.AppendBytes(o, z.ClientDataJSON)
-	// string "cdh"
-	o = append(o, 0xa3, 0x63, 0x64, 0x68)
-	o = msgp.AppendBytes(o, z.ClientDataHash)
-	// string "data"
-	o = append(o, 0xa4, 0x64, 0x61, 0x74, 0x61)
-	o = msgp.AppendBytes(o, z.AuthenticatorData)
-	// string "alg"
-	o = append(o, 0xa3, 0x61, 0x6c, 0x67)
-	o = msgp.AppendInt64(o, z.PublicKeyAlgorithm)
-	// string "obj"
-	o = append(o, 0xa3, 0x6f, 0x62, 0x6a)
-	o = msgp.AppendBytes(o, z.Object)
+	// check for omitted fields
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 5 bits */
+	_ = zb0001Mask
+	if z.ClientDataJSON == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.ClientDataHash == nil {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.AuthenticatorData == nil {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.PublicKeyAlgorithm == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.Object == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not omitted
+			// string "cdj"
+			o = append(o, 0xa3, 0x63, 0x64, 0x6a)
+			o = msgp.AppendBytes(o, z.ClientDataJSON)
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// string "cdh"
+			o = append(o, 0xa3, 0x63, 0x64, 0x68)
+			o = msgp.AppendBytes(o, z.ClientDataHash)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// string "data"
+			o = append(o, 0xa4, 0x64, 0x61, 0x74, 0x61)
+			o = msgp.AppendBytes(o, z.AuthenticatorData)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// string "alg"
+			o = append(o, 0xa3, 0x61, 0x6c, 0x67)
+			o = msgp.AppendInt64(o, z.PublicKeyAlgorithm)
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// string "obj"
+			o = append(o, 0xa3, 0x6f, 0x62, 0x6a)
+			o = msgp.AppendBytes(o, z.Object)
+		}
+	}
 	return
 }
 
@@ -496,6 +693,8 @@ func (z *CredentialAttestation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 5 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -510,36 +709,59 @@ func (z *CredentialAttestation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ClientDataJSON")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "cdh":
 			z.ClientDataHash, bts, err = msgp.ReadBytesBytes(bts, z.ClientDataHash)
 			if err != nil {
 				err = msgp.WrapError(err, "ClientDataHash")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "data":
 			z.AuthenticatorData, bts, err = msgp.ReadBytesBytes(bts, z.AuthenticatorData)
 			if err != nil {
 				err = msgp.WrapError(err, "AuthenticatorData")
 				return
 			}
+			zb0001Mask |= 0x4
 		case "alg":
 			z.PublicKeyAlgorithm, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "PublicKeyAlgorithm")
 				return
 			}
+			zb0001Mask |= 0x8
 		case "obj":
 			z.Object, bts, err = msgp.ReadBytesBytes(bts, z.Object)
 			if err != nil {
 				err = msgp.WrapError(err, "Object")
 				return
 			}
+			zb0001Mask |= 0x10
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1f {
+		if (zb0001Mask & 0x1) == 0 {
+			z.ClientDataJSON = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.ClientDataHash = nil
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.AuthenticatorData = nil
+		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.PublicKeyAlgorithm = 0
+		}
+		if (zb0001Mask & 0x10) == 0 {
+			z.Object = nil
 		}
 	}
 	o = bts
