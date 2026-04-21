@@ -18,9 +18,9 @@ body:
       description: What version of the library are you using or which versions do you see the issue in?
       multiple: true
       options:
+        - '0.17.0'
         - '0.16.5'
         - '0.15.0'
-        - '0.14.0'
     validations:
       required: true
   - type: dropdown
@@ -30,9 +30,9 @@ body:
       description: What version of go are you using?
       multiple: true
       options:
+        - '1.26'
         - '1.25'
         - '1.24'
-        - '1.23'
         - 'Other'
     validations:
       required: true
