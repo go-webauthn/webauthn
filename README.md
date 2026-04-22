@@ -50,7 +50,7 @@ supporting the storage and retrieval of the [webauthn.Credential] struct which c
 
 ## Notable Changes
 
-The notable breaking changes made by this library are documented in the [breaking changes](BREAKING.md) documentation.
+The notable breaking changes made by this library are documented in the release notes.
 
 ## Examples
 
