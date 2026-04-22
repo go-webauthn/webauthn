@@ -54,7 +54,13 @@ func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationDa
 // compromise privacy by being able to view this data, as well as prevents them being able to compromise security by
 // adding or modifying a Credential without them also having access to the encryption key.
 //
+// For consolidated persistence guidance; recommended schema shape, required lookup columns, and which fields
+// must be written back on every successful FinishLogin / ValidateLogin; see the [Storage] section of the
+// [github.com/go-webauthn/webauthn/webauthn] package documentation.
+//
 // See: §4. Terminology: Credential Record (https://www.w3.org/TR/webauthn-3/#credential-record)
+//
+// [Storage]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#hdr-Storage
 type Credential struct {
 	// The ID is the ID of the public key credential source. Described by the Credential Record 'id' field.
 	ID []byte `json:"id" msg:"id"`

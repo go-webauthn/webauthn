@@ -18,6 +18,16 @@ import (
 // The Relying Party must store this data securely and associate it with the user's session. It should not be
 // modifiable by the client (i.e. store it server-side or in a signed, opaque cookie). After the ceremony completes,
 // the session data should be discarded.
+//
+// Every field returned by the Begin* functions must be delivered to the matching Finish* / Validate* call with
+// the same values; if anything is dropped or reshaped in transit, verification will fail. Treat [SessionData] as
+// an atomic record between those two calls.
+//
+// For consolidated persistence guidance; recommended schema shape, required lookup columns, and the rules
+// that also apply to [Credential] records; see the [Storage] section of the
+// [github.com/go-webauthn/webauthn/webauthn] package documentation.
+//
+// [Storage]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#hdr-Storage
 type SessionData struct {
 	Challenge            string    `json:"challenge" msg:"c"`
 	RelyingPartyID       string    `json:"rpId" msg:"r"`
