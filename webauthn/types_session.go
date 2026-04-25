@@ -31,12 +31,12 @@ import (
 // [Storage]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#hdr-Storage
 type SessionData struct {
 	Challenge            string    `json:"challenge" msg:"c"`
-	RelyingPartyID       string    `json:"rpId" msg:"r,omitempty"`
-	UserID               []byte    `json:"user_id" msg:"u,omitempty"`
+	RelyingPartyID       string    `json:"rpId,omitempty" msg:"r,omitempty"`
+	UserID               []byte    `json:"user_id,omitempty" msg:"u,omitempty"`
 	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty" msg:"allow,omitempty"`
 	Expires              time.Time `json:"expires" msg:"exp"`
 
-	UserVerification protocol.UserVerificationRequirement    `json:"userVerification" msg:"uv,omitempty"`
+	UserVerification protocol.UserVerificationRequirement    `json:"userVerification,omitempty" msg:"uv,omitempty"`
 	Extensions       protocol.AuthenticationExtensions       `json:"extensions,omitempty" msg:"exts,omitempty"`
 	CredParams       []protocol.CredentialParameter          `json:"credParams,omitempty" msg:"params,omitempty"`
 	Mediation        protocol.CredentialMediationRequirement `json:"mediation,omitempty" msg:"cmr,omitempty"`
