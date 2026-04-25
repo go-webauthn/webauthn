@@ -130,7 +130,7 @@
 //	    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
 //	    last_used_at             TIMESTAMPTZ  NULL,
 //	    rpid                     VARCHAR(512) NOT NULL, -- Relying Party ID
-//	    user_id                  UUID         NOT NULL, -- Application-side unique user id (FK to your users table)
+//	    user_id                  UUID         NOT NULL, -- Application-side unique user id
 //	    kid                      BYTEA        NOT NULL, -- Credential.ID
 //	    aaguid                   BYTEA        NULL, -- Authenticator.AAGUID
 //	    public_key               BYTEA        NOT NULL, -- Credential.PublicKey (encrypt at rest)
