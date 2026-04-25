@@ -137,15 +137,15 @@
 //	    attestation_type         VARCHAR(32)  NOT NULL, -- CredentialAttestation.AttestationType
 //	    attestation_format       VARCHAR(32)  NOT NULL, -- CredentialAttestation.AttestationFormat
 //	    attestation              BYTEA        NULL DEFAULT NULL, -- CredentialAttestation serialized as Message Pack or JSON (encrypt at rest)
-//	    transport                VARCHAR(64)  NOT NULL DEFAULT '', -- Credential.Transport
+//	    transport                VARCHAR(64)  NOT NULL DEFAULT '', -- Credential.Transport serialized as a comma-separated value
 //	    sign_count               BIGINT       NOT NULL DEFAULT 0, -- Authenticator.SignCount
 //	    clone_warning            BOOLEAN      NOT NULL DEFAULT FALSE, -- Authenticator.CloneWarning
 //	    attachment               VARCHAR(64)  NOT NULL DEFAULT '', -- Authenticator.Attachment
-//	    flags                    CHAR         NOT NULL, -- Value of Flags.ProtocolValue, restored with NewCredentialFlags
-//	    present                  BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserPresent, only stored for displaying to the user or searchability
-//	    verified                 BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserVerified, only stored for displaying to the user or searchability
-//	    backup_eligible          BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.BackupEligible, only stored for displaying to the user or searchability
-//	    backup_state             BOOLEAN      NOT NULL DEFAULT FALSE -- Flags.BackupState, only stored for displaying to the user or searchability
+//	    flags                    BYTEA        NOT NULL, -- Value of Flags.ProtocolValue (a single octet), restored with NewCredentialFlags, could also be SMALLINT
+//	    present                  BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserPresent, optionally stored so you can either display it to the user or for filtering credentials
+//	    verified                 BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserVerified, optionally stored so you can either display it to the user or for filtering credentials
+//	    backup_eligible          BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.BackupEligible, optionally stored so you can either display it to the user or for filtering credentials
+//	    backup_state             BOOLEAN      NOT NULL DEFAULT FALSE -- Flags.BackupState, optionally stored so you can either display it to the user or for filtering credentials
 //	);
 //
 //	CREATE UNIQUE INDEX webauthn_credentials_kid_key ON webauthn_credentials (rpid, kid);
