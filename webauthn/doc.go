@@ -110,41 +110,46 @@
 // A minimal PostgreSQL schema covering the above plus the remaining [Credential], [Authenticator], and
 // [CredentialAttestation] fields is shown below.
 //
-//			CREATE TABLE webauthn_users (
-//			    id          UUID         PRIMARY KEY DEFAULT uuidv7(),
-//			    rpid        VARCHAR(512) NOT NULL, -- Relying Party ID
-//			    user_id     UUID         NOT NULL, -- application-side unique user id (FK to your users table)
-//			    handle      BYTEA        NOT NULL  -- User.WebAuthnID (WebAuthn User Handle); stable per (rpid, user_id)
-//			);
+// Example users table:
 //
-//			CREATE UNIQUE INDEX webauthn_users_user_id_key ON webauthn_users (rpid, user_id);
-//			CREATE UNIQUE INDEX webauthn_users_handle_key  ON webauthn_users (rpid, handle);
+//	CREATE TABLE webauthn_users (
+//	    id          UUID         PRIMARY KEY DEFAULT uuidv7(),
+//	    created_at  TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+//	    rpid        VARCHAR(512) NOT NULL, -- Relying Party ID
+//	    user_id     UUID         NOT NULL, -- Application-side unique user id (FK to your users table)
+//	    handle      BYTEA        NOT NULL  -- User.WebAuthnID (WebAuthn User Handle); stable per (rpid, user_id)
+//	);
 //
-//			CREATE TABLE webauthn_credentials (
-//			    id                       UUID         PRIMARY KEY DEFAULT uuidv7(),
-//			    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
-//			    last_used_at             TIMESTAMPTZ  NULL,
-//			    rpid                     VARCHAR(512) NOT NULL, -- Relying Party ID
-//			    user_id                  UUID         NOT NULL, -- application-side unique user id; join to webauthn_users
-//			    kid                      BYTEA        NOT NULL, -- Credential.ID
-//			    public_key               BYTEA        NOT NULL, -- Credential.PublicKey (encrypt at rest)
-//			    attestation_type         VARCHAR(32)  NOT NULL,
-//			    attestation_format       VARCHAR(32)  NOT NULL,
-//			    transport                VARCHAR(64)  NOT NULL DEFAULT '',
-//			    aaguid                   BYTEA        NULL,     -- Authenticator.AAGUID
-//			    sign_count               BIGINT       NOT NULL DEFAULT 0, -- Authenticator.SignCount
-//			    clone_warning            BOOLEAN      NOT NULL DEFAULT FALSE, -- Authenticator.CloneWarning
-//			    attachment               VARCHAR(64)  NOT NULL DEFAULT '',
-//			    present                  BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserPresent, only stored for displaying to the user or searchability.
-//			    verified                 BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserVerified, only stored for displaying to the user or searchability.
-//			    backup_eligible          BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.BackupEligible, only stored for displaying to the user or searchability.
-//			    backup_state             BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.BackupState, only stored for displaying to the user or searchability.
-//	            flags                    CHAR         NOT NULL, -- Value of Flags.ProtocolValue, restored with NewCredentialFlags.
-//		        attestation              BYTEA        NULL DEFAULT NULL -- CredentialAtte station serialized as Message Pack or JSON.
-//			);
+//	CREATE UNIQUE INDEX webauthn_users_user_id_key ON webauthn_users (rpid, user_id);
+//	CREATE UNIQUE INDEX webauthn_users_handle_key  ON webauthn_users (rpid, handle);
 //
-//			CREATE UNIQUE INDEX webauthn_credentials_kid_key ON webauthn_credentials (rpid, kid);
-//			CREATE        INDEX webauthn_credentials_user_id ON webauthn_credentials (rpid, user_id);
+// Example credentials table:
+//
+//	CREATE TABLE webauthn_credentials (
+//	    id                       UUID         PRIMARY KEY DEFAULT uuidv7(),
+//	    created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+//	    last_used_at             TIMESTAMPTZ  NULL,
+//	    rpid                     VARCHAR(512) NOT NULL, -- Relying Party ID
+//	    user_id                  UUID         NOT NULL, -- Application-side unique user id (FK to your users table)
+//	    kid                      BYTEA        NOT NULL, -- Credential.ID
+//	    aaguid                   BYTEA        NULL, -- Authenticator.AAGUID
+//	    public_key               BYTEA        NOT NULL, -- Credential.PublicKey (encrypt at rest)
+//	    attestation_type         VARCHAR(32)  NOT NULL, -- CredentialAttestation.AttestationType
+//	    attestation_format       VARCHAR(32)  NOT NULL, -- CredentialAttestation.AttestationFormat
+//	    attestation              BYTEA        NULL DEFAULT NULL, -- CredentialAttestation serialized as Message Pack or JSON (encrypt at rest)
+//	    transport                VARCHAR(64)  NOT NULL DEFAULT '', -- Credential.Transport
+//	    sign_count               BIGINT       NOT NULL DEFAULT 0, -- Authenticator.SignCount
+//	    clone_warning            BOOLEAN      NOT NULL DEFAULT FALSE, -- Authenticator.CloneWarning
+//	    attachment               VARCHAR(64)  NOT NULL DEFAULT '', -- Authenticator.Attachment
+//	    flags                    CHAR         NOT NULL, -- Value of Flags.ProtocolValue, restored with NewCredentialFlags
+//	    present                  BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserPresent, only stored for displaying to the user or searchability
+//	    verified                 BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserVerified, only stored for displaying to the user or searchability
+//	    backup_eligible          BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.BackupEligible, only stored for displaying to the user or searchability
+//	    backup_state             BOOLEAN      NOT NULL DEFAULT FALSE -- Flags.BackupState, only stored for displaying to the user or searchability
+//	);
+//
+//	CREATE UNIQUE INDEX webauthn_credentials_kid_key ON webauthn_credentials (rpid, kid);
+//	CREATE        INDEX webauthn_credentials_user_id ON webauthn_credentials (rpid, user_id);
 //
 // With that shape, the two login lookup paths resolve as:
 //
