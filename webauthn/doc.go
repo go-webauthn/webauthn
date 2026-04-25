@@ -143,7 +143,7 @@
 //		        attestation              BYTEA        NULL DEFAULT NULL -- CredentialAtte station serialized as Message Pack or JSON.
 //			);
 //
-//			CREATE UNIQUE INDEX webauthn_credentials_kid_key ON webauthn_credentials (kid);
+//			CREATE UNIQUE INDEX webauthn_credentials_kid_key ON webauthn_credentials (rpid, kid);
 //			CREATE        INDEX webauthn_credentials_user_id ON webauthn_credentials (rpid, user_id);
 //
 // With that shape, the two login lookup paths resolve as:
