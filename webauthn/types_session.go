@@ -11,6 +11,7 @@ import (
 //msgp:replace protocol.UserVerificationRequirement with:string
 //msgp:replace protocol.AuthenticationExtensions with:map[string]any
 //msgp:replace protocol.CredentialMediationRequirement with:string
+//msgp:clearomitted
 
 // SessionData is the data that must be stored by the Relying Party between the Begin and Finish steps of a WebAuthn
 // ceremony. It contains the challenge and other parameters needed to verify the authenticator's response.
@@ -30,13 +31,13 @@ import (
 // [Storage]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#hdr-Storage
 type SessionData struct {
 	Challenge            string    `json:"challenge" msg:"c"`
-	RelyingPartyID       string    `json:"rpId" msg:"r"`
-	UserID               []byte    `json:"user_id" msg:"u"`
-	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty" msg:"allow"`
+	RelyingPartyID       string    `json:"rpId,omitempty" msg:"r,omitempty"`
+	UserID               []byte    `json:"user_id,omitempty" msg:"u,omitempty"`
+	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty" msg:"allow,omitempty"`
 	Expires              time.Time `json:"expires" msg:"exp"`
 
-	UserVerification protocol.UserVerificationRequirement    `json:"userVerification" msg:"uv"`
-	Extensions       protocol.AuthenticationExtensions       `json:"extensions,omitempty" msg:"exts"`
-	CredParams       []protocol.CredentialParameter          `json:"credParams,omitempty" msg:"params"`
-	Mediation        protocol.CredentialMediationRequirement `json:"mediation,omitempty" msg:"cmr"`
+	UserVerification protocol.UserVerificationRequirement    `json:"userVerification,omitempty" msg:"uv,omitempty"`
+	Extensions       protocol.AuthenticationExtensions       `json:"extensions,omitempty" msg:"exts,omitempty"`
+	CredParams       []protocol.CredentialParameter          `json:"credParams,omitempty" msg:"params,omitempty"`
+	Mediation        protocol.CredentialMediationRequirement `json:"mediation,omitempty" msg:"cmr,omitempty"`
 }

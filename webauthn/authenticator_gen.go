@@ -17,6 +17,8 @@ func (z *Authenticator) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 4 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -31,18 +33,21 @@ func (z *Authenticator) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "AAGUID")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "sc":
 			z.SignCount, err = dc.ReadUint32()
 			if err != nil {
 				err = msgp.WrapError(err, "SignCount")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "cw":
 			z.CloneWarning, err = dc.ReadBool()
 			if err != nil {
 				err = msgp.WrapError(err, "CloneWarning")
 				return
 			}
+			zb0001Mask |= 0x4
 		case "aa":
 			{
 				var zb0002 string
@@ -53,6 +58,7 @@ func (z *Authenticator) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Attachment = protocol.AuthenticatorAttachment(zb0002)
 			}
+			zb0001Mask |= 0x8
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -61,51 +67,102 @@ func (z *Authenticator) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if zb0001Mask != 0xf {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AAGUID = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.SignCount = 0
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.CloneWarning = false
+		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.Attachment = ""
+		}
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z *Authenticator) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
-	// write "aaguid"
-	err = en.Append(0x84, 0xa6, 0x61, 0x61, 0x67, 0x75, 0x69, 0x64)
+	// check for omitted fields
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
+	_ = zb0001Mask
+	if z.AAGUID == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.SignCount == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.CloneWarning == false {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.Attachment == "" {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes(z.AAGUID)
-	if err != nil {
-		err = msgp.WrapError(err, "AAGUID")
-		return
-	}
-	// write "sc"
-	err = en.Append(0xa2, 0x73, 0x63)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint32(z.SignCount)
-	if err != nil {
-		err = msgp.WrapError(err, "SignCount")
-		return
-	}
-	// write "cw"
-	err = en.Append(0xa2, 0x63, 0x77)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.CloneWarning)
-	if err != nil {
-		err = msgp.WrapError(err, "CloneWarning")
-		return
-	}
-	// write "aa"
-	err = en.Append(0xa2, 0x61, 0x61)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(string(z.Attachment))
-	if err != nil {
-		err = msgp.WrapError(err, "Attachment")
-		return
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not omitted
+			// write "aaguid"
+			err = en.Append(0xa6, 0x61, 0x61, 0x67, 0x75, 0x69, 0x64)
+			if err != nil {
+				return
+			}
+			err = en.WriteBytes(z.AAGUID)
+			if err != nil {
+				err = msgp.WrapError(err, "AAGUID")
+				return
+			}
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// write "sc"
+			err = en.Append(0xa2, 0x73, 0x63)
+			if err != nil {
+				return
+			}
+			err = en.WriteUint32(z.SignCount)
+			if err != nil {
+				err = msgp.WrapError(err, "SignCount")
+				return
+			}
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// write "cw"
+			err = en.Append(0xa2, 0x63, 0x77)
+			if err != nil {
+				return
+			}
+			err = en.WriteBool(z.CloneWarning)
+			if err != nil {
+				err = msgp.WrapError(err, "CloneWarning")
+				return
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// write "aa"
+			err = en.Append(0xa2, 0x61, 0x61)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(string(z.Attachment))
+			if err != nil {
+				err = msgp.WrapError(err, "Attachment")
+				return
+			}
+		}
 	}
 	return
 }
@@ -113,19 +170,52 @@ func (z *Authenticator) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *Authenticator) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
-	// string "aaguid"
-	o = append(o, 0x84, 0xa6, 0x61, 0x61, 0x67, 0x75, 0x69, 0x64)
-	o = msgp.AppendBytes(o, z.AAGUID)
-	// string "sc"
-	o = append(o, 0xa2, 0x73, 0x63)
-	o = msgp.AppendUint32(o, z.SignCount)
-	// string "cw"
-	o = append(o, 0xa2, 0x63, 0x77)
-	o = msgp.AppendBool(o, z.CloneWarning)
-	// string "aa"
-	o = append(o, 0xa2, 0x61, 0x61)
-	o = msgp.AppendString(o, string(z.Attachment))
+	// check for omitted fields
+	zb0001Len := uint32(4)
+	var zb0001Mask uint8 /* 4 bits */
+	_ = zb0001Mask
+	if z.AAGUID == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.SignCount == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.CloneWarning == false {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.Attachment == "" {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not omitted
+			// string "aaguid"
+			o = append(o, 0xa6, 0x61, 0x61, 0x67, 0x75, 0x69, 0x64)
+			o = msgp.AppendBytes(o, z.AAGUID)
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// string "sc"
+			o = append(o, 0xa2, 0x73, 0x63)
+			o = msgp.AppendUint32(o, z.SignCount)
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// string "cw"
+			o = append(o, 0xa2, 0x63, 0x77)
+			o = msgp.AppendBool(o, z.CloneWarning)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// string "aa"
+			o = append(o, 0xa2, 0x61, 0x61)
+			o = msgp.AppendString(o, string(z.Attachment))
+		}
+	}
 	return
 }
 
@@ -139,6 +229,8 @@ func (z *Authenticator) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 4 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -153,18 +245,21 @@ func (z *Authenticator) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "AAGUID")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "sc":
 			z.SignCount, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "SignCount")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "cw":
 			z.CloneWarning, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "CloneWarning")
 				return
 			}
+			zb0001Mask |= 0x4
 		case "aa":
 			{
 				var zb0002 string
@@ -175,12 +270,28 @@ func (z *Authenticator) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Attachment = protocol.AuthenticatorAttachment(zb0002)
 			}
+			zb0001Mask |= 0x8
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0xf {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AAGUID = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.SignCount = 0
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.CloneWarning = false
+		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.Attachment = ""
 		}
 	}
 	o = bts
