@@ -1,3 +1,10 @@
+# [v0.17.2](https://github.com/go-webauthn/webauthn/compare/v0.17.1...v0.17.2) (2026-05-03)
+
+
+### Bug Fixes
+
+* **webauthn:** include verify attestation func for credential ([#679](https://github.com/go-webauthn/webauthn/issues/679)) ([1f354c8](https://github.com/go-webauthn/webauthn/commit/1f354c8e25ecfb8f075cce1848e1e1df21a23f68))
+
 # [0.17.1](https://github.com/go-webauthn/webauthn/compare/v0.17.0...v0.17.1) (2026-05-03)
 
 
