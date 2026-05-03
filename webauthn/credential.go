@@ -208,6 +208,42 @@ func (c *Credential) Verify(mds metadata.Provider) (err error) {
 	return nil
 }
 
+// VerifyAttestationType is a cutdown version of Verify which only does the minimal verification to update the
+// AttestationType if it's unset. For full verification use Verify.
+func (c *Credential) VerifyAttestationType() (err error) {
+	if c.AttestationType != "" {
+		return nil
+	}
+
+	raw := c.toAuthenticatorAttestationResponse()
+
+	var attestation *protocol.ParsedAttestationResponse
+
+	if attestation, err = raw.Parse(); err != nil {
+		return fmt.Errorf("error verifying credential: error parsing attestation: %w", err)
+	}
+
+	if !bytes.Equal(c.PublicKey, attestation.AttestationObject.AuthData.AttData.CredentialPublicKey) {
+		return fmt.Errorf("error verifying credential: stored public key does not match the credential public key embedded in the attestation object")
+	}
+
+	clientDataHash := c.Attestation.ClientDataHash
+
+	if len(clientDataHash) == 0 {
+		sum := sha256.Sum256(c.Attestation.ClientDataJSON)
+
+		clientDataHash = sum[:]
+	}
+
+	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, nil); err != nil {
+		return fmt.Errorf("error verifying credential: error verifying attestation: %w", err)
+	}
+
+	c.AttestationType = attestation.AttestationObject.Type
+
+	return nil
+}
+
 func (c *Credential) toAuthenticatorAttestationResponse() *protocol.AuthenticatorAttestationResponse {
 	raw := &protocol.AuthenticatorAttestationResponse{
 		AuthenticatorResponse: protocol.AuthenticatorResponse{
