@@ -1,3 +1,11 @@
+# [0.17.1](https://github.com/go-webauthn/webauthn/compare/v0.17.1...v0.17.0) (2026-05-03)
+
+
+### Bug Fixes
+
+* **protocol:** remove unnecessary guard ([#675](https://github.com/go-webauthn/webauthn/issues/675)) ([1e07db1](https://github.com/go-webauthn/webauthn/commit/1e07db19f1a696a1b52bbc5b80156957c36fde5c))
+* **webauthn:** minimized encoding outputs ([#670](https://github.com/go-webauthn/webauthn/issues/670)) ([3847681](https://github.com/go-webauthn/webauthn/commit/38476815c0688ecac5352b6ca853ccaa7ecc23ea))
+
 # [0.17.0](https://github.com/go-webauthn/webauthn/compare/v0.16.5...v0.17.0) (2026-04-21)
 
 
