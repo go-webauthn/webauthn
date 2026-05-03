@@ -44,9 +44,21 @@
 // [*http.Request] and performs all the necessary validations. If you have other requirements, you can use the
 // [protocol.ParseCredentialRequestResponseBody] or [protocol.ParseCredentialRequestResponseBytes] which require an
 // [io.Reader] or byte array respectively, then use [WebAuthn.ValidateLogin] to perform validations against the
-// [*protocol.ParsedCredentialAssertionData] and saved [*SessionData] and finalize the process. For complete customizabilty,
-// just produce the [protocol.ParsedCredentialAssertionData] with a custom parser and provide it to
+// [*protocol.ParsedCredentialAssertionData] and saved [*SessionData] and finalize the process. For complete
+// customizabilty, just produce the [protocol.ParsedCredentialAssertionData] with a custom parser and provide it to
 // [WebAuthn.ValidateLogin].
+//
+// # Relying Party Usage
+//
+// This library hadnles the relying party server-side concerns. The browser or other user agent is responsible for
+// handling the JSON responses from this library and translating them for the WebAUthn API appropriately. There are two
+// primary ways to handle this other than doing so manually:
+//
+//   1. Using a client side library like [@simplewebauthn/browser].
+//   2. Some browsers support the [parseCreationOptionsFromJSON] static method on the WebAuthn object.
+//
+// [parseCreationOptionsFromJSON]: https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseCreationOptionsFromJSON_static
+// [@simplewebauthn/browser]: https://simplewebauthn.dev/docs/packages/browser
 //
 // # Storage
 //
