@@ -330,6 +330,126 @@ func TestCredential_Verify_RejectsTamperedPublicKey(t *testing.T) {
 	})
 }
 
+func TestCredential_VerifyAttestationType(t *testing.T) {
+	testCases := []struct {
+		name                    string
+		credential              func(t *testing.T) Credential
+		err                     string
+		expectedAttestationType string
+	}{
+		{
+			name: "ShouldNoOpWhenAttestationTypeAlreadySet",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromNoneAttestation(t)
+				credential.AttestationType = "caller-set-value"
+				credential.Attestation.Object = []byte("not-valid-cbor")
+
+				return credential
+			},
+			expectedAttestationType: "caller-set-value",
+		},
+		{
+			name: "ShouldRestoreNoneAttestationType",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromNoneAttestation(t)
+				credential.AttestationType = ""
+
+				return credential
+			},
+			expectedAttestationType: "none",
+		},
+		{
+			name: "ShouldRestorePackedAttestationType",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromPackedAttestation(t)
+				credential.AttestationType = ""
+
+				return credential
+			},
+			expectedAttestationType: string(metadata.BasicFull),
+		},
+		{
+			name: "ShouldRecomputeClientDataHashWhenEmpty",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromNoneAttestation(t)
+				credential.AttestationType = ""
+				credential.Attestation.ClientDataHash = nil
+
+				return credential
+			},
+			expectedAttestationType: "none",
+		},
+		{
+			name: "ShouldFailParseError",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				return Credential{
+					Attestation: CredentialAttestation{
+						ClientDataJSON: []byte(`{}`),
+						Object:         []byte("not-valid-cbor"),
+					},
+				}
+			},
+			err: "error verifying credential: error parsing attestation: Error parsing the authenticator response",
+		},
+		{
+			name: "ShouldFailMismatchedPublicKey",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromNoneAttestation(t)
+				credential.AttestationType = ""
+
+				tampered := make([]byte, len(credential.PublicKey))
+				copy(tampered, credential.PublicKey)
+				tampered[0] ^= 0xFF
+				credential.PublicKey = tampered
+
+				return credential
+			},
+			err: "error verifying credential: stored public key does not match the credential public key embedded in the attestation object",
+		},
+		{
+			name: "ShouldFailEmptyPublicKey",
+			credential: func(t *testing.T) Credential {
+				t.Helper()
+
+				credential := testCredentialFromNoneAttestation(t)
+				credential.AttestationType = ""
+				credential.PublicKey = nil
+
+				return credential
+			},
+			err: "error verifying credential: stored public key does not match the credential public key embedded in the attestation object",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			credential := tc.credential(t)
+
+			err := credential.VerifyAttestationType()
+
+			if tc.err == "" {
+				require.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+			}
+
+			assert.Equal(t, tc.expectedAttestationType, credential.AttestationType)
+		})
+	}
+}
+
 // testCredentialFromNoneAttestation constructs a Credential with valid "none" format attestation data for testing.
 func testCredentialFromNoneAttestation(t *testing.T) Credential {
 	t.Helper()
