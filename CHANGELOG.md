@@ -1,4 +1,4 @@
-# [0.17.1](https://github.com/go-webauthn/webauthn/compare/v0.17.1...v0.17.0) (2026-05-03)
+# [0.17.1](https://github.com/go-webauthn/webauthn/compare/v0.17.0...v0.17.1) (2026-05-03)
 
 
 ### Bug Fixes
