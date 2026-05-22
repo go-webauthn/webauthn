@@ -1,3 +1,9 @@
+# [v0.17.4](https://github.com/go-webauthn/webauthn/compare/v0.17.3...v0.17.4) (2026-05-22)
+
+### Dependency Updates
+
+This release just contains updates to dependencies.
+
 # [v0.17.3](https://github.com/go-webauthn/webauthn/compare/v0.17.2...v0.17.3) (2026-05-09)
 
 ### Dependency Updates
