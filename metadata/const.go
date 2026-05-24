@@ -38,4 +38,8 @@ var (
 		Type:    "crl_unavailable",
 		Details: "Certificate revocation list is unavailable",
 	}
+	errInvalidCertificateChain = &Error{
+		Type:    "invalid_certificate_chain",
+		Details: "Certificate chain is malformed",
+	}
 )

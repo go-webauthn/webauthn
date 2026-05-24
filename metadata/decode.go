@@ -190,6 +190,20 @@ func WithRootCertificate(value string) DecoderOption {
 }
 
 func validateChain(root string, chain []any) (bool, error) {
+	if len(chain) < 2 {
+		return false, errInvalidCertificateChain
+	}
+
+	leaf, ok := chain[0].(string)
+	if !ok {
+		return false, errInvalidCertificateChain
+	}
+
+	intermediate, ok := chain[1].(string)
+	if !ok {
+		return false, errInvalidCertificateChain
+	}
+
 	oRoot := make([]byte, base64.StdEncoding.DecodedLen(len(root)))
 
 	nRoot, err := base64.StdEncoding.Decode(oRoot, []byte(root))
@@ -206,9 +220,9 @@ func validateChain(root string, chain []any) (bool, error) {
 
 	roots.AddCert(rootcert)
 
-	o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[1].(string))))
+	o := make([]byte, base64.StdEncoding.DecodedLen(len(intermediate)))
 
-	n, err := base64.StdEncoding.Decode(o, []byte(chain[1].(string)))
+	n, err := base64.StdEncoding.Decode(o, []byte(intermediate))
 	if err != nil {
 		return false, err
 	}
@@ -231,9 +245,9 @@ func validateChain(root string, chain []any) (bool, error) {
 	ints := x509.NewCertPool()
 	ints.AddCert(intcert)
 
-	l := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
+	l := make([]byte, base64.StdEncoding.DecodedLen(len(leaf)))
 
-	n, err = base64.StdEncoding.Decode(l, []byte(chain[0].(string)))
+	n, err = base64.StdEncoding.Decode(l, []byte(leaf))
 	if err != nil {
 		return false, err
 	}
