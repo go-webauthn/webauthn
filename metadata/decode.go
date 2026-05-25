@@ -190,8 +190,20 @@ func WithRootCertificate(value string) DecoderOption {
 }
 
 func validateChain(root string, chain []any) (bool, error) {
-	if len(chain) < 2 {
+	if len(chain) == 0 {
 		return false, errInvalidCertificateChain
+	}
+
+	// When no x5c header is present the caller sets chain = []any{root}, meaning
+	// the trust anchor is itself the signing certificate. Allow that single-entry
+	// fallback; reject any other single-entry chain as malformed.
+	if len(chain) == 1 {
+		entry, ok := chain[0].(string)
+		if !ok || entry != root {
+			return false, errInvalidCertificateChain
+		}
+		// Root is the signing cert; no further chain validation needed.
+		return true, nil
 	}
 
 	leaf, ok := chain[0].(string)

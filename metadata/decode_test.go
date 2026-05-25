@@ -40,3 +40,12 @@ func TestValidateChainMalformed(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateChainFallbackRoot(t *testing.T) {
+	// When x5c is absent the caller sets chain = []any{root}. The single-entry
+	// root chain must be accepted so that no-x5c MDS blobs can still be parsed.
+	valid, err := validateChain(ConformanceMDSRoot, []any{ConformanceMDSRoot})
+
+	assert.True(t, valid)
+	assert.NoError(t, err)
+}
