@@ -190,6 +190,32 @@ func WithRootCertificate(value string) DecoderOption {
 }
 
 func validateChain(root string, chain []any) (bool, error) {
+	if len(chain) == 0 {
+		return false, errInvalidCertificateChain
+	}
+
+	// When no x5c header is present the caller sets chain = []any{root}, meaning
+	// the trust anchor is itself the signing certificate. Allow that single-entry
+	// fallback; reject any other single-entry chain as malformed.
+	if len(chain) == 1 {
+		entry, ok := chain[0].(string)
+		if !ok || entry != root {
+			return false, errInvalidCertificateChain
+		}
+		// Root is the signing cert; no further chain validation needed.
+		return true, nil
+	}
+
+	leaf, ok := chain[0].(string)
+	if !ok {
+		return false, errInvalidCertificateChain
+	}
+
+	intermediate, ok := chain[1].(string)
+	if !ok {
+		return false, errInvalidCertificateChain
+	}
+
 	oRoot := make([]byte, base64.StdEncoding.DecodedLen(len(root)))
 
 	nRoot, err := base64.StdEncoding.Decode(oRoot, []byte(root))
@@ -206,9 +232,9 @@ func validateChain(root string, chain []any) (bool, error) {
 
 	roots.AddCert(rootcert)
 
-	o := make([]byte, base64.StdEncoding.DecodedLen(len(chain[1].(string))))
+	o := make([]byte, base64.StdEncoding.DecodedLen(len(intermediate)))
 
-	n, err := base64.StdEncoding.Decode(o, []byte(chain[1].(string)))
+	n, err := base64.StdEncoding.Decode(o, []byte(intermediate))
 	if err != nil {
 		return false, err
 	}
@@ -231,9 +257,9 @@ func validateChain(root string, chain []any) (bool, error) {
 	ints := x509.NewCertPool()
 	ints.AddCert(intcert)
 
-	l := make([]byte, base64.StdEncoding.DecodedLen(len(chain[0].(string))))
+	l := make([]byte, base64.StdEncoding.DecodedLen(len(leaf)))
 
-	n, err = base64.StdEncoding.Decode(l, []byte(chain[0].(string)))
+	n, err = base64.StdEncoding.Decode(l, []byte(leaf))
 	if err != nil {
 		return false, err
 	}
