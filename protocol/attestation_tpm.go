@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/subtle"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
+	"github.com/sirosfoundation/go-cryptoutil"
 )
 
 // attestationFormatValidationHandlerTPM is the handler for the TPM Attestation Statement Format.
@@ -177,9 +179,18 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1")
 	}
 
-	if sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg); sigAlg == x509.UnknownSignatureAlgorithm {
+	sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg)
+	if sigAlg == x509.UnknownSignatureAlgorithm {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", statement.Algorithm))
-	} else if err = aikCert.CheckSignature(sigAlg, statement.CertInfo, statement.Signature); err != nil {
+	}
+
+	// Normalize ECDSA signatures to handle BER-encoded signatures from some authenticators.
+	verifyableSig := statement.Signature
+	if _, ok := aikCert.PublicKey.(*ecdsa.PublicKey); ok {
+		verifyableSig, _ = cryptoutil.NormalizeECDSASignature(statement.Signature)
+	}
+
+	if err = aikCert.CheckSignature(sigAlg, statement.CertInfo, verifyableSig); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 	}
 
