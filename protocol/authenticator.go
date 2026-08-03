@@ -313,11 +313,12 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) (err error) {
 
 	if a.Flags.HasAttestedCredentialData() {
 		if len(rawAuthData) > minAttestedAuthLength {
-			if err = a.unmarshalAttestedData(rawAuthData); err != nil {
+			var attDataLen int
+
+			if attDataLen, err = a.unmarshalAttestedData(rawAuthData); err != nil {
 				return err
 			}
 
-			attDataLen := len(a.AttData.AAGUID) + 2 + len(a.AttData.CredentialID) + len(a.AttData.CredentialPublicKey)
 			remaining -= attDataLen
 		} else {
 			return ErrBadRequest.WithDetails("Attested credential flag set but data is missing")
@@ -344,42 +345,49 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) (err error) {
 	return nil
 }
 
-// If Attestation Data is present, unmarshall that into the appropriate public key structure.
-func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) (err error) {
+// If Attestation Data is present, unmarshall that into the appropriate public key structure. Returns the number of
+// bytes of rawAuthData which the attested credential data occupied, measured from the start of the AAGUID.
+func (a *AuthenticatorData) unmarshalAttestedData(rawAuthData []byte) (n int, err error) {
 	a.AttData.AAGUID = rawAuthData[37:53]
 
-	idLength := binary.BigEndian.Uint16(rawAuthData[53:55])
-	if len(rawAuthData) < int(55+idLength) {
-		return ErrBadRequest.WithDetails("Authenticator attestation data length too short")
-	}
+	idLength := int(binary.BigEndian.Uint16(rawAuthData[53:55]))
 
 	if idLength > maxCredentialIDLength {
-		return ErrBadRequest.WithDetails("Authenticator attestation data credential id length too long")
+		return 0, ErrBadRequest.WithDetails("Authenticator attestation data credential id length too long")
+	}
+
+	if len(rawAuthData) < 55+idLength {
+		return 0, ErrBadRequest.WithDetails("Authenticator attestation data length too short")
 	}
 
 	a.AttData.CredentialID = rawAuthData[55 : 55+idLength]
 
-	a.AttData.CredentialPublicKey, err = unmarshalCredentialPublicKey(rawAuthData[55+idLength:])
-	if err != nil {
-		return ErrBadRequest.WithDetails(fmt.Sprintf("Could not unmarshal Credential Public Key: %v", err)).WithError(err)
+	var keyLength int
+
+	if a.AttData.CredentialPublicKey, keyLength, err = unmarshalCredentialPublicKey(rawAuthData[55+idLength:]); err != nil {
+		return 0, ErrBadRequest.WithDetails(fmt.Sprintf("Could not unmarshal Credential Public Key: %v", err)).WithError(err)
 	}
 
-	return nil
+	// The AAGUID is 16 bytes and the credential id length prefix is 2 bytes.
+	return 16 + 2 + idLength + keyLength, nil
 }
 
-// Unmarshall the credential's Public Key into CBOR encoding.
-func unmarshalCredentialPublicKey(keyBytes []byte) (rawBytes []byte, err error) {
+// Unmarshall the credential's Public Key into CBOR encoding. Returns the re-encoded key alongside the number of bytes
+// of keyBytes which the key occupied on the wire. These lengths are not necessarily equal as the CTAP2 canonical form
+// produced by Marshal may be longer or shorter than the form which was decoded, so the consumed length must be used
+// when locating any data which follows the key.
+func unmarshalCredentialPublicKey(keyBytes []byte) (rawBytes []byte, n int, err error) {
 	var m any
 
-	if err = webauthncbor.Unmarshal(keyBytes, &m); err != nil {
-		return nil, err
+	if n, err = webauthncbor.UnmarshalFirst(keyBytes, &m); err != nil {
+		return nil, 0, err
 	}
 
 	if rawBytes, err = webauthncbor.Marshal(m); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return rawBytes, nil
+	return rawBytes, n, nil
 }
 
 // ResidentKeyRequired - Require that the key be private key resident to the client device.

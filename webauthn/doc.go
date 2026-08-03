@@ -50,15 +50,12 @@
 //
 // # Relying Party Usage
 //
-// This library hadnles the relying party server-side concerns. The browser or other user agent is responsible for
-// handling the JSON responses from this library and translating them for the WebAUthn API appropriately. There are two
+// This library handles the relying party server-side concerns. The browser or other user agent is responsible for
+// handling the JSON responses from this library and translating them for the WebAuthn API appropriately. There are two
 // primary ways to handle this other than doing so manually:
 //
-//   1. Using a client side library like [@simplewebauthn/browser].
-//   2. Some browsers support the [parseCreationOptionsFromJSON] static method on the WebAuthn object.
-//
-// [parseCreationOptionsFromJSON]: https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseCreationOptionsFromJSON_static
-// [@simplewebauthn/browser]: https://simplewebauthn.dev/docs/packages/browser
+//  1. Using a client side library like [@simplewebauthn/browser].
+//  2. Some browsers support the [parseCreationOptionsFromJSON] static method on the WebAuthn object.
 //
 // # Storage
 //
@@ -87,6 +84,17 @@
 // One persistence shape is supported for the [SessionData] struct which is to store it as bytes via encoding/json or
 // using MessagePack as bytes in whatever storage system you're using for user sessions. This data MUST be definitively
 // anchored to a user's active session, and it must be restored between the ceremony steps.
+//
+// Whichever encoding is used, the bytes handed back to the decoder MUST be bytes this library serialized and which the
+// Relying Party has kept integrity protected at rest and in transit. This matters most for the MessagePack decoders:
+// the generated UnmarshalMsg and DecodeMsg methods size their allocations directly from the array and map length
+// prefixes on the wire, before the rest of the payload is read, so a handful of malformed bytes can be enough to make
+// the process allocate gigabytes and be killed. The length limits offered by the msgp reader are at best a partial
+// mitigation and cannot be relied on as a substitute: SetMaxElements bounds the bin payloads the generated DecodeMsg
+// allocates, but it does not bound the array and map length prefixes that same code sizes its slices from, and it does
+// not apply at all to the slice based UnmarshalMsg, which takes no reader. Restoring a record which the client was
+// able to modify is in any case already fatal to the ceremony, as the challenge and User Handle would then be
+// attacker chosen.
 //
 // Regardless of which shape is chosen, the following values MUST be persisted as their own columns so records
 // can be located and scoped correctly without first decoding attestation or key material. The User Handle in
@@ -182,4 +190,7 @@
 // rule applies to [Credential] storage, not to [SessionData]. Additionally index the challenge (unique) and
 // the expiry timestamp so sessions can be looked up by challenge at Finish time and expired rows reaped
 // cheaply. Stored sessions must only be consumed by a Finish call operating under the same RP ID.
+//
+// [parseCreationOptionsFromJSON]: https://developer.mozilla.org/en-US/docs/Web/API/PublicKeyCredential/parseCreationOptionsFromJSON_static
+// [@simplewebauthn/browser]: https://simplewebauthn.dev/docs/packages/browser
 package webauthn

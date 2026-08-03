@@ -737,6 +737,93 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 	}
 }
 
+func TestTPMAttestationVerificationRSAExponent(t *testing.T) {
+	_, _, _, rsaKey, _, err := getTPMAttestionKeys()
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name            string
+		exponent        []byte
+		pubAreaExponent uint32
+		err             string
+	}{
+		{
+			"ShouldNotPanicWithSingleByteExponentMatchingPubArea",
+			[]byte{0x03},
+			3,
+			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest', EOF",
+		},
+		{
+			"ShouldNotPanicWithSingleByteExponentMismatchingPubArea",
+			[]byte{0x03},
+			65537,
+			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"ShouldNotPanicWithTwoByteExponentMatchingPubArea",
+			[]byte{0x01, 0x00},
+			256,
+			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest', EOF",
+		},
+		{
+			"ShouldNotPanicWithTwoByteExponentMismatchingPubArea",
+			[]byte{0x01, 0x00},
+			1,
+			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"ShouldDecodeThreeByteExponentAsBigEndian",
+			[]byte{0x01, 0x00, 0x01},
+			65537,
+			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest', EOF",
+		},
+		{
+			"ShouldRejectExponentExceedingMaxUint32",
+			[]byte{0x01, 0x00, 0x00, 0x00, 0x00},
+			65537,
+			"Invalid RSA public key size",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cpk, cerr := webauthncbor.Marshal(webauthncose.RSAPublicKeyData{
+				PublicKeyData: webauthncose.PublicKeyData{
+					KeyType:   int64(webauthncose.RSAKey),
+					Algorithm: int64(webauthncose.AlgRS256),
+				},
+				Modulus:  rsaKey.N.Bytes(),
+				Exponent: tc.exponent,
+			})
+			require.NoError(t, cerr)
+
+			attStmt := make(map[string]any, len(defaultAttStatement))
+			for id, v := range defaultAttStatement {
+				attStmt[id] = v
+			}
+
+			attStmt[stmtPubArea] = tpm2.Marshal(makeTPMTPublicRSA(&TPMRSATestParameters{Modulus: rsaKey.N.Bytes(), Exponent: tc.pubAreaExponent}))
+
+			att := AttestationObject{
+				AttStatement: attStmt,
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						CredentialPublicKey: cpk,
+					},
+				},
+			}
+
+			require.NotPanics(t, func() {
+				attestationType, x5cs, aerr := attestationFormatValidationHandlerTPM(att, nil, nil)
+
+				assert.Empty(t, attestationType)
+				assert.Nil(t, x5cs)
+				assert.EqualError(t, aerr, tc.err)
+			})
+		})
+	}
+}
+
 func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
 	extraData := h.Sum(nil)

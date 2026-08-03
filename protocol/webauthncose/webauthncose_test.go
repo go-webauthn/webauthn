@@ -182,7 +182,7 @@ func TestRSAExponent(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := parseRSAPublicKeyDataExponent(tc.have)
+			actual, err := ParseRSAPublicKeyDataExponent(tc.have)
 
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)

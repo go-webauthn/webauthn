@@ -358,7 +358,7 @@ func TestAuthenticatorData_unmarshalAttestedData(t *testing.T) {
 				ExtData:  tc.fields.ExtData,
 			}
 
-			err := actual.unmarshalAttestedData(tc.args.rawAuthData)
+			_, err := actual.unmarshalAttestedData(tc.args.rawAuthData)
 
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)

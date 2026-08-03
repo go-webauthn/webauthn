@@ -14,11 +14,10 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/go-webauthn/x/encoding/asn1"
-
 	"github.com/google/go-tpm/tpm2"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/go-webauthn/x/encoding/asn1"
 )
 
 // PublicKeyData The public key portion of a Relying Party-specific credential key pair, generated
@@ -129,11 +128,11 @@ func (k *EC2PublicKeyData) ToECDSA() (key *ecdsa.PublicKey, err error) {
 
 // Verify RSA Public Key Signature.
 func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (valid bool, err error) {
-	if err = validateRSAPublicKey(k); err != nil {
+	var e int
+
+	if e, err = validateRSAPublicKey(k); err != nil {
 		return false, err
 	}
-
-	e, _ := parseRSAPublicKeyDataExponent(k)
 
 	pubkey := &rsa.PublicKey{
 		N: big.NewInt(0).SetBytes(k.Modulus),
@@ -211,7 +210,7 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 
 		r.PublicKeyData = pk
 
-		if err = validateRSAPublicKey(&r); err != nil {
+		if _, err = validateRSAPublicKey(&r); err != nil {
 			return nil, err
 		}
 
@@ -267,7 +266,7 @@ func DisplayPublicKey(cpk []byte) string {
 	case RSAPublicKeyData:
 		var e int
 
-		if e, err = parseRSAPublicKeyDataExponent(&k); err != nil {
+		if e, err = ParseRSAPublicKeyDataExponent(&k); err != nil {
 			return keyCannotDisplay
 		}
 
@@ -454,20 +453,21 @@ func validateEC2PublicKey(k *EC2PublicKeyData) error {
 	return nil
 }
 
-func validateRSAPublicKey(k *RSAPublicKeyData) error {
+func validateRSAPublicKey(k *RSAPublicKeyData) (e int, err error) {
 	n := new(big.Int).SetBytes(k.Modulus)
 	if n.Sign() <= 0 {
-		return ErrUnsupportedKey.WithDetails("RSA key contains zero or empty modulus")
+		return e, ErrUnsupportedKey.WithDetails("RSA key contains zero or empty modulus")
 	}
 
-	if _, err := parseRSAPublicKeyDataExponent(k); err != nil {
-		return ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key contains invalid exponent: %v", err))
+	if e, err = ParseRSAPublicKeyDataExponent(k); err != nil {
+		return e, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key contains invalid exponent: %v", err))
 	}
 
-	return nil
+	return e, nil
 }
 
-func parseRSAPublicKeyDataExponent(k *RSAPublicKeyData) (exp int, err error) {
+// ParseRSAPublicKeyDataExponent safely parses the exponent value of the provided RSAPublicKeyData.
+func ParseRSAPublicKeyDataExponent(k *RSAPublicKeyData) (exp int, err error) {
 	if k == nil {
 		return 0, fmt.Errorf("invalid key")
 	}

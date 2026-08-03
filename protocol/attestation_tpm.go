@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/google/go-tpm/tpm2"
@@ -116,7 +117,16 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
 
-		exp := uint32(k.Exponent[0]) + uint32(k.Exponent[1])<<8 + uint32(k.Exponent[2])<<16
+		var e int
+
+		if e, err = webauthncose.ParseRSAPublicKeyDataExponent(&k); err != nil {
+			return "", nil, ErrAttestationFormat.WithDetails("Unable to decode RSA exponent in attestation statement").WithError(err)
+		} else if uint64(e) > math.MaxUint32 { //nolint:gosec // The exponent is guaranteed to be positive by the parser.
+			return "", nil, ErrAttestationFormat.WithDetails("Invalid RSA public key size")
+		}
+
+		exp := uint32(e) //nolint:gosec // The exponent is bounds checked above.
+
 		if tpm2Exponent(params) != exp {
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between RSAParameters in pubArea and credentialPublicKey")
 		}
