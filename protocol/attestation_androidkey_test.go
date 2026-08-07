@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -317,6 +318,118 @@ func TestAndroidKeyFormat_ExtensionValidationErrors(t *testing.T) {
 
 	// Verify the decoded challenge matches the clientDataHash as a sanity check.
 	assert.Equal(t, successClientDataHash[:], decoded.AttestationChallenge)
+}
+
+func TestAndroidKeyAuthorizationListDecoding(t *testing.T) {
+	att := attestationTestUnpackResponse(t, androidKeyTestResponse2["success"]).Response.AttestationObject
+
+	raw, ok := att.AttStatement["x5c"].([]any)
+	require.True(t, ok)
+
+	der, ok := raw[0].([]byte)
+	require.True(t, ok)
+
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	var ext []byte
+
+	for _, e := range cert.Extensions {
+		if e.Id.Equal(oidExtensionAndroidKeystore) {
+			ext = e.Value
+		}
+	}
+
+	require.NotEmpty(t, ext)
+
+	decoded := keyDescription{}
+
+	rest, err := asn1.Unmarshal(ext, &decoded)
+	require.NoError(t, err)
+	assert.Empty(t, rest)
+
+	// The rootOfTrust element was previously consumed by a preceding interface typed field, leaving it zero valued
+	// for every attestation which carried one.
+	assert.Len(t, decoded.TeeEnforced.RootOfTrust.VerifiedBootKey, 32)
+	assert.True(t, decoded.TeeEnforced.RootOfTrust.DeviceLocked)
+	assert.Len(t, decoded.TeeEnforced.RootOfTrust.VerifiedBootHash, 32)
+
+	assert.Equal(t, []int{KM_PURPOSE_SIGN}, decoded.TeeEnforced.Purpose)
+	assert.Equal(t, KM_ORIGIN_GENERATED, decoded.TeeEnforced.Origin)
+
+	assert.Empty(t, decoded.TeeEnforced.AllApplications.FullBytes)
+	assert.Empty(t, decoded.SoftwareEnforced.AllApplications.FullBytes)
+}
+
+func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
+	// SEQUENCE { [1] EXPLICIT SET { INTEGER 2 }, [702] EXPLICIT INTEGER 0 }
+	// purpose = KM_PURPOSE_SIGN, origin = KM_ORIGIN_GENERATED.
+	withoutAllApplications, err := hex.DecodeString("300e" + "a1053103020102" + "bf853e03020100")
+	require.NoError(t, err)
+
+	// The same list with [600] EXPLICIT { NULL } spliced in, which is the allApplications tag.
+	withAllApplications, err := hex.DecodeString("3014" + "a1053103020102" + "bf8458020500" + "bf853e03020100")
+	require.NoError(t, err)
+
+	var absent authorizationList
+
+	rest, err := asn1.Unmarshal(withoutAllApplications, &absent)
+	require.NoError(t, err)
+	require.Empty(t, rest)
+
+	var present authorizationList
+
+	rest, err = asn1.Unmarshal(withAllApplications, &present)
+	require.NoError(t, err)
+	require.Empty(t, rest)
+
+	// Both lists must otherwise be identical, so a failure below is attributable to allApplications alone.
+	require.Equal(t, []int{KM_PURPOSE_SIGN}, absent.Purpose)
+	require.Equal(t, []int{KM_PURPOSE_SIGN}, present.Purpose)
+	require.Equal(t, KM_ORIGIN_GENERATED, absent.Origin)
+	require.Equal(t, KM_ORIGIN_GENERATED, present.Origin)
+
+	assert.Empty(t, absent.AllApplications.FullBytes)
+	assert.NotEmpty(t, present.AllApplications.FullBytes, "allApplications must be detectable in the decoded list")
+
+	testCases := []struct {
+		name    string
+		decoded keyDescription
+		err     string
+	}{
+		{
+			name:    "ShouldAcceptWhenAbsentFromBothLists",
+			decoded: keyDescription{SoftwareEnforced: absent, TeeEnforced: absent},
+		},
+		{
+			name:    "ShouldRejectWhenPresentInSoftwareEnforced",
+			decoded: keyDescription{SoftwareEnforced: present, TeeEnforced: absent},
+			err:     "Attestation certificate extensions contains all applications field",
+		},
+		{
+			name:    "ShouldRejectWhenPresentInTeeEnforced",
+			decoded: keyDescription{SoftwareEnforced: absent, TeeEnforced: present},
+			err:     "Attestation certificate extensions contains all applications field",
+		},
+		{
+			name:    "ShouldRejectWhenPresentInBothLists",
+			decoded: keyDescription{SoftwareEnforced: present, TeeEnforced: present},
+			err:     "Attestation certificate extensions contains all applications field",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			protoErr := androidKeyValidateAuthorizationLists(&tc.decoded)
+
+			if tc.err != "" {
+				require.NotNil(t, protoErr)
+				assert.EqualError(t, protoErr, tc.err)
+			} else {
+				assert.Nil(t, protoErr)
+			}
+		})
+	}
 }
 
 var androidKeyTestResponse0 = map[string]string{
