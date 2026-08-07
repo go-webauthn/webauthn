@@ -3,6 +3,7 @@ package protocol
 import (
 	"crypto/ecdsa"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -47,6 +48,40 @@ func attStatementParseX5CS(attStatement map[string]any, key string) (x5c []any, 
 	}
 
 	return x5c, x5cs, nil
+}
+
+// attestationCertAAGUID extracts the AAGUID from the id-fido-gen-ce-aaguid extension of an attestation certificate. The
+// found return indicates the extension was present, and critical indicates it was marked as critical which some
+// attestation statement formats explicitly forbid.
+//
+// Note that an X.509 Extension encodes the DER-encoding of the value in an OCTET STRING. Thus, the AAGUID is wrapped in
+// two OCTET STRINGS to be valid.
+func attestationCertAAGUID(cert *x509.Certificate) (aaguid []byte, critical, found bool, err error) {
+	var raw []byte
+
+	for _, extension := range cert.Extensions {
+		if !extension.Id.Equal(oidFIDOGenCeAAGUID) {
+			continue
+		}
+
+		found = true
+
+		if extension.Critical {
+			critical = true
+		}
+
+		raw = extension.Value
+	}
+
+	if len(raw) == 0 {
+		return nil, critical, found, nil
+	}
+
+	if _, err = asn1.Unmarshal(raw, &aaguid); err != nil {
+		return nil, critical, found, err
+	}
+
+	return aaguid, critical, found, nil
 }
 
 func parseX5C(x5c []any) (x5cs []*x509.Certificate, err error) {

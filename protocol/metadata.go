@@ -93,7 +93,7 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 		}
 
 		if attestationType == string(metadata.AttCA) {
-			if protoErr = tpmParseAIKAttCA(x5c, x5cis); protoErr != nil {
+			if x5c, x5cis, protoErr = tpmParseAIKAttCA(x5c, x5cis); protoErr != nil {
 				return ErrMetadata.WithDetails(protoErr.Details).WithInfo(protoErr.DevInfo).WithError(protoErr)
 			}
 		}

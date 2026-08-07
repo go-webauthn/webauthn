@@ -3,7 +3,6 @@ package protocol
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/asn1"
 	"fmt"
 	"strings"
 	"time"
@@ -157,33 +156,22 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 	// Step 2.2.3 (from §8.2.1) If the related attestation root certificate is used for multiple authenticator models,
 	// the Extension OID 1.3.6.1.4.1.45724.1.1.4 (id-fido-gen-ce-aaguid) MUST be present, containing the
 	// AAGUID as a 16-byte OCTET STRING. The extension MUST NOT be marked as critical.
-	var foundAAGUID []byte
+	//
+	// We validate the AAGUID as mentioned above. This is not well defined in §8.2.1 but mentioned in step 2.3: we
+	// validate the AAGUID if it is present within the certificate and make sure it matches the auth data AAGUID.
+	var (
+		certAAGUID []byte
+		critical   bool
+	)
 
-	for _, extension := range attestnCert.Extensions {
-		if extension.Id.Equal(oidFIDOGenCeAAGUID) {
-			if extension.Critical {
-				return "", x5c, ErrInvalidAttestation.WithDetails("Attestation certificate FIDO extension marked as critical")
-			}
-
-			foundAAGUID = extension.Value
-		}
+	if certAAGUID, critical, _, err = attestationCertAAGUID(attestnCert); critical {
+		return "", x5c, ErrInvalidAttestation.WithDetails("Attestation certificate FIDO extension marked as critical")
+	} else if err != nil {
+		return "", x5c, ErrInvalidAttestation.WithDetails("Error unmarshalling AAGUID from certificate")
 	}
 
-	// We validate the AAGUID as mentioned above
-	// This is not well defined in§8.2.1 but mentioned in step 2.3: we validate the AAGUID if it is present within the certificate
-	// and make sure it matches the auth data AAGUID
-	// Note that an X.509 Extension encodes the DER-encoding of the value in an OCTET STRING. Thus, the
-	// AAGUID MUST be wrapped in two OCTET STRINGS to be valid.
-	if len(foundAAGUID) > 0 {
-		var unMarshalledAAGUID []byte
-
-		if _, err = asn1.Unmarshal(foundAAGUID, &unMarshalledAAGUID); err != nil {
-			return "", x5c, ErrInvalidAttestation.WithDetails("Error unmarshalling AAGUID from certificate")
-		}
-
-		if !bytes.Equal(aaguid, unMarshalledAAGUID) {
-			return "", x5c, ErrInvalidAttestation.WithDetails("Certificate AAGUID does not match Auth Data certificate")
-		}
+	if len(certAAGUID) > 0 && !bytes.Equal(aaguid, certAAGUID) {
+		return "", x5c, ErrInvalidAttestation.WithDetails("Certificate AAGUID does not match Auth Data certificate")
 	}
 
 	// Step 2.2.4 The Basic Constraints extension MUST have the CA component set to false.
