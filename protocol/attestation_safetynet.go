@@ -39,8 +39,6 @@ import (
 // Specification: §8.5. Android SafetyNet Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation
-//
-//nolint:gocyclo
 func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
@@ -76,8 +74,14 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 
 	var token *jwt.Token
 
-	if token, err = jwt.Parse(string(response), keyFuncSafetyNetJWT, jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()})); err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
+	// §8.5.2 and §8.5.4 Verify that response is a valid SafetyNet response of version ver, and that it actually came
+	// from the SafetyNet service, by following the steps indicated by the SafetyNet online documentation. Those steps
+	// require the certificate chain in the JWS header be validated and the leaf matched to the SafetyNet hostname
+	// before the signature is verified with it, which the verifier below performs as part of supplying the key.
+	verifier := &safetyNetJWTVerifier{}
+
+	if token, err = jwt.Parse(string(response), verifier.keyFunc, jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()})); err != nil {
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error verifying the SafetyNet response signature: %+v", err)).WithError(err)
 	}
 
 	// marshall the JWT payload into the safetynet response json.
@@ -96,33 +100,8 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 		return "", nil, ErrInvalidAttestation.WithDetails("Invalid nonce for in SafetyNet response").WithError(err)
 	}
 
-	// §8.5.4 Let attestationCert be the attestation certificate (https://www.w3.org/TR/webauthn/#attestation-certificate)
-	certChain, ok := token.Header[stmtX5C].([]any)
-	if !ok || len(certChain) == 0 {
-		return "", nil, ErrInvalidAttestation.WithDetails("Error getting certificate from JWT header x5c")
-	}
-
-	first, ok := certChain[0].(string)
-	if !ok || first == "" {
-		return "", nil, ErrInvalidAttestation.WithDetails("Error getting first certificate from JWT header x5c")
-	}
-
-	l := make([]byte, base64.StdEncoding.DecodedLen(len(first)))
-
-	n, err := base64.StdEncoding.Decode(l, []byte(first))
-	if err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
-	}
-
-	attestationCert, err := x509.ParseCertificate(l[:n])
-	if err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
-	}
-
-	// §8.5.5 Verify that attestationCert is issued to the hostname "attest.android.com".
-	if err = attestationCert.VerifyHostname(attStatementAndroidSafetyNetHostname); err != nil {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error finding cert issued to correct hostname: %+v", err)).WithError(err)
-	}
+	// §8.5.5 Verify that attestationCert is issued to the hostname "attest.android.com". This is performed by the
+	// verifier above as part of the chain validation rather than against a certificate nothing has vouched for.
 
 	// §8.5.6 Verify that the ctsProfileMatch attribute in the payload of response is true.
 	if !safetyNetResponse.CtsProfileMatch {
@@ -144,14 +123,22 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 	return string(metadata.BasicFull), nil, nil
 }
 
-func keyFuncSafetyNetJWT(token *jwt.Token) (key any, err error) {
+// safetyNetJWTVerifier verifies the certificate chain carried in the JWS x5c header before releasing the leaf public
+// key to the JWT parser, and retains the chain so it can be used as the attestation trust path.
+//
+// The SafetyNet documentation requires the chain be validated and the leaf matched to the SafetyNet hostname before
+// the signature is verified with it. Releasing the leaf public key without doing so allows any self-signed
+// certificate bearing that hostname to sign an entirely forged response.
+type safetyNetJWTVerifier struct {
+	x5c   []any
+	certs []*x509.Certificate
+}
+
+func (v *safetyNetJWTVerifier) keyFunc(token *jwt.Token) (key any, err error) {
 	var (
 		ok    bool
 		raw   any
 		chain []any
-		first string
-		der   []byte
-		cert  *x509.Certificate
 	)
 
 	if raw, ok = token.Header[stmtX5C]; !ok {
@@ -162,23 +149,55 @@ func keyFuncSafetyNetJWT(token *jwt.Token) (key any, err error) {
 		return nil, fmt.Errorf("jwt header x5c is not a non-empty array")
 	}
 
-	if first, ok = chain[0].(string); !ok || first == "" {
-		return nil, fmt.Errorf("jwt header x5c[0] not a base64 string")
-	}
+	certs := make([]*x509.Certificate, len(chain))
 
-	if der, err = base64.StdEncoding.DecodeString(first); err != nil {
-		return nil, fmt.Errorf("decode x5c leaf: %w", err)
-	}
+	for i, element := range chain {
+		var (
+			value string
+			der   []byte
+		)
 
-	if cert, err = x509.ParseCertificate(der); err != nil {
-		if cert != nil {
-			return cert.PublicKey, fmt.Errorf("parse x5c leaf: %w", err)
+		if value, ok = element.(string); !ok || value == "" {
+			return nil, fmt.Errorf("jwt header x5c[%d] is not a base64 string", i)
 		}
 
-		return nil, fmt.Errorf("parse x5c leaf: %w", err)
+		if der, err = base64.StdEncoding.DecodeString(value); err != nil {
+			return nil, fmt.Errorf("decode x5c[%d]: %w", i, err)
+		}
+
+		if certs[i], err = x509.ParseCertificate(der); err != nil {
+			return nil, fmt.Errorf("parse x5c[%d]: %w", i, err)
+		}
 	}
 
-	return cert.PublicKey, nil
+	roots := attStatementAndroidSafetyNetRootsCertPool
+
+	if roots == nil {
+		if roots, err = x509.SystemCertPool(); err != nil {
+			return nil, fmt.Errorf("load system trust store: %w", err)
+		}
+	}
+
+	intermediates := x509.NewCertPool()
+
+	for _, cert := range certs[1:] {
+		intermediates.AddCert(cert)
+	}
+
+	// The leaf is a TLS server certificate so the hostname match of §8.5.5 is performed here as part of the chain
+	// verification, and ExtKeyUsageServerAuth is the applicable usage.
+	if _, err = certs[0].Verify(x509.VerifyOptions{
+		DNSName:       attStatementAndroidSafetyNetHostname,
+		Roots:         roots,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}); err != nil {
+		return nil, fmt.Errorf("verify x5c chain: %w", err)
+	}
+
+	v.x5c, v.certs = chain, certs
+
+	return certs[0].PublicKey, nil
 }
 
 type SafetyNetResponse struct {
@@ -190,6 +209,14 @@ type SafetyNetResponse struct {
 	ApkCertificateDigestSha256 []any  `json:"apkCertificateDigestSha256"`
 	BasicIntegrity             bool   `json:"basicIntegrity"`
 }
+
+var (
+	// attStatementAndroidSafetyNetRootsCertPool contains the trust anchors used to verify the certificate chain which
+	// signs a SafetyNet response. A nil pool causes the host system trust store to be used, which is the correct
+	// default as the leaf is an ordinary WebPKI TLS certificate issued to the SafetyNet hostname rather than an
+	// attestation specific root.
+	attStatementAndroidSafetyNetRootsCertPool *x509.CertPool
+)
 
 func init() {
 	RegisterAttestationFormat(AttestationFormatAndroidSafetyNet, attestationFormatValidationHandlerAndroidSafetyNet)
