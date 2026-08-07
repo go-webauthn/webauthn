@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -11,10 +12,14 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"math"
+	"math/big"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/stretchr/testify/assert"
@@ -180,6 +185,24 @@ func TestIsValidTPMManufacturer(t *testing.T) {
 			id:   "DEADBEEF",
 			want: false,
 		},
+		{
+			// Added to Table 2 of the TCG registry in version 1.08.
+			name: "ShouldReturnTrueForArm",
+			id:   "41524D00",
+			want: true,
+		},
+		{
+			// The TCG registry renders IBM with a lowercase hexadecimal digit and the case of the value rendered by
+			// an authenticator isn't fixed by any specification.
+			name: "ShouldReturnTrueForLowercaseHexadecimal",
+			id:   "49424d00",
+			want: true,
+		},
+		{
+			name: "ShouldReturnTrueForMixedCaseHexadecimal",
+			id:   "414d4400",
+			want: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -187,17 +210,48 @@ func TestIsValidTPMManufacturer(t *testing.T) {
 			assert.Equal(t, tc.want, isValidTPMManufacturer(tc.id))
 		})
 	}
+
+	// The id is the hexadecimal encoding of the four byte value and the code is its ASCII rendering, so the two must
+	// agree for every entry. This catches transcription errors when new vendors are added to the registry. Entries
+	// which aren't an ASCII rendering, such as the FIDO Alliance conformance value, only have their id checked.
+	t.Run("ShouldHaveConsistentEntries", func(t *testing.T) {
+		seen := make(map[string]string, len(tpmManufacturers))
+
+		for _, m := range tpmManufacturers {
+			t.Run(m.name, func(t *testing.T) {
+				require.Len(t, m.id, 8)
+
+				raw, err := hex.DecodeString(m.id)
+				require.NoError(t, err)
+
+				assert.NotContains(t, seen, strings.ToUpper(m.id), "duplicate manufacturer id")
+				seen[strings.ToUpper(m.id)] = m.name
+
+				// A trailing byte is either 0x00 or 0x20 which is the choice of the requestor.
+				ascii := strings.TrimRight(string(raw), "\x00 ")
+
+				if ascii == "" || strings.ContainsFunc(ascii, func(r rune) bool { return r < ' ' || r > '~' }) {
+					return
+				}
+
+				assert.Equal(t, m.code, ascii)
+			})
+		}
+	})
 }
 
 func TestTpmRemoveEKU(t *testing.T) {
-	t.Run("ShouldFailWhenAikEkuMissing", func(t *testing.T) {
+	t.Run("ShouldReportAikEkuMissing", func(t *testing.T) {
 		cert := &x509.Certificate{
 			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
 				{1, 2, 3, 4},
 			},
 		}
 
-		assert.EqualError(t, tpmRemoveEKU(cert), "Attestation Identity Key certificate missing required Extended Key Usage.")
+		out, hasAiK := tpmRemoveEKU(cert)
+
+		assert.False(t, hasAiK)
+		require.Len(t, out.UnknownExtKeyUsage, 1)
 	})
 
 	t.Run("ShouldRemoveAikAndMicrosoftEkuButKeepOtherUnknownEku", func(t *testing.T) {
@@ -211,10 +265,30 @@ func TestTpmRemoveEKU(t *testing.T) {
 			},
 		}
 
-		require.Nil(t, tpmRemoveEKU(cert))
+		out, hasAiK := tpmRemoveEKU(cert)
 
-		require.Len(t, cert.UnknownExtKeyUsage, 1)
-		assert.True(t, cert.UnknownExtKeyUsage[0].Equal(other))
+		assert.True(t, hasAiK)
+
+		require.Len(t, out.UnknownExtKeyUsage, 1)
+		assert.True(t, out.UnknownExtKeyUsage[0].Equal(other))
+	})
+
+	t.Run("ShouldNotModifyTheCertificateGiven", func(t *testing.T) {
+		cert := &x509.Certificate{
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidMicrosoftKpPrivacyCA,
+				oidTCGKpAIKCertificate,
+			},
+		}
+
+		out, hasAiK := tpmRemoveEKU(cert)
+
+		assert.True(t, hasAiK)
+		assert.NotSame(t, cert, out)
+		assert.Empty(t, out.UnknownExtKeyUsage)
+		require.Len(t, cert.UnknownExtKeyUsage, 2)
+		assert.True(t, cert.UnknownExtKeyUsage[0].Equal(oidMicrosoftKpPrivacyCA))
+		assert.True(t, cert.UnknownExtKeyUsage[1].Equal(oidTCGKpAIKCertificate))
 	})
 }
 
@@ -262,9 +336,10 @@ func TestTpmParseSANExtension(t *testing.T) {
 			},
 		}
 
-		protoErr := tpmParseSANExtension(cert)
+		out, protoErr := tpmParseSANExtension(cert)
 		require.EqualError(t, protoErr, "Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.")
 
+		assert.Nil(t, out)
 		assert.Equal(t, ErrInvalidAttestation.Type, protoErr.Type)
 	})
 
@@ -273,7 +348,10 @@ func TestTpmParseSANExtension(t *testing.T) {
 			Extensions: []pkix.Extension{},
 		}
 
-		assert.EqualError(t, tpmParseSANExtension(cert), "Invalid SAN data in AIK certificate.")
+		out, protoErr := tpmParseSANExtension(cert)
+
+		assert.Nil(t, out)
+		assert.EqualError(t, protoErr, "Invalid SAN data in AIK certificate.")
 	})
 
 	t.Run("ShouldRemoveUnhandledCriticalSanExtensionWhenPresent", func(t *testing.T) {
@@ -290,11 +368,13 @@ func TestTpmParseSANExtension(t *testing.T) {
 			},
 		}
 
-		protoErr := tpmParseSANExtension(cert)
+		out, protoErr := tpmParseSANExtension(cert)
 		require.Nil(t, protoErr)
-
-		require.Len(t, cert.UnhandledCriticalExtensions, 1)
-		assert.True(t, cert.UnhandledCriticalExtensions[0].Equal(other))
+		require.Len(t, out.UnhandledCriticalExtensions, 1)
+		assert.True(t, out.UnhandledCriticalExtensions[0].Equal(other))
+		assert.NotSame(t, cert, out)
+		require.Len(t, cert.UnhandledCriticalExtensions, 2)
+		assert.True(t, cert.UnhandledCriticalExtensions[0].Equal(oidExtensionSubjectAltName))
 	})
 }
 
@@ -345,7 +425,7 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 			},
 		}
 
-		err := tpmParseAIKAttCA(leaf, nil)
+		_, _, err := tpmParseAIKAttCA(leaf, nil)
 		require.Error(t, err)
 
 		assert.Equal(t, ErrInvalidAttestation.Type, err.Type)
@@ -353,7 +433,7 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 		assert.Equal(t, "Error occurred parsing SAN extension: asn1: syntax error: data truncated", err.DevInfo)
 	})
 
-	t.Run("ShouldFailWhenParentMissingAikEku", func(t *testing.T) {
+	t.Run("ShouldSucceedWhenParentMissingAikEku", func(t *testing.T) {
 		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
 
 		leaf := &x509.Certificate{
@@ -374,11 +454,38 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 			},
 		}
 
-		err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
-		assert.EqualError(t, err, "Attestation Identity Key certificate missing required Extended Key Usage.")
+		outLeaf, outParents, err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		require.Nil(t, err)
+
+		require.Len(t, outLeaf.UnknownExtKeyUsage, 1)
+		assert.True(t, outLeaf.UnknownExtKeyUsage[0].Equal(otherEku))
+
+		require.Len(t, outParents, 1)
+		require.Len(t, outParents[0].UnknownExtKeyUsage, 1)
+		assert.True(t, outParents[0].UnknownExtKeyUsage[0].Equal(otherEku))
 	})
 
-	t.Run("ShouldSucceedAndMutateCertificates", func(t *testing.T) {
+	t.Run("ShouldSucceedWhenParentHasNoEkuAtAll", func(t *testing.T) {
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+			},
+		}
+
+		parent := &x509.Certificate{}
+
+		outLeaf, outParents, err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		require.Nil(t, err)
+
+		assert.Empty(t, outLeaf.UnknownExtKeyUsage)
+		require.Len(t, outParents, 1)
+		assert.Empty(t, outParents[0].UnknownExtKeyUsage)
+	})
+
+	t.Run("ShouldSucceedAndNotMutateCertificates", func(t *testing.T) {
 		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
 		otherCritical := asn1.ObjectIdentifier{2, 999, 1}
 
@@ -405,17 +512,43 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 			},
 		}
 
-		err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		outLeaf, outParents, err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
 		require.Nil(t, err)
 
-		require.Len(t, leaf.UnhandledCriticalExtensions, 1)
-		assert.True(t, leaf.UnhandledCriticalExtensions[0].Equal(otherCritical))
+		require.Len(t, outLeaf.UnhandledCriticalExtensions, 1)
+		assert.True(t, outLeaf.UnhandledCriticalExtensions[0].Equal(otherCritical))
 
-		require.Len(t, leaf.UnknownExtKeyUsage, 1)
-		assert.True(t, leaf.UnknownExtKeyUsage[0].Equal(otherEku))
+		require.Len(t, outLeaf.UnknownExtKeyUsage, 1)
+		assert.True(t, outLeaf.UnknownExtKeyUsage[0].Equal(otherEku))
 
-		require.Len(t, parent.UnknownExtKeyUsage, 1)
-		assert.True(t, parent.UnknownExtKeyUsage[0].Equal(otherEku))
+		require.Len(t, outParents, 1)
+		require.Len(t, outParents[0].UnknownExtKeyUsage, 1)
+		assert.True(t, outParents[0].UnknownExtKeyUsage[0].Equal(otherEku))
+		assert.NotSame(t, leaf, outLeaf)
+		assert.NotSame(t, parent, outParents[0])
+		assert.Len(t, leaf.UnhandledCriticalExtensions, 2)
+		assert.Len(t, leaf.UnknownExtKeyUsage, 3)
+		assert.Len(t, parent.UnknownExtKeyUsage, 3)
+	})
+
+	t.Run("ShouldBeIdempotent", func(t *testing.T) {
+		leaf := &x509.Certificate{
+			Extensions: []pkix.Extension{
+				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
+			},
+			UnhandledCriticalExtensions: []asn1.ObjectIdentifier{
+				oidExtensionSubjectAltName,
+			},
+			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
+				oidTCGKpAIKCertificate,
+			},
+		}
+
+		_, _, err := tpmParseAIKAttCA(leaf, nil)
+		require.Nil(t, err)
+
+		_, _, err = tpmParseAIKAttCA(leaf, nil)
+		assert.Nil(t, err)
 	})
 
 	t.Run("ShouldFailWhenLeafMissingAikEku", func(t *testing.T) {
@@ -428,9 +561,104 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 			},
 		}
 
-		err := tpmParseAIKAttCA(leaf, nil)
+		_, _, err := tpmParseAIKAttCA(leaf, nil)
 		assert.EqualError(t, err, "Attestation Identity Key certificate missing required Extended Key Usage.")
 	})
+}
+
+// TestTPMAttestationVerificationBasicConstraints asserts §8.3.1 5/6, i.e. that the Basic Constraints extension has the
+// CA component set to false. An absent extension can't assert that so it must be rejected the same way as one which
+// asserts CA is true.
+func TestTPMAttestationVerificationBasicConstraints(t *testing.T) {
+	testCases := []struct {
+		name string
+		opts tpmAttestationOptions
+		err  string
+	}{
+		{
+			name: "ShouldAcceptWhenBasicConstraintsPresentAndCAIsFalse",
+			opts: tpmAttestationOptions{basicConstraintsValid: true},
+		},
+		{
+			name: "ShouldRejectWhenBasicConstraintsPresentAndCAIsTrue",
+			opts: tpmAttestationOptions{basicConstraintsValid: true, isCA: true},
+			err:  "AIK certificate basic constraints missing or CA is true",
+		},
+		{
+			name: "ShouldRejectWhenBasicConstraintsMissing",
+			opts: tpmAttestationOptions{},
+			err:  "AIK certificate basic constraints missing or CA is true",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(makeTPMAttestation(t, tc.opts), nil, nil)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, "attca", attestationType)
+			assert.Len(t, x5cs, 1)
+		})
+	}
+}
+
+// TestTPMAttestationVerificationAAGUID asserts the §8.3 step which requires that where the AIK certificate contains an
+// extension with OID 1.3.6.1.4.1.45724.1.1.4 (id-fido-gen-ce-aaguid) the value of that extension matches the AAGUID in
+// the authenticator data.
+func TestTPMAttestationVerificationAAGUID(t *testing.T) {
+	aaguid := []byte{0x08, 0x98, 0x70, 0x58, 0xca, 0xdc, 0x4b, 0x81, 0xb6, 0xe1, 0x30, 0xde, 0x50, 0xdc, 0xbe, 0x96}
+	other := []byte{0xf8, 0xa0, 0x11, 0xf3, 0x8c, 0x0a, 0x4d, 0x15, 0x80, 0x06, 0x17, 0x11, 0x1f, 0x9e, 0xdc, 0x7d}
+
+	testCases := []struct {
+		name string
+		opts tpmAttestationOptions
+		err  string
+	}{
+		{
+			name: "ShouldAcceptWhenExtensionAbsent",
+			opts: tpmAttestationOptions{basicConstraintsValid: true, authDataAAGUID: aaguid},
+		},
+		{
+			name: "ShouldAcceptWhenExtensionMatchesAuthData",
+			opts: tpmAttestationOptions{basicConstraintsValid: true, certAAGUID: aaguid, authDataAAGUID: aaguid},
+		},
+		{
+			name: "ShouldRejectWhenExtensionDoesNotMatchAuthData",
+			opts: tpmAttestationOptions{basicConstraintsValid: true, certAAGUID: other, authDataAAGUID: aaguid},
+			err:  "Certificate AAGUID does not match Auth Data certificate",
+		},
+		{
+			name: "ShouldRejectWhenExtensionPresentButAuthDataAAGUIDEmpty",
+			opts: tpmAttestationOptions{basicConstraintsValid: true, certAAGUID: aaguid},
+			err:  "Certificate AAGUID does not match Auth Data certificate",
+		},
+		{
+			name: "ShouldAcceptWhenExtensionCriticalAndMatchesAuthData",
+			opts: tpmAttestationOptions{basicConstraintsValid: true, certAAGUID: aaguid, certAAGUIDCritical: true, authDataAAGUID: aaguid},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(makeTPMAttestation(t, tc.opts), nil, nil)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, "attca", attestationType)
+			assert.Len(t, x5cs, 1)
+		})
+	}
 }
 
 func TestTpm2Exponent(t *testing.T) {
@@ -456,38 +684,6 @@ func TestTpm2Exponent(t *testing.T) {
 			assert.Equal(t, tc.want, tpm2Exponent(tc.params))
 		})
 	}
-}
-
-func TestTpm2NameDigest(t *testing.T) {
-	t.Run("ShouldRejectNameTooShort", func(t *testing.T) {
-		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: []byte{0x00, 0x0B}})
-		assert.EqualError(t, err, "name too short")
-	})
-
-	t.Run("ShouldRejectInvalidHashAlgorithm", func(t *testing.T) {
-		buf := []byte{0xFF, 0xFF, 0x01}
-		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
-		assert.EqualError(t, err, "invalid hash algorithm: unsupported hash algorithm: 65535")
-	})
-
-	t.Run("ShouldRejectDigestLengthMismatch", func(t *testing.T) {
-		buf := []byte{0x00, 0x0B, 0xAA}
-		_, _, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
-		assert.EqualError(t, err, "invalid name digest length: 1")
-	})
-
-	t.Run("ShouldReturnAlgAndDigestWhenValid", func(t *testing.T) {
-		digest := make([]byte, sha256.Size)
-		for i := range digest {
-			digest[i] = byte(i)
-		}
-
-		buf := append([]byte{0x00, 0x0B}, digest...)
-		alg, gotDigest, err := tpm2NameDigest(tpm2.TPM2BName{Buffer: buf})
-		require.NoError(t, err)
-		assert.Equal(t, tpm2.TPMAlgSHA256, alg)
-		assert.Equal(t, digest, gotDigest)
-	})
 }
 
 func TestTPM2NameMatch(t *testing.T) {
@@ -1276,4 +1472,122 @@ func mustConvertPEMToPEMBytes(t *testing.T, in string) []byte {
 	require.Len(t, rest, 0)
 
 	return data.Bytes
+}
+
+type tpmAttestationOptions struct {
+	basicConstraintsValid bool
+	isCA                  bool
+	certAAGUID            []byte
+	certAAGUIDCritical    bool
+	authDataAAGUID        []byte
+}
+
+func makeTPMAttestation(t *testing.T, opts tpmAttestationOptions) AttestationObject {
+	t.Helper()
+
+	nameDER, err := asn1.Marshal(pkix.RDNSequence{
+		{
+			{Type: oidTCGAtTpmManufacturer, Value: "id:414D4400"},
+			{Type: oidTCGAtTpmModel, Value: "ModelX"},
+			{Type: oidTCGAtTPMVersion, Value: "id:00070002"},
+		},
+	})
+	require.NoError(t, err)
+
+	sanDER, err := asn1.Marshal([]asn1.RawValue{
+		{
+			Class:      asn1.ClassContextSpecific,
+			Tag:        nameTypeDN,
+			IsCompound: true,
+			Bytes:      nameDER,
+		},
+	})
+	require.NoError(t, err)
+
+	credKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	aikKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	require.LessOrEqual(t, int64(credKey.E), int64(math.MaxUint32))
+
+	exponent := uint32(credKey.E) //nolint:gosec // Bounds checked above.
+
+	public := makeTPMTPublicRSA(&TPMRSATestParameters{Modulus: credKey.N.Bytes(), Exponent: exponent})
+
+	credentialPublicKey, err := webauthncbor.Marshal(webauthncose.RSAPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.RSAKey),
+			Algorithm: int64(webauthncose.AlgRS256),
+		},
+		Modulus:  credKey.N.Bytes(),
+		Exponent: uint32ToBytes(exponent),
+	})
+	require.NoError(t, err)
+
+	att := AttestationObject{
+		AuthData: AuthenticatorData{
+			AttData: AttestedCredentialData{
+				AAGUID:              opts.authDataAAGUID,
+				CredentialPublicKey: credentialPublicKey,
+			},
+		},
+	}
+
+	name, err := tpm2.ObjectName(&public)
+	require.NoError(t, err)
+
+	extraData := sha256.Sum256(att.RawAuthData)
+
+	certInfo := tpm2.Marshal(tpm2.TPMSAttest{
+		Magic: tpm2.TPMGeneratedValue,
+		Type:  tpm2.TPMSTAttestCertify,
+		Attested: tpm2.NewTPMUAttest[*tpm2.TPMSCertifyInfo](tpm2.TPMSTAttestCertify, &tpm2.TPMSCertifyInfo{
+			Name: *name,
+		}),
+		ExtraData: tpm2.TPM2BData{
+			Buffer: extraData[:],
+		},
+	})
+
+	extensions := []pkix.Extension{
+		{Id: oidExtensionSubjectAltName, Critical: true, Value: sanDER},
+	}
+
+	if len(opts.certAAGUID) > 0 {
+		value, err := asn1.Marshal(opts.certAAGUID)
+		require.NoError(t, err)
+
+		extensions = append(extensions, pkix.Extension{Id: oidFIDOGenCeAAGUID, Critical: opts.certAAGUIDCritical, Value: value})
+	}
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		BasicConstraintsValid: opts.basicConstraintsValid,
+		IsCA:                  opts.isCA,
+		UnknownExtKeyUsage:    []asn1.ObjectIdentifier{oidTCGKpAIKCertificate},
+		ExtraExtensions:       extensions,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &aikKey.PublicKey, aikKey)
+	require.NoError(t, err)
+
+	digest := sha256.Sum256(certInfo)
+
+	sig, err := rsa.SignPKCS1v15(rand.Reader, aikKey, crypto.SHA256, digest[:])
+	require.NoError(t, err)
+
+	att.AttStatement = map[string]any{
+		stmtVersion:   versionTPM20,
+		stmtAlgorithm: int64(webauthncose.AlgRS256),
+		stmtSignature: sig,
+		stmtCertInfo:  certInfo,
+		stmtPubArea:   tpm2.Marshal(public),
+		stmtX5C:       []any{der},
+	}
+
+	return att
 }

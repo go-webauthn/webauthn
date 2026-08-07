@@ -2,12 +2,10 @@ package protocol
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/subtle"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -208,6 +206,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	var (
 		manufacturer, model, version string
 		ekuValid                     = false
+		constraintsValid             = false
 		eku                          []asn1.ObjectIdentifier
 		constraints                  tpmBasicConstraints
 		rest                         []byte
@@ -246,6 +245,8 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 			} else if len(rest) != 0 {
 				return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints contains extra data")
 			}
+
+			constraintsValid = true
 		}
 	}
 
@@ -263,11 +264,27 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		return "", nil, ErrAttestationFormat.WithDetails("AIK certificate missing EKU")
 	}
 
+	// 5/6 The Basic Constraints extension MUST have the CA component set to false. An absent extension can't have the
+	// CA component set to false so it's rejected in the same way as one which asserts CA is true.
+	//
 	// 6/6 An Authority Information Access (AIA) extension with entry id-ad-ocsp and a CRL Distribution Point
 	// extension [RFC5280] are both OPTIONAL as the status of many attestation certificates is available
 	// through metadata services. See, for example, the FIDO Metadata Service.
-	if constraints.IsCA {
+	if !constraintsValid || constraints.IsCA {
 		return "", nil, ErrAttestationFormat.WithDetails("AIK certificate basic constraints missing or CA is true")
+	}
+
+	// If aikCert contains an extension with OID 1.3.6.1.4.1.45724.1.1.4 (id-fido-gen-ce-aaguid) verify that the value
+	// of this extension matches the aaguid in authenticatorData.
+	var (
+		aaguid []byte
+		found  bool
+	)
+
+	if aaguid, _, found, err = attestationCertAAGUID(aikCert); err != nil {
+		return "", nil, ErrInvalidAttestation.WithDetails("Error unmarshalling AAGUID from certificate").WithError(err)
+	} else if found && !bytes.Equal(aaguid, att.AuthData.AttData.AAGUID) {
+		return "", nil, ErrInvalidAttestation.WithDetails("Certificate AAGUID does not match Auth Data certificate")
 	}
 
 	// 4/4 Verify that attested contains a TPMS_CERTIFY_INFO structure as specified in
@@ -320,34 +337,6 @@ func tpm2NameMatch(certInfo *tpm2.TPMSAttest, pubArea *tpm2.TPMTPublic) (match b
 	// See: https://w3c.github.io/webauthn/#sctn-tpm-attestation
 
 	return subtle.ConstantTimeCompare(certifyInfo.Name.Buffer, name.Buffer) == 1, nil
-}
-
-func tpm2NameDigest(name tpm2.TPM2BName) (alg tpm2.TPMIAlgHash, digest []byte, err error) {
-	buf := name.Buffer
-
-	if len(buf) < 3 {
-		return 0, nil, fmt.Errorf("name too short")
-	}
-
-	alg = tpm2.TPMIAlgHash(binary.BigEndian.Uint16(buf[:2]))
-
-	var hash crypto.Hash
-
-	if hash, err = alg.Hash(); err != nil {
-		return 0, nil, fmt.Errorf("invalid hash algorithm: %w", err)
-	}
-
-	digest = buf[2:]
-
-	if len(digest) == 0 {
-		return 0, nil, fmt.Errorf("name digest is empty")
-	}
-
-	if len(digest) != hash.Size() {
-		return 0, nil, fmt.Errorf("invalid name digest length: %d", len(digest))
-	}
-
-	return alg, digest, nil
 }
 
 type tpm2AttStatement struct {
@@ -507,72 +496,29 @@ type tpmManufacturer struct {
 	code string
 }
 
-// See https://trustedcomputinggroup.org/resource/vendor-id-registry/ for registry contents.
-var (
-	tpmManufacturers = []tpmManufacturer{
-		{"414D4400", "AMD", "AMD"},
-		{"414E5400", "Ant Group", "ANT"},
-		{"41544D4C", "Atmel", "ATML"},
-		{"4252434D", "Broadcom", "BRCM"},
-		{"4353434F", "Cisco", "CSCO"},
-		{"464C5953", "Flyslice Technologies", "FLYS"},
-		{"524F4343", "Fuzhou Rockchip", "ROCC"},
-		{"474F4F47", "Google", "GOOG"},
-		{"48504900", "HPI", "HPI"},
-		{"48504500", "HPE", "HPE"},
-		{"48495349", "Huawei", "HISI"},
-		{"49424d00", "IBM", "IBM"},
-		{"49424D00", "IBM", "IBM"},
-		{"49465800", "Infineon", "IFX"},
-		{"494E5443", "Intel", "INTC"},
-		{"4C454E00", "Lenovo", "LEN"},
-		{"4D534654", "Microsoft", "MSFT"},
-		{"4E534D20", "National Semiconductor", "NSM"},
-		{"4E545A00", "Nationz", "NTZ"},
-		{"4E534700", "NSING", "NSG"},
-		{"4E544300", "Nuvoton Technology", "NTC"},
-		{"51434F4D", "Qualcomm", "QCOM"},
-		{"534D534E", "Samsung", "SECE"},
-		{"53454345", "SecEdge", "SecEdge"},
-		{"534E5300", "Sinosun", "SNS"},
-		{"534D5343", "SMSC", "SMSC"},
-		{"53544D20", "ST Microelectronics", "STM"},
-		{"54584E00", "Texas Instruments", "TXN"},
-		{"57454300", "Winbond", "WEC"},
-		{"5345414C", "Wisekey", "SEAL"},
-		{"FFFFF1D0", "FIDO Alliance Conformance Testing", "FIDO"},
-	}
-)
-
-func isValidTPMManufacturer(id string) bool {
-	for _, m := range tpmManufacturers {
-		if m.id == id {
-			return true
-		}
+func tpmParseAIKAttCA(x5c *x509.Certificate, x5cis []*x509.Certificate) (leaf *x509.Certificate, parents []*x509.Certificate, protoErr *Error) {
+	if leaf, protoErr = tpmParseSANExtension(x5c); protoErr != nil {
+		return nil, nil, protoErr
 	}
 
-	return false
+	var hasAIK bool
+
+	// The AIK Extended Key Usage is only required on the attestation certificate itself per §8.3.1. TPM vendor
+	// intermediates generally don't carry it so it must not be required of them.
+	if leaf, hasAIK = tpmRemoveEKU(leaf); !hasAIK {
+		return nil, nil, ErrAttestationFormat.WithDetails("Attestation Identity Key certificate missing required Extended Key Usage.")
+	}
+
+	for _, x5ci := range x5cis {
+		parent, _ := tpmRemoveEKU(x5ci)
+
+		parents = append(parents, parent)
+	}
+
+	return leaf, parents, nil
 }
 
-func tpmParseAIKAttCA(x5c *x509.Certificate, x5cis []*x509.Certificate) (err *Error) {
-	if err = tpmParseSANExtension(x5c); err != nil {
-		return err
-	}
-
-	if err = tpmRemoveEKU(x5c); err != nil {
-		return err
-	}
-
-	for _, parent := range x5cis {
-		if err = tpmRemoveEKU(parent); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
+func tpmParseSANExtension(attestation *x509.Certificate) (out *x509.Certificate, protoErr *Error) {
 	var (
 		manufacturer, model, version string
 		err                          error
@@ -581,13 +527,13 @@ func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
 	for _, ext := range attestation.Extensions {
 		if ext.Id.Equal(oidExtensionSubjectAltName) {
 			if manufacturer, model, version, err = parseSANExtension(ext.Value); err != nil {
-				return ErrInvalidAttestation.WithDetails("Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.").WithInfo(fmt.Sprintf("Error occurred parsing SAN extension: %s", err.Error())).WithError(err)
+				return nil, ErrInvalidAttestation.WithDetails("Authenticator with invalid Authenticator Identity Key SAN data encountered during attestation validation.").WithInfo(fmt.Sprintf("Error occurred parsing SAN extension: %s", err.Error())).WithError(err)
 			}
 		}
 	}
 
 	if manufacturer == "" || model == "" || version == "" {
-		return ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate.")
+		return nil, ErrAttestationFormat.WithDetails("Invalid SAN data in AIK certificate.")
 	}
 
 	var unhandled []asn1.ObjectIdentifier
@@ -600,9 +546,11 @@ func tpmParseSANExtension(attestation *x509.Certificate) (protoErr *Error) {
 		unhandled = append(unhandled, uce)
 	}
 
-	attestation.UnhandledCriticalExtensions = unhandled
+	out = new(x509.Certificate)
+	*out = *attestation
+	out.UnhandledCriticalExtensions = unhandled
 
-	return nil
+	return out, nil
 }
 
 type tpmBasicConstraints struct {
@@ -610,12 +558,11 @@ type tpmBasicConstraints struct {
 	MaxPathLen int  `asn1:"optional,default:-1"`
 }
 
-// Remove extension key usage to avoid ExtKeyUsage check failure.
-func tpmRemoveEKU(x5c *x509.Certificate) *Error {
-	var (
-		unknown []asn1.ObjectIdentifier
-		hasAiK  bool
-	)
+// tpmRemoveEKU returns a copy of the certificate with the TCG and Microsoft extension key usages removed to avoid the
+// ExtKeyUsage check failure, and reports whether the certificate carried the AIK extension key usage. The certificate
+// given is never modified as it's owned by the caller.
+func tpmRemoveEKU(x5c *x509.Certificate) (out *x509.Certificate, hasAiK bool) {
+	var unknown []asn1.ObjectIdentifier
 
 	for _, eku := range x5c.UnknownExtKeyUsage {
 		if eku.Equal(oidTCGKpAIKCertificate) {
@@ -631,13 +578,11 @@ func tpmRemoveEKU(x5c *x509.Certificate) *Error {
 		unknown = append(unknown, eku)
 	}
 
-	if !hasAiK {
-		return ErrAttestationFormat.WithDetails("Attestation Identity Key certificate missing required Extended Key Usage.")
-	}
+	out = new(x509.Certificate)
+	*out = *x5c
+	out.UnknownExtKeyUsage = unknown
 
-	x5c.UnknownExtKeyUsage = unknown
-
-	return nil
+	return out, hasAiK
 }
 
 func init() {
