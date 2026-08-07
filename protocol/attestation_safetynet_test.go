@@ -53,7 +53,7 @@ func TestSafetyNetFormat_AttStatementErrors(t *testing.T) {
 		{
 			name:         "ShouldFailInvalidJWT",
 			attStatement: map[string]any{stmtVersion: "2.0", "response": []byte("!!!.a.jwt")},
-			err:          "Error finding cert issued to correct hostname: token is malformed: could not base64 decode header: illegal base64 data at input byte 0",
+			err:          "Error verifying the SafetyNet response signature: token is malformed: could not base64 decode header: illegal base64 data at input byte 0",
 		},
 	}
 
@@ -71,8 +71,14 @@ func TestSafetyNetFormat_AttStatementErrors(t *testing.T) {
 }
 
 func TestSafetyNetFormat_JWTValidation(t *testing.T) {
-	key, cert := safetyNetTestGenerateKeyCert(t, "attest.android.com")
-	wrongHostKey, wrongHostCert := safetyNetTestGenerateKeyCert(t, "wrong.example.com")
+	caKey, caCert := safetyNetTestInstallCA(t)
+
+	key, cert := safetyNetTestGenerateKeyCert(t, "attest.android.com", caKey, caCert)
+	wrongHostKey, wrongHostCert := safetyNetTestGenerateKeyCert(t, "wrong.example.com", caKey, caCert)
+
+	// A certificate which asserts the SafetyNet hostname but chains to nothing. Before the response signing chain was
+	// verified this was accepted, allowing an attacker to attest arbitrary authenticator data.
+	forgedKey, forgedCert := safetyNetTestGenerateKeyCert(t, "attest.android.com", nil, nil)
 
 	testCases := []struct {
 		name            string
@@ -147,7 +153,24 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 			},
 			rawAuthData:    []byte("authdata"),
 			clientDataHash: []byte("clienthash"),
-			err:            `Error finding cert issued to correct hostname: x509: certificate is valid for wrong.example.com, not attest.android.com`,
+			err:            `Error verifying the SafetyNet response signature: token is unverifiable: error while executing keyfunc: verify x5c chain: x509: certificate is valid for wrong.example.com, not attest.android.com`,
+		},
+		{
+			name: "ShouldFailSelfSignedCertificateWithCorrectHostname",
+			buildJWT: func(t *testing.T) []byte {
+				t.Helper()
+
+				nonceHash := sha256.Sum256(append([]byte("authdata"), []byte("clienthash")...))
+
+				return safetyNetTestBuildJWT(t, forgedKey, forgedCert, SafetyNetResponse{
+					Nonce:           base64.StdEncoding.EncodeToString(nonceHash[:]),
+					TimestampMs:     time.Now().UnixMilli(),
+					CtsProfileMatch: true,
+				})
+			},
+			rawAuthData:    []byte("authdata"),
+			clientDataHash: []byte("clienthash"),
+			err:            `Error verifying the SafetyNet response signature: token is unverifiable: error while executing keyfunc: verify x5c chain: x509: certificate signed by unknown authority`,
 		},
 		{
 			name: "ShouldFailOldTimestampWithMDS",
@@ -245,10 +268,11 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 }
 
 func TestKeyFuncSafetyNetJWT(t *testing.T) {
-	key, cert := safetyNetTestGenerateKeyCert(t, "attest.android.com")
+	caKey, caCert := safetyNetTestInstallCA(t)
 
-	certDER, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
-	require.NoError(t, err)
+	_, certDER := safetyNetTestGenerateKeyCert(t, "attest.android.com", caKey, caCert)
+	_, forgedDER := safetyNetTestGenerateKeyCert(t, "attest.android.com", nil, nil)
+	_, wrongHostDER := safetyNetTestGenerateKeyCert(t, "wrong.example.com", caKey, caCert)
 
 	validB64 := base64.StdEncoding.EncodeToString(certDER)
 
@@ -275,22 +299,39 @@ func TestKeyFuncSafetyNetJWT(t *testing.T) {
 		{
 			name:   "ShouldFailX5CFirstNotString",
 			header: map[string]any{stmtX5C: []any{123}},
-			err:    "jwt header x5c[0] not a base64 string",
+			err:    "jwt header x5c[0] is not a base64 string",
 		},
 		{
 			name:   "ShouldFailX5CFirstEmptyString",
 			header: map[string]any{stmtX5C: []any{""}},
-			err:    "jwt header x5c[0] not a base64 string",
+			err:    "jwt header x5c[0] is not a base64 string",
 		},
 		{
 			name:   "ShouldFailX5CInvalidBase64",
 			header: map[string]any{stmtX5C: []any{"not valid base64!!!"}},
-			err:    "decode x5c leaf: illegal base64 data at input byte 3",
+			err:    "decode x5c[0]: illegal base64 data at input byte 3",
 		},
 		{
 			name:   "ShouldFailX5CInvalidCert",
 			header: map[string]any{stmtX5C: []any{base64.StdEncoding.EncodeToString([]byte("not-a-cert"))}},
-			err:    "parse x5c leaf: x509: malformed certificate",
+			err:    "parse x5c[0]: x509: malformed certificate",
+		},
+		{
+			name:   "ShouldFailX5CIntermediateInvalidCert",
+			header: map[string]any{stmtX5C: []any{validB64, base64.StdEncoding.EncodeToString([]byte("not-a-cert"))}},
+			err:    "parse x5c[1]: x509: malformed certificate",
+		},
+		{
+			// The certificate asserts the SafetyNet hostname but chains to no trust anchor, so the key must not be
+			// released to verify the signature with.
+			name:   "ShouldFailSelfSignedCert",
+			header: map[string]any{stmtX5C: []any{base64.StdEncoding.EncodeToString(forgedDER)}},
+			err:    "verify x5c chain: x509: certificate signed by unknown authority",
+		},
+		{
+			name:   "ShouldFailWrongHostnameCert",
+			header: map[string]any{stmtX5C: []any{base64.StdEncoding.EncodeToString(wrongHostDER)}},
+			err:    "verify x5c chain: x509: certificate is valid for wrong.example.com, not attest.android.com",
 		},
 		{
 			name:   "ShouldSucceedWithValidCert",
@@ -302,17 +343,44 @@ func TestKeyFuncSafetyNetJWT(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			token := &jwt.Token{Header: tc.header}
 
-			result, err := keyFuncSafetyNetJWT(token)
+			verifier := &safetyNetJWTVerifier{}
+
+			result, err := verifier.keyFunc(token)
 
 			if tc.err != "" {
 				assert.Nil(t, result)
+				assert.Nil(t, verifier.x5c)
+				assert.Nil(t, verifier.certs)
 				require.EqualError(t, err, tc.err)
 			} else {
 				require.NoError(t, err)
 				assert.NotNil(t, result)
+				assert.Len(t, verifier.certs, 1)
 			}
 		})
 	}
+}
+
+// TestKeyFuncSafetyNetJWTSystemRoots asserts that a nil pool falls back to the host trust store rather than trusting
+// anything, as an empty pool and a nil pool must not behave the same way.
+func TestKeyFuncSafetyNetJWTSystemRoots(t *testing.T) {
+	original := attStatementAndroidSafetyNetRootsCertPool
+	attStatementAndroidSafetyNetRootsCertPool = nil
+
+	t.Cleanup(func() {
+		attStatementAndroidSafetyNetRootsCertPool = original
+	})
+
+	_, forgedDER := safetyNetTestGenerateKeyCert(t, "attest.android.com", nil, nil)
+
+	verifier := &safetyNetJWTVerifier{}
+
+	result, err := verifier.keyFunc(&jwt.Token{
+		Header: map[string]any{stmtX5C: []any{base64.StdEncoding.EncodeToString(forgedDER)}},
+	})
+
+	assert.Nil(t, result)
+	require.EqualError(t, err, "verify x5c chain: x509: certificate signed by unknown authority")
 }
 
 func TestSafetyNetFormat_ParseExistingResponse(t *testing.T) {
@@ -331,22 +399,72 @@ func TestSafetyNetFormat_ParseExistingResponse(t *testing.T) {
 
 // Supporting functions and test data.
 
-func safetyNetTestGenerateKeyCert(t *testing.T, hostname string) (*rsa.PrivateKey, *x509.Certificate) {
+// safetyNetTestInstallCA creates a certificate authority for issuing SafetyNet response signing certificates and
+// installs it as the trust anchor for the duration of the test.
+func safetyNetTestInstallCA(t *testing.T) (*rsa.PrivateKey, *x509.Certificate) {
 	t.Helper()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
 	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "SafetyNet Test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	pool := x509.NewCertPool()
+	pool.AddCert(cert)
+
+	original := attStatementAndroidSafetyNetRootsCertPool
+	attStatementAndroidSafetyNetRootsCertPool = pool
+
+	t.Cleanup(func() {
+		attStatementAndroidSafetyNetRootsCertPool = original
+	})
+
+	return key, cert
+}
+
+// safetyNetTestGenerateKeyCert issues a SafetyNet response signing certificate for the given hostname from the given
+// certificate authority. A nil caKey produces a self-signed certificate, which is what a forged attestation looks
+// like.
+func safetyNetTestGenerateKeyCert(t *testing.T, hostname string, caKey *rsa.PrivateKey, caCert *x509.Certificate) (*rsa.PrivateKey, []byte) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
 		Subject:      pkix.Name{CommonName: hostname},
 		DNSNames:     []string{hostname},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 
-	return key, template
+	parent, signer := caCert, caKey
+
+	if caKey == nil {
+		parent, signer = template, key
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, signer)
+	require.NoError(t, err)
+
+	return key, der
 }
 
 type safetyNetTestMDS struct {
@@ -358,11 +476,8 @@ func (m *safetyNetTestMDS) GetValidateEntry(_ context.Context) bool {
 	return m.validateEntry
 }
 
-func safetyNetTestBuildJWT(t *testing.T, key *rsa.PrivateKey, certTemplate *x509.Certificate, response SafetyNetResponse) []byte {
+func safetyNetTestBuildJWT(t *testing.T, key *rsa.PrivateKey, certDER []byte, response SafetyNetResponse) []byte {
 	t.Helper()
-
-	certDER, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &key.PublicKey, key)
-	require.NoError(t, err)
 
 	certB64 := base64.StdEncoding.EncodeToString(certDER)
 
