@@ -235,7 +235,9 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 			format:                      "android-key",
 			credParams:                  []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
-			err:                         "Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN",
+			// Both authorization lists of this vector are empty sequences, so it satisfies neither the origin nor the
+			// purpose requirement of §8.4. The origin is reported as it is the first of the two in the specification.
+			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
 		},
 		{
 			// §16.15 Apple Anonymous Attestation - ES256 - Top Origin
