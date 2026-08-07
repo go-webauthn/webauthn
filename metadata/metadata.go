@@ -437,6 +437,7 @@ func (s *Statement) Verifier(x5cis []*x509.Certificate) (opts x509.VerifyOptions
 	return x509.VerifyOptions{
 		Roots:         roots,
 		Intermediates: intermediates,
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"math/big"
 	"testing"
 	"time"
@@ -549,6 +550,136 @@ func testUtilsGenerateLeafCert(t *testing.T, ca *x509.Certificate) *x509.Certifi
 	require.NoError(t, err)
 
 	return leafCert
+}
+
+func testUtilsIssueCert(t *testing.T, template, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	if parent == nil {
+		parent, parentKey = template, key
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, parent, &key.PublicKey, parentKey)
+	require.NoError(t, err)
+
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	return cert, key
+}
+
+func testUtilsCertTemplate(cn string, ca bool) *x509.Certificate {
+	return &x509.Certificate{
+		SerialNumber:          big.NewInt(time.Now().UnixNano()),
+		Subject:               pkix.Name{CommonName: cn},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  ca,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+}
+
+// TestAttStatementCertChainVerifyExtKeyUsage ensures attestation certificates are not held to the crypto/x509 default
+// KeyUsages of ExtKeyUsageServerAuth, which is applied to every certificate in the chain when KeyUsages is unset.
+func TestAttStatementCertChainVerifyExtKeyUsage(t *testing.T) {
+	testCases := []struct {
+		name     string
+		template func(*x509.Certificate)
+	}{
+		{
+			name:     "ShouldAllowNoExtKeyUsage",
+			template: func(cert *x509.Certificate) {},
+		},
+		{
+			name: "ShouldAllowUnknownExtKeyUsageAIK",
+			template: func(cert *x509.Certificate) {
+				// tcg-kp-AIKCertificate, mandatory for TPM attestation certificates and not known to crypto/x509.
+				cert.UnknownExtKeyUsage = []asn1.ObjectIdentifier{{2, 23, 133, 8, 3}}
+			},
+		},
+		{
+			name: "ShouldAllowClientAuthExtKeyUsage",
+			template: func(cert *x509.Certificate) {
+				cert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+			},
+		},
+		{
+			name: "ShouldAllowCodeSigningExtKeyUsage",
+			template: func(cert *x509.Certificate) {
+				cert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageCodeSigning}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			root, rootKey := testUtilsIssueCert(t, testUtilsCertTemplate("Test Root CA", true), nil, nil)
+
+			roots := x509.NewCertPool()
+			roots.AddCert(root)
+
+			template := testUtilsCertTemplate("Test Attestation Leaf", false)
+
+			tc.template(template)
+
+			leaf, _ := testUtilsIssueCert(t, template, root, rootKey)
+
+			chains, err := attStatementCertChainVerify([]*x509.Certificate{leaf, root}, roots, false, time.Time{})
+
+			assert.NoError(t, err)
+			assert.NotEmpty(t, chains)
+		})
+	}
+}
+
+// TestAttStatementCertChainVerifyLeafIsFirstCert ensures the certificate whose chain is verified is always x5c[0], the
+// same certificate the attestation format handlers use for the signature, public key, and extension checks. Selecting
+// any other element would allow an untrusted x5c[0] to be paired with an unrelated genuine certificate.
+func TestAttStatementCertChainVerifyLeafIsFirstCert(t *testing.T) {
+	root, rootKey := testUtilsIssueCert(t, testUtilsCertTemplate("Test Root CA", true), nil, nil)
+
+	roots := x509.NewCertPool()
+	roots.AddCert(root)
+
+	genuine, _ := testUtilsIssueCert(t, testUtilsCertTemplate("Test Genuine Leaf", false), root, rootKey)
+
+	// A self-signed certificate which chains to nothing trusted, marked as a CA so that a leaf selection which skips CA
+	// certificates would fall through to the genuine certificate instead.
+	untrusted, _ := testUtilsIssueCert(t, testUtilsCertTemplate("Test Untrusted CA", true), nil, nil)
+
+	chains, err := attStatementCertChainVerify([]*x509.Certificate{untrusted, genuine}, roots, true, time.Now().Add(time.Hour*8760))
+
+	assert.Error(t, err)
+	assert.Empty(t, chains)
+}
+
+// TestAttStatementCertChainVerifyMangledLeaf ensures an expired x5c[0] is still excluded from the intermediate pool and
+// verifies successfully when mangling is enabled, as the mangle returns a copy rather than the original certificate.
+func TestAttStatementCertChainVerifyMangledLeaf(t *testing.T) {
+	root, rootKey := testUtilsIssueCert(t, testUtilsCertTemplate("Test Root CA", true), nil, nil)
+
+	roots := x509.NewCertPool()
+	roots.AddCert(root)
+
+	template := testUtilsCertTemplate("Test Expired Leaf", false)
+	template.NotBefore = time.Now().Add(-time.Hour * 48)
+	template.NotAfter = time.Now().Add(-time.Hour * 24)
+
+	expired, _ := testUtilsIssueCert(t, template, root, rootKey)
+
+	chains, err := attStatementCertChainVerify([]*x509.Certificate{expired, root}, roots, false, time.Time{})
+
+	assert.Error(t, err)
+	assert.Empty(t, chains)
+
+	chains, err = attStatementCertChainVerify([]*x509.Certificate{expired, root}, roots, true, time.Now().Add(time.Hour*8760))
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, chains)
 }
 
 func testUtilsGenerateCertWithKey(t *testing.T, pub *ecdsa.PublicKey) *x509.Certificate {

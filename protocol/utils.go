@@ -116,15 +116,7 @@ func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool
 		return nil, errors.New("empty chain")
 	}
 
-	leaf := certs[0]
-
-	for _, cert := range certs {
-		if !cert.IsCA {
-			leaf = certInsecureConditionalNotAfterMangle(cert, mangleNotAfter, mangleNotAfterSafeTime)
-
-			break
-		}
-	}
+	leaf := certInsecureConditionalNotAfterMangle(certs[0], mangleNotAfter, mangleNotAfterSafeTime)
 
 	var (
 		intermediates *x509.CertPool
@@ -140,8 +132,10 @@ func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool
 		}
 	}
 
-	for _, cert := range certs {
-		if cert == leaf {
+	// This skips the leaf by index rather than by identity as certInsecureConditionalNotAfterMangle returns a copy
+	// when it mangles a certificate, which would make an identity comparison against the leaf never match.
+	for i, cert := range certs {
+		if i == 0 {
 			continue
 		}
 
@@ -155,6 +149,12 @@ func attStatementCertChainVerify(certs []*x509.Certificate, roots *x509.CertPool
 	opts := x509.VerifyOptions{
 		Roots:         roots,
 		Intermediates: intermediates,
+
+		// Attestation certificates are not TLS certificates. An unset KeyUsages does not mean 'any': crypto/x509
+		// substitutes ExtKeyUsageServerAuth and applies it to every certificate in the chain, rejecting attestation
+		// certificates that carry any other Extended Key Usage, including ones it does not recognize such as
+		// tcg-kp-AIKCertificate (2.23.133.8.3).
+		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
 	return leaf.Verify(opts)
