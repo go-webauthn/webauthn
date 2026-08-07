@@ -57,10 +57,10 @@ func TestAuthenticatorData_Unmarshal_TrailingBytesRejected(t *testing.T) {
 func buildAuthData(flags byte, credentialID, rawPublicKey []byte) []byte {
 	data := make([]byte, 0, 55+len(credentialID)+len(rawPublicKey))
 
-	data = append(data, make([]byte, 32)...)    // RPIDHash.
-	data = append(data, flags)                  // Flags.
-	data = append(data, 0x00, 0x00, 0x00, 0x01) // Counter.
-	data = append(data, make([]byte, 16)...)    // AAGUID.
+	data = append(data, make([]byte, 32)...)                                 // RPIDHash.
+	data = append(data, flags)                                               // Flags.
+	data = append(data, 0x00, 0x00, 0x00, 0x01)                              // Counter.
+	data = append(data, make([]byte, 16)...)                                 // AAGUID.
 	data = append(data, byte(len(credentialID)>>8), byte(len(credentialID))) //nolint:gosec // Test data is bounded.
 	data = append(data, credentialID...)
 	data = append(data, rawPublicKey...)

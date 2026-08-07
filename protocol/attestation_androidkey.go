@@ -122,23 +122,33 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation challenge not equal to clientDataHash")
 	}
 
+	if protoErr := androidKeyValidateAuthorizationLists(&decoded); protoErr != nil {
+		return "", nil, protoErr
+	}
+
+	return string(metadata.BasicFull), x5c, err
+}
+
+// androidKeyValidateAuthorizationLists performs the §8.4 verification steps which apply to the authorization lists of
+// the Android key attestation certificate extension.
+func androidKeyValidateAuthorizationLists(decoded *keyDescription) *Error {
 	// The AuthorizationList.allApplications field is not present on either authorization list (softwareEnforced nor teeEnforced), since PublicKeyCredential MUST be scoped to the RP ID.
-	if decoded.SoftwareEnforced.AllApplications != nil || decoded.TeeEnforced.AllApplications != nil {
-		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains all applications field")
+	if len(decoded.SoftwareEnforced.AllApplications.FullBytes) != 0 || len(decoded.TeeEnforced.AllApplications.FullBytes) != 0 {
+		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains all applications field")
 	}
 
 	// For the following, use only the teeEnforced authorization list if the RP wants to accept only keys from a trusted execution environment, otherwise use the union of teeEnforced and softwareEnforced.
 	// The value in the AuthorizationList.origin field is equal to KM_ORIGIN_GENERATED (which == 0).
 	if decoded.SoftwareEnforced.Origin != KM_ORIGIN_GENERATED || decoded.TeeEnforced.Origin != KM_ORIGIN_GENERATED {
-		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED")
+		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED")
 	}
 
 	// The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN (which == 2).
 	if !contains(decoded.SoftwareEnforced.Purpose, KM_PURPOSE_SIGN) && !contains(decoded.TeeEnforced.Purpose, KM_PURPOSE_SIGN) {
-		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN")
+		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN")
 	}
 
-	return string(metadata.BasicFull), x5c, err
+	return nil
 }
 
 func contains(s []int, e int) bool {
@@ -163,49 +173,49 @@ type keyDescription struct {
 }
 
 type authorizationList struct {
-	Purpose                     []int       `asn1:"tag:1,explicit,set,optional"`
-	Algorithm                   int         `asn1:"tag:2,explicit,optional"`
-	KeySize                     int         `asn1:"tag:3,explicit,optional"`
-	Digest                      []int       `asn1:"tag:5,explicit,set,optional"`
-	Padding                     []int       `asn1:"tag:6,explicit,set,optional"`
-	EcCurve                     int         `asn1:"tag:10,explicit,optional"`
-	RsaPublicExponent           int         `asn1:"tag:200,explicit,optional"`
-	RollbackResistance          any         `asn1:"tag:303,explicit,optional"`
-	ActiveDateTime              int         `asn1:"tag:400,explicit,optional"`
-	OriginationExpireDateTime   int         `asn1:"tag:401,explicit,optional"`
-	UsageExpireDateTime         int         `asn1:"tag:402,explicit,optional"`
-	NoAuthRequired              any         `asn1:"tag:503,explicit,optional"`
-	UserAuthType                int         `asn1:"tag:504,explicit,optional"`
-	AuthTimeout                 int         `asn1:"tag:505,explicit,optional"`
-	AllowWhileOnBody            any         `asn1:"tag:506,explicit,optional"`
-	TrustedUserPresenceRequired any         `asn1:"tag:507,explicit,optional"`
-	TrustedConfirmationRequired any         `asn1:"tag:508,explicit,optional"`
-	UnlockedDeviceRequired      any         `asn1:"tag:509,explicit,optional"`
-	AllApplications             any         `asn1:"tag:600,explicit,optional"`
-	ApplicationID               any         `asn1:"tag:601,explicit,optional"`
-	CreationDateTime            int         `asn1:"tag:701,explicit,optional"`
-	Origin                      int         `asn1:"tag:702,explicit,optional"`
-	RootOfTrust                 rootOfTrust `asn1:"tag:704,explicit,optional"`
-	OsVersion                   int         `asn1:"tag:705,explicit,optional"`
-	OsPatchLevel                int         `asn1:"tag:706,explicit,optional"`
-	AttestationApplicationID    []byte      `asn1:"tag:709,explicit,optional"`
-	AttestationIDBrand          []byte      `asn1:"tag:710,explicit,optional"`
-	AttestationIDDevice         []byte      `asn1:"tag:711,explicit,optional"`
-	AttestationIDProduct        []byte      `asn1:"tag:712,explicit,optional"`
-	AttestationIDSerial         []byte      `asn1:"tag:713,explicit,optional"`
-	AttestationIDImei           []byte      `asn1:"tag:714,explicit,optional"`
-	AttestationIDMeid           []byte      `asn1:"tag:715,explicit,optional"`
-	AttestationIDManufacturer   []byte      `asn1:"tag:716,explicit,optional"`
-	AttestationIDModel          []byte      `asn1:"tag:717,explicit,optional"`
-	VendorPatchLevel            int         `asn1:"tag:718,explicit,optional"`
-	BootPatchLevel              int         `asn1:"tag:719,explicit,optional"`
+	Purpose                     []int         `asn1:"tag:1,explicit,set,optional"`
+	Algorithm                   int           `asn1:"tag:2,explicit,optional"`
+	KeySize                     int           `asn1:"tag:3,explicit,optional"`
+	Digest                      []int         `asn1:"tag:5,explicit,set,optional"`
+	Padding                     []int         `asn1:"tag:6,explicit,set,optional"`
+	EcCurve                     int           `asn1:"tag:10,explicit,optional"`
+	RsaPublicExponent           int           `asn1:"tag:200,explicit,optional"`
+	RollbackResistance          asn1.RawValue `asn1:"tag:303,explicit,optional"`
+	ActiveDateTime              int           `asn1:"tag:400,explicit,optional"`
+	OriginationExpireDateTime   int           `asn1:"tag:401,explicit,optional"`
+	UsageExpireDateTime         int           `asn1:"tag:402,explicit,optional"`
+	NoAuthRequired              asn1.RawValue `asn1:"tag:503,explicit,optional"`
+	UserAuthType                int           `asn1:"tag:504,explicit,optional"`
+	AuthTimeout                 int           `asn1:"tag:505,explicit,optional"`
+	AllowWhileOnBody            asn1.RawValue `asn1:"tag:506,explicit,optional"`
+	TrustedUserPresenceRequired asn1.RawValue `asn1:"tag:507,explicit,optional"`
+	TrustedConfirmationRequired asn1.RawValue `asn1:"tag:508,explicit,optional"`
+	UnlockedDeviceRequired      asn1.RawValue `asn1:"tag:509,explicit,optional"`
+	AllApplications             asn1.RawValue `asn1:"tag:600,explicit,optional"`
+	ApplicationID               asn1.RawValue `asn1:"tag:601,explicit,optional"`
+	CreationDateTime            int           `asn1:"tag:701,explicit,optional"`
+	Origin                      int           `asn1:"tag:702,explicit,optional"`
+	RootOfTrust                 rootOfTrust   `asn1:"tag:704,explicit,optional"`
+	OsVersion                   int           `asn1:"tag:705,explicit,optional"`
+	OsPatchLevel                int           `asn1:"tag:706,explicit,optional"`
+	AttestationApplicationID    []byte        `asn1:"tag:709,explicit,optional"`
+	AttestationIDBrand          []byte        `asn1:"tag:710,explicit,optional"`
+	AttestationIDDevice         []byte        `asn1:"tag:711,explicit,optional"`
+	AttestationIDProduct        []byte        `asn1:"tag:712,explicit,optional"`
+	AttestationIDSerial         []byte        `asn1:"tag:713,explicit,optional"`
+	AttestationIDImei           []byte        `asn1:"tag:714,explicit,optional"`
+	AttestationIDMeid           []byte        `asn1:"tag:715,explicit,optional"`
+	AttestationIDManufacturer   []byte        `asn1:"tag:716,explicit,optional"`
+	AttestationIDModel          []byte        `asn1:"tag:717,explicit,optional"`
+	VendorPatchLevel            int           `asn1:"tag:718,explicit,optional"`
+	BootPatchLevel              int           `asn1:"tag:719,explicit,optional"`
 }
 
 type rootOfTrust struct {
-	verifiedBootKey   []byte            //nolint:unused
-	deviceLocked      bool              //nolint:unused
-	verifiedBootState verifiedBootState //nolint:unused
-	verifiedBootHash  []byte            //nolint:unused
+	VerifiedBootKey   []byte
+	DeviceLocked      bool
+	VerifiedBootState asn1.Enumerated
+	VerifiedBootHash  []byte `asn1:"optional"`
 }
 
 type verifiedBootState int
