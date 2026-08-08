@@ -482,6 +482,45 @@ func testCredentialFromNoneAttestation(t *testing.T) Credential {
 	}
 }
 
+// newTestParsedCredentialCreationData returns a fully populated [*protocol.ParsedCredentialCreationData] suitable
+// for [NewCredential], with no extension data set. Tests mutate the returned value's ClientExtensionResults and
+// Response.AttestationObject.AuthData.Ext fields to exercise extension handling.
+func newTestParsedCredentialCreationData(t *testing.T) *protocol.ParsedCredentialCreationData {
+	t.Helper()
+
+	return &protocol.ParsedCredentialCreationData{
+		ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
+			AuthenticatorAttachment: protocol.Platform,
+		},
+		Response: protocol.ParsedAttestationResponse{
+			AttestationObject: protocol.AttestationObject{
+				Format: "packed",
+				Type:   string(metadata.BasicFull),
+				AuthData: protocol.AuthenticatorData{
+					Counter: 1,
+					Flags:   protocol.FlagUserPresent | protocol.FlagUserVerified,
+					AttData: protocol.AttestedCredentialData{
+						AAGUID:              []byte("aaguid-value-here"),
+						CredentialID:        []byte("credential-id"),
+						CredentialPublicKey: []byte("public-key"),
+					},
+				},
+			},
+			Transports: []protocol.AuthenticatorTransport{protocol.USB},
+		},
+		Raw: protocol.CredentialCreationResponse{
+			AttestationResponse: protocol.AuthenticatorAttestationResponse{
+				AuthenticatorResponse: protocol.AuthenticatorResponse{
+					ClientDataJSON: []byte("client-data-json"),
+				},
+				AuthenticatorData:  []byte("auth-data"),
+				PublicKeyAlgorithm: -7,
+				AttestationObject:  []byte("attestation-object"),
+			},
+		},
+	}
+}
+
 func TestNewCredential(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -492,37 +531,7 @@ func TestNewCredential(t *testing.T) {
 		{
 			name:           "ShouldCreateCredential",
 			clientDataHash: []byte("client-data-hash"),
-			parsed: &protocol.ParsedCredentialCreationData{
-				ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
-					AuthenticatorAttachment: protocol.Platform,
-				},
-				Response: protocol.ParsedAttestationResponse{
-					AttestationObject: protocol.AttestationObject{
-						Format: "packed",
-						Type:   string(metadata.BasicFull),
-						AuthData: protocol.AuthenticatorData{
-							Counter: 1,
-							Flags:   protocol.FlagUserPresent | protocol.FlagUserVerified,
-							AttData: protocol.AttestedCredentialData{
-								AAGUID:              []byte("aaguid-value-here"),
-								CredentialID:        []byte("credential-id"),
-								CredentialPublicKey: []byte("public-key"),
-							},
-						},
-					},
-					Transports: []protocol.AuthenticatorTransport{protocol.USB},
-				},
-				Raw: protocol.CredentialCreationResponse{
-					AttestationResponse: protocol.AuthenticatorAttestationResponse{
-						AuthenticatorResponse: protocol.AuthenticatorResponse{
-							ClientDataJSON: []byte("client-data-json"),
-						},
-						AuthenticatorData:  []byte("auth-data"),
-						PublicKeyAlgorithm: -7,
-						AttestationObject:  []byte("attestation-object"),
-					},
-				},
-			},
+			parsed:         newTestParsedCredentialCreationData(t),
 			expected: &Credential{
 				ID:                []byte("credential-id"),
 				PublicKey:         []byte("public-key"),
@@ -581,6 +590,142 @@ func TestNewCredential(t *testing.T) {
 			assert.Equal(t, tc.expected, actual)
 		})
 	}
+}
+
+func TestNewCredentialRecordsExtensionResults(t *testing.T) {
+	parsed := newTestParsedCredentialCreationData(t)
+
+	parsed.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		CredProps: &protocol.CredentialPropertiesOutput{RK: ptr(false)},
+		PRF:       &protocol.PRFOutputs{Enabled: ptr(true), Results: &protocol.PRFValues{First: []byte("secret")}},
+		LargeBlob: &protocol.LargeBlobOutputs{Supported: ptr(true)},
+	}
+	parsed.Response.AttestationObject.AuthData.Ext = &protocol.AuthenticatorExtensionOutputs{
+		CredProtect:  ptr(protocol.CredentialProtectionPolicyUserVerificationRequired),
+		MinPinLength: ptr(uint(6)),
+	}
+
+	credential, err := NewCredential(nil, parsed)
+	require.NoError(t, err)
+
+	require.NotNil(t, credential.Extensions.RK)
+	assert.False(t, *credential.Extensions.RK, "rk false must be recorded, not treated as absent")
+
+	require.NotNil(t, credential.Extensions.PRFEnabled)
+	assert.True(t, *credential.Extensions.PRFEnabled)
+
+	require.NotNil(t, credential.Extensions.LargeBlobSupported)
+	assert.True(t, *credential.Extensions.LargeBlobSupported)
+
+	assert.Equal(t, protocol.CredentialProtectionPolicyUserVerificationRequired, credential.Extensions.CredProtect)
+
+	require.NotNil(t, credential.Extensions.MinPinLength)
+	assert.Equal(t, uint(6), *credential.Extensions.MinPinLength)
+}
+
+func TestNewCredentialExtensionsDoNotAliasParsedResponse(t *testing.T) {
+	// Credential.Extensions must be an independent snapshot. A caller may retain the parsed response (it carries
+	// the attestation data an RP may want to re-verify later); if the stored record shared pointers with it,
+	// mutating the parsed response after registration would silently change the already-persisted credential.
+	rk := false
+	prfEnabled := true
+	largeBlobSupported := true
+	minPinLength := uint(6)
+
+	parsed := newTestParsedCredentialCreationData(t)
+
+	parsed.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		CredProps: &protocol.CredentialPropertiesOutput{RK: &rk},
+		PRF:       &protocol.PRFOutputs{Enabled: &prfEnabled},
+		LargeBlob: &protocol.LargeBlobOutputs{Supported: &largeBlobSupported},
+	}
+	parsed.Response.AttestationObject.AuthData.Ext = &protocol.AuthenticatorExtensionOutputs{
+		MinPinLength: &minPinLength,
+	}
+
+	credential, err := NewCredential(nil, parsed)
+	require.NoError(t, err)
+
+	require.NotNil(t, credential.Extensions.RK)
+	require.NotNil(t, credential.Extensions.PRFEnabled)
+	require.NotNil(t, credential.Extensions.LargeBlobSupported)
+	require.NotNil(t, credential.Extensions.MinPinLength)
+
+	assert.NotSame(t, &rk, credential.Extensions.RK)
+	assert.NotSame(t, &prfEnabled, credential.Extensions.PRFEnabled)
+	assert.NotSame(t, &largeBlobSupported, credential.Extensions.LargeBlobSupported)
+	assert.NotSame(t, &minPinLength, credential.Extensions.MinPinLength)
+
+	// Mutate the values through the original pointers, as a caller retaining the parsed response could.
+	rk = true
+	prfEnabled = false
+	largeBlobSupported = false
+	minPinLength = 4
+
+	assert.False(t, *credential.Extensions.RK, "credential must retain the value at construction time")
+	assert.True(t, *credential.Extensions.PRFEnabled, "credential must retain the value at construction time")
+	assert.True(t, *credential.Extensions.LargeBlobSupported, "credential must retain the value at construction time")
+	assert.Equal(t, uint(6), *credential.Extensions.MinPinLength, "credential must retain the value at construction time")
+}
+
+func TestNewCredentialDoesNotPersistPRFResults(t *testing.T) {
+	// PRF results are secrets. They must never reach the credential record.
+	parsed := newTestParsedCredentialCreationData(t)
+	parsed.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		PRF: &protocol.PRFOutputs{Enabled: ptr(true), Results: &protocol.PRFValues{First: []byte("secret-prf-output")}},
+	}
+
+	credential, err := NewCredential(nil, parsed)
+	require.NoError(t, err)
+
+	data, err := json.Marshal(credential)
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(data), "secret-prf-output")
+}
+
+func TestCredentialExtensionsAbsentIsOmitted(t *testing.T) {
+	parsed := newTestParsedCredentialCreationData(t)
+
+	credential, err := NewCredential(nil, parsed)
+	require.NoError(t, err)
+
+	data, err := json.Marshal(credential)
+	require.NoError(t, err)
+
+	assert.NotContains(t, string(data), `"extensions"`)
+}
+
+func TestCredentialExtensionsRoundTrip(t *testing.T) {
+	original := Credential{
+		ID:        []byte("credential"),
+		PublicKey: []byte("key"),
+		Extensions: CredentialExtensions{
+			RK:                 ptr(false),
+			CredProtect:        protocol.CredentialProtectionPolicyUserVerificationRequired,
+			MinPinLength:       ptr(uint(6)),
+			PRFEnabled:         ptr(true),
+			LargeBlobSupported: ptr(false),
+		},
+	}
+
+	data, err := original.MarshalMsg(nil)
+	require.NoError(t, err)
+
+	var decoded Credential
+
+	_, err = decoded.UnmarshalMsg(data)
+	require.NoError(t, err)
+
+	assert.Equal(t, original.Extensions, decoded.Extensions)
+
+	encoded, err := json.Marshal(original)
+	require.NoError(t, err)
+
+	var decodedJSON Credential
+
+	require.NoError(t, json.Unmarshal(encoded, &decodedJSON))
+	assert.Equal(t, original.Extensions, decodedJSON.Extensions)
 }
 
 func TestCredential_SignalUnknownCredential(t *testing.T) {

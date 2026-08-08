@@ -2,6 +2,7 @@ package webauthn
 
 import (
 	"bytes"
+	"reflect"
 	"testing"
 	"time"
 
@@ -92,7 +93,7 @@ func TestSessionData_MsgpEmptyVariants(t *testing.T) {
 			},
 		},
 		{
-			name: "NilExtensions",
+			name: "ZeroExtensions",
 			original: SessionData{
 				Challenge:      "c",
 				RelyingPartyID: "r",
@@ -100,12 +101,15 @@ func TestSessionData_MsgpEmptyVariants(t *testing.T) {
 			},
 		},
 		{
-			name: "EmptyExtensions",
+			name: "PopulatedExtensions",
 			original: SessionData{
 				Challenge:      "c",
 				RelyingPartyID: "r",
 				UserID:         []byte{0x01},
-				Extensions:     protocol.AuthenticationExtensions{},
+				Extensions: protocol.SessionExtensions{
+					Requested: []string{"appid"},
+					AppID:     "https://example.com",
+				},
 			},
 		},
 		{
@@ -133,7 +137,7 @@ func TestSessionData_MsgpEmptyVariants(t *testing.T) {
 			assert.Equal(t, tc.original.RelyingPartyID, decoded.RelyingPartyID)
 			assert.Equal(t, tc.original.UserID, decoded.UserID)
 			assert.Len(t, decoded.AllowedCredentialIDs, len(tc.original.AllowedCredentialIDs))
-			assert.Len(t, decoded.Extensions, len(tc.original.Extensions))
+			assert.Equal(t, tc.original.Extensions, decoded.Extensions)
 			assert.Len(t, decoded.CredParams, len(tc.original.CredParams))
 		})
 	}
@@ -236,6 +240,20 @@ func TestSessionData_DecodeMsgInvalidTypes(t *testing.T) {
 	}
 }
 
+func TestSessionExtensionsShadowMatches(t *testing.T) {
+	// A compile-time conversion in both directions proves the shadow struct the msgp generator uses stays
+	// field-for-field identical to the protocol type.
+	var (
+		shadow sessionExtensions
+		actual protocol.SessionExtensions
+	)
+
+	assert.Equal(t, protocol.SessionExtensions(shadow), actual)
+	assert.Equal(t, sessionExtensions(actual), shadow)
+
+	assert.Equal(t, reflect.TypeOf(shadow).NumField(), reflect.TypeOf(actual).NumField())
+}
+
 func newPopulatedSessionData() SessionData {
 	return SessionData{
 		Challenge:      "challenge-bytes-b64url",
@@ -247,10 +265,10 @@ func newPopulatedSessionData() SessionData {
 		},
 		Expires:          time.Date(2026, time.April, 19, 12, 34, 56, 0, time.UTC),
 		UserVerification: protocol.VerificationRequired,
-		Extensions: protocol.AuthenticationExtensions{
-			"appid":       "https://example.com",
-			"credProtect": int64(2),
-			"largeBlob":   true,
+		Extensions: protocol.SessionExtensions{
+			Requested: []string{"credProps", "largeBlob"},
+			LargeBlob: protocol.LargeBlobSupportPreferred,
+			Extra:     map[string]any{"credProtect": int64(2)},
 		},
 		CredParams: []protocol.CredentialParameter{
 			{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256},

@@ -18,6 +18,12 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
+// ptr returns a pointer to the given value. It exists so that the pointer-valued members of the extension output
+// structures, where an absent value must be distinguishable from a false or zero value, can be constructed inline.
+func ptr[T any](v T) *T {
+	return &v
+}
+
 func mustParseX509Certificate(der []byte) *x509.Certificate {
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {

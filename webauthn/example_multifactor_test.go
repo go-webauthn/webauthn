@@ -89,7 +89,7 @@ func handlerExampleMultiFactorCreateChallenge(w *webauthn.WebAuthn) func(rw http
 
 		opts := []webauthn.RegistrationOption{
 			webauthn.WithExclusions(webauthn.Credentials(user.WebAuthnCredentials()).CredentialDescriptors()),
-			webauthn.WithExtensions(map[string]any{"credProps": true}),
+			webauthn.WithExtensions(webauthn.WithExtensionCredProps()),
 		}
 
 		if creation, s, err = w.BeginMediatedRegistration(user, protocol.MediationDefault, opts...); err != nil {

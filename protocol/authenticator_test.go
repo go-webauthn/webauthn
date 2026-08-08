@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 const (
@@ -557,4 +559,22 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthenticatorDataUnmarshalDecodesExtensions(t *testing.T) {
+	extData, err := webauthncbor.Marshal(map[string]any{"minPinLength": uint64(4)})
+	require.NoError(t, err)
+
+	raw := make([]byte, 37)
+	raw[32] = byte(FlagHasExtensions)
+	raw = append(raw, extData...)
+
+	var authData AuthenticatorData
+
+	require.NoError(t, authData.Unmarshal(raw))
+
+	assert.Equal(t, extData, authData.ExtData, "the raw signed bytes must be preserved")
+	require.NotNil(t, authData.Ext)
+	require.NotNil(t, authData.Ext.MinPinLength)
+	assert.Equal(t, uint(4), *authData.Ext.MinPinLength)
 }

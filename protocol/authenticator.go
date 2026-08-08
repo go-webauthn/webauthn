@@ -42,11 +42,12 @@ type AuthenticatorResponse struct {
 //
 // Specification: §6.1. Authenticator Data (https://www.w3.org/TR/webauthn/#sctn-authenticator-data)
 type AuthenticatorData struct {
-	RPIDHash []byte                 `json:"rpid"`
-	Flags    AuthenticatorFlags     `json:"flags"`
-	Counter  uint32                 `json:"sign_count"`
-	AttData  AttestedCredentialData `json:"att_data"`
-	ExtData  []byte                 `json:"ext_data"`
+	RPIDHash []byte                         `json:"rpid"`
+	Flags    AuthenticatorFlags             `json:"flags"`
+	Counter  uint32                         `json:"sign_count"`
+	AttData  AttestedCredentialData         `json:"att_data"`
+	ExtData  []byte                         `json:"ext_data"`
+	Ext      *AuthenticatorExtensionOutputs `json:"ext,omitempty"`
 }
 
 // AttestedCredentialData is a variable-length byte array added to the authenticator data when generating an attestation
@@ -333,6 +334,10 @@ func (a *AuthenticatorData) Unmarshal(rawAuthData []byte) (err error) {
 		if remaining != 0 {
 			a.ExtData = rawAuthData[len(rawAuthData)-remaining:]
 			remaining -= len(a.ExtData)
+
+			if a.Ext, err = ParseAuthenticatorExtensionOutputs(a.ExtData); err != nil {
+				return err
+			}
 		} else {
 			return ErrBadRequest.WithDetails("Extensions flag set but extensions data is missing")
 		}
