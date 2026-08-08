@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -248,7 +249,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, stmtTypNone, gotType)
+		// §8.9 returns any combination of the outputs of the successful verification procedures. The type of the
+		// first sub-statement is conveyed so the credential isn't recorded as carrying no attestation.
+		assert.Equal(t, "packed-type", gotType)
 		assert.Nil(t, gotX5Cs)
 
 		require.Len(t, calls, 2)
@@ -364,9 +367,52 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
 		require.NoError(t, err)
 
-		assert.Equal(t, stmtTypNone, gotType)
+		assert.Equal(t, testAttTypeSome, gotType)
 		assert.Nil(t, gotX5Cs)
 		assert.Equal(t, 2, handlerCalls)
+	})
+
+	// A compound attestation which conveys stmtTypNone suppresses the attestation type validation performed by
+	// ValidateMetadata, which skips the check for that value, so the type of a sub-statement must reach it.
+	t.Run("ShouldValidateMetadataAgainstTheConveyedAttestationType", func(t *testing.T) {
+		withFreshAttestationRegistry(t)
+
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (string, []any, error) {
+			return string(metadata.BasicFull), nil, nil
+		}
+
+		att := AttestationObject{
+			Format: string(AttestationFormatCompound),
+			AuthData: AuthenticatorData{
+				AttData: AttestedCredentialData{AAGUID: make([]byte, 0)},
+			},
+			AttStatement: map[string]any{
+				stmtAttStmt: []any{
+					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+				},
+			},
+		}
+
+		gotType, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil)
+		require.NoError(t, err)
+		require.NotEqual(t, stmtTypNone, gotType)
+
+		ctrl := gomock.NewController(t)
+		mds := mocks.NewMockMetadataProvider(ctrl)
+
+		entry := &metadata.Entry{
+			MetadataStatement: metadata.Statement{
+				AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.AttCA},
+			},
+		}
+
+		mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
+		mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true)
+
+		protoErr := ValidateMetadata(context.Background(), mds, uuid.Nil, gotType, string(AttestationFormatCompound), nil)
+		require.NotNil(t, protoErr)
+		assert.Contains(t, protoErr.DevInfo, "is not known to be used by this authenticator")
 	})
 }
 
