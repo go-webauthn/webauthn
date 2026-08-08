@@ -25,6 +25,10 @@ func init() {
 //
 // nonCompoundAttStmt = { $$attStmtType } .within { fmt: text .ne "compound", * any => any }
 //
+// §8.9 leaves the handling of a sub-statement which fails verification, and the number which must succeed, to Relying
+// Party policy. The policy applied here is the strictest available: every sub-statement must verify, and the first
+// failure rejects the attestation.
+//
 // Specification: §8.9. Compound Attestation Statement Forma
 //
 // See: https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation
@@ -87,7 +91,7 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 		}
 	}
 
-	for _, attStmt := range attStmts {
+	for i, attStmt := range attStmts {
 		object := AttestationObject{
 			Format:       attStmt.Format,
 			AttStatement: attStmt.AttStatement,
@@ -104,6 +108,12 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 			return "", nil, err
 		}
 
+		// Every sub-statement attests the same credential, so the type conveyed by the first describes an attestation
+		// which was obtained and is the value recorded against the credential.
+		if i == 0 {
+			attestationType = subAttType
+		}
+
 		if mds == nil {
 			continue
 		}
@@ -113,5 +123,8 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 		}
 	}
 
-	return stmtTypNone, nil, nil
+	// The trust paths are not conveyed to the caller. Each is validated against the Metadata Service above alongside
+	// the format and attestation type it belongs to, which a single chain can't describe for more than one
+	// sub-statement, and the paths of independent sub-statements joined together describe no real chain.
+	return attestationType, nil, nil
 }
