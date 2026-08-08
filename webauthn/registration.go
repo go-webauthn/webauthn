@@ -14,7 +14,9 @@ import (
 // RegistrationOption is a functional option that modifies the [protocol.PublicKeyCredentialCreationOptions] sent
 // to the client during a registration ceremony. Use the With* functions in this package (i.e.
 // [WithConveyancePreference], [WithExclusions], [WithAuthenticatorSelection]) to create registration options.
-type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
+//
+// An option returns an error to reject the ceremony; [WebAuthn.BeginRegistration] aborts on the first error.
+type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions) error
 
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator. To set a
 // conditional mediation requirement for the registration see [WebAuthn.BeginMediatedRegistration].
@@ -74,7 +76,9 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	for _, opt := range opts {
-		opt(&creation.Response)
+		if err = opt(&creation.Response); err != nil {
+			return nil, nil, fmt.Errorf("error applying registration option: %w", err)
+		}
 	}
 
 	if len(creation.Response.RelyingParty.ID) == 0 {
@@ -100,11 +104,19 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		}
 	}
 
+	// The FIDO AppID Exclusion Extension is only meaningful when the exclude list contains a credential registered
+	// through the legacy FIDO U2F JavaScript API. Pruning here rather than inside the option makes the result
+	// independent of the order the options were supplied in.
+	if !hasU2FCredential(creation.Response.CredentialExcludeList) {
+		creation.Response.Extensions.AppIDExclude = ""
+	}
+
 	session = &SessionData{
 		Challenge:        creation.Response.Challenge.String(),
 		RelyingPartyID:   creation.Response.RelyingParty.ID,
 		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
+		Extensions:       creation.Response.Extensions.Session(),
 		CredParams:       creation.Response.Parameters,
 		Mediation:        creation.Mediation,
 	}
@@ -152,6 +164,10 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 	var clientDataHash []byte
 
 	if clientDataHash, err = parsedResponse.Verify(session.Challenge, webauthn.Config.RPID, webauthn.Config.RPOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, webauthn.Config.MDS, session.CredParams); err != nil {
+		return nil, err
+	}
+
+	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.CreateCeremony, webauthn.Config.ExtensionsUnsolicitedOutputPolicy); err != nil {
 		return nil, err
 	}
 

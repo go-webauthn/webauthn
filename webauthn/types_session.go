@@ -6,12 +6,30 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
-//go:generate msgp
+//go:generate msgp -unexported
 
 //msgp:replace protocol.UserVerificationRequirement with:string
-//msgp:replace protocol.AuthenticationExtensions with:map[string]any
 //msgp:replace protocol.CredentialMediationRequirement with:string
+//msgp:replace protocol.SessionExtensions with:sessionExtensions
+//msgp:replace protocol.LargeBlobSupport with:string
 //msgp:clearomitted
+
+// sessionExtensions shadows [protocol.SessionExtensions] for the msgp code generator, which cannot inspect types
+// in other packages. It MUST stay field-for-field convertible with [protocol.SessionExtensions]; the conversion in
+// the generated code fails to compile otherwise, and TestSessionExtensionsShadowMatches asserts it directly.
+//
+// The generator only visits unexported types when invoked with -unexported, hence the go:generate line above.
+//
+// The exts field of [SessionData] deliberately carries no omitempty tag option. msgp cannot test a replaced struct
+// for emptiness, so the option never suppressed the field on the wire, while //msgp:clearomitted additionally
+// emitted an assignment to the field's address which does not compile. Do not add it back (msgp v1.6.4).
+type sessionExtensions struct {
+	Requested    []string                  `msg:"req,omitempty"`
+	AppID        string                    `msg:"appid,omitempty"`
+	AppIDExclude string                    `msg:"appidExclude,omitempty"`
+	LargeBlob    protocol.LargeBlobSupport `msg:"largeBlob,omitempty"`
+	Extra        map[string]any            `msg:"extra,omitempty"`
+}
 
 // SessionData is the data that must be stored by the Relying Party between the Begin and Finish steps of a WebAuthn
 // ceremony. It contains the challenge and other parameters needed to verify the authenticator's response.
@@ -23,6 +41,10 @@ import (
 // Every field returned by the Begin* functions must be delivered to the matching Finish* / Validate* call with
 // the same values; if anything is dropped or reshaped in transit, verification will fail. Treat [SessionData] as
 // an atomic record between those two calls.
+//
+// Decode into a fresh [SessionData]. Unlike the other members, Extensions is not reset when the encoded payload
+// omits it, so decoding a payload that predates the field, or one written by a different producer, over a reused
+// destination leaves the previous ceremony's extension state in place.
 //
 // For consolidated persistence guidance; recommended schema shape, required lookup columns, and the rules
 // that also apply to [Credential] records; see the [Storage] section of the
@@ -37,7 +59,7 @@ type SessionData struct {
 	Expires              time.Time `json:"expires" msg:"exp"`
 
 	UserVerification protocol.UserVerificationRequirement    `json:"userVerification,omitempty" msg:"uv,omitempty"`
-	Extensions       protocol.AuthenticationExtensions       `json:"extensions,omitempty" msg:"exts,omitempty"`
+	Extensions       protocol.SessionExtensions              `json:"extensions,omitzero" msg:"exts"`
 	CredParams       []protocol.CredentialParameter          `json:"credParams,omitempty" msg:"params,omitempty"`
 	Mediation        protocol.CredentialMediationRequirement `json:"mediation,omitempty" msg:"cmr,omitempty"`
 }

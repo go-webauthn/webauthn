@@ -1,0 +1,122 @@
+package protocol
+
+import (
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+)
+
+// SessionExtensions is the subset of [AuthenticationExtensions] a Relying Party must persist between the begin and
+// finish steps of a ceremony in order to verify the extension outputs it receives.
+//
+// The per-ceremony PRF salts and the large blob write payload are deliberately excluded. The salts are secrets with
+// no verification role and the payload can be large; both are represented by their identifier in Requested.
+type SessionExtensions struct {
+	// Requested lists the extension identifiers the Relying Party asked for, as reported by
+	// [AuthenticationExtensions.Requested]. An extension output whose identifier is absent from this list was not
+	// solicited.
+	Requested []string `json:"requested,omitempty"`
+
+	// AppID is the FIDO AppID Extension input, required to determine the Relying Party ID of a credential
+	// registered through the legacy FIDO U2F JavaScript API.
+	AppID string `json:"appid,omitempty"`
+
+	// AppIDExclude is the FIDO AppID Exclusion Extension input.
+	AppIDExclude string `json:"appidExclude,omitempty"`
+
+	// LargeBlob is the large blob support requirement requested at registration. A value of
+	// [LargeBlobSupportRequired] is asserted against the extension output.
+	LargeBlob LargeBlobSupport `json:"largeBlob,omitempty"`
+
+	// Extra carries the inputs of extensions this library does not model, so a Relying Party can verify the
+	// outputs of its own extensions. Whatever is placed here is persisted verbatim; keep it small.
+	Extra map[string]any `json:"extra,omitempty"`
+}
+
+// IsZero returns true when nothing needs to be persisted. It is used by the encoding/json omitzero tag option.
+func (e SessionExtensions) IsZero() bool {
+	return len(e.Requested) == 0 && e.AppID == "" && e.AppIDExclude == "" && e.LargeBlob == "" && len(e.Extra) == 0
+}
+
+// Session returns the subset of these inputs that must be persisted in the session for the finish step of the
+// ceremony to verify the extension outputs.
+//
+// Extra is cloned so the persisted session and the live options do not share a backing map; mutating the inputs
+// after the begin step must not retroactively change what the finish step verifies against.
+func (e AuthenticationExtensions) Session() SessionExtensions {
+	return SessionExtensions{
+		Requested:    e.Requested(),
+		AppID:        e.AppID,
+		AppIDExclude: e.AppIDExclude,
+		LargeBlob:    e.LargeBlob.Support,
+		Extra:        maps.Clone(e.Extra),
+	}
+}
+
+// UnsolicitedOutputPolicy determines how a client extension output that the Relying Party did not request is
+// handled during the finish step of a ceremony.
+type UnsolicitedOutputPolicy int
+
+const (
+	// UnsolicitedOutputPolicyReject fails the ceremony when the client returns an extension output the Relying
+	// Party did not request. This is the zero value and therefore the default.
+	UnsolicitedOutputPolicyReject UnsolicitedOutputPolicy = iota
+
+	// UnsolicitedOutputPolicyIgnore accepts and ignores extension outputs the Relying Party did not request. Use
+	// this only when a client is known to return outputs unprompted.
+	UnsolicitedOutputPolicyIgnore
+)
+
+// Verify checks these client extension outputs against the extensions recorded in the session.
+//
+// Two rules are enforced. First, every present output must correspond to an extension the Relying Party requested;
+// keys of [AuthenticationExtensionsClientOutputs.Extra] participate on equal terms with the modelled members. This
+// subsumes ceremony applicability, because an output that cannot be requested for a ceremony cannot have been
+// requested at all. Second, a registration that required large blob support must have received it.
+//
+// Every problem found is reported rather than only the first. The result is an [Error] whose details name every
+// problem and whose cause is the [errors.Join] of them, so [errors.As] and [errors.Is] reach each one individually.
+//
+// A ceremony which is neither [CreateCeremony] nor [AssertCeremony] is treated as a registration, so an unexpected
+// value fails closed against the required large blob support assertion rather than skipping it.
+//
+// The appid value path is not handled here; see [ParsedPublicKeyCredential.GetAppID].
+//
+// Specification: §7.1. Registering a New Credential (https://www.w3.org/TR/webauthn-3/#sctn-registering-a-new-credential)
+//
+// Specification: §7.2. Verifying an Authentication Assertion (https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion)
+func (o AuthenticationExtensionsClientOutputs) Verify(session SessionExtensions, ceremony CeremonyType, policy UnsolicitedOutputPolicy) error {
+	var errs []error
+
+	if policy != UnsolicitedOutputPolicyIgnore {
+		for _, name := range o.Present() {
+			if !slices.Contains(session.Requested, name) {
+				errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("Client returned the %q extension output which was not requested", name)))
+			}
+		}
+	}
+
+	// The guard is written against AssertCeremony rather than CreateCeremony so an unrecognised ceremony still has
+	// the required-support assertion applied, matching the policy guard above. Verify is exported, so the ceremony
+	// is not necessarily one this package produced.
+	if ceremony != AssertCeremony && session.LargeBlob == LargeBlobSupportRequired {
+		if o.LargeBlob == nil || o.LargeBlob.Supported == nil || !*o.LargeBlob.Supported {
+			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with support required but the client did not report it as supported", ExtensionLargeBlob)))
+		}
+	}
+
+	if len(errs) == 0 {
+		return nil
+	}
+
+	// errors.Join always wraps, even for a single error, so returning it directly would make this the only failure
+	// path out of the finish step which does not yield an *Error. The joined error is kept as the cause, so
+	// errors.As and errors.Is still reach each individual problem, and every problem is also named in the details.
+	joined := errors.Join(errs...)
+
+	return ErrBadRequest.
+		WithDetails(fmt.Sprintf("Error validating the client extension outputs: %s", strings.ReplaceAll(joined.Error(), "\n", "; "))).
+		WithError(joined)
+}

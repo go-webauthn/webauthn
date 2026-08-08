@@ -15,7 +15,9 @@ import (
 // LoginOption is a functional option that modifies the [protocol.PublicKeyCredentialRequestOptions] sent to the
 // client during a login ceremony. Use the With* functions in this package (i.e. [WithUserVerification],
 // [WithAllowedCredentials]) to create login options.
-type LoginOption func(*protocol.PublicKeyCredentialRequestOptions)
+//
+// An option returns an error to reject the ceremony; [WebAuthn.BeginLogin] aborts on the first error.
+type LoginOption func(*protocol.PublicKeyCredentialRequestOptions) error
 
 // DiscoverableUserHandler is a callback function that the Relying Party must provide when performing a discoverable
 // (passkey) login. It is called with the rawID of the credential and the userHandle from the authenticator response,
@@ -91,7 +93,9 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	for _, opt := range opts {
-		opt(&assertion.Response)
+		if err = opt(&assertion.Response); err != nil {
+			return nil, nil, fmt.Errorf("error applying login option: %w", err)
+		}
 	}
 
 	if len(assertion.Response.Challenge) == 0 {
@@ -122,13 +126,19 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		}
 	}
 
+	// See the equivalent comment in BeginMediatedRegistration. A discoverable login has no allowed credentials and
+	// therefore never carries a FIDO U2F credential.
+	if !hasU2FCredential(assertion.Response.AllowedCredentials) {
+		assertion.Response.Extensions.AppID = ""
+	}
+
 	session = &SessionData{
 		Challenge:            assertion.Response.Challenge.String(),
 		RelyingPartyID:       assertion.Response.RelyingPartyID,
 		UserID:               userID,
 		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
 		UserVerification:     assertion.Response.UserVerification,
-		Extensions:           assertion.Response.Extensions,
+		Extensions:           assertion.Response.Extensions.Session(),
 	}
 
 	if webauthn.Config.Timeouts.Login.Enforce {
@@ -364,6 +374,10 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 	// Handle steps 4 through 16.
 	if err = parsedResponse.Verify(session.Challenge, rpID, appID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, credential.PublicKey); err != nil {
+		return nil, err
+	}
+
+	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.AssertCeremony, webauthn.Config.ExtensionsUnsolicitedOutputPolicy); err != nil {
 		return nil, err
 	}
 
