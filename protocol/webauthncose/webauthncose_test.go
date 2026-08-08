@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/fxamacker/cbor/v2"
+	cbor "github.com/fxamacker/cbor/v2"
 	"github.com/google/go-tpm/tpm2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

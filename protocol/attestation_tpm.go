@@ -496,26 +496,20 @@ type tpmManufacturer struct {
 	code string
 }
 
+// tpmParseAIKAttCA prepares an Attestation Identity Key certificate and its parents for chain verification against the
+// Metadata Service.
+//
+// The only adjustment required is clearing the critical Subject Alternative Name, as crypto/x509 has no verification
+// option which accepts a critical extension it doesn't itself parse. The Extended Key Usages are left intact as the
+// verifier requests x509.ExtKeyUsageAny, which admits the TCG and Microsoft usages. §8.3.1 requires the attestation
+// certificate carry the AIK Extended Key Usage, which the TPM attestation handler enforces against the same
+// certificate.
 func tpmParseAIKAttCA(x5c *x509.Certificate, x5cis []*x509.Certificate) (leaf *x509.Certificate, parents []*x509.Certificate, protoErr *Error) {
 	if leaf, protoErr = tpmParseSANExtension(x5c); protoErr != nil {
 		return nil, nil, protoErr
 	}
 
-	var hasAIK bool
-
-	// The AIK Extended Key Usage is only required on the attestation certificate itself per §8.3.1. TPM vendor
-	// intermediates generally don't carry it so it must not be required of them.
-	if leaf, hasAIK = tpmRemoveEKU(leaf); !hasAIK {
-		return nil, nil, ErrAttestationFormat.WithDetails("Attestation Identity Key certificate missing required Extended Key Usage.")
-	}
-
-	for _, x5ci := range x5cis {
-		parent, _ := tpmRemoveEKU(x5ci)
-
-		parents = append(parents, parent)
-	}
-
-	return leaf, parents, nil
+	return leaf, x5cis, nil
 }
 
 func tpmParseSANExtension(attestation *x509.Certificate) (out *x509.Certificate, protoErr *Error) {
@@ -556,33 +550,6 @@ func tpmParseSANExtension(attestation *x509.Certificate) (out *x509.Certificate,
 type tpmBasicConstraints struct {
 	IsCA       bool `asn1:"optional"`
 	MaxPathLen int  `asn1:"optional,default:-1"`
-}
-
-// tpmRemoveEKU returns a copy of the certificate with the TCG and Microsoft extension key usages removed to avoid the
-// ExtKeyUsage check failure, and reports whether the certificate carried the AIK extension key usage. The certificate
-// given is never modified as it's owned by the caller.
-func tpmRemoveEKU(x5c *x509.Certificate) (out *x509.Certificate, hasAiK bool) {
-	var unknown []asn1.ObjectIdentifier
-
-	for _, eku := range x5c.UnknownExtKeyUsage {
-		if eku.Equal(oidTCGKpAIKCertificate) {
-			hasAiK = true
-
-			continue
-		}
-
-		if eku.Equal(oidMicrosoftKpPrivacyCA) {
-			continue
-		}
-
-		unknown = append(unknown, eku)
-	}
-
-	out = new(x509.Certificate)
-	*out = *x5c
-	out.UnknownExtKeyUsage = unknown
-
-	return out, hasAiK
 }
 
 func init() {

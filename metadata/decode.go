@@ -278,7 +278,7 @@ func validateChain(root string, chain []any) (bool, error) {
 	opts := x509.VerifyOptions{
 		Roots:         roots,
 		Intermediates: ints,
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
 	_, err = leafcert.Verify(opts)

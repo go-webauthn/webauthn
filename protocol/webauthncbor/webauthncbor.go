@@ -1,6 +1,6 @@
 package webauthncbor
 
-import "github.com/fxamacker/cbor/v2"
+import cbor "github.com/fxamacker/cbor/v2"
 
 const nestedLevelsAllowed = 4
 

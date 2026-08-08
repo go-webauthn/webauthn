@@ -313,7 +313,7 @@ func TestAndroidKeyFormat_ExtensionValidationErrors(t *testing.T) {
 	require.NotEmpty(t, keystoreExtBytes)
 
 	// Decode the keystore extension to verify it's valid.
-	decoded := keyDescription{}
+	decoded := androidkeyDescription{}
 	_, err = asn1.Unmarshal(keystoreExtBytes, &decoded)
 	require.NoError(t, err)
 
@@ -343,7 +343,7 @@ func TestAndroidKeyAuthorizationListDecoding(t *testing.T) {
 
 	require.NotEmpty(t, ext)
 
-	decoded := keyDescription{}
+	decoded := androidkeyDescription{}
 
 	rest, err := asn1.Unmarshal(ext, &decoded)
 	require.NoError(t, err)
@@ -377,7 +377,7 @@ func TestAndroidKeyAuthorizationListDecoding(t *testing.T) {
 // optional integer decodes to zero when absent, which is the value of KM_ORIGIN_GENERATED.
 func TestAndroidKeyAuthorizationListOrigin(t *testing.T) {
 	// SEQUENCE { [1] EXPLICIT SET { INTEGER 2 } [, [702] EXPLICIT INTEGER n] } where the purpose is KM_PURPOSE_SIGN.
-	list := func(t *testing.T, origin string) authorizationList {
+	list := func(t *testing.T, origin string) androidkeyAuthorizationList {
 		t.Helper()
 
 		body := "a1053103020102"
@@ -389,7 +389,7 @@ func TestAndroidKeyAuthorizationListOrigin(t *testing.T) {
 		der, err := hex.DecodeString(fmt.Sprintf("30%02x", len(body)/2) + body)
 		require.NoError(t, err)
 
-		var decoded authorizationList
+		var decoded androidkeyAuthorizationList
 
 		rest, err := asn1.Unmarshal(der, &decoded)
 		require.NoError(t, err)
@@ -404,8 +404,8 @@ func TestAndroidKeyAuthorizationListOrigin(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		tee      authorizationList
-		software authorizationList
+		tee      androidkeyAuthorizationList
+		software androidkeyAuthorizationList
 		err      string
 	}{
 		{
@@ -446,7 +446,7 @@ func TestAndroidKeyAuthorizationListOrigin(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decoded := keyDescription{TeeEnforced: tc.tee, SoftwareEnforced: tc.software}
+			decoded := androidkeyDescription{TeeEnforced: tc.tee, SoftwareEnforced: tc.software}
 
 			protoErr := androidKeyValidateAuthorizationLists(&decoded)
 
@@ -473,7 +473,7 @@ func TestAuthorizationListOriginDER(t *testing.T) {
 	}
 
 	t.Run("ShouldRejectPresentButEmptyOriginWhileDecoding", func(t *testing.T) {
-		var list authorizationList
+		var list androidkeyAuthorizationList
 
 		_, err := asn1.Unmarshal(sequence(t, purpose+"bf853e00"), &list)
 		require.EqualError(t, err, "asn1: structure error: explicit tag has no child")
@@ -519,7 +519,7 @@ func TestAuthorizationListOriginDER(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var list authorizationList
+			var list androidkeyAuthorizationList
 
 			rest, err := asn1.Unmarshal(sequence(t, purpose+tc.origin), &list)
 			require.NoError(t, err)
@@ -552,13 +552,13 @@ func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
 	withAllApplications, err := hex.DecodeString("3014" + "a1053103020102" + "bf8458020500" + "bf853e03020100")
 	require.NoError(t, err)
 
-	var absent authorizationList
+	var absent androidkeyAuthorizationList
 
 	rest, err := asn1.Unmarshal(withoutAllApplications, &absent)
 	require.NoError(t, err)
 	require.Empty(t, rest)
 
-	var present authorizationList
+	var present androidkeyAuthorizationList
 
 	rest, err = asn1.Unmarshal(withAllApplications, &present)
 	require.NoError(t, err)
@@ -568,7 +568,7 @@ func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
 	require.Equal(t, []int{KM_PURPOSE_SIGN}, absent.Purpose)
 	require.Equal(t, []int{KM_PURPOSE_SIGN}, present.Purpose)
 
-	for _, list := range []*authorizationList{&absent, &present} {
+	for _, list := range []*androidkeyAuthorizationList{&absent, &present} {
 		origin, ok, err := authorizationListOrigin(list)
 		require.NoError(t, err)
 		require.True(t, ok)
@@ -580,26 +580,26 @@ func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
 
 	testCases := []struct {
 		name    string
-		decoded keyDescription
+		decoded androidkeyDescription
 		err     string
 	}{
 		{
 			name:    "ShouldAcceptWhenAbsentFromBothLists",
-			decoded: keyDescription{SoftwareEnforced: absent, TeeEnforced: absent},
+			decoded: androidkeyDescription{SoftwareEnforced: absent, TeeEnforced: absent},
 		},
 		{
 			name:    "ShouldRejectWhenPresentInSoftwareEnforced",
-			decoded: keyDescription{SoftwareEnforced: present, TeeEnforced: absent},
+			decoded: androidkeyDescription{SoftwareEnforced: present, TeeEnforced: absent},
 			err:     "Attestation certificate extensions contains all applications field",
 		},
 		{
 			name:    "ShouldRejectWhenPresentInTeeEnforced",
-			decoded: keyDescription{SoftwareEnforced: absent, TeeEnforced: present},
+			decoded: androidkeyDescription{SoftwareEnforced: absent, TeeEnforced: present},
 			err:     "Attestation certificate extensions contains all applications field",
 		},
 		{
 			name:    "ShouldRejectWhenPresentInBothLists",
-			decoded: keyDescription{SoftwareEnforced: present, TeeEnforced: present},
+			decoded: androidkeyDescription{SoftwareEnforced: present, TeeEnforced: present},
 			err:     "Attestation certificate extensions contains all applications field",
 		},
 	}
@@ -616,6 +616,220 @@ func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAuthorizationListTags asserts every tag of the Keymaster/KeyMint schema is modelled by authorizationList. A tag
+// which isn't modelled displaces the fields declared after it during decoding.
+//
+// See: https://source.android.com/docs/security/features/keystore/attestation
+func TestAuthorizationListTags(t *testing.T) {
+	schema := []int{
+		1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 200, 203, 303, 305, 400, 401, 402, 405, 502, 503, 504, 505, 506, 507, 508,
+		509, 600, 601, 701, 702, 704, 705, 706, 709, 710, 711, 712, 713, 714, 715, 716, 717, 718, 719, 720, 723, 724,
+	}
+
+	for _, tag := range schema {
+		assert.True(t, authorizationListTags[tag], "tag [%d] of the Android schema is not modelled by authorizationList", tag)
+	}
+
+	assert.Len(t, authorizationListTags, len(schema), "authorizationList models a tag which is not in the Android schema")
+
+	for _, tag := range authorizationListValidatedTags {
+		assert.True(t, authorizationListTags[tag], "validated tag [%d] is not modelled by authorizationList", tag)
+	}
+}
+
+// TestAndroidKeyAuthorizationListUnsupportedTagBypass asserts an authorization list can't conceal the allApplications
+// field behind a tag which isn't modelled.
+//
+// §8.4 requires allApplications is absent from both lists. encoding/asn1 abandons the fields declared after an element
+// it can't match, so an unmodelled tag placed ahead of allApplications drops it from the decoded list, and the union
+// permits the other list to supply the origin and purpose.
+func TestAndroidKeyAuthorizationListUnsupportedTagBypass(t *testing.T) {
+	tee := androidKeyDERPurpose + androidKeyDERUnsupportedLow + androidKeyDERAllApplications + androidKeyDEROrigin
+	software := androidKeyDERPurpose + androidKeyDEROrigin
+
+	der := androidKeyDERKeyDescription(t, software, tee)
+
+	var decoded androidkeyDescription
+
+	rest, err := asn1.Unmarshal(der, &decoded)
+	require.NoError(t, err)
+	require.Empty(t, rest)
+
+	// The decode reports no error yet allApplications, which is present in the encoding, is absent from the result.
+	// The §8.4 checks alone therefore accept the attestation.
+	require.Empty(t, decoded.TeeEnforced.AllApplications.FullBytes)
+	require.Nil(t, androidKeyValidateAuthorizationLists(&decoded))
+
+	// Verifying the tags actually present against the raw extension is what rejects it.
+	var raw androidkeyDescriptionRaw
+
+	rest, err = asn1.Unmarshal(der, &raw)
+	require.NoError(t, err)
+	require.Empty(t, rest)
+
+	protoErr := androidKeyVerifyAuthorizationListTags(&raw)
+	require.NotNil(t, protoErr)
+	assert.EqualError(t, protoErr, "Unable to validate the teeEnforced authorization list")
+	assert.Equal(t, androidKeyErrUnsupportedLow, protoErr.DevInfo)
+}
+
+// TestAndroidKeyAuthorizationListSchemaTagsDecode asserts a tag which is part of the schema doesn't displace the
+// fields declared after it. A device emitting earlyBootOnly [305] must still have its origin decoded, as an origin
+// read as absent rejects an otherwise sound attestation.
+func TestAndroidKeyAuthorizationListSchemaTagsDecode(t *testing.T) {
+	der, err := hex.DecodeString(androidKeyDERSequence(t, androidKeyDERPurpose+androidKeyDEREarlyBootOnly+androidKeyDEROrigin))
+	require.NoError(t, err)
+
+	var list androidkeyAuthorizationList
+
+	rest, err := asn1.Unmarshal(der, &list)
+	require.NoError(t, err)
+	require.Empty(t, rest)
+
+	assert.NotEmpty(t, list.EarlyBootOnly.FullBytes)
+	assert.Equal(t, []int{KM_PURPOSE_SIGN}, list.Purpose)
+
+	origin, present, err := authorizationListOrigin(&list)
+	require.NoError(t, err)
+	assert.True(t, present)
+	assert.Equal(t, KM_ORIGIN_GENERATED, origin)
+}
+
+func TestAuthorizationListVerifyTags(t *testing.T) {
+	testCases := []struct {
+		name string
+		body string
+		err  string
+	}{
+		{
+			name: "ShouldAcceptListOfSupportedTags",
+			body: androidKeyDERPurpose + androidKeyDEROrigin,
+		},
+		{
+			name: "ShouldAcceptSchemaTagWhichIsModelled",
+			body: androidKeyDERPurpose + androidKeyDEREarlyBootOnly + androidKeyDEROrigin,
+		},
+		{
+			// A tag appended by a later revision of the schema sits after every field the procedure consults, so
+			// decoding reached them all and the attestation must not be rejected.
+			name: "ShouldAcceptUnsupportedTagAfterLastValidatedField",
+			body: androidKeyDERPurpose + androidKeyDEROrigin + androidKeyDERUnsupportedHigh,
+		},
+		{
+			name: "ShouldRejectUnsupportedTagBeforeOrigin",
+			body: androidKeyDERPurpose + androidKeyDERUnsupportedLow + androidKeyDEROrigin,
+			err:  androidKeyErrUnsupportedLow,
+		},
+		{
+			name: "ShouldRejectUnsupportedTagBeforeAllApplications",
+			body: androidKeyDERPurpose + androidKeyDERUnsupportedLow + androidKeyDERAllApplications,
+			err:  androidKeyErrUnsupportedLow,
+		},
+		{
+			// The high tag is only tolerated because it follows the fields consulted. Ahead of them it's rejected,
+			// which matters as nothing requires the elements to be ordered by tag.
+			name: "ShouldRejectUnsupportedHighTagBeforeOrigin",
+			body: androidKeyDERPurpose + androidKeyDERUnsupportedHigh + androidKeyDEROrigin,
+			err:  "element 1 has tag [725] which is not supported and precedes a field required by the verification procedure",
+		},
+		{
+			name: "ShouldRejectNonContextSpecificElement",
+			body: androidKeyDERPurpose + "0500" + androidKeyDEROrigin,
+			err:  "element 1 has class 0 where a context specific class was expected",
+		},
+		{
+			// No field the procedure consults is present, so nothing was displaced. The origin check rejects it.
+			name: "ShouldAcceptUnsupportedTagWhenNoValidatedFieldFollows",
+			body: androidKeyDERUnsupportedLow,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := authorizationListVerifyTags(androidKeyDERRawList(t, tc.body))
+
+			if tc.err != "" {
+				require.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+
+	t.Run("ShouldRejectWhenNotASequence", func(t *testing.T) {
+		der, err := hex.DecodeString("0500")
+		require.NoError(t, err)
+
+		var raw asn1.RawValue
+
+		_, err = asn1.Unmarshal(der, &raw)
+		require.NoError(t, err)
+
+		assert.EqualError(t, authorizationListVerifyTags(raw), "authorization list is not a sequence")
+	})
+}
+
+// Supporting functions and test data.
+
+// Authorization list elements in DER. The tag bytes use the high tag number form, so [600] encodes as bf 84 58 where
+// 600 = 4*128 + 88, and so on.
+const (
+	androidKeyDERPurpose         = "a1053103020102" // [1] EXPLICIT SET { INTEGER 2 }, KM_PURPOSE_SIGN.
+	androidKeyDERAllApplications = "bf8458020500"   // [600] EXPLICIT NULL.
+	androidKeyDEROrigin          = "bf853e03020100" // [702] EXPLICIT INTEGER 0, KM_ORIGIN_GENERATED.
+	androidKeyDEREarlyBootOnly   = "bf8231020500"   // [305] EXPLICIT NULL, earlyBootOnly, modelled by the schema.
+	androidKeyDERUnsupportedLow  = "bf8314020500"   // [404] EXPLICIT NULL, a tag below origin which isn't modelled.
+	androidKeyDERUnsupportedHigh = "bf8555020500"   // [725] EXPLICIT NULL, a tag above origin which isn't modelled.
+
+	androidKeyErrUnsupportedLow = "element 1 has tag [404] which is not supported and precedes a field required by the verification procedure"
+)
+
+// androidKeyDERSequence wraps a body in a DER SEQUENCE header.
+func androidKeyDERSequence(t *testing.T, body string) string {
+	t.Helper()
+
+	require.Less(t, len(body)/2, 128, "the short form length used here only encodes up to 127 bytes")
+
+	return fmt.Sprintf("30%02x", len(body)/2) + body
+}
+
+// androidKeyDERRawList decodes an authorization list body into the raw element the tag verification receives.
+func androidKeyDERRawList(t *testing.T, body string) asn1.RawValue {
+	t.Helper()
+
+	der, err := hex.DecodeString(androidKeyDERSequence(t, body))
+	require.NoError(t, err)
+
+	var raw asn1.RawValue
+
+	rest, err := asn1.Unmarshal(der, &raw)
+	require.NoError(t, err)
+	require.Empty(t, rest)
+
+	return raw
+}
+
+// androidKeyDERKeyDescription builds a key description extension carrying the two authorization list bodies given.
+func androidKeyDERKeyDescription(t *testing.T, software, tee string) []byte {
+	t.Helper()
+
+	body := "020100" + // attestationVersion INTEGER 0.
+		"0a0100" + // attestationSecurityLevel ENUMERATED 0.
+		"020100" + // keymasterVersion INTEGER 0.
+		"0a0100" + // keymasterSecurityLevel ENUMERATED 0.
+		"0400" + // attestationChallenge OCTET STRING, empty.
+		"0400" + // uniqueId OCTET STRING, empty.
+		androidKeyDERSequence(t, software) +
+		androidKeyDERSequence(t, tee)
+
+	der, err := hex.DecodeString(androidKeyDERSequence(t, body))
+	require.NoError(t, err)
+
+	return der
 }
 
 var androidKeyTestResponse0 = map[string]string{
