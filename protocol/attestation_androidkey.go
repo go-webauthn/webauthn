@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/asn1"
+	"errors"
 	"fmt"
+	"reflect"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-webauthn/webauthn/metadata"
@@ -111,10 +115,22 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate extensions missing 1.3.6.1.4.1.11129.2.1.17")
 	}
 
-	decoded := keyDescription{}
+	decoded := androidkeyDescription{}
 
 	if _, err = asn1.Unmarshal(attExtBytes, &decoded); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to parse Android key attestation certificate extensions").WithError(err)
+	}
+
+	// The decode above silently abandons the remaining fields of an authorization list on meeting an element it can't
+	// model, so the elements actually present are checked against the raw extension before any of it is relied upon.
+	raw := androidkeyDescriptionRaw{}
+
+	if _, err = asn1.Unmarshal(attExtBytes, &raw); err != nil {
+		return "", nil, ErrAttestationFormat.WithDetails("Unable to parse Android key attestation certificate extensions").WithError(err)
+	}
+
+	if protoErr := androidKeyVerifyAuthorizationListTags(&raw); protoErr != nil {
+		return "", nil, protoErr
 	}
 
 	// Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.
@@ -131,7 +147,7 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 
 // androidKeyValidateAuthorizationLists performs the §8.4 verification steps which apply to the authorization lists of
 // the Android key attestation certificate extension.
-func androidKeyValidateAuthorizationLists(decoded *keyDescription) *Error {
+func androidKeyValidateAuthorizationLists(decoded *androidkeyDescription) *Error {
 	// The AuthorizationList.allApplications field is not present on either authorization list (softwareEnforced nor teeEnforced), since PublicKeyCredential MUST be scoped to the RP ID.
 	if len(decoded.SoftwareEnforced.AllApplications.FullBytes) != 0 || len(decoded.TeeEnforced.AllApplications.FullBytes) != 0 {
 		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains all applications field")
@@ -172,7 +188,7 @@ func androidKeyValidateAuthorizationLists(decoded *keyDescription) *Error {
 // authorizationListOrigin returns the origin of an authorization list and reports whether the field was present. The
 // value is decoded from the raw element because encoding/asn1 leaves an absent optional integer at its zero value,
 // which is indistinguishable from a present origin of KM_ORIGIN_GENERATED.
-func authorizationListOrigin(list *authorizationList) (origin int, present bool, err error) {
+func authorizationListOrigin(list *androidkeyAuthorizationList) (origin int, present bool, err error) {
 	// An explicit tag which is present always carries a child as encoding/asn1 rejects one which doesn't while
 	// decoding the key description, so an empty raw value means the field was absent rather than empty.
 	if len(list.Origin.FullBytes) == 0 {
@@ -202,111 +218,108 @@ func contains(s []int, e int) bool {
 	return false
 }
 
-type keyDescription struct {
-	AttestationVersion       int
-	AttestationSecurityLevel asn1.Enumerated
-	KeymasterVersion         int
-	KeymasterSecurityLevel   asn1.Enumerated
-	AttestationChallenge     []byte
-	UniqueID                 []byte
-	SoftwareEnforced         authorizationList
-	TeeEnforced              authorizationList
+// authorizationListTags contains every context specific tag number modelled by [authorizationList]. It's derived from
+// the struct definition so that declaring a field is the only step needed to support a tag, and the two can't drift.
+var authorizationListTags = func() (tags map[int]bool) {
+	t := reflect.TypeOf(androidkeyAuthorizationList{})
+
+	tags = make(map[int]bool, t.NumField())
+
+	for i := range t.NumField() {
+		field := t.Field(i)
+
+		for _, option := range strings.Split(field.Tag.Get("asn1"), ",") {
+			if !strings.HasPrefix(option, "tag:") {
+				continue
+			}
+
+			tag, err := strconv.Atoi(strings.TrimPrefix(option, "tag:"))
+			if err != nil {
+				panic(fmt.Sprintf("protocol: authorizationList field %s has a malformed asn1 tag: %v", field.Name, err))
+			}
+
+			tags[tag] = true
+		}
+	}
+
+	return tags
+}()
+
+// authorizationListValidatedTags contains the tags of the authorization list fields which the §8.4 verification steps
+// consult. An element the struct can't model only matters when it displaces one of these.
+var authorizationListValidatedTags = []int{
+	1,   // purpose.
+	600, // allApplications.
+	702, // origin.
 }
 
-type authorizationList struct {
-	Purpose                     []int         `asn1:"tag:1,explicit,set,optional"`
-	Algorithm                   int           `asn1:"tag:2,explicit,optional"`
-	KeySize                     int           `asn1:"tag:3,explicit,optional"`
-	Digest                      []int         `asn1:"tag:5,explicit,set,optional"`
-	Padding                     []int         `asn1:"tag:6,explicit,set,optional"`
-	EcCurve                     int           `asn1:"tag:10,explicit,optional"`
-	RsaPublicExponent           int           `asn1:"tag:200,explicit,optional"`
-	RollbackResistance          asn1.RawValue `asn1:"tag:303,explicit,optional"`
-	ActiveDateTime              int           `asn1:"tag:400,explicit,optional"`
-	OriginationExpireDateTime   int           `asn1:"tag:401,explicit,optional"`
-	UsageExpireDateTime         int           `asn1:"tag:402,explicit,optional"`
-	NoAuthRequired              asn1.RawValue `asn1:"tag:503,explicit,optional"`
-	UserAuthType                int           `asn1:"tag:504,explicit,optional"`
-	AuthTimeout                 int           `asn1:"tag:505,explicit,optional"`
-	AllowWhileOnBody            asn1.RawValue `asn1:"tag:506,explicit,optional"`
-	TrustedUserPresenceRequired asn1.RawValue `asn1:"tag:507,explicit,optional"`
-	TrustedConfirmationRequired asn1.RawValue `asn1:"tag:508,explicit,optional"`
-	UnlockedDeviceRequired      asn1.RawValue `asn1:"tag:509,explicit,optional"`
-	AllApplications             asn1.RawValue `asn1:"tag:600,explicit,optional"`
-	ApplicationID               asn1.RawValue `asn1:"tag:601,explicit,optional"`
-	CreationDateTime            int           `asn1:"tag:701,explicit,optional"`
-	// Origin is decoded as a raw element rather than an integer. encoding/asn1 leaves an absent optional integer at
-	// its zero value, which is indistinguishable from a present origin of KM_ORIGIN_GENERATED.
-	Origin asn1.RawValue `asn1:"tag:702,explicit,optional"`
+// androidKeyVerifyAuthorizationListTags rejects an attestation whose authorization lists carry an element that
+// [authorizationList] can't model and which precedes a field the verification procedure depends on.
+//
+// An unmodelled tag otherwise defeats the §8.4 requirement that allApplications is absent, as the element is dropped
+// along with every field declared after it while the union permits the other list to supply the origin and purpose. A
+// list which can't be modelled in full is rejected explicitly rather than silently truncated.
+func androidKeyVerifyAuthorizationListTags(raw *androidkeyDescriptionRaw) *Error {
+	for _, list := range []struct {
+		name string
+		raw  asn1.RawValue
+	}{
+		{"teeEnforced", raw.TeeEnforced},
+		{"softwareEnforced", raw.SoftwareEnforced},
+	} {
+		if err := authorizationListVerifyTags(list.raw); err != nil {
+			return ErrAttestationFormat.WithDetails(fmt.Sprintf("Unable to validate the %s authorization list", list.name)).WithInfo(err.Error()).WithError(err)
+		}
+	}
 
-	RootOfTrust rootOfTrust `asn1:"tag:704,explicit,optional"`
-
-	OsVersion                 int    `asn1:"tag:705,explicit,optional"`
-	OsPatchLevel              int    `asn1:"tag:706,explicit,optional"`
-	AttestationApplicationID  []byte `asn1:"tag:709,explicit,optional"`
-	AttestationIDBrand        []byte `asn1:"tag:710,explicit,optional"`
-	AttestationIDDevice       []byte `asn1:"tag:711,explicit,optional"`
-	AttestationIDProduct      []byte `asn1:"tag:712,explicit,optional"`
-	AttestationIDSerial       []byte `asn1:"tag:713,explicit,optional"`
-	AttestationIDImei         []byte `asn1:"tag:714,explicit,optional"`
-	AttestationIDMeid         []byte `asn1:"tag:715,explicit,optional"`
-	AttestationIDManufacturer []byte `asn1:"tag:716,explicit,optional"`
-	AttestationIDModel        []byte `asn1:"tag:717,explicit,optional"`
-	VendorPatchLevel          int    `asn1:"tag:718,explicit,optional"`
-	BootPatchLevel            int    `asn1:"tag:719,explicit,optional"`
+	return nil
 }
 
-type rootOfTrust struct {
-	VerifiedBootKey   []byte
-	DeviceLocked      bool
-	VerifiedBootState asn1.Enumerated
-	VerifiedBootHash  []byte `asn1:"optional"`
+// authorizationListVerifyTags reports an error when an element of the raw authorization list isn't modelled by
+// [authorizationList] and is positioned before an element the verification procedure consults. Anything after the last
+// consulted element can't influence the outcome as decoding reached them all, which keeps a tag appended to a later
+// revision of the schema from rejecting an otherwise sound attestation.
+func authorizationListVerifyTags(raw asn1.RawValue) (err error) {
+	if raw.Class != asn1.ClassUniversal || raw.Tag != asn1.TagSequence || !raw.IsCompound {
+		return errors.New("authorization list is not a sequence")
+	}
+
+	var tags []int
+
+	rest := raw.Bytes
+
+	for len(rest) > 0 {
+		var element asn1.RawValue
+
+		if rest, err = asn1.Unmarshal(rest, &element); err != nil {
+			return err
+		}
+
+		if element.Class != asn1.ClassContextSpecific {
+			return fmt.Errorf("element %d has class %d where a context specific class was expected", len(tags), element.Class)
+		}
+
+		tags = append(tags, element.Tag)
+	}
+
+	last := -1
+
+	for i, tag := range tags {
+		if contains(authorizationListValidatedTags, tag) {
+			last = i
+		}
+	}
+
+	for i, tag := range tags[:last+1] {
+		if authorizationListTags[tag] {
+			continue
+		}
+
+		return fmt.Errorf("element %d has tag [%d] which is not supported and precedes a field required by the verification procedure", i, tag)
+	}
+
+	return nil
 }
-
-type verifiedBootState int
-
-const (
-	Verified verifiedBootState = iota
-	SelfSigned
-	Unverified
-	Failed
-)
-
-const (
-	// KM_ORIGIN_GENERATED means generated in keymaster. Should not exist outside the TEE.
-	KM_ORIGIN_GENERATED = iota
-
-	// KM_ORIGIN_DERIVED means derived inside keymaster. Likely exists off-device.
-	KM_ORIGIN_DERIVED
-
-	// KM_ORIGIN_IMPORTED means imported into keymaster. Existed as clear text in Android.
-	KM_ORIGIN_IMPORTED
-
-	// KM_ORIGIN_UNKNOWN means keymaster did not record origin.  This value can only be seen on keys in a keymaster0
-	// implementation. The keymaster0 adapter uses this value to document the fact that it is unknown whether the key
-	// was generated inside or imported into keymaster.
-	KM_ORIGIN_UNKNOWN
-)
-
-const (
-	// KM_PURPOSE_ENCRYPT is usable with RSA, EC and AES keys.
-	KM_PURPOSE_ENCRYPT = iota
-
-	// KM_PURPOSE_DECRYPT is usable with RSA, EC and AES keys.
-	KM_PURPOSE_DECRYPT
-
-	// KM_PURPOSE_SIGN is usable with RSA, EC and HMAC keys.
-	KM_PURPOSE_SIGN
-
-	// KM_PURPOSE_VERIFY is usable with RSA, EC and HMAC keys.
-	KM_PURPOSE_VERIFY
-
-	// KM_PURPOSE_DERIVE_KEY is usable with EC keys.
-	KM_PURPOSE_DERIVE_KEY
-
-	// KM_PURPOSE_WRAP is usable with wrapped keys.
-	KM_PURPOSE_WRAP
-)
 
 var (
 	attAndroidKeyHardwareRootsCertPool *x509.CertPool

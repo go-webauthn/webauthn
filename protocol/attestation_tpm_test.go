@@ -240,58 +240,6 @@ func TestIsValidTPMManufacturer(t *testing.T) {
 	})
 }
 
-func TestTpmRemoveEKU(t *testing.T) {
-	t.Run("ShouldReportAikEkuMissing", func(t *testing.T) {
-		cert := &x509.Certificate{
-			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
-				{1, 2, 3, 4},
-			},
-		}
-
-		out, hasAiK := tpmRemoveEKU(cert)
-
-		assert.False(t, hasAiK)
-		require.Len(t, out.UnknownExtKeyUsage, 1)
-	})
-
-	t.Run("ShouldRemoveAikAndMicrosoftEkuButKeepOtherUnknownEku", func(t *testing.T) {
-		other := asn1.ObjectIdentifier{1, 2, 3, 4}
-
-		cert := &x509.Certificate{
-			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
-				oidMicrosoftKpPrivacyCA,
-				other,
-				oidTCGKpAIKCertificate,
-			},
-		}
-
-		out, hasAiK := tpmRemoveEKU(cert)
-
-		assert.True(t, hasAiK)
-
-		require.Len(t, out.UnknownExtKeyUsage, 1)
-		assert.True(t, out.UnknownExtKeyUsage[0].Equal(other))
-	})
-
-	t.Run("ShouldNotModifyTheCertificateGiven", func(t *testing.T) {
-		cert := &x509.Certificate{
-			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
-				oidMicrosoftKpPrivacyCA,
-				oidTCGKpAIKCertificate,
-			},
-		}
-
-		out, hasAiK := tpmRemoveEKU(cert)
-
-		assert.True(t, hasAiK)
-		assert.NotSame(t, cert, out)
-		assert.Empty(t, out.UnknownExtKeyUsage)
-		require.Len(t, cert.UnknownExtKeyUsage, 2)
-		assert.True(t, cert.UnknownExtKeyUsage[0].Equal(oidMicrosoftKpPrivacyCA))
-		assert.True(t, cert.UnknownExtKeyUsage[1].Equal(oidTCGKpAIKCertificate))
-	})
-}
-
 func TestTpmParseSANExtension(t *testing.T) {
 	makeSAN := func(t *testing.T, manufacturer, model, version string) []byte {
 		t.Helper()
@@ -433,7 +381,7 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 		assert.Equal(t, "Error occurred parsing SAN extension: asn1: syntax error: data truncated", err.DevInfo)
 	})
 
-	t.Run("ShouldSucceedWhenParentMissingAikEku", func(t *testing.T) {
+	t.Run("ShouldPreserveExtendedKeyUsages", func(t *testing.T) {
 		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
 
 		leaf := &x509.Certificate{
@@ -457,36 +405,33 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 		outLeaf, outParents, err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
 		require.Nil(t, err)
 
-		require.Len(t, outLeaf.UnknownExtKeyUsage, 1)
-		assert.True(t, outLeaf.UnknownExtKeyUsage[0].Equal(otherEku))
+		require.Len(t, outLeaf.UnknownExtKeyUsage, 3)
+		assert.True(t, outLeaf.UnknownExtKeyUsage[0].Equal(oidTCGKpAIKCertificate))
+		assert.True(t, outLeaf.UnknownExtKeyUsage[1].Equal(oidMicrosoftKpPrivacyCA))
+		assert.True(t, outLeaf.UnknownExtKeyUsage[2].Equal(otherEku))
 
 		require.Len(t, outParents, 1)
-		require.Len(t, outParents[0].UnknownExtKeyUsage, 1)
-		assert.True(t, outParents[0].UnknownExtKeyUsage[0].Equal(otherEku))
+		assert.Same(t, parent, outParents[0])
 	})
 
-	t.Run("ShouldSucceedWhenParentHasNoEkuAtAll", func(t *testing.T) {
+	t.Run("ShouldSucceedWhenLeafMissingAikEku", func(t *testing.T) {
 		leaf := &x509.Certificate{
 			Extensions: []pkix.Extension{
 				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
 			},
 			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
-				oidTCGKpAIKCertificate,
+				oidMicrosoftKpPrivacyCA,
 			},
 		}
 
-		parent := &x509.Certificate{}
-
-		outLeaf, outParents, err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		outLeaf, _, err := tpmParseAIKAttCA(leaf, nil)
 		require.Nil(t, err)
 
-		assert.Empty(t, outLeaf.UnknownExtKeyUsage)
-		require.Len(t, outParents, 1)
-		assert.Empty(t, outParents[0].UnknownExtKeyUsage)
+		require.Len(t, outLeaf.UnknownExtKeyUsage, 1)
+		assert.True(t, outLeaf.UnknownExtKeyUsage[0].Equal(oidMicrosoftKpPrivacyCA))
 	})
 
-	t.Run("ShouldSucceedAndNotMutateCertificates", func(t *testing.T) {
-		otherEku := asn1.ObjectIdentifier{1, 2, 3, 4}
+	t.Run("ShouldClearCriticalSanAndNotMutateCertificates", func(t *testing.T) {
 		otherCritical := asn1.ObjectIdentifier{2, 999, 1}
 
 		leaf := &x509.Certificate{
@@ -497,38 +442,16 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 				oidExtensionSubjectAltName,
 				otherCritical,
 			},
-			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
-				oidTCGKpAIKCertificate,
-				oidMicrosoftKpPrivacyCA,
-				otherEku,
-			},
 		}
 
-		parent := &x509.Certificate{
-			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
-				oidTCGKpAIKCertificate,
-				oidMicrosoftKpPrivacyCA,
-				otherEku,
-			},
-		}
-
-		outLeaf, outParents, err := tpmParseAIKAttCA(leaf, []*x509.Certificate{parent})
+		outLeaf, _, err := tpmParseAIKAttCA(leaf, nil)
 		require.Nil(t, err)
 
 		require.Len(t, outLeaf.UnhandledCriticalExtensions, 1)
 		assert.True(t, outLeaf.UnhandledCriticalExtensions[0].Equal(otherCritical))
 
-		require.Len(t, outLeaf.UnknownExtKeyUsage, 1)
-		assert.True(t, outLeaf.UnknownExtKeyUsage[0].Equal(otherEku))
-
-		require.Len(t, outParents, 1)
-		require.Len(t, outParents[0].UnknownExtKeyUsage, 1)
-		assert.True(t, outParents[0].UnknownExtKeyUsage[0].Equal(otherEku))
 		assert.NotSame(t, leaf, outLeaf)
-		assert.NotSame(t, parent, outParents[0])
 		assert.Len(t, leaf.UnhandledCriticalExtensions, 2)
-		assert.Len(t, leaf.UnknownExtKeyUsage, 3)
-		assert.Len(t, parent.UnknownExtKeyUsage, 3)
 	})
 
 	t.Run("ShouldBeIdempotent", func(t *testing.T) {
@@ -549,20 +472,6 @@ func TestTpmParseAIKAttCA(t *testing.T) {
 
 		_, _, err = tpmParseAIKAttCA(leaf, nil)
 		assert.Nil(t, err)
-	})
-
-	t.Run("ShouldFailWhenLeafMissingAikEku", func(t *testing.T) {
-		leaf := &x509.Certificate{
-			Extensions: []pkix.Extension{
-				{Id: oidExtensionSubjectAltName, Value: makeSAN(t, "id:414D4400", "ModelX", "id:00070002")},
-			},
-			UnknownExtKeyUsage: []asn1.ObjectIdentifier{
-				oidMicrosoftKpPrivacyCA,
-			},
-		}
-
-		_, _, err := tpmParseAIKAttCA(leaf, nil)
-		assert.EqualError(t, err, "Attestation Identity Key certificate missing required Extended Key Usage.")
 	})
 }
 

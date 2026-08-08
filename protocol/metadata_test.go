@@ -2,11 +2,19 @@ package protocol
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"github.com/go-webauthn/webauthn/metadata"
@@ -187,6 +195,90 @@ func TestValidateMetadata(t *testing.T) {
 	}
 }
 
+func TestValidateMetadataTrustAnchor(t *testing.T) {
+	aaguid := uuid.MustParse("0865c31d-05dc-4fb1-adce-3227bfb19967")
+
+	root, rootKey := metadataTestGenerateCertificate(t, "Metadata Root", nil, nil)
+
+	errUntrusted := &Error{
+		Type:    ErrMetadata.Type,
+		Details: fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. The attestation certificate could not be verified due to an error validating the trust chain against the Metadata Service.", aaguid),
+	}
+
+	testCases := []struct {
+		name string
+		x5cs []any
+		err  *Error
+	}{
+		{
+			// Self-signed by an attacker so it reaches no trust anchor, with the subject and issuer Common Names
+			// equal.
+			name: "ShouldRejectSelfSignedCertificateWithMatchingCommonNames",
+			x5cs: func() []any {
+				cert, _ := metadataTestGenerateCertificate(t, "Attacker", nil, nil)
+
+				return []any{cert.Raw}
+			}(),
+			err: errUntrusted,
+		},
+		{
+			name: "ShouldRejectCertificateNotIssuedByMetadataRoot",
+			x5cs: func() []any {
+				other, otherKey := metadataTestGenerateCertificate(t, "Other Root", nil, nil)
+				cert, _ := metadataTestGenerateCertificate(t, "Attestation", other, otherKey)
+
+				return []any{cert.Raw}
+			}(),
+			err: errUntrusted,
+		},
+		{
+			name: "ShouldAcceptCertificateIssuedByMetadataRoot",
+			x5cs: func() []any {
+				cert, _ := metadataTestGenerateCertificate(t, "Attestation", root, rootKey)
+
+				return []any{cert.Raw}
+			}(),
+		},
+		{
+			// A self-signed certificate which is itself the published trust anchor must verify, so an authenticator
+			// whose attestation certificate is its own root isn't rejected.
+			name: "ShouldAcceptSelfSignedCertificateWhichIsTheMetadataRoot",
+			x5cs: []any{root.Raw},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mds := mocks.NewMockMetadataProvider(ctrl)
+
+			entry := &metadata.Entry{
+				MetadataStatement: metadata.Statement{
+					AttestationTypes:            metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+					AttestationRootCertificates: []*x509.Certificate{root},
+				},
+			}
+
+			mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
+			mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
+			mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false)
+			mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(true)
+
+			actual := ValidateMetadata(context.Background(), mds, aaguid, string(metadata.BasicFull), "packed", tc.x5cs)
+
+			if tc.err == nil {
+				assert.Nil(t, actual)
+
+				return
+			}
+
+			require.NotNil(t, actual)
+			assert.Equal(t, tc.err.Type, actual.Type)
+			assert.Equal(t, tc.err.Details, actual.Details)
+		})
+	}
+}
+
 func TestLoopOrdinalNumber(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -260,4 +352,39 @@ func TestLoopOrdinalNumber(t *testing.T) {
 			assert.Equal(t, tc.expected, loopOrdinalNumber(tc.n))
 		})
 	}
+}
+
+// Supporting functions and test data.
+
+// metadataTestGenerateCertificate issues a certificate authority certificate, self-signed when parent is nil. The
+// subject and issuer Common Names of a self-signed certificate are equal by construction.
+func metadataTestGenerateCertificate(t *testing.T, commonName string, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (*x509.Certificate, *ecdsa.PrivateKey) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: commonName},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	signer, signerKey := parent, parentKey
+
+	if parent == nil {
+		signer, signerKey = template, key
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, signer, &key.PublicKey, signerKey)
+	require.NoError(t, err)
+
+	cert, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	return cert, key
 }
