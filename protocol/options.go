@@ -39,7 +39,7 @@ type PublicKeyCredentialCreationOptions struct {
 	Hints                  []PublicKeyCredentialHints `json:"hints,omitempty"`
 	Attestation            ConveyancePreference       `json:"attestation,omitempty"`
 	AttestationFormats     []AttestationFormat        `json:"attestationFormats,omitempty"`
-	Extensions             AuthenticationExtensions   `json:"extensions,omitempty"`
+	Extensions             AuthenticationExtensions   `json:"extensions,omitzero"`
 }
 
 // The PublicKeyCredentialRequestOptions dictionary supplies get() with the data it needs to generate an assertion.
@@ -55,7 +55,7 @@ type PublicKeyCredentialRequestOptions struct {
 	AllowedCredentials []CredentialDescriptor      `json:"allowCredentials,omitempty"`
 	UserVerification   UserVerificationRequirement `json:"userVerification,omitempty"`
 	Hints              []PublicKeyCredentialHints  `json:"hints,omitempty"`
-	Extensions         AuthenticationExtensions    `json:"extensions,omitempty"`
+	Extensions         AuthenticationExtensions    `json:"extensions,omitzero"`
 }
 
 // CredentialDescriptor represents the PublicKeyCredentialDescriptor IDL.
@@ -110,12 +110,6 @@ const (
 	// PublicKeyCredentialType - Currently one credential type is defined, namely "public-key".
 	PublicKeyCredentialType CredentialType = "public-key"
 )
-
-// AuthenticationExtensions represents the AuthenticationExtensionsClientInputs IDL. This member contains additional
-// parameters requesting additional processing by the client and authenticator.
-//
-// Specification: §5.7.1. Authentication Extensions Client Inputs (https://www.w3.org/TR/webauthn/#iface-authentication-extensions-client-inputs)
-type AuthenticationExtensions map[string]any
 
 // AuthenticatorSelection represents the AuthenticatorSelectionCriteria IDL.
 //
@@ -278,11 +272,6 @@ func (a *PublicKeyCredentialRequestOptions) GetAllowedCredentialIDs() [][]byte {
 
 	return allowedCredentialIDs
 }
-
-// Extensions is a generic type for WebAuthn extensions. The actual contents are defined by each individual extension.
-//
-// Specification: §9. WebAuthn Extensions (https://www.w3.org/TR/webauthn/#extensions)
-type Extensions any
 
 // ServerResponse is a response from a FIDO conformance server.
 type ServerResponse struct {

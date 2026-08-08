@@ -39,7 +39,7 @@ type PublicKeyCredential struct {
 	Credential
 
 	RawID                   URLEncodedBase64                      `json:"rawId"`
-	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitzero"`
 	AuthenticatorAttachment string                                `json:"authenticatorAttachment,omitempty"`
 }
 
@@ -48,7 +48,7 @@ type ParsedPublicKeyCredential struct {
 	ParsedCredential
 
 	RawID                   []byte                                `json:"rawId"`
-	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitempty"`
+	ClientExtensionResults  AuthenticationExtensionsClientOutputs `json:"clientExtensionResults,omitzero"`
 	AuthenticatorAttachment AuthenticatorAttachment               `json:"authenticatorAttachment,omitempty"`
 }
 
@@ -228,56 +228,38 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, relyingP
 	return clientDataHash, nil
 }
 
-// GetAppID takes a AuthenticationExtensions object or nil. It then performs the following checks in order:
+// GetAppID determines the Relying Party ID to use for a credential registered through the legacy FIDO U2F
+// JavaScript API. It returns an empty string when the FIDO AppID Extension does not apply, and the session's appid
+// when it does.
 //
-// 1. Check that the Session Data's AuthenticationExtensions has been provided and if it hasn't return an error.
-// 2. Check that the AuthenticationExtensionsClientOutputs contains the extensions output and return an empty string if it doesn't.
-// 3. Check that the Credential AttestationFormat is `fido-u2f` and return an empty string if it isn't.
-// 4. Check that the AuthenticationExtensionsClientOutputs contains the appid key and if it doesn't return an empty string.
-// 5. Check that the AuthenticationExtensionsClientOutputs appid is a bool and if it isn't return an error.
-// 6. Check that the appid output is true and if it isn't return an empty string.
-// 7. Check that the Session Data has an appid extension defined and if it doesn't return an error.
-// 8. Check that the appid extension in Session Data is a string and if it isn't return an error.
-// 9. Return the appid extension value from the Session data.
-func (ppkc ParsedPublicKeyCredential) GetAppID(authExt AuthenticationExtensions, credentialAttestationFormat string) (appID string, err error) {
-	var (
-		value, clientValue interface{}
-		enableAppID, ok    bool
-	)
-
-	if authExt == nil {
+// The checks performed, in order:
+//
+//  1. If the client did not report the appid extension output, or reported it as false, return an empty string.
+//  2. If the credential's attestation format is not "fido-u2f" it is assumed not to be a FIDO U2F credential, so
+//     return an empty string.
+//  3. If the session data has no appid, return an error; the client indicates it acted on an extension the Relying
+//     Party did not request.
+//  4. Return the session's appid.
+//
+// A client output whose appid member is not a boolean is rejected when the response is parsed rather than here.
+//
+// A non-empty return value becomes the sole expected rpIdHash for the assertion. The specification requires the
+// Relying Party to expect the hash of the AppID and not the hash of the RP ID once the client reports the extension
+// was acted upon, so the RP ID hash is not accepted as an alternative; see [AuthenticatorData.Verify].
+//
+// Specification: §10.1.1. FIDO AppID Extension (https://www.w3.org/TR/webauthn-3/#sctn-appid-extension)
+func (ppkc ParsedPublicKeyCredential) GetAppID(session SessionExtensions, credentialAttestationFormat string) (appID string, err error) {
+	if ppkc.ClientExtensionResults.AppID == nil || !*ppkc.ClientExtensionResults.AppID {
 		return "", nil
 	}
 
-	if ppkc.ClientExtensionResults == nil {
-		return "", nil
-	}
-
-	// If the credential is not in the fido-u2f attestation FORMAT it is assumed to NOT be a fido-u2f credential.
-	// https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
 	if credentialAttestationFormat != string(AttestationFormatFIDOUniversalSecondFactor) {
 		return "", nil
 	}
 
-	if clientValue, ok = ppkc.ClientExtensionResults[ExtensionAppID]; !ok {
-		return "", nil
-	}
-
-	if enableAppID, ok = clientValue.(bool); !ok {
-		return "", ErrBadRequest.WithDetails("Client Output appid did not have the expected type")
-	}
-
-	if !enableAppID {
-		return "", nil
-	}
-
-	if value, ok = authExt[ExtensionAppID]; !ok {
+	if session.AppID == "" {
 		return "", ErrBadRequest.WithDetails("Session Data does not have an appid but Client Output indicates it should be set")
 	}
 
-	if appID, ok = value.(string); !ok {
-		return "", ErrBadRequest.WithDetails("Session Data appid did not have the expected type")
-	}
-
-	return appID, nil
+	return session.AppID, nil
 }

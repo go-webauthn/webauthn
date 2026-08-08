@@ -95,7 +95,7 @@ func handlerExamplePasskeyCreateChallenge(w *webauthn.WebAuthn) func(rw http.Res
 		opts := []webauthn.RegistrationOption{
 			webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
 			webauthn.WithExclusions(webauthn.Credentials(user.WebAuthnCredentials()).CredentialDescriptors()),
-			webauthn.WithExtensions(map[string]any{"credProps": true}),
+			webauthn.WithExtensions(webauthn.WithExtensionCredProps()),
 		}
 
 		if creation, s, err = w.BeginMediatedRegistration(user, protocol.MediationDefault, opts...); err != nil {

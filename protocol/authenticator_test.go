@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 const (
@@ -466,6 +468,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 
 	type args struct {
 		rpIdHash                 []byte
+		appIDHash                []byte
 		userVerificationRequired bool
 		userPresenceRequired     bool
 	}
@@ -501,7 +504,55 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			err:        "Error validating the authenticator response",
 			errType:    "verification_error",
 			errDetails: "Error validating the authenticator response",
-			errInfo:    "RP Hash mismatch. Expected ff and Received aa",
+			errInfo:    "RP Hash mismatch. Expected aa and Received ff",
+		},
+		{
+			// The FIDO AppID Extension was used, so the AppID hash is the value the authenticator is expected to
+			// have signed over.
+			name: "AppID hash matches",
+			fields: fields{
+				RPIDHash: []byte{1, 2, 3},
+				Flags:    AuthenticatorFlags(0x05),
+			},
+			args: args{
+				rpIdHash:  []byte{0xaa},
+				appIDHash: []byte{1, 2, 3},
+			},
+			err: "",
+		},
+		{
+			// Specification: §10.1.1. When the appid client extension output is true the Relying Party MUST expect
+			// the rpIdHash to be the hash of the AppID, not the RP ID, so the RP ID hash must no longer satisfy the
+			// check once an AppID hash is in play.
+			name: "AppID hash set and only RP ID hash matches",
+			fields: fields{
+				RPIDHash: []byte{1, 2, 3},
+				Flags:    AuthenticatorFlags(0x05),
+			},
+			args: args{
+				rpIdHash:  []byte{1, 2, 3},
+				appIDHash: []byte{0xaa},
+			},
+			err:        "Error validating the authenticator response",
+			errType:    "verification_error",
+			errDetails: "Error validating the authenticator response",
+			errInfo:    "RP Hash mismatch. Expected aa and Received 010203",
+		},
+		{
+			// An absent AppID hash must not become a second acceptable value. The all zero hash is the shape a
+			// caller passing an unset [32]byte would produce.
+			name: "Zero RP ID hash without an AppID",
+			fields: fields{
+				RPIDHash: make([]byte, 32),
+				Flags:    AuthenticatorFlags(0x05),
+			},
+			args: args{
+				rpIdHash: []byte{1, 2, 3},
+			},
+			err:        "Error validating the authenticator response",
+			errType:    "verification_error",
+			errDetails: "Error validating the authenticator response",
+			errInfo:    "RP Hash mismatch. Expected 010203 and Received 0000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
 			name: "UP flag not set",
@@ -546,7 +597,7 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 				ExtData:  tc.fields.ExtData,
 			}
 
-			err := a.Verify(tc.args.rpIdHash, nil, tc.args.userVerificationRequired, tc.args.userPresenceRequired)
+			err := a.Verify(tc.args.rpIdHash, tc.args.appIDHash, tc.args.userVerificationRequired, tc.args.userPresenceRequired)
 
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
@@ -557,4 +608,22 @@ func TestAuthenticatorData_Verify(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthenticatorDataUnmarshalDecodesExtensions(t *testing.T) {
+	extData, err := webauthncbor.Marshal(map[string]any{"minPinLength": uint64(4)})
+	require.NoError(t, err)
+
+	raw := make([]byte, 37)
+	raw[32] = byte(FlagHasExtensions)
+	raw = append(raw, extData...)
+
+	var authData AuthenticatorData
+
+	require.NoError(t, authData.Unmarshal(raw))
+
+	assert.Equal(t, extData, authData.ExtData, "the raw signed bytes must be preserved")
+	require.NotNil(t, authData.Ext)
+	require.NotNil(t, authData.Ext.MinPinLength)
+	assert.Equal(t, uint(4), *authData.Ext.MinPinLength)
 }

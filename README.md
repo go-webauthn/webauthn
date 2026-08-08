@@ -32,7 +32,6 @@ which are not available in that version. The current intentionally supported ver
 
 - go 1.26
 - go 1.25
-- go 1.24
 
 ## Status
 
@@ -146,34 +145,60 @@ represents when the format was introduced into the spec.
 
 ### Extensions
 
+Extensions with a typed input have a dedicated functional option (`webauthn.WithExtension<Name>`) taking typed
+Go values, applied via `webauthn.WithExtensions` (registration) or `webauthn.WithAssertionExtensions`
+(authentication); a typed client output is exposed as a field of `protocol.AuthenticationExtensionsClientOutputs`,
+and a typed authenticator output as a field of `protocol.AuthenticatorExtensionOutputs`. An identifier with no
+dedicated option is not modelled: it can still be set on input with the generic `webauthn.WithExtension`, which
+conveys the value to the client verbatim, and any output returned under that identifier is preserved in the
+relevant `Extra` map rather than dropped.
+
 Standardized and Specification Listed Extensions:
 
-|                                                                                   Extension                                                                                    |   Identifier   | Supported (Registration) | Supported (Authentication) | Level |
-|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:--------------:|:------------------------:|:--------------------------:|:-----:|
-|                                              [§10.1.1 FIDO AppID Extension](https://www.w3.org/TR/webauthn/#sctn-appid-extension)                                              |    `appid`     |         N/A[^2]          |        Yes (manual)        | 3 (1) |
-|                                     [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn/#sctn-appid-exclude-extension)                                     | `appidExclude` |       Yes (manual)       |          N/A[^1]           | 3 (1) |
-|                        [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension)                         |  `credProps`   |       Yes (manual)       |          N/A[^1]           | 3 (2) |
-|                                       [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn/#sctn-large-blob-extension)                                        |  `largeBlob`   |       Yes (manual)       |        Yes (manual)        | 3 (2) |
+|                                                            Extension                                                            |   Identifier   |                 Registration                  |                       Authentication                        | Level |
+|:-------------------------------------------------------------------------------------------------------------------------------:|:--------------:|:---------------------------------------------:|:-----------------------------------------------------------:|:-----:|
+|                     [§10.1.1 FIDO AppID Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-extension)                      |    `appid`     |                    N/A[^2]                    |                    `WithExtensionAppID`                     | 3 (1) |
+|            [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-exclude-extension)             | `appidExclude` |          `WithExtensionAppIDExclude`          |                           N/A[^1]                           | 3 (1) |
+| [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension) |  `credProps`   |           `WithExtensionCredProps`            |                           N/A[^1]                           | 3 (2) |
+|                   [§10.1.4 Pseudo-Random Function Extension](https://www.w3.org/TR/webauthn-3/#prf-extension)                   |     `prf`      | `WithExtensionPRF`, `WithExtensionPRFSupport` |        `WithExtensionPRF`, `WithExtensionPRFSupport`        | 3 (2) |
+|               [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)               |  `largeBlob`   |        `WithExtensionLargeBlobSupport`        | `WithExtensionLargeBlobRead`, `WithExtensionLargeBlobWrite` | 3 (2) |
 
-CTAP2 Extensions Which Are Largely unsupported:
+CTAP 2.1 / CTAP 2.2 / CTAP 2.3 Extensions registered in the IANA ["WebAuthn Extension Identifiers"](https://www.iana.org/assignments/webauthn/webauthn.xhtml)
+registry:
 
-|                                                                                             Extension                                                                                             |      Identifier       | Supported (Registration) | Supported (Authentication) |
-|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:---------------------:|:------------------------:|:--------------------------:|
-|          [Credential Protection Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-credProtect-extension)           |     `credProtect`     |       Yes (manual)       |          N/A[^1]           |
-|               [Credential Blob Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-credBlob-extension)               |      `credBlob`       |       Yes (manual)       |        Yes (manual)        | 
-|             [Large Blob Key Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-largeBlobKey-extension)              |    `largeBlobKey`     |       Yes (manual)       |        Yes (manual)        |
-|           [Minimum PIN Length Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-minpinlength-extension)            |    `minPinLength`     |       Yes (manual)       |        Yes (manual)        |
-|          [PIN Complexity Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-pincomplexitypolicy-extension)          | `pinComplexityPolicy` |       Yes (manual)       |          N/A[^1]           | 
-|               [HMAC Secret Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-hmac-secret-extension)                |     `hmac-secret`     |       Yes (manual)       |        Yes (manual)        | 
-|   [HMAC Secret MakeCredential Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-hmac-secret-make-cred-extension)   |   `hmac-secret-mc`    |         N/A[^2]          |        Yes (manual)        | 
-| [Third-Party Payment Authentication Extension](https://fidoalliance.org/specs/fido-v2.2-ps-20250714/fido-client-to-authenticator-protocol-v2.2-ps-20250714.html#sctn-thirdPartyPayment-extension) |  `thirdPartyPayment`  |       Yes (manual)       |        Yes (manual)        |
+|                                                                                             Extension                                                                                             |              Identifier              |               Registration                |        Authentication        |
+|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|:------------------------------------:|:-----------------------------------------:|:----------------------------:|
+|          [Credential Protection Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-credProtect-extension)           |            `credProtect`             | `WithExtensionCredentialProtectionPolicy` |           N/A[^1]            |
+|               [Credential Blob Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-credBlob-extension)               |      `credBlob` / `getCredBlob`      |          `WithExtensionCredBlob`          |  `WithExtensionGetCredBlob`  |
+|           [Minimum PIN Length Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-minpinlength-extension)            |            `minPinLength`            |        `WithExtensionMinPinLength`        |           N/A[^1]            |
+|               [HMAC Secret Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-hmac-secret-extension)                | `hmacCreateSecret` / `hmacGetSecret` |      `WithExtensionHMACCreateSecret`      | `WithExtensionHMACGetSecret` |
+|                                                [User Verification Method Extension](https://www.iana.org/assignments/webauthn/webauthn.xhtml)[^5]                                                 |                `uvm`                 |            `WithExtensionUVM`             |      `WithExtensionUVM`      |
+|             [Large Blob Key Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-largeBlobKey-extension)              |            `largeBlobKey`            |             Not modelled[^3]              |       Not modelled[^3]       |
+|          [PIN Complexity Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-pincomplexitypolicy-extension)          |        `pinComplexityPolicy`         |             Not modelled[^4]              |           N/A[^1]            |
+|   [HMAC Secret MakeCredential Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-hmac-secret-make-cred-extension)   |           `hmac-secret-mc`           |             Not modelled[^4]              |           N/A[^1]            |
+| [Third-Party Payment Authentication Extension](https://fidoalliance.org/specs/fido-v2.3-ps-20260226/fido-client-to-authenticator-protocol-v2.3-ps-20260226.html#sctn-thirdPartyPayment-extension) |         `thirdPartyPayment`          |             Not modelled[^4]              |       Not modelled[^4]       |
+
+The CTAP authenticator data also carries a `hmac-secret` extension output identifier (`protocol.ExtensionHMACSecret`),
+distinct from the `hmacCreateSecret` / `hmacGetSecret` client-facing identifiers above; it is decoded automatically
+into `AuthenticatorExtensionOutputs.HMACSecret` / `HMACSecretV` and is not something a Relying Party requests.
 
 [^1]: This extension is only applicable during Registration.
 [^2]: This extension is only applicable during Authentication.
+[^3]: Deliberately not modelled. CTAP 2.3 §12.3 defines no client extension input, output, or processing for
+      `largeBlobKey`: it is a CTAP response member returned directly to the platform, not to the Relying Party.
+      `protocol.ExtensionLargeBlobKey` is kept as a documented identifier and remains reachable verbatim via
+      `webauthn.WithExtension`.
+[^4]: Not modelled. Set on input with `webauthn.WithExtension`; an output returned under this identifier is
+      preserved in the outputs' `Extra` map.
+[^5]: `uvm` was deprecated from the core WebAuthn spec text at Level 3 (see the deprecated extensions table
+      below) but remains registered as a CTAP 2.1/2.2/2.3 extension in the IANA registry and is still forwarded by
+      several clients, hence a dedicated option.
 
 Extensions that have been deprecated and removed from the spec. The deprecated level is the first spec level that did
-not include the extension. These are all technically supported by the extensions map, but have no official support from
-this library, and are most likely not supported by either browsers or authenticators.
+not include the extension. These are all technically reachable as untyped values via `webauthn.WithExtension`, but
+have no official (typed) support from this library, and are most likely not supported by either browsers or
+authenticators. The one exception is `uvm`: it remains registered as a CTAP extension and is modelled, so
+`webauthn.WithExtension` rejects it and `webauthn.WithExtensionUVM` is used instead.
 
 These extensions often either were excluded due to privacy or security concerns, were introduced into the core of the
 spec as legitimate inputs outside of extensions, or never received support from browsers or authenticators.
