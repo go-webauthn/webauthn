@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -355,10 +356,190 @@ func TestAndroidKeyAuthorizationListDecoding(t *testing.T) {
 	assert.Len(t, decoded.TeeEnforced.RootOfTrust.VerifiedBootHash, 32)
 
 	assert.Equal(t, []int{KM_PURPOSE_SIGN}, decoded.TeeEnforced.Purpose)
-	assert.Equal(t, KM_ORIGIN_GENERATED, decoded.TeeEnforced.Origin)
+
+	origin, present, err := authorizationListOrigin(&decoded.TeeEnforced)
+	require.NoError(t, err)
+	assert.True(t, present)
+	assert.Equal(t, KM_ORIGIN_GENERATED, origin)
+
+	// A real attestation carries origin on one list only, which is why an absent origin decoding to the zero value
+	// went unnoticed.
+	_, present, err = authorizationListOrigin(&decoded.SoftwareEnforced)
+	require.NoError(t, err)
+	assert.False(t, present)
 
 	assert.Empty(t, decoded.TeeEnforced.AllApplications.FullBytes)
 	assert.Empty(t, decoded.SoftwareEnforced.AllApplications.FullBytes)
+}
+
+// TestAndroidKeyAuthorizationListOrigin asserts the §8.4 origin requirement is evaluated against the union of the two
+// authorization lists, matching the adjacent purpose requirement, and that an absent origin does not satisfy it. An
+// optional integer decodes to zero when absent, which is the value of KM_ORIGIN_GENERATED.
+func TestAndroidKeyAuthorizationListOrigin(t *testing.T) {
+	// SEQUENCE { [1] EXPLICIT SET { INTEGER 2 } [, [702] EXPLICIT INTEGER n] } where the purpose is KM_PURPOSE_SIGN.
+	list := func(t *testing.T, origin string) authorizationList {
+		t.Helper()
+
+		body := "a1053103020102"
+
+		if origin != "" {
+			body += "bf853e030201" + origin
+		}
+
+		der, err := hex.DecodeString(fmt.Sprintf("30%02x", len(body)/2) + body)
+		require.NoError(t, err)
+
+		var decoded authorizationList
+
+		rest, err := asn1.Unmarshal(der, &decoded)
+		require.NoError(t, err)
+		require.Empty(t, rest)
+
+		return decoded
+	}
+
+	generated := list(t, "00") // KM_ORIGIN_GENERATED.
+	imported := list(t, "02")  // KM_ORIGIN_IMPORTED.
+	missing := list(t, "")
+
+	testCases := []struct {
+		name     string
+		tee      authorizationList
+		software authorizationList
+		err      string
+	}{
+		{
+			name: "ShouldAcceptWhenGeneratedInTeeAndAbsentFromSoftware",
+			tee:  generated, software: missing,
+		},
+		{
+			name: "ShouldAcceptWhenGeneratedInSoftwareAndAbsentFromTee",
+			tee:  missing, software: generated,
+		},
+		{
+			name: "ShouldAcceptWhenGeneratedInBoth",
+			tee:  generated, software: generated,
+		},
+		{
+			// The union is satisfied by the teeEnforced list. The previous implementation required both lists to
+			// agree, which rejected this.
+			name: "ShouldAcceptWhenGeneratedInTeeAndImportedInSoftware",
+			tee:  generated, software: imported,
+		},
+		{
+			name: "ShouldRejectWhenImportedInBoth",
+			tee:  imported, software: imported,
+			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
+		},
+		{
+			// Neither list states an origin, so there is no value equal to KM_ORIGIN_GENERATED to verify.
+			name: "ShouldRejectWhenAbsentFromBothLists",
+			tee:  missing, software: missing,
+			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
+		},
+		{
+			name: "ShouldRejectWhenImportedInTeeAndAbsentFromSoftware",
+			tee:  imported, software: missing,
+			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			decoded := keyDescription{TeeEnforced: tc.tee, SoftwareEnforced: tc.software}
+
+			protoErr := androidKeyValidateAuthorizationLists(&decoded)
+
+			if tc.err != "" {
+				require.NotNil(t, protoErr)
+				assert.EqualError(t, protoErr, tc.err)
+			} else {
+				assert.Nil(t, protoErr)
+			}
+		})
+	}
+}
+
+func TestAuthorizationListOriginDER(t *testing.T) {
+	const purpose = "a1053103020102" // [1] EXPLICIT SET { INTEGER 2 }.
+
+	sequence := func(t *testing.T, body string) []byte {
+		t.Helper()
+
+		der, err := hex.DecodeString(fmt.Sprintf("30%02x", len(body)/2) + body)
+		require.NoError(t, err)
+
+		return der
+	}
+
+	t.Run("ShouldRejectPresentButEmptyOriginWhileDecoding", func(t *testing.T) {
+		var list authorizationList
+
+		_, err := asn1.Unmarshal(sequence(t, purpose+"bf853e00"), &list)
+		require.EqualError(t, err, "asn1: structure error: explicit tag has no child")
+	})
+
+	testCases := []struct {
+		name    string
+		origin  string
+		origins int
+		present bool
+		err     string
+	}{
+		{
+			name:   "ShouldReportAbsentWhenOriginMissing",
+			origin: "",
+		},
+		{
+			name:    "ShouldDecodeGenerated",
+			origin:  "bf853e03020100",
+			origins: KM_ORIGIN_GENERATED,
+			present: true,
+		},
+		{
+			name:    "ShouldDecodeImported",
+			origin:  "bf853e03020102",
+			origins: KM_ORIGIN_IMPORTED,
+			present: true,
+		},
+		{
+			// [702] EXPLICIT { INTEGER 0, NULL }. The value decodes but a NULL follows it inside the wrapper, which
+			// was previously discarded along with the remainder returned by asn1.Unmarshal.
+			name:   "ShouldRejectTrailingDataAfterOrigin",
+			origin: "bf853e05" + "020100" + "0500",
+			err:    "origin has 2 bytes of trailing data",
+		},
+		{
+			// [702] EXPLICIT { INTEGER 0, INTEGER 2 }, so the trailing data is itself a valid origin value.
+			name:   "ShouldRejectTrailingOriginValue",
+			origin: "bf853e06" + "020100" + "020102",
+			err:    "origin has 3 bytes of trailing data",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var list authorizationList
+
+			rest, err := asn1.Unmarshal(sequence(t, purpose+tc.origin), &list)
+			require.NoError(t, err)
+			require.Empty(t, rest)
+
+			origin, present, err := authorizationListOrigin(&list)
+
+			if tc.err != "" {
+				require.EqualError(t, err, tc.err)
+				assert.False(t, present)
+				assert.Equal(t, 0, origin)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.present, present)
+			assert.Equal(t, tc.origins, origin)
+		})
+	}
 }
 
 func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
@@ -386,8 +567,13 @@ func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
 	// Both lists must otherwise be identical, so a failure below is attributable to allApplications alone.
 	require.Equal(t, []int{KM_PURPOSE_SIGN}, absent.Purpose)
 	require.Equal(t, []int{KM_PURPOSE_SIGN}, present.Purpose)
-	require.Equal(t, KM_ORIGIN_GENERATED, absent.Origin)
-	require.Equal(t, KM_ORIGIN_GENERATED, present.Origin)
+
+	for _, list := range []*authorizationList{&absent, &present} {
+		origin, ok, err := authorizationListOrigin(list)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, KM_ORIGIN_GENERATED, origin)
+	}
 
 	assert.Empty(t, absent.AllApplications.FullBytes)
 	assert.NotEmpty(t, present.AllApplications.FullBytes, "allApplications must be detectable in the decoded list")

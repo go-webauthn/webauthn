@@ -139,7 +139,25 @@ func androidKeyValidateAuthorizationLists(decoded *keyDescription) *Error {
 
 	// For the following, use only the teeEnforced authorization list if the RP wants to accept only keys from a trusted execution environment, otherwise use the union of teeEnforced and softwareEnforced.
 	// The value in the AuthorizationList.origin field is equal to KM_ORIGIN_GENERATED (which == 0).
-	if decoded.SoftwareEnforced.Origin != KM_ORIGIN_GENERATED || decoded.TeeEnforced.Origin != KM_ORIGIN_GENERATED {
+	var (
+		originTee, originSoftware   int
+		presentTee, presentSoftware bool
+		err                         error
+	)
+
+	if originTee, presentTee, err = authorizationListOrigin(&decoded.TeeEnforced); err != nil {
+		return ErrAttestationFormat.WithDetails("Unable to parse the origin of the teeEnforced authorization list").WithError(err)
+	}
+
+	if originSoftware, presentSoftware, err = authorizationListOrigin(&decoded.SoftwareEnforced); err != nil {
+		return ErrAttestationFormat.WithDetails("Unable to parse the origin of the softwareEnforced authorization list").WithError(err)
+	}
+
+	// The union is satisfied when either list carries an origin equal to KM_ORIGIN_GENERATED. An absent origin
+	// satisfies nothing as there is no value to compare against, which mirrors the purpose check below.
+	generated := (presentTee && originTee == KM_ORIGIN_GENERATED) || (presentSoftware && originSoftware == KM_ORIGIN_GENERATED)
+
+	if !generated {
 		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED")
 	}
 
@@ -149,6 +167,29 @@ func androidKeyValidateAuthorizationLists(decoded *keyDescription) *Error {
 	}
 
 	return nil
+}
+
+// authorizationListOrigin returns the origin of an authorization list and reports whether the field was present. The
+// value is decoded from the raw element because encoding/asn1 leaves an absent optional integer at its zero value,
+// which is indistinguishable from a present origin of KM_ORIGIN_GENERATED.
+func authorizationListOrigin(list *authorizationList) (origin int, present bool, err error) {
+	// An explicit tag which is present always carries a child as encoding/asn1 rejects one which doesn't while
+	// decoding the key description, so an empty raw value means the field was absent rather than empty.
+	if len(list.Origin.FullBytes) == 0 {
+		return 0, false, nil
+	}
+
+	var rest []byte
+
+	if rest, err = asn1.Unmarshal(list.Origin.Bytes, &origin); err != nil {
+		return 0, false, err
+	}
+
+	if len(rest) != 0 {
+		return 0, false, fmt.Errorf("origin has %d bytes of trailing data", len(rest))
+	}
+
+	return origin, true, nil
 }
 
 func contains(s []int, e int) bool {
@@ -194,21 +235,25 @@ type authorizationList struct {
 	AllApplications             asn1.RawValue `asn1:"tag:600,explicit,optional"`
 	ApplicationID               asn1.RawValue `asn1:"tag:601,explicit,optional"`
 	CreationDateTime            int           `asn1:"tag:701,explicit,optional"`
-	Origin                      int           `asn1:"tag:702,explicit,optional"`
-	RootOfTrust                 rootOfTrust   `asn1:"tag:704,explicit,optional"`
-	OsVersion                   int           `asn1:"tag:705,explicit,optional"`
-	OsPatchLevel                int           `asn1:"tag:706,explicit,optional"`
-	AttestationApplicationID    []byte        `asn1:"tag:709,explicit,optional"`
-	AttestationIDBrand          []byte        `asn1:"tag:710,explicit,optional"`
-	AttestationIDDevice         []byte        `asn1:"tag:711,explicit,optional"`
-	AttestationIDProduct        []byte        `asn1:"tag:712,explicit,optional"`
-	AttestationIDSerial         []byte        `asn1:"tag:713,explicit,optional"`
-	AttestationIDImei           []byte        `asn1:"tag:714,explicit,optional"`
-	AttestationIDMeid           []byte        `asn1:"tag:715,explicit,optional"`
-	AttestationIDManufacturer   []byte        `asn1:"tag:716,explicit,optional"`
-	AttestationIDModel          []byte        `asn1:"tag:717,explicit,optional"`
-	VendorPatchLevel            int           `asn1:"tag:718,explicit,optional"`
-	BootPatchLevel              int           `asn1:"tag:719,explicit,optional"`
+	// Origin is decoded as a raw element rather than an integer. encoding/asn1 leaves an absent optional integer at
+	// its zero value, which is indistinguishable from a present origin of KM_ORIGIN_GENERATED.
+	Origin asn1.RawValue `asn1:"tag:702,explicit,optional"`
+
+	RootOfTrust rootOfTrust `asn1:"tag:704,explicit,optional"`
+
+	OsVersion                 int    `asn1:"tag:705,explicit,optional"`
+	OsPatchLevel              int    `asn1:"tag:706,explicit,optional"`
+	AttestationApplicationID  []byte `asn1:"tag:709,explicit,optional"`
+	AttestationIDBrand        []byte `asn1:"tag:710,explicit,optional"`
+	AttestationIDDevice       []byte `asn1:"tag:711,explicit,optional"`
+	AttestationIDProduct      []byte `asn1:"tag:712,explicit,optional"`
+	AttestationIDSerial       []byte `asn1:"tag:713,explicit,optional"`
+	AttestationIDImei         []byte `asn1:"tag:714,explicit,optional"`
+	AttestationIDMeid         []byte `asn1:"tag:715,explicit,optional"`
+	AttestationIDManufacturer []byte `asn1:"tag:716,explicit,optional"`
+	AttestationIDModel        []byte `asn1:"tag:717,explicit,optional"`
+	VendorPatchLevel          int    `asn1:"tag:718,explicit,optional"`
+	BootPatchLevel            int    `asn1:"tag:719,explicit,optional"`
 }
 
 type rootOfTrust struct {
