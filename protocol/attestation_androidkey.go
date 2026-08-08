@@ -88,14 +88,21 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 	}
 
 	// Verify that the public key in the first certificate in x5c matches the credentialPublicKey in the attestedCredentialData in authenticatorData.
-	var attPublicKeyData webauthncose.EC2PublicKeyData
-	if attPublicKeyData, err = verifyAttestationECDSAPublicKeyMatch(att, credCert); err != nil {
+	var credentialPublicKey any
+
+	if credentialPublicKey, err = verifyAttestationPublicKeyMatch(att, credCert); err != nil {
 		return "", nil, err
 	}
 
+	// The signature was verified above with the certificate public key and the algorithm of the attestation
+	// statement. Repeating it with the credential public key additionally requires the two to agree on the algorithm,
+	// as each selects the digest from the algorithm it carries.
 	var valid bool
-	if valid, err = attPublicKeyData.Verify(signatureData, sig); err != nil || !valid {
-		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
+
+	if valid, err = webauthncose.VerifySignature(credentialPublicKey, signatureData, sig); err != nil {
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error verifying the signature with the credential public key: %+v", err)).WithError(err)
+	} else if !valid {
+		return "", nil, ErrInvalidAttestation.WithDetails("Signature is not valid for the credential public key")
 	}
 
 	// §8.4.3. Verify that the attestationChallenge field in the attestation certificate extension data is identical to clientDataHash.

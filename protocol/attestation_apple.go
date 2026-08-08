@@ -81,7 +81,7 @@ func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, cli
 	}
 
 	// Step 5. Verify that the credential public key equals the Subject Public Key of credCert.
-	if _, err = verifyAttestationECDSAPublicKeyMatch(att, credCert); err != nil {
+	if _, err = verifyAttestationPublicKeyMatch(att, credCert); err != nil {
 		return "", nil, err
 	}
 

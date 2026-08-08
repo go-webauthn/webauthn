@@ -1,7 +1,9 @@
 package protocol
 
 import (
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -330,11 +332,14 @@ func TestAttStatementCertChainVerify(t *testing.T) {
 	}
 }
 
-func TestVerifyAttestationECDSAPublicKeyMatch(t *testing.T) {
+// TestVerifyAttestationPublicKeyMatch asserts the credential public key is compared with the certificate public key
+// for every key type the COSE parser produces. §8.4 and §8.8 require the two to match without restricting the key to
+// ECDSA, so a key of another type is compared rather than refused.
+func TestVerifyAttestationPublicKeyMatch(t *testing.T) {
 	eccKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
-	coseKeyBytes, err := webauthncbor.Marshal(webauthncose.EC2PublicKeyData{
+	eccKeyBytes, err := webauthncbor.Marshal(webauthncose.EC2PublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{
 			KeyType:   int64(webauthncose.EllipticKey),
 			Algorithm: int64(webauthncose.AlgES256),
@@ -345,118 +350,108 @@ func TestVerifyAttestationECDSAPublicKeyMatch(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	okpKeyBytes, err := webauthncbor.Marshal(webauthncose.OKPPublicKeyData{
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	rsaKeyBytes, err := webauthncbor.Marshal(webauthncose.RSAPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.RSAKey),
+			Algorithm: int64(webauthncose.AlgRS256),
+		},
+		Modulus:  rsaKey.N.Bytes(),
+		Exponent: big.NewInt(int64(rsaKey.E)).Bytes(),
+	})
+	require.NoError(t, err)
+
+	edKey, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	edKeyBytes, err := webauthncbor.Marshal(webauthncose.OKPPublicKeyData{
 		PublicKeyData: webauthncose.PublicKeyData{
 			KeyType:   int64(webauthncose.OctetKey),
 			Algorithm: int64(webauthncose.AlgEdDSA),
 		},
-		Curve:  1,
-		XCoord: make([]byte, 32),
+		Curve:  int64(webauthncose.Ed25519),
+		XCoord: edKey,
 	})
 	require.NoError(t, err)
 
-	matchingCert := testUtilsGenerateCertWithKey(t, &eccKey.PublicKey)
+	edShortKeyBytes, err := webauthncbor.Marshal(webauthncose.OKPPublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.OctetKey),
+			Algorithm: int64(webauthncose.AlgEdDSA),
+		},
+		Curve:  int64(webauthncose.Ed25519),
+		XCoord: edKey[:16],
+	})
+	require.NoError(t, err)
 
 	differentECCKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
+	eccCert := testUtilsGenerateCertWithKey(t, &eccKey.PublicKey)
 	differentCert := testUtilsGenerateCertWithKey(t, &differentECCKey.PublicKey)
-
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-
-	rsaCert := testUtilsGenerateCertWithRSAKey(t, &rsaKey.PublicKey)
+	rsaCert := testUtilsGenerateCertWithKey(t, &rsaKey.PublicKey)
+	edCert := testUtilsGenerateCertWithKey(t, edKey)
 
 	testCases := []struct {
-		name string
-		have struct {
-			credentialPublicKey []byte
-			cert                *x509.Certificate
-		}
-		expected struct {
-			algorithm int64
-			err       string
-		}
+		name                string
+		credentialPublicKey []byte
+		cert                *x509.Certificate
+		expected            any
+		err                 string
 	}{
 		{
-			name: "ShouldSucceed",
-			have: struct {
-				credentialPublicKey []byte
-				cert                *x509.Certificate
-			}{
-				credentialPublicKey: coseKeyBytes,
-				cert:                matchingCert,
-			},
-			expected: struct {
-				algorithm int64
-				err       string
-			}{
-				algorithm: int64(webauthncose.AlgES256),
-			},
+			name:                "ShouldMatchECDSA",
+			credentialPublicKey: eccKeyBytes,
+			cert:                eccCert,
+			expected:            webauthncose.EC2PublicKeyData{},
 		},
 		{
-			name: "ShouldFailInvalidPublicKey",
-			have: struct {
-				credentialPublicKey []byte
-				cert                *x509.Certificate
-			}{
-				credentialPublicKey: []byte("invalid"),
-				cert:                matchingCert,
-			},
-			expected: struct {
-				algorithm int64
-				err       string
-			}{
-				err: "Error parsing public key: Unsupported Public Key Type",
-			},
+			name:                "ShouldMatchRSA",
+			credentialPublicKey: rsaKeyBytes,
+			cert:                rsaCert,
+			expected:            webauthncose.RSAPublicKeyData{},
 		},
 		{
-			name: "ShouldFailNotECDSAKey",
-			have: struct {
-				credentialPublicKey []byte
-				cert                *x509.Certificate
-			}{
-				credentialPublicKey: okpKeyBytes,
-				cert:                matchingCert,
-			},
-			expected: struct {
-				algorithm int64
-				err       string
-			}{
-				err: "Attestation public key is not ECDSA",
-			},
+			name:                "ShouldMatchEd25519",
+			credentialPublicKey: edKeyBytes,
+			cert:                edCert,
+			expected:            webauthncose.OKPPublicKeyData{},
 		},
 		{
-			name: "ShouldFailCertNotECDSA",
-			have: struct {
-				credentialPublicKey []byte
-				cert                *x509.Certificate
-			}{
-				credentialPublicKey: coseKeyBytes,
-				cert:                rsaCert,
-			},
-			expected: struct {
-				algorithm int64
-				err       string
-			}{
-				err: "Credential public key is not ECDSA",
-			},
+			name:                "ShouldFailInvalidPublicKey",
+			credentialPublicKey: []byte("invalid"),
+			cert:                eccCert,
+			err:                 "Error parsing public key: Unsupported Public Key Type",
 		},
 		{
-			name: "ShouldFailKeyMismatch",
-			have: struct {
-				credentialPublicKey []byte
-				cert                *x509.Certificate
-			}{
-				credentialPublicKey: coseKeyBytes,
-				cert:                differentCert,
-			},
-			expected: struct {
-				algorithm int64
-				err       string
-			}{
-				err: "Certificate public key does not match public key in authData",
-			},
+			name:                "ShouldFailKeyMismatch",
+			credentialPublicKey: eccKeyBytes,
+			cert:                differentCert,
+			err:                 testUtilsErrKeyMismatch,
+		},
+		{
+			// A credential public key of a different type to the certificate public key is a mismatch. It was
+			// refused for not being ECDSA, which rejected the ECDSA certificate paired with it just the same.
+			name:                "ShouldFailWhenCredentialKeyTypeDiffersFromCertificate",
+			credentialPublicKey: edKeyBytes,
+			cert:                eccCert,
+			err:                 testUtilsErrKeyMismatch,
+		},
+		{
+			name:                "ShouldFailWhenCertificateKeyTypeDiffersFromCredential",
+			credentialPublicKey: eccKeyBytes,
+			cert:                rsaCert,
+			err:                 testUtilsErrKeyMismatch,
+		},
+		{
+			// Rejected while parsing rather than while converting, which is the invariant letting the conversion
+			// pass the coordinate to ed25519 without asserting its length.
+			name:                "ShouldRejectMalformedOKPCoordinateWhileParsing",
+			credentialPublicKey: edShortKeyBytes,
+			cert:                edCert,
+			err:                 "Error parsing public key: OKP key x coordinate has invalid length 16, expected 32",
 		},
 	}
 
@@ -465,19 +460,22 @@ func TestVerifyAttestationECDSAPublicKeyMatch(t *testing.T) {
 			att := AttestationObject{
 				AuthData: AuthenticatorData{
 					AttData: AttestedCredentialData{
-						CredentialPublicKey: tc.have.credentialPublicKey,
+						CredentialPublicKey: tc.credentialPublicKey,
 					},
 				},
 			}
 
-			result, err := verifyAttestationECDSAPublicKeyMatch(att, tc.have.cert)
+			result, err := verifyAttestationPublicKeyMatch(att, tc.cert)
 
-			if tc.expected.err == "" {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.expected.algorithm, result.Algorithm)
-			} else {
-				assert.EqualError(t, err, tc.expected.err)
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.Nil(t, result)
+
+				return
 			}
+
+			require.NoError(t, err)
+			assert.IsType(t, tc.expected, result)
 		})
 	}
 }
@@ -682,7 +680,11 @@ func TestAttStatementCertChainVerifyMangledLeaf(t *testing.T) {
 	assert.NotEmpty(t, chains)
 }
 
-func testUtilsGenerateCertWithKey(t *testing.T, pub *ecdsa.PublicKey) *x509.Certificate {
+const testUtilsErrKeyMismatch = "Certificate public key does not match public key in authData"
+
+// testUtilsGenerateCertWithKey issues a self-signed certificate carrying the given public key, which may be of any
+// type crypto/x509 can encode.
+func testUtilsGenerateCertWithKey(t *testing.T, pub crypto.PublicKey) *x509.Certificate {
 	t.Helper()
 
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -721,26 +723,4 @@ func padP256Coord(v *big.Int) []byte {
 	copy(padded[p256ByteLen-len(b):], b)
 
 	return padded
-}
-
-func testUtilsGenerateCertWithRSAKey(t *testing.T, pub *rsa.PublicKey) *x509.Certificate {
-	t.Helper()
-
-	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(3),
-		Subject:      pkix.Name{CommonName: "Test RSA Leaf"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-	}
-
-	der, err := x509.CreateCertificate(rand.Reader, template, template, pub, caKey)
-	require.NoError(t, err)
-
-	cert, err := x509.ParseCertificate(der)
-	require.NoError(t, err)
-
-	return cert
 }

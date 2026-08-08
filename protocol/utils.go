@@ -1,12 +1,15 @@
 package protocol
 
 import (
-	"crypto/ecdsa"
+	"crypto"
+	"crypto/ed25519"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/asn1"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"net/url"
 	"strings"
@@ -187,35 +190,58 @@ func certInsecureConditionalNotAfterMangle(cert *x509.Certificate, mangle bool, 
 	return out
 }
 
-func verifyAttestationECDSAPublicKeyMatch(att AttestationObject, cert *x509.Certificate) (attPublicKeyData webauthncose.EC2PublicKeyData, err error) {
-	var (
-		key any
-		ok  bool
-
-		publicKey, attPublicKey *ecdsa.PublicKey
-	)
-
-	if key, err = webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey); err != nil {
-		return attPublicKeyData, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
+// verifyAttestationPublicKeyMatch verifies the credentialPublicKey of the attested credential data is the public key
+// of the given attestation certificate, and returns the credential public key parsed from its COSE encoding so a
+// signature made with it can be verified.
+//
+// The attestation statement formats which perform this step place no restriction on the key type, so every type the
+// COSE parser produces is accepted rather than ECDSA alone.
+func verifyAttestationPublicKeyMatch(att AttestationObject, cert *x509.Certificate) (credentialPublicKey any, err error) {
+	if credentialPublicKey, err = webauthncose.ParsePublicKey(att.AuthData.AttData.CredentialPublicKey); err != nil {
+		return nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error parsing public key: %+v", err)).WithError(err)
 	}
 
-	if attPublicKeyData, ok = key.(webauthncose.EC2PublicKeyData); !ok {
-		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Attestation public key is not ECDSA")
+	var public crypto.PublicKey
+
+	if public, err = attestationCredentialPublicKey(credentialPublicKey); err != nil {
+		return nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error converting public key: %+v", err)).WithError(err)
 	}
 
-	if publicKey, ok = cert.PublicKey.(*ecdsa.PublicKey); !ok {
-		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Credential public key is not ECDSA")
+	// Each standard library public key type carries an Equal method which reports false for a key of another type, so
+	// a credential public key and a certificate public key of differing types are a mismatch rather than an error.
+	equatable, ok := public.(interface{ Equal(x crypto.PublicKey) bool })
+	if !ok {
+		return nil, ErrInvalidAttestation.WithDetails("Public key does not support comparison")
 	}
 
-	if attPublicKey, err = attPublicKeyData.ToECDSA(); err != nil {
-		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Error converting public key to ECDSA").WithError(err)
+	if !equatable.Equal(cert.PublicKey) {
+		return nil, ErrInvalidAttestation.WithDetails("Certificate public key does not match public key in authData")
 	}
 
-	if !attPublicKey.Equal(publicKey) {
-		return attPublicKeyData, ErrInvalidAttestation.WithDetails("Certificate public key does not match public key in authData")
-	}
+	return credentialPublicKey, nil
+}
 
-	return attPublicKeyData, nil
+// attestationCredentialPublicKey converts a credential public key parsed from its COSE encoding into the equivalent
+// standard library type.
+func attestationCredentialPublicKey(credentialPublicKey any) (public crypto.PublicKey, err error) {
+	switch k := credentialPublicKey.(type) {
+	case webauthncose.EC2PublicKeyData:
+		return k.ToECDSA()
+	case webauthncose.RSAPublicKeyData:
+		var exponent int
+
+		if exponent, err = webauthncose.ParseRSAPublicKeyDataExponent(&k); err != nil {
+			return nil, err
+		}
+
+		return &rsa.PublicKey{N: new(big.Int).SetBytes(k.Modulus), E: exponent}, nil
+	case webauthncose.OKPPublicKeyData:
+		// The coordinate is of the length ed25519 requires as webauthncose.ParsePublicKey rejects any other, so no
+		// length is asserted here.
+		return ed25519.PublicKey(k.XCoord), nil
+	default:
+		return nil, fmt.Errorf("unsupported public key type %T", credentialPublicKey)
+	}
 }
 
 // ValidateRPID performs non-exhaustive checks to ensure the string is most likely a domain string as
