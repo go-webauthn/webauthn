@@ -219,24 +219,12 @@ var defaultUndesiredAuthenticatorStatus = [...]AuthenticatorStatus{
 
 // IsUndesiredAuthenticatorStatus returns whether the supplied authenticator status is desirable or not.
 func IsUndesiredAuthenticatorStatus(status AuthenticatorStatus) bool {
-	for _, s := range defaultUndesiredAuthenticatorStatus {
-		if s == status {
-			return true
-		}
-	}
-
-	return false
+	return hasStatus(status, defaultUndesiredAuthenticatorStatus[:])
 }
 
 // IsUndesiredAuthenticatorStatusSlice returns whether the supplied authenticator status is desirable or not.
 func IsUndesiredAuthenticatorStatusSlice(status AuthenticatorStatus, values []AuthenticatorStatus) bool {
-	for _, s := range values {
-		if s == status {
-			return true
-		}
-	}
-
-	return false
+	return hasStatus(status, values)
 }
 
 // IsUndesiredAuthenticatorStatusMap returns whether the supplied authenticator status is desirable or not.
