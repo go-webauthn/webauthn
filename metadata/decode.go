@@ -206,24 +206,21 @@ func validateChain(root string, chain []any) (bool, error) {
 		return true, nil
 	}
 
-	leaf, ok := chain[0].(string)
-	if !ok {
-		return false, errInvalidCertificateChain
+	// The chain is the signing certificate followed by every intermediate between it and the trust anchor. Each entry
+	// is type checked before any of them are decoded so that a malformed chain is reported as such rather than as a
+	// decoding failure of whichever entry happened to be handled first.
+	encoded := make([]string, len(chain))
+
+	for i, entry := range chain {
+		value, ok := entry.(string)
+		if !ok {
+			return false, errInvalidCertificateChain
+		}
+
+		encoded[i] = value
 	}
 
-	intermediate, ok := chain[1].(string)
-	if !ok {
-		return false, errInvalidCertificateChain
-	}
-
-	oRoot := make([]byte, base64.StdEncoding.DecodedLen(len(root)))
-
-	nRoot, err := base64.StdEncoding.Decode(oRoot, []byte(root))
-	if err != nil {
-		return false, err
-	}
-
-	rootcert, err := x509.ParseCertificate(oRoot[:nRoot])
+	rootcert, err := mdsParseX509Certificate(root)
 	if err != nil {
 		return false, err
 	}
@@ -232,39 +229,29 @@ func validateChain(root string, chain []any) (bool, error) {
 
 	roots.AddCert(rootcert)
 
-	o := make([]byte, base64.StdEncoding.DecodedLen(len(intermediate)))
-
-	n, err := base64.StdEncoding.Decode(o, []byte(intermediate))
-	if err != nil {
-		return false, err
-	}
-
-	intcert, err := x509.ParseCertificate(o[:n])
-	if err != nil {
-		return false, err
-	}
-
-	if revoked, ok := revoke.VerifyCertificate(intcert); !ok {
-		issuer := intcert.IssuingCertificateURL
-
-		if issuer != nil {
-			return false, errCRLUnavailable
-		}
-	} else if revoked {
-		return false, errIntermediateCertRevoked
-	}
-
 	ints := x509.NewCertPool()
-	ints.AddCert(intcert)
 
-	l := make([]byte, base64.StdEncoding.DecodedLen(len(leaf)))
+	for _, value := range encoded[1:] {
+		var intcert *x509.Certificate
 
-	n, err = base64.StdEncoding.Decode(l, []byte(leaf))
-	if err != nil {
-		return false, err
+		if intcert, err = mdsParseX509Certificate(value); err != nil {
+			return false, err
+		}
+
+		if revoked, ok := revoke.VerifyCertificate(intcert); !ok {
+			issuer := intcert.IssuingCertificateURL
+
+			if issuer != nil {
+				return false, errCRLUnavailable
+			}
+		} else if revoked {
+			return false, errIntermediateCertRevoked
+		}
+
+		ints.AddCert(intcert)
 	}
 
-	leafcert, err := x509.ParseCertificate(l[:n])
+	leafcert, err := mdsParseX509Certificate(encoded[0])
 	if err != nil {
 		return false, err
 	}
