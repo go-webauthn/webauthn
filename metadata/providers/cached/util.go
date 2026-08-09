@@ -1,43 +1,49 @@
 package cached
 
 import (
-	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/metadata/providers/memory"
 )
 
-func doTruncateCopyAndSeekStart(f *os.File, rc io.ReadCloser) (err error) {
-	if err = f.Truncate(0); err != nil {
+// doAtomicReplace writes the data to a temporary file in the same directory as the cache before atomically replacing
+// it. The existing cache is never truncated or otherwise modified until the replacement has been written and synced in
+// full, so neither a partial write nor a failure part way through can leave a corrupt blob behind. The temporary file
+// is removed if any step fails.
+func doAtomicReplace(name string, data []byte) (err error) {
+	var f *os.File
+
+	if f, err = os.CreateTemp(filepath.Dir(name), filepath.Base(name)+".tmp*"); err != nil {
 		return err
 	}
 
-	if _, err = io.Copy(f, rc); err != nil {
-		return err
-	}
+	tmp := f.Name()
 
-	if _, err = f.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-
-	return rc.Close()
-}
-
-func doOpenOrCreate(name string) (f *os.File, created bool, err error) {
-	if f, err = os.OpenFile(name, os.O_RDWR, 0); err == nil {
-		return f, false, nil
-	}
-
-	if os.IsNotExist(err) {
-		if f, err = os.Create(name); err != nil {
-			return nil, false, err
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmp)
 		}
+	}()
 
-		return f, true, nil
+	if _, err = f.Write(data); err != nil {
+		_ = f.Close()
+
+		return err
 	}
 
-	return nil, false, err
+	if err = f.Sync(); err != nil {
+		_ = f.Close()
+
+		return err
+	}
+
+	if err = f.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmp, name)
 }
 
 func defaultNew(mds *metadata.Metadata) (provider metadata.Provider, err error) {

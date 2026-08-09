@@ -1,9 +1,12 @@
 package metadata
 
 import (
+	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateChainMalformed(t *testing.T) {
@@ -39,6 +42,27 @@ func TestValidateChainMalformed(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestDecodeBytesRejectsX509URIHeader(t *testing.T) {
+	decoder, err := NewDecoder()
+	require.NoError(t, err)
+
+	encode := func(v string) string {
+		return base64.RawURLEncoding.EncodeToString([]byte(v))
+	}
+
+	token := strings.Join([]string{
+		encode(`{"alg":"ES256","typ":"JWT","x5u":"https://mds.example.com/signing.pem"}`),
+		encode(`{"no":1,"nextUpdate":"2025-01-01","entries":[]}`),
+		encode("signature"),
+	}, ".")
+
+	payload, err := decoder.DecodeBytes([]byte(token))
+
+	assert.Nil(t, payload)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "x5u encountered in header of metadata TOC payload")
 }
 
 func TestValidateChainFallbackRoot(t *testing.T) {

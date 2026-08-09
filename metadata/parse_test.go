@@ -130,16 +130,43 @@ func TestEntryJSON_Parse(t *testing.T) {
 				TimeOfLastStatusChange: "2025-01-01",
 			},
 		},
+		{
+			name: "ShouldSucceedWithStatusReportsWithoutEffectiveDate",
+			have: EntryJSON{
+				AaGUID:                 "0132d110-bf4e-4208-a403-ab4f5f12efe5",
+				TimeOfLastStatusChange: "2025-01-01",
+				StatusReports: []StatusReportJSON{
+					{Status: FidoCertifiedL1},
+				},
+				BiometricStatusReports: []BiometricStatusReportJSON{
+					{CertLevel: 1, Modality: "fingerprint"},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.have.Parse()
+			entry, err := tc.have.Parse()
 
-			if tc.err == "" {
-				assert.NoError(t, err)
-			} else {
+			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+
+			for i := range entry.StatusReports {
+				if len(tc.have.StatusReports[i].EffectiveDate) == 0 {
+					assert.Nil(t, entry.StatusReports[i].EffectiveDate, "status report %d", i)
+				}
+			}
+
+			for i := range entry.BiometricStatusReports {
+				if len(tc.have.BiometricStatusReports[i].EffectiveDate) == 0 {
+					assert.Nil(t, entry.BiometricStatusReports[i].EffectiveDate, "biometric status report %d", i)
+				}
 			}
 		})
 	}
@@ -240,9 +267,10 @@ func TestStatementJSON_Parse(t *testing.T) {
 
 func TestBiometricStatusReportJSON_Parse(t *testing.T) {
 	testCases := []struct {
-		name string
-		have BiometricStatusReportJSON
-		err  string
+		name     string
+		have     BiometricStatusReportJSON
+		expected *time.Time
+		err      string
 	}{
 		{
 			name: "ShouldFailInvalidEffectiveDate",
@@ -257,18 +285,30 @@ func TestBiometricStatusReportJSON_Parse(t *testing.T) {
 				EffectiveDate: "2025-01-01",
 				CertLevel:     1,
 			},
+			expected: timePtr(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
+		},
+		{
+			name: "ShouldSucceedWithoutEffectiveDate",
+			have: BiometricStatusReportJSON{
+				CertLevel: 1,
+				Modality:  "fingerprint",
+			},
+			expected: nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.have.Parse()
+			report, err := tc.have.Parse()
 
-			if tc.err == "" {
-				assert.NoError(t, err)
-			} else {
+			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
+
+				return
 			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, report.EffectiveDate)
 		})
 	}
 }
@@ -327,7 +367,17 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 			},
 			expected: StatusReport{
 				Status:        "",
-				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				EffectiveDate: timePtr(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
+			},
+		},
+		{
+			name: "ShouldSucceedWithoutEffectiveDate",
+			have: StatusReportJSON{
+				Status: FidoCertifiedL1,
+			},
+			expected: StatusReport{
+				Status:        FidoCertifiedL1,
+				EffectiveDate: nil,
 			},
 		},
 		{
@@ -337,7 +387,7 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 				SunsetDate:    "2026-06-01",
 			},
 			expected: StatusReport{
-				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				EffectiveDate: timePtr(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
 				SunsetDate:    timePtr(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)),
 			},
 		},
@@ -359,7 +409,7 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 			},
 			expected: StatusReport{
 				Status:                           FidoCertifiedL1,
-				EffectiveDate:                    time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC),
+				EffectiveDate:                    timePtr(time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)),
 				AuthenticatorVersion:             42,
 				CertificationDescriptor:          "SecurityKey based on CC EAL 5 certified chip",
 				CertificateNumber:                "FIDO2-CERT-001",
@@ -379,7 +429,7 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 				URL:           "example.com/update",
 			},
 			expected: StatusReport{
-				EffectiveDate: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				EffectiveDate: timePtr(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
 			},
 			expectedURL: "https://example.com/update",
 		},

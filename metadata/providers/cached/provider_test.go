@@ -2,6 +2,9 @@ package cached
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -161,4 +164,70 @@ func TestWithNew(t *testing.T) {
 	_, _ = p.newup(nil)
 
 	assert.True(t, called)
+}
+
+func TestProviderDoesNotPoisonCache(t *testing.T) {
+	const sentinel = "cached blob that must survive a failed refresh"
+
+	testCases := []struct {
+		name    string
+		status  int
+		body    string
+		wantErr string
+	}{
+		{
+			name:    "ShouldRejectServerError",
+			status:  http.StatusServiceUnavailable,
+			body:    "<html>503 Service Unavailable</html>",
+			wantErr: "unexpected status code 503",
+		},
+		{
+			name:    "ShouldRejectNotFound",
+			status:  http.StatusNotFound,
+			body:    "not found",
+			wantErr: "unexpected status code 404",
+		},
+		{
+			// A 200 response is not enough: the body must decode and parse before it is allowed to replace the cache.
+			name:    "ShouldRejectUnparseableBody",
+			status:  http.StatusOK,
+			body:    "this is not a jwt",
+			wantErr: "token is malformed",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+
+			t.Run("ShouldPreserveExistingCache", func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "mds.jwt")
+				require.NoError(t, os.WriteFile(path, []byte(sentinel), 0600))
+
+				// Force skips reading the existing cache and goes straight to the download.
+				_, err := New(WithPath(path), WithMetadataURL(srv.URL), WithForceUpdate(true))
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErr)
+
+				content, err := os.ReadFile(path)
+				require.NoError(t, err)
+				assert.Equal(t, sentinel, string(content), "a failed refresh must not overwrite the cached blob")
+			})
+
+			t.Run("ShouldNotLeaveCacheFileBehind", func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "mds.jwt")
+
+				_, err := New(WithPath(path), WithMetadataURL(srv.URL))
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.wantErr)
+
+				_, err = os.Stat(path)
+				assert.True(t, os.IsNotExist(err), "a cache file we created but never populated must be removed, otherwise it fails to parse on every subsequent run")
+			})
+		})
+	}
 }
