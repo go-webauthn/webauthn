@@ -39,6 +39,7 @@ type sessionExtensions struct {
 	LargeBlobWrite                    bool                                `msg:"lbWrite,omitempty"`
 	CredentialProtectionPolicy        protocol.CredentialProtectionPolicy `msg:"credProtect,omitempty"`
 	EnforceCredentialProtectionPolicy bool                                `msg:"cpEnforce,omitempty"`
+	CredBlob                          bool                                `msg:"credBlob,omitempty"`
 	Extra                             map[string]any                      `msg:"extra,omitempty"`
 }
 

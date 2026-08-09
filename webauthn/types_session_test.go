@@ -271,6 +271,7 @@ func newPopulatedSessionData() SessionData {
 			LargeBlobRead:                     true,
 			CredentialProtectionPolicy:        protocol.CredentialProtectionPolicyUserVerificationRequired,
 			EnforceCredentialProtectionPolicy: true,
+			CredBlob:                          true,
 			Extra:                             map[string]any{"vendorThing": int64(2)},
 		},
 		CredParams: []protocol.CredentialParameter{

@@ -63,6 +63,10 @@ func newCredentialExtensions(c *protocol.ParsedCredentialCreationData) (extensio
 		extensions.LargeBlobSupported = ptr(*outputs.LargeBlob.Supported)
 	}
 
+	if outputs.HMACCreateSecret != nil {
+		extensions.HMACSecret = ptr(*outputs.HMACCreateSecret)
+	}
+
 	if ext := c.Response.AttestationObject.AuthData.Ext; ext != nil {
 		if ext.CredProtect != nil {
 			extensions.CredProtect = *ext.CredProtect
@@ -70,6 +74,16 @@ func newCredentialExtensions(c *protocol.ParsedCredentialCreationData) (extensio
 
 		if ext.MinPinLength != nil {
 			extensions.MinPinLength = ptr(*ext.MinPinLength)
+		}
+
+		if ext.CredBlobSet != nil {
+			extensions.CredBlobSet = ptr(*ext.CredBlobSet)
+		}
+
+		// The authenticator output wins over the client's hmacCreateSecret because it is covered by the
+		// attestation signature; the client value assigned above stands only when the authenticator omits it.
+		if ext.HMACSecret != nil {
+			extensions.HMACSecret = ptr(*ext.HMACSecret)
 		}
 	}
 
@@ -152,6 +166,23 @@ type CredentialExtensions struct {
 
 	// LargeBlobSupported reports whether the credential supports large blob storage.
 	LargeBlobSupported *bool `json:"largeBlobSupported,omitempty" msg:"lbs,omitempty"`
+
+	// HMACSecret reports whether the authenticator provisioned a CTAP hmac-secret for this credential, which is
+	// what determines whether requesting [WithExtensionHMACGetSecret] at authentication can succeed.
+	//
+	// The value is taken from the authenticator extension outputs where present, because those are covered by the
+	// attestation signature, and from the client's 'hmacCreateSecret' output otherwise. The two are the signed and
+	// client-reported views of one capability rather than two separate properties, so they share a field.
+	//
+	// This is a sibling of PRFEnabled rather than a duplicate of it: the pseudo-random function extension is the
+	// WebAuthn level abstraction over the same authenticator capability, and a client may report either, both, or
+	// neither depending on which extension the Relying Party requested.
+	HMACSecret *bool `json:"hmacSecret,omitempty" msg:"hs,omitempty"`
+
+	// CredBlobSet reports whether the blob submitted with [WithExtensionCredBlob] at registration was stored by
+	// the authenticator, which is what determines whether requesting [WithExtensionGetCredBlob] at authentication
+	// can return anything.
+	CredBlobSet *bool `json:"credBlobSet,omitempty" msg:"cbs,omitempty"`
 }
 
 // UnmarshalJSON decodes a [Credential] from JSON, applying a backward-compatibility migration for records produced

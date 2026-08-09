@@ -821,7 +821,7 @@ func (z *CredentialExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 5 bits */
+	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -918,6 +918,44 @@ func (z *CredentialExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 			zb0001Mask |= 0x10
+		case "hs":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+				z.HMACSecret = nil
+			} else {
+				if z.HMACSecret == nil {
+					z.HMACSecret = new(bool)
+				}
+				*z.HMACSecret, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+			}
+			zb0001Mask |= 0x20
+		case "cbs":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+				z.CredBlobSet = nil
+			} else {
+				if z.CredBlobSet == nil {
+					z.CredBlobSet = new(bool)
+				}
+				*z.CredBlobSet, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+			}
+			zb0001Mask |= 0x40
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -927,7 +965,7 @@ func (z *CredentialExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1f {
+	if zb0001Mask != 0x7f {
 		if (zb0001Mask & 0x1) == 0 {
 			z.RK = nil
 		}
@@ -943,6 +981,12 @@ func (z *CredentialExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 		if (zb0001Mask & 0x10) == 0 {
 			z.LargeBlobSupported = nil
 		}
+		if (zb0001Mask & 0x20) == 0 {
+			z.HMACSecret = nil
+		}
+		if (zb0001Mask & 0x40) == 0 {
+			z.CredBlobSet = nil
+		}
 	}
 	return
 }
@@ -950,8 +994,8 @@ func (z *CredentialExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *CredentialExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 	// check for omitted fields
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
 	if z.RK == nil {
 		zb0001Len--
@@ -972,6 +1016,14 @@ func (z *CredentialExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 	if z.LargeBlobSupported == nil {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if z.HMACSecret == nil {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if z.CredBlobSet == nil {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -1069,6 +1121,44 @@ func (z *CredentialExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 				}
 			}
 		}
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// write "hs"
+			err = en.Append(0xa2, 0x68, 0x73)
+			if err != nil {
+				return
+			}
+			if z.HMACSecret == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteBool(*z.HMACSecret)
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// write "cbs"
+			err = en.Append(0xa3, 0x63, 0x62, 0x73)
+			if err != nil {
+				return
+			}
+			if z.CredBlobSet == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteBool(*z.CredBlobSet)
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+			}
+		}
 	}
 	return
 }
@@ -1077,8 +1167,8 @@ func (z *CredentialExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *CredentialExtensions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// check for omitted fields
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
 	if z.RK == nil {
 		zb0001Len--
@@ -1099,6 +1189,14 @@ func (z *CredentialExtensions) MarshalMsg(b []byte) (o []byte, err error) {
 	if z.LargeBlobSupported == nil {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if z.HMACSecret == nil {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if z.CredBlobSet == nil {
+		zb0001Len--
+		zb0001Mask |= 0x40
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -1146,6 +1244,24 @@ func (z *CredentialExtensions) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendBool(o, *z.LargeBlobSupported)
 			}
 		}
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// string "hs"
+			o = append(o, 0xa2, 0x68, 0x73)
+			if z.HMACSecret == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendBool(o, *z.HMACSecret)
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// string "cbs"
+			o = append(o, 0xa3, 0x63, 0x62, 0x73)
+			if z.CredBlobSet == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendBool(o, *z.CredBlobSet)
+			}
+		}
 	}
 	return
 }
@@ -1160,7 +1276,7 @@ func (z *CredentialExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 5 bits */
+	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -1253,6 +1369,42 @@ func (z *CredentialExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 			zb0001Mask |= 0x10
+		case "hs":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.HMACSecret = nil
+			} else {
+				if z.HMACSecret == nil {
+					z.HMACSecret = new(bool)
+				}
+				*z.HMACSecret, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+			}
+			zb0001Mask |= 0x20
+		case "cbs":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.CredBlobSet = nil
+			} else {
+				if z.CredBlobSet == nil {
+					z.CredBlobSet = new(bool)
+				}
+				*z.CredBlobSet, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+			}
+			zb0001Mask |= 0x40
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1262,7 +1414,7 @@ func (z *CredentialExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1f {
+	if zb0001Mask != 0x7f {
 		if (zb0001Mask & 0x1) == 0 {
 			z.RK = nil
 		}
@@ -1277,6 +1429,12 @@ func (z *CredentialExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if (zb0001Mask & 0x10) == 0 {
 			z.LargeBlobSupported = nil
+		}
+		if (zb0001Mask & 0x20) == 0 {
+			z.HMACSecret = nil
+		}
+		if (zb0001Mask & 0x40) == 0 {
+			z.CredBlobSet = nil
 		}
 	}
 	o = bts
@@ -1305,6 +1463,18 @@ func (z *CredentialExtensions) Msgsize() (s int) {
 	}
 	s += 4
 	if z.LargeBlobSupported == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.BoolSize
+	}
+	s += 3
+	if z.HMACSecret == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.BoolSize
+	}
+	s += 4
+	if z.CredBlobSet == nil {
 		s += msgp.NilSize
 	} else {
 		s += msgp.BoolSize

@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -46,12 +47,25 @@ func TestAuthenticationExtensionsSessionDerivation(t *testing.T) {
 		assert.True(t, AuthenticationExtensions{}.Session().IsZero())
 	})
 
+	t.Run("CredBlob", func(t *testing.T) {
+		session := AuthenticationExtensions{CredBlob: []byte("a blob")}.Session()
+
+		assert.True(t, session.CredBlob)
+
+		// The blob is Relying Party data with no verification role beyond the flag, so it must not be persisted.
+		data, err := json.Marshal(session)
+		require.NoError(t, err)
+
+		assert.NotContains(t, string(data), "a blob")
+	})
+
 	t.Run("EveryNewMemberIsCoveredByIsZero", func(t *testing.T) {
 		for name, session := range map[string]SessionExtensions{
 			"LargeBlobRead":                     {LargeBlobRead: true},
 			"LargeBlobWrite":                    {LargeBlobWrite: true},
 			"CredentialProtectionPolicy":        {CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationOptional},
 			"EnforceCredentialProtectionPolicy": {EnforceCredentialProtectionPolicy: true},
+			"CredBlob":                          {CredBlob: true},
 		} {
 			assert.Falsef(t, session.IsZero(), "IsZero must not report %s as empty", name)
 		}

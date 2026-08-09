@@ -44,6 +44,11 @@ type SessionExtensions struct {
 	// EnforceCredentialProtectionPolicy records that the requested credential protection policy must be honoured.
 	EnforceCredentialProtectionPolicy bool `json:"enforceCredentialProtectionPolicy,omitempty"`
 
+	// CredBlob records that a blob was submitted for storage with the credential at registration. As with
+	// LargeBlobWrite only the intent is recorded, because the blob is Relying Party data with no verification role
+	// beyond this flag.
+	CredBlob bool `json:"credBlob,omitempty"`
+
 	// Extra carries the inputs of extensions this library does not model, so a Relying Party can verify the
 	// outputs of its own extensions. Whatever is placed here is persisted verbatim; keep it small.
 	Extra map[string]any `json:"extra,omitempty"`
@@ -53,7 +58,7 @@ type SessionExtensions struct {
 func (e SessionExtensions) IsZero() bool {
 	return len(e.Requested) == 0 && e.AppID == "" && e.AppIDExclude == "" && e.LargeBlob == "" && !e.LargeBlobRead &&
 		!e.LargeBlobWrite && e.CredentialProtectionPolicy == "" && !e.EnforceCredentialProtectionPolicy &&
-		len(e.Extra) == 0
+		!e.CredBlob && len(e.Extra) == 0
 }
 
 // Session returns the subset of these inputs that must be persisted in the session for the finish step of the
@@ -71,6 +76,7 @@ func (e AuthenticationExtensions) Session() SessionExtensions {
 		LargeBlobWrite:                    len(e.LargeBlob.Write) != 0,
 		CredentialProtectionPolicy:        e.CredentialProtectionPolicy,
 		EnforceCredentialProtectionPolicy: e.EnforceCredentialProtectionPolicy,
+		CredBlob:                          len(e.CredBlob) != 0,
 		Extra:                             maps.Clone(e.Extra),
 	}
 }

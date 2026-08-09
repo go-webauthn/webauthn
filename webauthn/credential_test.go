@@ -603,6 +603,8 @@ func TestNewCredentialRecordsExtensionResults(t *testing.T) {
 	parsed.Response.AttestationObject.AuthData.Ext = &protocol.AuthenticatorExtensionOutputs{
 		CredProtect:  ptr(protocol.CredentialProtectionPolicyUserVerificationRequired),
 		MinPinLength: ptr(uint(6)),
+		CredBlobSet:  ptr(true),
+		HMACSecret:   ptr(true),
 	}
 
 	credential, err := NewCredential(nil, parsed)
@@ -621,6 +623,50 @@ func TestNewCredentialRecordsExtensionResults(t *testing.T) {
 
 	require.NotNil(t, credential.Extensions.MinPinLength)
 	assert.Equal(t, uint(6), *credential.Extensions.MinPinLength)
+
+	require.NotNil(t, credential.Extensions.CredBlobSet)
+	assert.True(t, *credential.Extensions.CredBlobSet)
+
+	require.NotNil(t, credential.Extensions.HMACSecret)
+	assert.True(t, *credential.Extensions.HMACSecret)
+}
+
+// The hmac-secret capability arrives on two channels. The authenticator output is covered by the attestation
+// signature, so it wins; the client's hmacCreateSecret stands only when the authenticator omits it.
+func TestNewCredentialRecordsHMACSecretFromEitherSource(t *testing.T) {
+	testCases := []struct {
+		name     string
+		client   *bool
+		signed   *bool
+		expected *bool
+	}{
+		{name: "NeitherSource"},
+		{name: "ClientOnly", client: ptr(true), expected: ptr(true)},
+		{name: "AuthenticatorOnly", signed: ptr(true), expected: ptr(true)},
+		{name: "AuthenticatorWins", client: ptr(true), signed: ptr(false), expected: ptr(false)},
+		{name: "FalseIsRecorded", client: ptr(false), expected: ptr(false)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed := newTestParsedCredentialCreationData(t)
+
+			parsed.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{HMACCreateSecret: tc.client}
+			parsed.Response.AttestationObject.AuthData.Ext = &protocol.AuthenticatorExtensionOutputs{HMACSecret: tc.signed}
+
+			credential, err := NewCredential(nil, parsed)
+			require.NoError(t, err)
+
+			if tc.expected == nil {
+				assert.Nil(t, credential.Extensions.HMACSecret)
+
+				return
+			}
+
+			require.NotNil(t, credential.Extensions.HMACSecret)
+			assert.Equal(t, *tc.expected, *credential.Extensions.HMACSecret)
+		})
+	}
 }
 
 func TestNewCredentialExtensionsDoNotAliasParsedResponse(t *testing.T) {
@@ -706,6 +752,8 @@ func TestCredentialExtensionsRoundTrip(t *testing.T) {
 			MinPinLength:       ptr(uint(6)),
 			PRFEnabled:         ptr(true),
 			LargeBlobSupported: ptr(false),
+			HMACSecret:         ptr(true),
+			CredBlobSet:        ptr(false),
 		},
 	}
 
