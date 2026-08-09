@@ -60,7 +60,7 @@ func TestAttestationVerify(t *testing.T) {
 
 			pcc.Response = *parsedAttestationResponse
 
-			_, err = pcc.Verify(options.Response.Challenge.String(), options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginExplicitVerificationMode, false, false, false, nil, options.Response.Parameters, AttestationPolicy{})
+			_, err = pcc.Verify(options.Response.Challenge.String(), options.Response.RelyingParty.ID, []string{options.Response.RelyingParty.Name}, nil, TopOriginExplicitVerificationMode, false, false, false, nil, options.Response.Parameters, AttestationPolicy{}, SignaturePolicy{})
 
 			require.NoError(t, err)
 		})
@@ -72,7 +72,7 @@ func TestPackedAttestationVerification(t *testing.T) {
 
 	clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-	_, _, err := attestationFormatValidationHandlerPacked(pcc.Response.AttestationObject, clientDataHash[:], nil, AttestationPolicy{})
+	_, _, err := attestationFormatValidationHandlerPacked(pcc.Response.AttestationObject, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
 	require.NoError(t, err)
 }
 
@@ -138,7 +138,7 @@ func TestAttestationObject_VerifyAttestation_Errors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.att.VerifyAttestation([]byte("hash"), nil, AttestationPolicy{})
+			err := tc.att.VerifyAttestation([]byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}
@@ -151,7 +151,7 @@ func TestAttestationObject_Verify_AlgorithmMismatch(t *testing.T) {
 
 	wrongParams := []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: -257}}
 
-	err := att.Verify("localhost", clientDataHash[:], false, false, nil, wrongParams, AttestationPolicy{})
+	err := att.Verify("localhost", clientDataHash[:], false, false, nil, wrongParams, AttestationPolicy{}, SignaturePolicy{})
 	require.EqualError(t, err, "Invalid attestation format")
 }
 
@@ -170,7 +170,7 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 		{
 			name:   "ShouldWrapProtocolError",
 			format: "test-format",
-			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return string(metadata.BasicFull), nil, ErrInvalidAttestation.WithDetails("handler failed")
 			},
 			err:     "handler failed",
@@ -179,7 +179,7 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 		{
 			name:   "ShouldWrapNonProtocolError",
 			format: "test-format",
-			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return string(metadata.BasicFull), nil, fmt.Errorf("stdlib error")
 			},
 			err:     "stdlib error",
@@ -188,14 +188,14 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 		{
 			name:   "ShouldReturnNilForCompoundAttestationType",
 			format: "test-format",
-			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return string(AttestationFormatCompound), nil, nil
 			},
 		},
 		{
 			name:   "ShouldFailWithInvalidAAGUIDLength",
 			format: "test-format",
-			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			handler: func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return string(metadata.BasicFull), nil, nil
 			},
 			authData: AuthenticatorData{
@@ -218,7 +218,7 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 				AuthData:     tc.authData,
 			}
 
-			err := att.VerifyAttestation([]byte("hash"), nil, AttestationPolicy{})
+			err := att.VerifyAttestation([]byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				require.Error(t, err)

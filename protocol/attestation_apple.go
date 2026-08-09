@@ -27,7 +27,7 @@ import (
 // Specification: §8.8. Apple Anonymous Attestation Statement Format
 //
 // See : https://www.w3.org/TR/webauthn/#sctn-apple-anonymous-attestation
-func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (attestationType string, x5cs []any, err error) {
 	// Step 1. Verify that attStmt is valid CBOR conforming to the syntax defined above and perform CBOR decoding on it
 	// to extract the contained fields.
 	var (

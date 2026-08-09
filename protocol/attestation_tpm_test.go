@@ -502,7 +502,7 @@ func TestTPMAttestationVerificationBasicConstraints(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(makeTPMAttestation(t, tc.opts), nil, nil, AttestationPolicy{})
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(makeTPMAttestation(t, tc.opts), nil, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
@@ -555,7 +555,7 @@ func TestTPMAttestationVerificationAAGUID(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(makeTPMAttestation(t, tc.opts), nil, nil, AttestationPolicy{})
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(makeTPMAttestation(t, tc.opts), nil, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
@@ -632,7 +632,7 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-			attestationType, _, err := attestationFormatValidationHandlerTPM(pcc.Response.AttestationObject, clientDataHash[:], nil, AttestationPolicy{})
+			attestationType, _, err := attestationFormatValidationHandlerTPM(pcc.Response.AttestationObject, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
 			require.NoError(t, err)
 
 			assert.Equal(t, "attca", attestationType)
@@ -721,7 +721,7 @@ func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(tc.att, nil, nil, AttestationPolicy{})
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(tc.att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			assert.Equal(t, tc.attestationType, attestationType)
 			assert.Equal(t, tc.x5cs, x5cs)
@@ -832,7 +832,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 				},
 			}
 
-			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{})
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
 			} else {
@@ -919,7 +919,7 @@ func TestTPMAttestationVerificationRSAExponent(t *testing.T) {
 			}
 
 			require.NotPanics(t, func() {
-				attestationType, x5cs, aerr := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{})
+				attestationType, x5cs, aerr := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
 
 				assert.Empty(t, attestationType)
 				assert.Nil(t, x5cs)
@@ -1003,7 +1003,7 @@ func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
 			}
 
 			att.AttStatement[stmtCertInfo] = tpm2.Marshal(tc.certInfo)
-			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{})
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
@@ -1107,7 +1107,7 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			att.AttStatement[stmtX5C] = tc.x5c
-			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{})
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)

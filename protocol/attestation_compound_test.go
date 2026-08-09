@@ -25,7 +25,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 	t.Run("ShouldReturnValidationErrors", func(t *testing.T) {
 		withFreshAttestationRegistry(t)
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			return "ok", nil, nil
 		}
 
@@ -176,7 +176,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				att := tc.mutate(base)
 
-				attestationType, x5cs, err := attestationFormatValidationHandlerCompound(att, []byte("clientDataHash"), nil, AttestationPolicy{})
+				attestationType, x5cs, err := attestationFormatValidationHandlerCompound(att, []byte("clientDataHash"), nil, AttestationPolicy{}, SignaturePolicy{})
 				require.Error(t, err)
 				assert.Empty(t, attestationType)
 				assert.Nil(t, x5cs)
@@ -206,7 +206,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		var calls []call
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			calls = append(calls, call{
 				format:  att.Format,
 				attStmt: att.AttStatement,
@@ -217,7 +217,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			return typePacked, []any{[]byte("cert1")}, nil
 		}
 
-		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			calls = append(calls, call{
 				format:  att.Format,
 				attStmt: att.AttStatement,
@@ -252,7 +252,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			},
 		}
 
-		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{})
+		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 		require.NoError(t, err)
 
 		// §8.9 returns any combination of the outputs of the successful verification procedures. The type of the
@@ -281,13 +281,13 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		var calls []call
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			calls = append(calls, call{format: att.Format, policy: policy})
 
 			return typePacked, nil, nil
 		}
 
-		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			calls = append(calls, call{format: att.Format, policy: policy})
 
 			return typeApple, nil, nil
@@ -310,7 +310,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		// replaced by AttestationPolicy{}, which is the exact regression this test exists to catch.
 		policy := AttestationPolicy{AndroidKey: AndroidKeyPolicy{AuthorizationScope: AndroidKeyAuthorizationScopeUnion}}
 
-		_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, policy)
+		_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, policy, SignaturePolicy{})
 		require.NoError(t, err)
 
 		require.Len(t, calls, 2)
@@ -323,7 +323,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		subErr := ErrInvalidAttestation.WithDetails("sub-handler failed")
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			return "", nil, subErr
 		}
 
@@ -340,7 +340,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			},
 		}
 
-		_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{})
+		_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, subErr))
 	})
@@ -350,7 +350,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		var handlerCalls int
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			handlerCalls++
 
 			return testAttTypeSome, []any{[]byte("cert")}, nil
@@ -380,7 +380,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			},
 		}
 
-		_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), mds, AttestationPolicy{})
+		_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), mds, AttestationPolicy{}, SignaturePolicy{})
 		require.Error(t, err)
 
 		protoErr, ok := err.(*Error)
@@ -397,7 +397,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		var handlerCalls int
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			handlerCalls++
 			return testAttTypeSome, []any{[]byte("cert")}, nil
 		}
@@ -417,7 +417,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			},
 		}
 
-		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{})
+		gotType, gotX5Cs, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 		require.NoError(t, err)
 
 		assert.Equal(t, testAttTypeSome, gotType)
@@ -430,7 +430,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 	t.Run("ShouldValidateMetadataAgainstTheConveyedAttestationType", func(t *testing.T) {
 		withFreshAttestationRegistry(t)
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			return string(metadata.BasicFull), nil, nil
 		}
 
@@ -447,7 +447,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			},
 		}
 
-		gotType, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{})
+		gotType, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 		require.NoError(t, err)
 		require.NotEqual(t, stmtTypNone, gotType)
 
@@ -483,11 +483,11 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 
 			withFreshAttestationRegistry(t)
 
-			attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return "", nil, errPacked
 			}
 
-			attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return typeApple, nil, nil
 			}
 		}
@@ -497,7 +497,7 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 
 			// The type recorded against the credential is that of the sub-statement which was verified, not that of
 			// the first sub-statement which the all scope conveys.
-			attestationType, x5cs, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny)
+			attestationType, x5cs, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny, SignaturePolicy{})
 			require.NoError(t, err)
 			assert.Equal(t, typeApple, attestationType)
 			assert.Nil(t, x5cs)
@@ -506,7 +506,7 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 		t.Run("All", func(t *testing.T) {
 			register(t)
 
-			_, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAll)
+			_, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAll, SignaturePolicy{})
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, errPacked))
 		})
@@ -517,19 +517,19 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 
 		var packedCalls, appleCalls int
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			packedCalls++
 
 			return typePacked, nil, nil
 		}
 
-		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			appleCalls++
 
 			return "", nil, ErrInvalidAttestation.WithDetails("apple sub-statement failed")
 		}
 
-		attestationType, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny)
+		attestationType, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny, SignaturePolicy{})
 		require.NoError(t, err)
 
 		assert.Equal(t, typePacked, attestationType)
@@ -570,11 +570,11 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 
 			// The surrogate type isn't one the metadata entry above declares, so this sub-statement verifies but is
 			// rejected by ValidateMetadata.
-			attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return string(metadata.BasicSurrogate), nil, nil
 			}
 
-			attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 				return string(metadata.BasicFull), nil, nil
 			}
 		}
@@ -582,7 +582,7 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 		t.Run("Any", func(t *testing.T) {
 			register(t)
 
-			attestationType, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(u[:]), []byte("hash"), newProvider(t), policyAny)
+			attestationType, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(u[:]), []byte("hash"), newProvider(t), policyAny, SignaturePolicy{})
 			require.NoError(t, err)
 			assert.Equal(t, string(metadata.BasicFull), attestationType)
 		})
@@ -590,7 +590,7 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 		t.Run("All", func(t *testing.T) {
 			register(t)
 
-			_, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(u[:]), []byte("hash"), newProvider(t), policyAll)
+			_, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(u[:]), []byte("hash"), newProvider(t), policyAll, SignaturePolicy{})
 			require.Error(t, err)
 
 			protoErr, ok := err.(*Error)
@@ -609,15 +609,15 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 			errApple  = ErrInvalidAttestation.WithDetails("apple sub-statement failed")
 		)
 
-		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			return "", nil, errPacked
 		}
 
-		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 			return "", nil, errApple
 		}
 
-		attestationType, x5cs, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny)
+		attestationType, x5cs, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny, SignaturePolicy{})
 		require.Error(t, err)
 
 		assert.Empty(t, attestationType)
@@ -650,7 +650,7 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 			t.Run(tc.name, func(t *testing.T) {
 				withFreshAttestationRegistry(t)
 
-				attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+				attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (string, []any, error) {
 					return typeApple, nil, nil
 				}
 
@@ -660,7 +660,7 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 					map[string]any{stmtFmt: string(AttestationFormatApple), stmtAttStmt: map[string]any{}},
 				}
 
-				_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, tc.policy)
+				_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, tc.policy, SignaturePolicy{})
 				require.Error(t, err)
 
 				protoErr, ok := err.(*Error)

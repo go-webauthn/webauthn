@@ -1,6 +1,7 @@
 package webauthncose
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdh"
 	"crypto/ecdsa"
@@ -101,13 +102,18 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 
 	e := &ECDSASignature{}
 
-	var opts []asn1.UnmarshalOpt
-
-	if allowBERIntegers.Load() {
-		opts = append(opts, asn1.WithUnmarshalAllowBERIntegers(true))
+	if _, err = asn1.Unmarshal(sig, e); err != nil {
+		return false, ErrSigNotProvidedOrInvalid
 	}
 
-	if _, err = asn1.Unmarshal(sig, e, opts...); err != nil {
+	// DER is a canonical encoding, so re-encoding the decoded integers reproduces a conforming signature exactly.
+	// Anything else is rejected: data trailing the signature and elements trailing the two integers within it are
+	// both discarded by the decoder rather than reported, and an integer which is not minimally encoded decodes to
+	// the same value as the one which is. A Relying Party which accepts a non-conforming encoding normalizes the
+	// signature before it reaches this point rather than relaxing the check here.
+	var der []byte
+
+	if der, err = asn1.Marshal(*e); err != nil || !bytes.Equal(der, sig) {
 		return false, ErrSigNotProvidedOrInvalid
 	}
 

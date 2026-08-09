@@ -297,14 +297,12 @@ func TestConfig_Validate_DefaultsECDSASignatureEncodingToDER(t *testing.T) {
 			config := &Config{
 				RPID:      "example.com",
 				RPOrigins: []string{"https://example.com"},
-				Attestation: protocol.AttestationPolicy{
-					Signature: protocol.SignaturePolicy{ECDSAEncoding: tc.encoding},
-				},
+				Signature: protocol.SignaturePolicy{ECDSAEncoding: tc.encoding},
 			}
 
 			require.NoError(t, config.validate())
-			assert.Equal(t, tc.expected, config.Attestation.Signature.ECDSAEncoding)
-			assert.Equal(t, config.Attestation, config.GetAttestationPolicy())
+			assert.Equal(t, tc.expected, config.Signature.ECDSAEncoding)
+			assert.Equal(t, config.Signature, config.GetSignaturePolicy())
 		})
 	}
 }

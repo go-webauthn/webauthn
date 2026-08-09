@@ -38,7 +38,7 @@ func init() {
 // Specification: §8.2. Packed Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-packed-attestation
-func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, signature SignaturePolicy) (attestationType string, x5cs []any, err error) {
 	var (
 		alg int64
 		sig []byte
@@ -62,7 +62,7 @@ func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataH
 	// Step 2. If x5c is present, this indicates that the attestation type is not ECDAA.
 	if x5c, ok = att.AttStatement[stmtX5C].([]any); ok {
 		// Handle Basic Attestation steps for the x509 Certificate.
-		return handleBasicAttestation(sig, clientDataHash, att.RawAuthData, att.AuthData.AttData.AAGUID, alg, x5c, mds, policy.Signature)
+		return handleBasicAttestation(sig, clientDataHash, att.RawAuthData, att.AuthData.AttData.AAGUID, alg, x5c, mds, signature)
 	}
 
 	// Step 3. If ecdaaKeyId is present, then the attestation type is ECDAA.
@@ -74,7 +74,7 @@ func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataH
 	}
 
 	// Step 4. If neither x5c nor ecdaaKeyId is present, self attestation is in use.
-	return handleSelfAttestation(alg, att.AuthData.AttData.CredentialPublicKey, att.RawAuthData, clientDataHash, sig, mds, policy.Signature)
+	return handleSelfAttestation(alg, att.AuthData.AttData.CredentialPublicKey, att.RawAuthData, clientDataHash, sig, mds, signature)
 }
 
 // Handle the attestation steps laid out in the basic format.
@@ -113,7 +113,7 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 
 	if sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.COSEAlgorithmIdentifier(alg)); sigAlg == x509.UnknownSignatureAlgorithm {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", alg))
-	} else if err = attestationCertCheckSignature(attestnCert, sigAlg, signatureData, sig, policy); err != nil {
+	} else if err = certCheckSignature(attestnCert, sigAlg, signatureData, sig, policy); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
@@ -224,7 +224,7 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, sig []by
 
 	// §4.2 Verify that sig is a valid signature over the concatenation of authenticatorData and
 	// clientDataHash using the credential public key with alg.
-	if valid, err = attestationKeyVerifySignature(key, verificationData, sig, policy); err != nil {
+	if valid, err = keyVerifySignature(key, verificationData, sig, policy); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Error verifying the signature: %+v", err)).WithError(err)
 	} else if !valid {
 		return "", nil, ErrInvalidAttestation.WithDetails("Unable to verify signature")

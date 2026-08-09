@@ -34,7 +34,7 @@ func init() {
 // Specification: §8.9. Compound Attestation Statement Forma
 //
 // See: https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation
-func attestationFormatValidationHandlerCompound(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerCompound(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, signature SignaturePolicy) (attestationType string, x5cs []any, err error) {
 	var (
 		aaguid   uuid.UUID
 		raw      any
@@ -96,20 +96,20 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 	// for more than one sub-statement, and the paths of independent sub-statements joined together describe no real
 	// chain.
 	if policy.Compound.SubStatementScope.any() {
-		return compoundVerifySubStatementsAny(att, attStmts, clientDataHash, mds, policy, aaguid)
+		return compoundVerifySubStatementsAny(att, attStmts, clientDataHash, mds, policy, signature, aaguid)
 	}
 
-	return compoundVerifySubStatementsAll(att, attStmts, clientDataHash, mds, policy, aaguid)
+	return compoundVerifySubStatementsAll(att, attStmts, clientDataHash, mds, policy, signature, aaguid)
 }
 
 // compoundVerifySubStatementsAll verifies every sub-statement, rejecting the attestation on the first which fails.
 //
 // This is the behavior of [CompoundSubStatementScopeAll].
-func compoundVerifySubStatementsAll(att AttestationObject, attStmts []NonCompoundAttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, aaguid uuid.UUID) (attestationType string, x5cs []any, err error) {
+func compoundVerifySubStatementsAll(att AttestationObject, attStmts []NonCompoundAttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, signature SignaturePolicy, aaguid uuid.UUID) (attestationType string, x5cs []any, err error) {
 	for i, attStmt := range attStmts {
 		var subAttType string
 
-		if subAttType, err = compoundVerifySubStatement(att, attStmt, clientDataHash, mds, policy, aaguid); err != nil {
+		if subAttType, err = compoundVerifySubStatement(att, attStmt, clientDataHash, mds, policy, signature, aaguid); err != nil {
 			return "", nil, err
 		}
 
@@ -129,7 +129,7 @@ func compoundVerifySubStatementsAll(att AttestationObject, attStmts []NonCompoun
 // reached is not lost.
 //
 // This is the behavior of [CompoundSubStatementScopeAny].
-func compoundVerifySubStatementsAny(att AttestationObject, attStmts []NonCompoundAttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, aaguid uuid.UUID) (attestationType string, x5cs []any, err error) {
+func compoundVerifySubStatementsAny(att AttestationObject, attStmts []NonCompoundAttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, signature SignaturePolicy, aaguid uuid.UUID) (attestationType string, x5cs []any, err error) {
 	var (
 		errs    = make([]error, 0, len(attStmts))
 		reasons = make([]string, 0, len(attStmts))
@@ -138,7 +138,7 @@ func compoundVerifySubStatementsAny(att AttestationObject, attStmts []NonCompoun
 	for _, attStmt := range attStmts {
 		var subAttType string
 
-		if subAttType, err = compoundVerifySubStatement(att, attStmt, clientDataHash, mds, policy, aaguid); err != nil {
+		if subAttType, err = compoundVerifySubStatement(att, attStmt, clientDataHash, mds, policy, signature, aaguid); err != nil {
 			errs = append(errs, err)
 			reasons = append(reasons, fmt.Sprintf("%s: %s", attStmt.Format, compoundSubStatementFailureReason(err)))
 
@@ -179,7 +179,7 @@ func compoundSubStatementFailureReason(err error) string {
 // path it produces against the Metadata Service. A sub-statement is verified in full or not at all, so a scope which
 // tolerates a failure treats a sub-statement whose trust path the Metadata Service rejects the same as one whose
 // verification procedure fails.
-func compoundVerifySubStatement(att AttestationObject, attStmt NonCompoundAttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, aaguid uuid.UUID) (attestationType string, err error) {
+func compoundVerifySubStatement(att AttestationObject, attStmt NonCompoundAttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy, signature SignaturePolicy, aaguid uuid.UUID) (attestationType string, err error) {
 	object := AttestationObject{
 		Format:       attStmt.Format,
 		AttStatement: attStmt.AttStatement,
@@ -189,7 +189,7 @@ func compoundVerifySubStatement(att AttestationObject, attStmt NonCompoundAttest
 
 	var cx5cs []any
 
-	if attestationType, cx5cs, err = attestationRegistry[AttestationFormat(object.Format)](object, clientDataHash, mds, policy); err != nil {
+	if attestationType, cx5cs, err = attestationRegistry[AttestationFormat(object.Format)](object, clientDataHash, mds, policy, signature); err != nil {
 		return "", err
 	}
 
