@@ -32,8 +32,8 @@ type AuthenticatorExtensionOutputs struct {
 	// HMACSecret reports whether the hmac-secret was provisioned. Registration only.
 	HMACSecret *bool `json:"-"`
 
-	// HMACSecretV is the encrypted hmac-secret output. Authentication only.
-	HMACSecretV []byte `json:"-"`
+	// HMACSecretOutput is the encrypted hmac-secret output. Authentication only.
+	HMACSecretOutput []byte `json:"-"`
 
 	// UVM reports the user verification methods used for the operation.
 	UVM []UserVerificationMethod `json:"uvm,omitempty"`
@@ -83,13 +83,24 @@ func (p CredentialProtectionPolicy) Value() (value uint64, ok bool) {
 // [AuthenticatorExtensionOutputs.Extra] without an error, so a single non-conforming authenticator cannot fail
 // every ceremony it participates in.
 func ParseAuthenticatorExtensionOutputs(data []byte) (out *AuthenticatorExtensionOutputs, err error) {
-	var members map[string]any
+	var (
+		members map[string]any
+		n       int
+	)
 
-	if err = webauthncbor.Unmarshal(data, &members); err != nil {
+	// The extension data is the remainder of the authenticator data, so the caller cannot bound it; anything after
+	// the map is unaccounted for and must be rejected here or not at all.
+	if n, err = webauthncbor.UnmarshalFirst(data, &members); err != nil {
 		return nil, ErrBadRequest.
 			WithDetails("Error decoding authenticator extension outputs").
 			WithInfo(err.Error()).
 			WithError(err)
+	}
+
+	if n != len(data) {
+		return nil, ErrBadRequest.
+			WithDetails("Leftover bytes decoding authenticator extension outputs").
+			WithInfo(fmt.Sprintf("The extension output map consumed %d of %d bytes", n, len(data)))
 	}
 
 	out = &AuthenticatorExtensionOutputs{}
@@ -197,7 +208,7 @@ func (o *AuthenticatorExtensionOutputs) verifyCredentialProtectionPolicy(session
 // had the expected type. A false result sends the entry to Extra.
 func (o *AuthenticatorExtensionOutputs) assign(key string, value any) bool {
 	switch key {
-	case ExtensionCredentialProtectionPolicy, "credProtect":
+	case ExtensionCredentialProtectionPolicy, ExtensionCredProtect:
 		raw, ok := value.(uint64)
 		if !ok {
 			return false
@@ -240,7 +251,7 @@ func (o *AuthenticatorExtensionOutputs) assign(key string, value any) bool {
 		case bool:
 			o.HMACSecret = ptr(raw)
 		case []byte:
-			o.HMACSecretV = raw
+			o.HMACSecretOutput = raw
 		default:
 			return false
 		}

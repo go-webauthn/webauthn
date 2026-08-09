@@ -81,8 +81,9 @@ func WithAssertionPublicKeyCredentialHints(hints []protocol.PublicKeyCredentialH
 	}
 }
 
-// WithAppIdExtension automatically includes the specified appid if the AllowedCredentials contains a credential
-// with the fido-u2f attestation format.
+// WithAppIdExtension sets the specified appid as the FIDO AppID Extension input. The option itself always sets
+// it; [WebAuthn.BeginLogin] then discards it unless the AllowedCredentials contains a credential with the fido-u2f
+// attestation format, which is what makes the result independent of the order the options were supplied in.
 //
 // Specification: §5.5. Options for Assertion Generation (https://www.w3.org/TR/webauthn/#dom-publickeycredentialrequestoptions-extensions)
 //

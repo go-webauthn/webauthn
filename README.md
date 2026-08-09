@@ -180,7 +180,7 @@ registry:
 
 The CTAP authenticator data also carries a `hmac-secret` extension output identifier (`protocol.ExtensionHMACSecret`),
 distinct from the `hmacCreateSecret` / `hmacGetSecret` client-facing identifiers above; it is decoded automatically
-into `AuthenticatorExtensionOutputs.HMACSecret` / `HMACSecretV` and is not something a Relying Party requests.
+into `AuthenticatorExtensionOutputs.HMACSecret` / `HMACSecretOutput` and is not something a Relying Party requests.
 
 [^1]: This extension is only applicable during Registration.
 [^2]: This extension is only applicable during Authentication.

@@ -96,8 +96,10 @@ func WithAttestationFormats(formats []protocol.AttestationFormat) RegistrationOp
 	}
 }
 
-// WithAppIdExcludeExtension automatically includes the specified appid if the CredentialExcludeList contains a
-// credential with the fido-u2f attestation format.
+// WithAppIdExcludeExtension sets the specified appid as the FIDO AppID Exclusion Extension input. The option
+// itself always sets it; [WebAuthn.BeginRegistration] then discards it unless the CredentialExcludeList contains a
+// credential with the fido-u2f attestation format, which is what makes the result independent of the order the
+// options were supplied in.
 //
 // Specification: §10.1.2. FIDO AppID Exclusion Extension (https://www.w3.org/TR/webauthn-3/#sctn-appid-exclude-extension)
 //

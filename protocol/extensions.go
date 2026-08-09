@@ -20,7 +20,20 @@ import (
 // exact-case name from the untyped member map while encoding/json bound the case-insensitive variant to the typed
 // field, leaving the same member present in both the typed field and Extra.
 func extensionNameModelled(names []string, key string) bool {
-	return slices.ContainsFunc(names, func(name string) bool { return strings.EqualFold(name, key) })
+	_, modelled := extensionNameCanonical(names, key)
+
+	return modelled
+}
+
+// extensionNameCanonical resolves key to the entry of names it matches case-insensitively, so a member whose key
+// differs from a modelled name only by case is reported under the identifier the rest of the package uses. It
+// backs extensionNameModelled so the two cannot disagree about what counts as a match.
+func extensionNameCanonical(names []string, key string) (name string, modelled bool) {
+	if index := slices.IndexFunc(names, func(name string) bool { return strings.EqualFold(name, key) }); index >= 0 {
+		return names[index], true
+	}
+
+	return "", false
 }
 
 const (
@@ -74,6 +87,12 @@ const (
 	// ExtensionEnforceCredentialProtectionPolicy requires that the requested credential protection policy is
 	// honoured, failing the ceremony if the authenticator cannot satisfy it.
 	ExtensionEnforceCredentialProtectionPolicy = "enforceCredentialProtectionPolicy"
+
+	// ExtensionCredProtect is the credProtect extension's authenticator-output identifier, carried in the
+	// authenticator data's extension outputs. It is deliberately distinct from
+	// ExtensionCredentialProtectionPolicy, which is the client-facing input identifier used by the
+	// create() extensions member; authenticators echo this abbreviated identifier, not that one.
+	ExtensionCredProtect = "credProtect"
 
 	// ExtensionMinPinLength requests the authenticator's current minimum PIN length at registration.
 	ExtensionMinPinLength = "minPinLength"

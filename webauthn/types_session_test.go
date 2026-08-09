@@ -240,6 +240,31 @@ func TestSessionData_DecodeMsgInvalidTypes(t *testing.T) {
 	}
 }
 
+func TestSessionDataUnmarshalMsgLeavesExtensionsWhenOmitted(t *testing.T) {
+	// SessionData documents that Extensions, unlike the other members, is not reset when the encoded payload omits
+	// it, so a reused destination keeps the previous ceremony's extension state. This pins that behaviour: it is
+	// the reason the documentation tells Relying Parties to decode into a fresh SessionData, and a silent change
+	// either way would invalidate that advice.
+	payload := msgp.AppendMapHeader(nil, 1)
+	payload = msgp.AppendString(payload, "c")
+	payload = msgp.AppendString(payload, "a-new-challenge")
+
+	decoded := SessionData{
+		Extensions: protocol.SessionExtensions{
+			Requested: []string{protocol.ExtensionAppID},
+			AppID:     "https://previous.example.com",
+		},
+	}
+
+	left, err := decoded.UnmarshalMsg(payload)
+	require.NoError(t, err)
+	assert.Empty(t, left)
+
+	assert.Equal(t, "a-new-challenge", decoded.Challenge)
+	assert.Equal(t, "https://previous.example.com", decoded.Extensions.AppID,
+		"Extensions is not cleared by a payload which omits it; decode into a fresh SessionData")
+}
+
 func TestSessionExtensionsShadowMatches(t *testing.T) {
 	// A compile-time conversion in both directions proves the shadow struct the msgp generator uses stays
 	// field-for-field identical to the protocol type.

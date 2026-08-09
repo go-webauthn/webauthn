@@ -208,7 +208,7 @@ func TestParseAuthenticatorExtensionOutputsAssertionForms(t *testing.T) {
 
 	assert.Equal(t, []byte{0x01, 0x02}, have.CredBlob)
 	assert.Nil(t, have.CredBlobSet)
-	assert.Equal(t, []byte{0x03, 0x04}, have.HMACSecretV)
+	assert.Equal(t, []byte{0x03, 0x04}, have.HMACSecretOutput)
 	assert.Nil(t, have.HMACSecret)
 }
 
@@ -230,20 +230,61 @@ func TestParseAuthenticatorExtensionOutputsUVM(t *testing.T) {
 	}, have.UVM)
 }
 
-func TestParseAuthenticatorExtensionOutputsUVMFieldOutOfRange(t *testing.T) {
-	// A uvm field value that cannot fit in a uint32 is preserved in Extra rather than silently truncated.
-	data, err := webauthncbor.Marshal(map[string]any{
-		"uvm": []any{
-			[]any{uint64(math.MaxUint32) + 1, uint64(4), uint64(2)},
+func TestParseAuthenticatorExtensionOutputsUVMMalformed(t *testing.T) {
+	// A uvm output this library cannot represent is preserved in Extra rather than silently truncated, dropped, or
+	// failing the whole ceremony.
+	testCases := []struct {
+		name  string
+		value any
+	}{
+		{
+			name:  "FieldOutOfRange",
+			value: []any{[]any{uint64(math.MaxUint32) + 1, uint64(4), uint64(2)}},
 		},
-	})
+		{
+			name:  "NotAList",
+			value: "not-a-list",
+		},
+		{
+			name:  "TooFewFields",
+			value: []any{[]any{uint64(2), uint64(4)}},
+		},
+		{
+			name:  "TooManyFields",
+			value: []any{[]any{uint64(2), uint64(4), uint64(2), uint64(1)}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := webauthncbor.Marshal(map[string]any{"uvm": tc.value})
+			require.NoError(t, err)
+
+			have, err := ParseAuthenticatorExtensionOutputs(data)
+			require.NoError(t, err)
+
+			assert.Nil(t, have.UVM)
+			require.Contains(t, have.Extra, "uvm")
+		})
+	}
+}
+
+func TestParseAuthenticatorExtensionOutputsRejectsTrailingBytes(t *testing.T) {
+	// The extension data is the remainder of the authenticator data, so nothing else bounds it. Anything after the
+	// map is unaccounted for and must not be silently ignored.
+	data, err := webauthncbor.Marshal(map[string]any{"credProtect": uint64(3)})
 	require.NoError(t, err)
 
-	have, err := ParseAuthenticatorExtensionOutputs(data)
-	require.NoError(t, err)
+	have, err := ParseAuthenticatorExtensionOutputs(append(append([]byte{}, data...), 0xff))
 
-	assert.Nil(t, have.UVM)
-	require.Contains(t, have.Extra, "uvm")
+	assert.Nil(t, have)
+	assert.ErrorContains(t, err, "Leftover bytes")
+
+	// A second complete map is the same problem: without the length check the first would silently win.
+	have, err = ParseAuthenticatorExtensionOutputs(append(append([]byte{}, data...), data...))
+
+	assert.Nil(t, have)
+	assert.ErrorContains(t, err, "Leftover bytes")
 }
 
 func TestParseAuthenticatorExtensionOutputsUnknownKey(t *testing.T) {

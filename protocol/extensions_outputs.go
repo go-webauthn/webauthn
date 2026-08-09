@@ -1,11 +1,16 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
 )
+
+// jsonNull is the encoded form of a JSON null, compared against a raw member value to detect a modelled extension
+// output the client returned without a value.
+var jsonNull = []byte("null")
 
 // AuthenticationExtensionsClientOutputs represents the AuthenticationExtensionsClientOutputs IDL, returned by the
 // client after a create() or get() call.
@@ -49,6 +54,16 @@ type AuthenticationExtensionsClientOutputs struct {
 
 	// Extra carries extension outputs this library does not model.
 	Extra map[string]any `json:"-"`
+
+	// nullModelled lists the modelled extension identifiers the client returned with a JSON null value. A null
+	// leaves the typed field nil, but the member was still present in the response, and
+	// [AuthenticationExtensionsClientOutputs.Verify] must be able to see it: without this an unsolicited modelled
+	// output could evade the unsolicited check simply by being null, while an unsolicited unmodelled one could not,
+	// because a null value in [AuthenticationExtensionsClientOutputs.Extra] is still a key.
+	//
+	// It is decoder state rather than part of the IDL, hence unexported, and is therefore not reproduced by
+	// [AuthenticationExtensionsClientOutputs.MarshalJSON]; a null member does not survive a marshal round trip.
+	nullModelled []string
 }
 
 // CredentialPropertiesOutput represents the CredentialPropertiesOutput IDL. The editor's draft defines no member
@@ -171,11 +186,24 @@ func (o *AuthenticationExtensionsClientOutputs) UnmarshalJSON(data []byte) (err 
 	// because the alias decode above already bound a case-variant key (e.g. "AppID") to its modelled field via
 	// encoding/json's case-insensitive fallback. Deleting only the exact-case name would leave that key in members
 	// and duplicate it into Extra alongside the typed field it was actually bound to.
-	for key := range members {
-		if extensionNameModelled(extensionOutputNames, key) {
-			delete(members, key)
+	//
+	// A modelled member whose value is null leaves the typed field nil, so it is recorded under its canonical
+	// identifier before being deleted; see the nullModelled documentation.
+	for key, value := range members {
+		name, modelled := extensionNameCanonical(extensionOutputNames, key)
+		if !modelled {
+			continue
 		}
+
+		if bytes.Equal(bytes.TrimSpace(value), jsonNull) {
+			decoded.nullModelled = append(decoded.nullModelled, name)
+		}
+
+		delete(members, key)
 	}
+
+	// The map iteration order above is undefined, so the identifiers are sorted to keep Present deterministic.
+	slices.Sort(decoded.nullModelled)
 
 	if len(members) != 0 {
 		decoded.Extra = make(map[string]any, len(members))
@@ -208,6 +236,10 @@ func (o AuthenticationExtensionsClientOutputs) IsZero() bool {
 
 // Present returns the extension identifiers present in these outputs, in specification order followed by the
 // sorted [AuthenticationExtensionsClientOutputs.Extra] keys.
+//
+// A modelled member the client returned as JSON null is present: it leaves the typed field nil, but the client did
+// return the member, and the unsolicited output check must treat it the same as the unmodelled null it would
+// otherwise be inconsistent with.
 func (o AuthenticationExtensionsClientOutputs) Present() (names []string) {
 	for _, present := range []struct {
 		name string
@@ -222,7 +254,7 @@ func (o AuthenticationExtensionsClientOutputs) Present() (names []string) {
 		{ExtensionHMACCreateSecret, o.HMACCreateSecret != nil},
 		{ExtensionHMACGetSecret, o.HMACGetSecret != nil},
 	} {
-		if present.set {
+		if present.set || slices.Contains(o.nullModelled, present.name) {
 			names = append(names, present.name)
 		}
 	}

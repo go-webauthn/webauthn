@@ -66,6 +66,13 @@ func (e SessionExtensions) IsZero() bool {
 //
 // Extra is cloned so the persisted session and the live options do not share a backing map; mutating the inputs
 // after the begin step must not retroactively change what the finish step verifies against.
+//
+// The clone is shallow. A value inside Extra which is itself a reference type stays shared with the inputs, so a
+// Relying Party which mutates a nested map or slice after the begin step does change what the finish step sees.
+// Extra holds Relying Party data rather than anything an attacker supplies, and a deep clone of an arbitrary value
+// cannot be done without either reflection or a serialisation round trip, so the boundary is documented instead of
+// widened. Persisting the session, as a Relying Party is required to do between the two steps, is itself a
+// serialisation and does not carry the sharing with it.
 func (e AuthenticationExtensions) Session() SessionExtensions {
 	return SessionExtensions{
 		Requested:                         e.Requested(),

@@ -1170,6 +1170,25 @@ func TestCreateCredentialRejectsUnsolicitedExtensionOutput(t *testing.T) {
 	assert.ErrorContains(t, err, "credProps")
 }
 
+func TestCreateCredentialAcceptsSolicitedExtensionOutput(t *testing.T) {
+	// The sibling of the rejection case: the same output must pass once the session records that it was asked
+	// for, so the check is known to discriminate rather than to reject the extension outright.
+	w, session, response := newRegistrationFixture(t)
+
+	response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		CredProps: &protocol.CredentialPropertiesOutput{RK: ptr(true)},
+	}
+	session.Extensions = protocol.SessionExtensions{Requested: []string{protocol.ExtensionCredProps}}
+
+	credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+	require.NoError(t, err)
+	require.NotNil(t, credential)
+
+	require.NotNil(t, credential.Extensions.RK)
+	assert.True(t, *credential.Extensions.RK)
+}
+
 func testRegDecodeHex(t *testing.T, s string) []byte {
 	t.Helper()
 

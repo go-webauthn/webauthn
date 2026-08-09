@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 
@@ -10,6 +11,16 @@ import (
 
 // The verification rules are only as good as what Session records for them, and the read and write arms are
 // derived rather than copied, so the derivation is asserted directly.
+// testOutputsFromJSON decodes outputs through the real codec, which is the only way to construct the presence
+// state a JSON null produces; a struct literal cannot express it.
+func testOutputsFromJSON(t *testing.T, data string) (outputs AuthenticationExtensionsClientOutputs) {
+	t.Helper()
+
+	require.NoError(t, json.Unmarshal([]byte(data), &outputs))
+
+	return outputs
+}
+
 func TestAuthenticationExtensionsSessionDerivation(t *testing.T) {
 	t.Run("LargeBlobRead", func(t *testing.T) {
 		session := AuthenticationExtensions{LargeBlob: LargeBlobInputs{Read: true}}.Session()
@@ -53,10 +64,16 @@ func TestAuthenticationExtensionsSessionDerivation(t *testing.T) {
 		assert.True(t, session.CredBlob)
 
 		// The blob is Relying Party data with no verification role beyond the flag, so it must not be persisted.
+		// It is a byte value, so the encoded forms have to be checked as well as the raw one; a raw-only assertion
+		// would pass even if the blob were persisted, because it would appear base64url encoded.
 		data, err := json.Marshal(session)
 		require.NoError(t, err)
 
-		assert.NotContains(t, string(data), "a blob")
+		blob := []byte("a blob")
+
+		assert.NotContains(t, string(data), string(blob))
+		assert.NotContains(t, string(data), base64.RawURLEncoding.EncodeToString(blob))
+		assert.NotContains(t, string(data), base64.URLEncoding.EncodeToString(blob))
 	})
 
 	t.Run("EveryNewMemberIsCoveredByIsZero", func(t *testing.T) {
@@ -107,6 +124,38 @@ func TestClientOutputsVerify(t *testing.T) {
 			session:  SessionExtensions{},
 			ceremony: CreateCeremony,
 			errs:     []string{"vendorThing"},
+		},
+		{
+			// A modelled member returned as null leaves the typed field nil. It must still be treated as returned,
+			// otherwise a null is a way around the unsolicited check that an unmodelled null does not have.
+			name:     "UnsolicitedModelledNull",
+			outputs:  testOutputsFromJSON(t, `{"credProps":null}`),
+			session:  SessionExtensions{},
+			ceremony: CreateCeremony,
+			errs:     []string{"credProps"},
+		},
+		{
+			name:     "SolicitedModelledNull",
+			outputs:  testOutputsFromJSON(t, `{"credProps":null}`),
+			session:  SessionExtensions{Requested: []string{ExtensionCredProps}},
+			ceremony: CreateCeremony,
+		},
+		{
+			// The reject policy is what the null must not evade; the ignore policy still ignores it.
+			name:     "UnsolicitedModelledNullIgnored",
+			outputs:  testOutputsFromJSON(t, `{"credProps":null}`),
+			session:  SessionExtensions{},
+			ceremony: CreateCeremony,
+			policy:   UnsolicitedOutputPolicyIgnore,
+		},
+		{
+			// encoding/json binds a case-variant key to the modelled field, so the null must be recorded under the
+			// canonical identifier rather than the key as it was written.
+			name:     "UnsolicitedModelledNullCaseVariant",
+			outputs:  testOutputsFromJSON(t, `{"CredProps":null}`),
+			session:  SessionExtensions{},
+			ceremony: CreateCeremony,
+			errs:     []string{"credProps"},
 		},
 		{
 			name:     "UnsolicitedRemoteClientDataJSON",

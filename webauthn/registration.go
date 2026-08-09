@@ -1,10 +1,10 @@
 package webauthn
 
 import (
-	"slices"
 	"bytes"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -226,8 +226,8 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 			success = true
 		} else {
 			if slices.Contains(filtering.PermittedAAGUIDs, aaguid) {
-					success = true
-				}
+				success = true
+			}
 		}
 
 		if !success {
@@ -237,8 +237,8 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 
 	if len(filtering.ProhibitedAAGUIDs) != 0 {
 		if slices.Contains(filtering.ProhibitedAAGUIDs, aaguid) {
-				return protocol.ErrPolicyRestriction.WithInfo("Credential has an AAGUID which is prohibited")
-			}
+			return protocol.ErrPolicyRestriction.WithInfo("Credential has an AAGUID which is prohibited")
+		}
 	}
 
 	return nil

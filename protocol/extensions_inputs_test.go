@@ -1,7 +1,9 @@
 package protocol
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -154,6 +156,25 @@ func TestAuthenticationExtensionsSessionClonesExtra(t *testing.T) {
 	assert.Nil(t, AuthenticationExtensions{}.Session().Extra)
 }
 
+func TestAuthenticationExtensionsSessionClonesExtraShallowly(t *testing.T) {
+	// The clone is documented as shallow. This pins that boundary so the guarantee Session actually makes is the
+	// one that is tested: the top level is independent, a nested reference type is not.
+	nested := map[string]any{"inner": "original"}
+	have := AuthenticationExtensions{Extra: map[string]any{"vendorThing": nested}}
+
+	session := have.Session()
+
+	nested["inner"] = "mutated"
+
+	assert.Equal(t, map[string]any{"inner": "mutated"}, session.Extra["vendorThing"],
+		"the clone is shallow, so a nested map stays shared; widening this requires a deep clone, not a test change")
+
+	// The top level is still independent, which is what the clone is there for.
+	have.Extra["added"] = true
+
+	assert.NotContains(t, session.Extra, "added")
+}
+
 func TestAuthenticationExtensionsMarshalJSONKeyOrderIsStable(t *testing.T) {
 	// Marshalling always routes through a map so encoding/json sorts the keys. Output ordering must not depend on
 	// whether Extra is populated, otherwise golden comparisons drift.
@@ -233,20 +254,23 @@ func TestAuthenticationExtensionsRequestedMatchesMarshalledKeys(t *testing.T) {
 		{Extra: map[string]any{"b": 1, "a": 2}},
 	}
 
-	for _, tc := range testCases {
+	for i, tc := range testCases {
 		data, err := json.Marshal(tc)
 		require.NoError(t, err)
 
-		var keys map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(data, &keys))
+		// The marshalled form names the entry that drifted, which a bare index would not.
+		t.Run(fmt.Sprintf("%d/%s", i, data), func(t *testing.T) {
+			var keys map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(data, &keys))
 
-		requested := tc.Requested()
+			requested := tc.Requested()
 
-		assert.Len(t, requested, len(keys))
+			assert.Len(t, requested, len(keys))
 
-		for _, name := range requested {
-			assert.Contains(t, keys, name)
-		}
+			for _, name := range requested {
+				assert.Contains(t, keys, name)
+			}
+		})
 	}
 }
 
@@ -269,11 +293,17 @@ func TestAuthenticationExtensionsSession(t *testing.T) {
 	assert.Equal(t, map[string]any{"vendorThing": true}, session.Extra)
 	assert.Equal(t, have.Requested(), session.Requested)
 
-	// The per-ceremony PRF salts and the large blob payload are deliberately not persisted.
+	// The per-ceremony PRF salts and the large blob payload are deliberately not persisted. Both are byte values
+	// which would be base64url encoded on the way out, so asserting only against the raw strings would pass even if
+	// they were persisted; the encoded forms are what the assertion has to look for.
 	data, err := json.Marshal(session)
 	require.NoError(t, err)
-	assert.NotContains(t, string(data), "secret-salt")
-	assert.NotContains(t, string(data), "a large payload")
+
+	for _, secret := range [][]byte{[]byte("secret-salt"), []byte("a large payload")} {
+		assert.NotContains(t, string(data), string(secret))
+		assert.NotContains(t, string(data), base64.RawURLEncoding.EncodeToString(secret))
+		assert.NotContains(t, string(data), base64.URLEncoding.EncodeToString(secret))
+	}
 }
 
 func TestParseAuthenticationExtensions(t *testing.T) {
