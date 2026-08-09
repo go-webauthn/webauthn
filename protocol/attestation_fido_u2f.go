@@ -30,7 +30,7 @@ import (
 // Specification: §8.6. FIDO U2F Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
-func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error) {
 	// Signing procedure. Non-normative verification procedure of expected requirement.
 	// If the credential public key of the attested credential is not of algorithm -7 ("ES256"), stop and return an error.
 	var key webauthncose.EC2PublicKeyData
@@ -138,7 +138,7 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 
 	// Step 6. Verify the sig using verificationData and the certificate public key per section 4.1.4 of [SEC1] with
 	// SHA-256 as the hash function used in step two.
-	if err = attCert.CheckSignature(x509.ECDSAWithSHA256, verificationData.Bytes(), sig); err != nil {
+	if err = attestationCertCheckSignature(attCert, x509.ECDSAWithSHA256, verificationData.Bytes(), sig, policy.Signature); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 

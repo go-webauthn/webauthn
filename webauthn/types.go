@@ -176,13 +176,7 @@ func (config *Config) validate() (err error) {
 		config.RPTopOriginVerificationMode = protocol.TopOriginExplicitVerificationMode
 	}
 
-	if config.Attestation.AndroidKey.AuthorizationScope == protocol.AndroidKeyAuthorizationScopeDefault {
-		config.Attestation.AndroidKey.AuthorizationScope = protocol.AndroidKeyAuthorizationScopeTEEEnforced
-	}
-
-	if config.Attestation.Compound.SubStatementScope == protocol.CompoundSubStatementScopeDefault {
-		config.Attestation.Compound.SubStatementScope = protocol.CompoundSubStatementScopeAll
-	}
+	config.validateAttestationPolicy()
 
 	if config.Filtering != nil {
 		if len(config.Filtering.PermittedAAGUIDs) > 0 && len(config.Filtering.ProhibitedAAGUIDs) > 0 {
@@ -193,6 +187,24 @@ func (config *Config) validate() (err error) {
 	config.validated = true
 
 	return nil
+}
+
+// validateAttestationPolicy rewrites each zero value of the attestation policy to the explicit constant it evaluates
+// as, so a Relying Party can tell an unset field apart from a deliberate choice of the same behavior. Every default
+// is the most restrictive behavior the policy offers, which for the encoding of a signature is the one the
+// specification requires.
+func (config *Config) validateAttestationPolicy() {
+	if config.Attestation.AndroidKey.AuthorizationScope == protocol.AndroidKeyAuthorizationScopeDefault {
+		config.Attestation.AndroidKey.AuthorizationScope = protocol.AndroidKeyAuthorizationScopeTEEEnforced
+	}
+
+	if config.Attestation.Compound.SubStatementScope == protocol.CompoundSubStatementScopeDefault {
+		config.Attestation.Compound.SubStatementScope = protocol.CompoundSubStatementScopeAll
+	}
+
+	if config.Attestation.Signature.ECDSAEncoding == protocol.ECDSASignatureEncodingDefault {
+		config.Attestation.Signature.ECDSAEncoding = protocol.ECDSASignatureEncodingDER
+	}
 }
 
 // GetRPID returns the configured Relying Party ID.

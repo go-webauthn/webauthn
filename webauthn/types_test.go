@@ -269,6 +269,46 @@ func TestConfig_Validate_DefaultsCompoundSubStatementScopeToAll(t *testing.T) {
 	}
 }
 
+func TestConfig_Validate_DefaultsECDSASignatureEncodingToDER(t *testing.T) {
+	testCases := []struct {
+		name     string
+		encoding protocol.ECDSASignatureEncoding
+		expected protocol.ECDSASignatureEncoding
+	}{
+		{
+			name:     "ShouldCoerceDefaultToDER",
+			encoding: protocol.ECDSASignatureEncodingDefault,
+			expected: protocol.ECDSASignatureEncodingDER,
+		},
+		{
+			name:     "ShouldPreserveExplicitDER",
+			encoding: protocol.ECDSASignatureEncodingDER,
+			expected: protocol.ECDSASignatureEncodingDER,
+		},
+		{
+			name:     "ShouldPreserveExplicitBER",
+			encoding: protocol.ECDSASignatureEncodingBER,
+			expected: protocol.ECDSASignatureEncodingBER,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+				Attestation: protocol.AttestationPolicy{
+					Signature: protocol.SignaturePolicy{ECDSAEncoding: tc.encoding},
+				},
+			}
+
+			require.NoError(t, config.validate())
+			assert.Equal(t, tc.expected, config.Attestation.Signature.ECDSAEncoding)
+			assert.Equal(t, config.Attestation, config.GetAttestationPolicy())
+		})
+	}
+}
+
 func TestConfig_Validate_FilteringMutuallyExclusive(t *testing.T) {
 	aaguidA := uuid.MustParse("00000000-0000-0000-0000-00000000000a")
 	aaguidB := uuid.MustParse("00000000-0000-0000-0000-00000000000b")

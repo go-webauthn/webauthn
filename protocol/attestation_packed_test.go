@@ -143,7 +143,7 @@ func TestPackedFormat_BasicAttestationErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := handleBasicAttestation([]byte("sig"), []byte("hash"), []byte("auth"), []byte("aaguid"), tc.alg, tc.x5c, nil)
+			_, _, err := handleBasicAttestation([]byte("sig"), []byte("hash"), []byte("auth"), []byte("aaguid"), tc.alg, tc.x5c, nil, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}
@@ -238,7 +238,7 @@ func TestPackedFormat_BasicAttestationSignatureAndTimeErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := handleBasicAttestation(tc.sig, clientDataHash, authData, nil, tc.alg, tc.x5c, nil)
+			_, _, err := handleBasicAttestation(tc.sig, clientDataHash, authData, nil, tc.alg, tc.x5c, nil, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}
@@ -270,7 +270,7 @@ func TestPackedFormat_SelfAttestationErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := handleSelfAttestation(tc.alg, tc.pub, []byte("auth"), []byte("hash"), []byte("sig"), nil)
+			_, _, err := handleSelfAttestation(tc.alg, tc.pub, []byte("auth"), []byte("hash"), []byte("sig"), nil, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}
@@ -447,7 +447,7 @@ func TestPackedFormat_BasicAttestationCertRequirements(t *testing.T) {
 
 			x5c := []any{certDER}
 
-			_, _, err = handleBasicAttestation(sig, clientDataHash, authData, nil, int64(webauthncose.AlgES256), x5c, nil)
+			_, _, err = handleBasicAttestation(sig, clientDataHash, authData, nil, int64(webauthncose.AlgES256), x5c, nil, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 
 			_ = cert
