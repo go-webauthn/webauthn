@@ -43,7 +43,7 @@ import (
 // See: https://www.w3.org/TR/webauthn/#sctn-tpm-attestation
 //
 //nolint:gocyclo
-func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error) {
 	var statement *tpm2AttStatement
 
 	if statement, err = newTPM2AttStatement(att.AttStatement); err != nil {
@@ -187,7 +187,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 
 	if sigAlg := webauthncose.SigAlgFromCOSEAlg(coseAlg); sigAlg == x509.UnknownSignatureAlgorithm {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", statement.Algorithm))
-	} else if err = aikCert.CheckSignature(sigAlg, statement.CertInfo, statement.Signature); err != nil {
+	} else if err = attestationCertCheckSignature(aikCert, sigAlg, statement.CertInfo, statement.Signature, policy.Signature); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
 	}
 
