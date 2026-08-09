@@ -1616,3 +1616,90 @@ func testDecodeHex(t *testing.T, s string) []byte {
 
 	return data
 }
+
+func TestValidateLoginExtensionOutputs(t *testing.T) {
+	userID := []byte(testUserID)
+
+	newFixture := func(t *testing.T, attestationFormat string) (*WebAuthn, *defaultUser, SessionData, *protocol.ParsedCredentialAssertionData) {
+		t.Helper()
+
+		parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:                credentialID,
+					PublicKey:         credPubKey,
+					AttestationFormat: attestationFormat,
+					Flags:             CredentialFlags{UserPresent: true, BackupEligible: true},
+				},
+			},
+		}
+
+		return w, user, SessionData{UserID: userID, Challenge: challenge}, parsedResponse
+	}
+
+	t.Run("AppIDWithoutSessionValue", func(t *testing.T) {
+		// The client says it acted on the FIDO AppID extension for a credential registered through the legacy U2F
+		// API, but the session records no appid, so there is no value to verify the assertion's RP ID against.
+		w, user, session, response := newFixture(t, string(protocol.AttestationFormatFIDOUniversalSecondFactor))
+
+		response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{AppID: ptr(true)}
+
+		credential, err := w.ValidateLogin(user, session, response)
+
+		assert.Nil(t, credential)
+		assert.ErrorContains(t, err, "appid")
+	})
+
+	t.Run("UnsolicitedOutput", func(t *testing.T) {
+		// The same output against a credential which is not U2F leaves GetAppID with nothing to do, so the
+		// unsolicited check is what rejects it: the session never asked for the extension.
+		w, user, session, response := newFixture(t, string(protocol.AttestationFormatPacked))
+
+		response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{AppID: ptr(true)}
+
+		credential, err := w.ValidateLogin(user, session, response)
+
+		assert.Nil(t, credential)
+		assert.ErrorContains(t, err, "was not requested")
+	})
+
+	t.Run("SolicitedOutput", func(t *testing.T) {
+		// The discriminating case: the same output passes once the session records that it was asked for.
+		w, user, session, response := newFixture(t, string(protocol.AttestationFormatPacked))
+
+		response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{AppID: ptr(true)}
+		session.Extensions = protocol.SessionExtensions{Requested: []string{protocol.ExtensionAppID}}
+
+		credential, err := w.ValidateLogin(user, session, response)
+
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+	})
+}
+
+func TestBeginLoginRejectsInvalidConfig(t *testing.T) {
+	// As with registration, the lazily validated configuration must stop the ceremony rather than producing
+	// request options from an incomplete configuration.
+	w := &WebAuthn{Config: &Config{}}
+
+	user := &defaultUser{
+		id:          []byte(testUserID),
+		credentials: []Credential{{ID: []byte("credential")}},
+	}
+
+	assertion, session, err := w.BeginLogin(user)
+
+	assert.Nil(t, assertion)
+	assert.Nil(t, session)
+	assert.ErrorContains(t, err, "error occurred validating the configuration")
+}

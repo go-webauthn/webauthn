@@ -322,15 +322,68 @@ func TestParseAuthenticatorExtensionOutputsUnknownKey(t *testing.T) {
 
 func TestParseAuthenticatorExtensionOutputsWrongTypeIsPreserved(t *testing.T) {
 	// A known key carrying an unexpected type is preserved rather than failing the ceremony, so one vendor's odd
-	// encoding cannot break registration for that authenticator.
-	data, err := webauthncbor.Marshal(map[string]any{"minPinLength": "six"})
-	require.NoError(t, err)
+	// encoding cannot break registration for that authenticator. Each modelled identifier has its own type
+	// assertion, so each one is exercised; a branch which errored instead of falling through to Extra would fail
+	// every ceremony that authenticator takes part in.
+	testCases := []struct {
+		name  string
+		key   string
+		value any
+		field func(o *AuthenticatorExtensionOutputs) any
+	}{
+		{
+			name:  "CredProtectWrongType",
+			key:   ExtensionCredProtect,
+			value: "three",
+			field: func(o *AuthenticatorExtensionOutputs) any { return o.CredProtect },
+		},
+		{
+			// A value outside the three policies CTAP defines is not one this library can name.
+			name:  "CredProtectUnknownPolicy",
+			key:   ExtensionCredProtect,
+			value: uint64(4),
+			field: func(o *AuthenticatorExtensionOutputs) any { return o.CredProtect },
+		},
+		{
+			name:  "MinPinLengthWrongType",
+			key:   ExtensionMinPinLength,
+			value: "six",
+			field: func(o *AuthenticatorExtensionOutputs) any { return o.MinPinLength },
+		},
+		{
+			// credBlob is a bool at registration and a byte string at authentication; anything else is neither.
+			name:  "CredBlobWrongType",
+			key:   ExtensionCredBlob,
+			value: uint64(1),
+			field: func(o *AuthenticatorExtensionOutputs) any { return o.CredBlobSet },
+		},
+		{
+			name:  "HMACSecretWrongType",
+			key:   ExtensionHMACSecret,
+			value: uint64(1),
+			field: func(o *AuthenticatorExtensionOutputs) any { return o.HMACSecret },
+		},
+		{
+			name:  "UVMFieldWrongType",
+			key:   ExtensionUVM,
+			value: []any{[]any{"not-an-integer", uint64(4), uint64(2)}},
+			field: func(o *AuthenticatorExtensionOutputs) any { return o.UVM },
+		},
+	}
 
-	have, err := ParseAuthenticatorExtensionOutputs(data)
-	require.NoError(t, err)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := webauthncbor.Marshal(map[string]any{tc.key: tc.value})
+			require.NoError(t, err)
 
-	assert.Nil(t, have.MinPinLength)
-	assert.Equal(t, map[string]any{"minPinLength": "six"}, have.Extra)
+			have, err := ParseAuthenticatorExtensionOutputs(data)
+			require.NoError(t, err)
+
+			assert.Nil(t, tc.field(have), "the modelled field must stay unset")
+			require.Contains(t, have.Extra, tc.key, "the value must be preserved rather than dropped")
+			assert.Equal(t, tc.value, have.Extra[tc.key])
+		})
+	}
 }
 
 func TestParseAuthenticatorExtensionOutputsMalformed(t *testing.T) {

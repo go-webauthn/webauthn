@@ -517,3 +517,30 @@ func TestAuthenticationExtensionsValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestAuthenticationExtensionsMapPropagatesMarshalError(t *testing.T) {
+	// Map goes through MarshalJSON, so the collision check it performs has to surface rather than yielding a
+	// partial map the caller would treat as the real inputs.
+	have, err := AuthenticationExtensions{Extra: map[string]any{ExtensionCredProps: true}}.Map()
+
+	assert.Nil(t, have)
+	assert.ErrorContains(t, err, "collides with a modelled extension")
+}
+
+func TestAuthenticationExtensionsMarshalJSONExtraValueError(t *testing.T) {
+	// An Extra value which cannot be marshalled is reported against the extension that carries it, and under the
+	// inputs label rather than the outputs one.
+	_, err := AuthenticationExtensions{Extra: map[string]any{"vendorThing": make(chan int)}}.MarshalJSON()
+
+	assert.ErrorContains(t, err, "extension inputs")
+	assert.ErrorContains(t, err, `"vendorThing"`)
+}
+
+func TestParseAuthenticationExtensionsUnmarshallableInput(t *testing.T) {
+	// The map form is untyped, so it can carry a value encoding/json cannot represent at all. That has to be an
+	// error from the coercion step rather than a panic or a silently empty result.
+	have, err := ParseAuthenticationExtensions(map[string]any{"vendorThing": make(chan int)})
+
+	assert.Equal(t, AuthenticationExtensions{}, have)
+	assert.ErrorContains(t, err, "error parsing extension inputs")
+}

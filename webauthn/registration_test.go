@@ -1250,3 +1250,53 @@ func newRegistrationFixture(t *testing.T) (w *WebAuthn, session SessionData, res
 
 	return w, session, response
 }
+
+func TestCreateCredentialRejectsUnhonouredCredentialProtectionPolicy(t *testing.T) {
+	// End to end cover for the authenticator extension output check: the session required enforcement, and this
+	// authenticator's data carries no extension outputs at all, so it cannot have honoured the policy.
+	w, session, response := newRegistrationFixture(t)
+
+	session.Extensions = protocol.SessionExtensions{
+		Requested:                         []string{protocol.ExtensionCredentialProtectionPolicy},
+		CredentialProtectionPolicy:        protocol.CredentialProtectionPolicyUserVerificationRequired,
+		EnforceCredentialProtectionPolicy: true,
+	}
+
+	credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+	assert.Nil(t, credential)
+	assert.ErrorContains(t, err, "credentialProtectionPolicy")
+	assert.ErrorContains(t, err, "did not report the policy")
+}
+
+func TestCreateCredentialPropagatesFilteringFailure(t *testing.T) {
+	// The filtering step runs after the credential is built, so its rejection has to reach the caller rather than
+	// yielding a credential the configuration prohibits.
+	w, session, response := newRegistrationFixture(t)
+
+	w.Config.Filtering = &FilteringConfig{ProhibitBackupEligibility: true}
+
+	credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+	assert.Nil(t, credential)
+	require.NotNil(t, err)
+
+	// The rejection reason is carried in DevInfo rather than the message, which is deliberately generic.
+	var e *protocol.Error
+
+	require.ErrorAs(t, err, &e)
+	assert.Equal(t, protocol.ErrPolicyRestriction.Type, e.Type)
+	assert.Contains(t, e.DevInfo, "Backup Eligible")
+}
+
+func TestBeginMediatedRegistrationRejectsInvalidConfig(t *testing.T) {
+	// The configuration is validated lazily on first use, so a WebAuthn built without New must fail the ceremony
+	// rather than emitting creation options derived from an incomplete configuration.
+	w := &WebAuthn{Config: &Config{}}
+
+	creation, session, err := w.BeginRegistration(newTestUser(t))
+
+	assert.Nil(t, creation)
+	assert.Nil(t, session)
+	assert.ErrorContains(t, err, "error occurred validating the configuration")
+}

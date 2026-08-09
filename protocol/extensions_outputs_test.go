@@ -138,3 +138,42 @@ func TestClientOutputsIsZero(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(data), `"clientExtensionResults":{"appid":true}`)
 }
+
+func TestClientOutputsMap(t *testing.T) {
+	// Map is the untyped view callers migrating from the previous map representation use, so it has to agree with
+	// the marshalled JSON, including the merged Extra members.
+	outputs := AuthenticationExtensionsClientOutputs{
+		AppID:     ptr(true),
+		CredProps: &CredentialPropertiesOutput{RK: ptr(false)},
+		Extra:     map[string]any{"vendorThing": "x"},
+	}
+
+	have, err := outputs.Map()
+	require.NoError(t, err)
+
+	assert.Equal(t, map[string]any{
+		"appid":       true,
+		"credProps":   map[string]any{"rk": false},
+		"vendorThing": "x",
+	}, have)
+}
+
+func TestClientOutputsMapPropagatesMarshalError(t *testing.T) {
+	// Map goes through MarshalJSON, so the collision check it performs has to surface rather than yielding a
+	// partial map.
+	outputs := AuthenticationExtensionsClientOutputs{Extra: map[string]any{ExtensionCredProps: true}}
+
+	have, err := outputs.Map()
+
+	assert.Nil(t, have)
+	assert.ErrorContains(t, err, "collides with a modelled extension")
+}
+
+func TestClientOutputsMarshalJSONExtraValueError(t *testing.T) {
+	// An Extra value which cannot be marshalled is reported against the extension that carries it, rather than
+	// failing with an error that does not say which member was at fault.
+	_, err := AuthenticationExtensionsClientOutputs{Extra: map[string]any{"vendorThing": make(chan int)}}.MarshalJSON()
+
+	assert.ErrorContains(t, err, "extension outputs")
+	assert.ErrorContains(t, err, `"vendorThing"`)
+}
