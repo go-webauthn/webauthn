@@ -105,7 +105,7 @@ func TestValidateChainDepth(t *testing.T) {
 			valid: true,
 		},
 		{
-			name: "ShouldRejectIncompleteChain",
+			name:  "ShouldRejectIncompleteChain",
 			chain: []any{deepEncoded, secondEncoded},
 			valid: false,
 		},

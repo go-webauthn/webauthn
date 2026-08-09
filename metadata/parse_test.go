@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPayloadJSON_Parse(t *testing.T) {
@@ -227,12 +229,12 @@ func TestStatementJSON_Parse(t *testing.T) {
 			err: "error occurred parsing statement with description 'test': error occurred parsing provider logo dark value: parse \"://bad\": missing protocol scheme",
 		},
 		{
-			name: "ShouldFailInvalidCxpConfigURL",
+			name: "ShouldFailInvalidCxConfigURL",
 			have: StatementJSON{
-				Description:                       "test",
-				CredentialExportProtocolConfigURL: "://bad",
+				Description:                 "test",
+				CredentialExchangeConfigURL: "://bad",
 			},
-			err: "error occurred parsing statement with description 'test': error occurred parsing cxp config url value: parse \"://bad\": missing protocol scheme",
+			err: "error occurred parsing statement with description 'test': error occurred parsing cx config url value: parse \"://bad\": missing protocol scheme",
 		},
 		{
 			name: "ShouldFailInvalidAuthenticatorGetInfo",
@@ -523,4 +525,57 @@ func TestAuthenticatorGetInfoJSON_Parse(t *testing.T) {
 
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+func TestStatementJSONDecodesCurrentSpecMembers(t *testing.T) {
+	// The member names are decoded from the JWT claims by mapstructure using the json tags, so an incorrect tag leaves
+	// the field silently unset rather than failing. These names are taken from the Metadata Statement v3.1.1 and the
+	// authenticatorGetInfo response of CTAP 2.3.
+	raw := map[string]any{
+		"description": "test",
+		"cxConfigURL": "https://example.com/cx",
+		"authenticatorGetInfo": map[string]any{
+			"attestationFormats":          []any{"packed", "tpm"},
+			"uvCountSinceLastPinEntry":    3,
+			"longTouchForReset":           true,
+			"encIdentifier":               "aGVsbG8=",
+			"transportsForReset":          []any{"usb", "nfc"},
+			"pinComplexityPolicy":         true,
+			"pinComplexityPolicyURL":      "aHR0cHM6Ly9leGFtcGxlLmNvbQ==",
+			"maxPINLength":                63,
+			"encCredStoreState":           "d29ybGQ=",
+			"authenticatorConfigCommands": []any{1, 2},
+		},
+	}
+
+	var statement StatementJSON
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{Result: &statement, TagName: "json"})
+	require.NoError(t, err)
+	require.NoError(t, decoder.Decode(raw))
+
+	assert.Equal(t, "https://example.com/cx", statement.CredentialExchangeConfigURL)
+
+	info := statement.AuthenticatorGetInfo
+
+	assert.Equal(t, []string{"packed", "tpm"}, info.AttestationFormats)
+	assert.Equal(t, uint(3), info.UvCountSinceLastPinEntry)
+	assert.True(t, info.LongTouchForReset)
+	assert.Equal(t, "aGVsbG8=", info.EncIdentifier)
+	assert.Equal(t, []string{"usb", "nfc"}, info.TransportsForReset)
+	assert.True(t, info.PinComplexityPolicy)
+	assert.Equal(t, "aHR0cHM6Ly9leGFtcGxlLmNvbQ==", info.PinComplexityPolicyURL)
+	assert.Equal(t, uint(63), info.MaxPINLength)
+	assert.Equal(t, "d29ybGQ=", info.EncCredStoreState)
+	assert.Equal(t, []uint{1, 2}, info.AuthenticatorConfigCommands)
+
+	parsed, err := statement.Parse()
+	require.NoError(t, err)
+
+	require.NotNil(t, parsed.CredentialExchangeConfigURL)
+	assert.Equal(t, "https://example.com/cx", parsed.CredentialExchangeConfigURL.String())
+	assert.Equal(t, []string{"packed", "tpm"}, parsed.AuthenticatorGetInfo.AttestationFormats)
+	assert.True(t, parsed.AuthenticatorGetInfo.LongTouchForReset)
+	assert.Equal(t, uint(63), parsed.AuthenticatorGetInfo.MaxPINLength)
+	assert.Equal(t, []uint{1, 2}, parsed.AuthenticatorGetInfo.AuthenticatorConfigCommands)
 }
