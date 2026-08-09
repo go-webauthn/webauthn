@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 // NewDecoder returns a new metadata decoder.
 func NewDecoder(opts ...DecoderOption) (decoder *Decoder, err error) {
 	decoder = &Decoder{
-		client: &http.Client{},
 		parser: jwt.NewParser(),
 		hook:   mapstructure.ComposeDecodeHookFunc(),
 	}
@@ -39,7 +37,6 @@ func NewDecoder(opts ...DecoderOption) (decoder *Decoder, err error) {
 
 // Decoder handles decoding and specialized parsing of the metadata blob.
 type Decoder struct {
-	client                   *http.Client
 	parser                   *jwt.Parser
 	hook                     mapstructure.DecodeHookFunc
 	root                     string
@@ -82,7 +79,8 @@ func (d *Decoder) Parse(payload *PayloadJSON) (metadata *Metadata, err error) {
 	return metadata, nil
 }
 
-// Decode the blob from an [io.Reader]. This function will close the [io.ReadCloser] after completing.
+// Decode the blob from an [io.Reader]. The reader is read in full but is not closed; closing it remains the
+// responsibility of the caller.
 func (d *Decoder) Decode(r io.Reader) (payload *PayloadJSON, err error) {
 	bytes, err := io.ReadAll(r)
 	if err != nil {
@@ -238,14 +236,8 @@ func validateChain(root string, chain []any) (bool, error) {
 			return false, err
 		}
 
-		if revoked, ok := revoke.VerifyCertificate(intcert); !ok {
-			issuer := intcert.IssuingCertificateURL
-
-			if issuer != nil {
-				return false, errCRLUnavailable
-			}
-		} else if revoked {
-			return false, errIntermediateCertRevoked
+		if err = validateChainCheckRevocation(intcert, errIntermediateCertRevoked); err != nil {
+			return false, err
 		}
 
 		ints.AddCert(intcert)
@@ -256,10 +248,8 @@ func validateChain(root string, chain []any) (bool, error) {
 		return false, err
 	}
 
-	if revoked, ok := revoke.VerifyCertificate(leafcert); !ok {
-		return false, errCRLUnavailable
-	} else if revoked {
-		return false, errLeafCertRevoked
+	if err = validateChainCheckRevocation(leafcert, errLeafCertRevoked); err != nil {
+		return false, err
 	}
 
 	opts := x509.VerifyOptions{
@@ -271,6 +261,14 @@ func validateChain(root string, chain []any) (bool, error) {
 	_, err = leafcert.Verify(opts)
 
 	return err == nil, err
+}
+
+func validateChainCheckRevocation(cert *x509.Certificate, revokedErr error) error {
+	if revoked, ok := revoke.VerifyCertificate(cert); ok && revoked {
+		return revokedErr
+	}
+
+	return nil
 }
 
 func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err error) {

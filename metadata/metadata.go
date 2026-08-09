@@ -21,7 +21,7 @@ func Fetch() (metadata *Metadata, err error) {
 		resp    *http.Response
 	)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: DefaultMDSTimeout}
 
 	if resp, err = client.Get(ProductionMDSURL); err != nil {
 		return nil, err

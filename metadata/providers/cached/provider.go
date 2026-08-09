@@ -156,7 +156,7 @@ func (p *Provider) outdated(mds *metadata.Metadata) bool {
 
 func (p *Provider) get() (data []byte, err error) {
 	if p.client == nil {
-		p.client = &http.Client{}
+		p.client = &http.Client{Timeout: metadata.DefaultMDSTimeout}
 	}
 
 	var res *http.Response

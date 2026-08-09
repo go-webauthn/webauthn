@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -20,10 +21,16 @@ func TestProductionMetadataTOCParsing(t *testing.T) {
 	decoder, err := NewDecoder(WithIgnoreEntryParsingErrors())
 	require.NoError(t, err)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: DefaultMDSTimeout}
 
 	res, err := client.Get(ProductionMDSURL)
 	require.NoError(t, err)
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	require.Equalf(t, http.StatusOK, res.StatusCode, "unexpected status code %d fetching the metadata blob", res.StatusCode)
 
 	payload, err := decoder.Decode(res.Body)
 	require.NoError(t, err)
@@ -89,7 +96,13 @@ func TestConformanceMetadataTOCParsing(t *testing.T) {
 		res, err = client.Get(endpoint)
 		require.NoError(t, err)
 
-		if blob, err = decoder.Decode(res.Body); err != nil {
+		require.Equalf(t, http.StatusOK, res.StatusCode, "unexpected status code %d fetching conformance blob '%s'", res.StatusCode, endpoint)
+
+		blob, err = decoder.Decode(res.Body)
+
+		_ = res.Body.Close()
+
+		if err != nil {
 			if errors.As(err, &me) {
 				t.Log(me.Details)
 			}
@@ -341,6 +354,10 @@ func getEndpoints(c *http.Client) ([]string, error) {
 
 	defer req.Body.Close()
 
+	if req.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error occurred requesting the conformance endpoints: unexpected status code %d", req.StatusCode)
+	}
+
 	body, _ := io.ReadAll(req.Body)
 
 	var resp MDSGetEndpointsResponse
@@ -373,6 +390,10 @@ func getTestMetadata(s string, c *http.Client) (StatementJSON, error) {
 	}
 
 	defer req.Body.Close()
+
+	if req.StatusCode != http.StatusOK {
+		return statement, fmt.Errorf("error occurred requesting the conformance test metadata for '%s': unexpected status code %d", s, req.StatusCode)
+	}
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
