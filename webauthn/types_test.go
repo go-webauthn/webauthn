@@ -229,6 +229,46 @@ func TestConfig_Validate_DefaultsAndroidKeyAuthorizationScopeToTEEEnforced(t *te
 	}
 }
 
+func TestConfig_Validate_DefaultsCompoundSubStatementScopeToAll(t *testing.T) {
+	testCases := []struct {
+		name     string
+		scope    protocol.CompoundSubStatementScope
+		expected protocol.CompoundSubStatementScope
+	}{
+		{
+			name:     "ShouldCoerceDefaultToAll",
+			scope:    protocol.CompoundSubStatementScopeDefault,
+			expected: protocol.CompoundSubStatementScopeAll,
+		},
+		{
+			name:     "ShouldPreserveExplicitAll",
+			scope:    protocol.CompoundSubStatementScopeAll,
+			expected: protocol.CompoundSubStatementScopeAll,
+		},
+		{
+			name:     "ShouldPreserveExplicitAny",
+			scope:    protocol.CompoundSubStatementScopeAny,
+			expected: protocol.CompoundSubStatementScopeAny,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+				Attestation: protocol.AttestationPolicy{
+					Compound: protocol.CompoundPolicy{SubStatementScope: tc.scope},
+				},
+			}
+
+			require.NoError(t, config.validate())
+			assert.Equal(t, tc.expected, config.Attestation.Compound.SubStatementScope)
+			assert.Equal(t, config.Attestation, config.GetAttestationPolicy())
+		})
+	}
+}
+
 func TestConfig_Validate_FilteringMutuallyExclusive(t *testing.T) {
 	aaguidA := uuid.MustParse("00000000-0000-0000-0000-00000000000a")
 	aaguidB := uuid.MustParse("00000000-0000-0000-0000-00000000000b")

@@ -180,6 +180,10 @@ func (config *Config) validate() (err error) {
 		config.Attestation.AndroidKey.AuthorizationScope = protocol.AndroidKeyAuthorizationScopeTEEEnforced
 	}
 
+	if config.Attestation.Compound.SubStatementScope == protocol.CompoundSubStatementScopeDefault {
+		config.Attestation.Compound.SubStatementScope = protocol.CompoundSubStatementScopeAll
+	}
+
 	if config.Filtering != nil {
 		if len(config.Filtering.PermittedAAGUIDs) > 0 && len(config.Filtering.ProhibitedAAGUIDs) > 0 {
 			return fmt.Errorf("cannot set both 'PermittedAAGUIDs' and 'ProhibitedAAGUIDs' in the filtering config")

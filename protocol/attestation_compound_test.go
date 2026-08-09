@@ -15,6 +15,12 @@ import (
 	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
+const (
+	typePacked      = "packed-type"
+	typeApple       = "apple-type"
+	fmtUnregistered = "definitely-not-registered"
+)
+
 func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 	t.Run("ShouldReturnValidationErrors", func(t *testing.T) {
 		withFreshAttestationRegistry(t)
@@ -155,7 +161,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				name: "ShouldRejectUnsupportedSubStatementFmt",
 				mutate: func(a AttestationObject) AttestationObject {
 					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtFmt: "definitely-not-registered", stmtAttStmt: map[string]any{}},
+						map[string]any{stmtFmt: fmtUnregistered, stmtAttStmt: map[string]any{}},
 						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
 					}
 
@@ -208,7 +214,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				rawAuth: att.RawAuthData,
 			})
 
-			return "packed-type", []any{[]byte("cert1")}, nil
+			return typePacked, []any{[]byte("cert1")}, nil
 		}
 
 		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
@@ -219,7 +225,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				rawAuth: att.RawAuthData,
 			})
 
-			return "apple-type", []any{[]byte("cert2")}, nil
+			return typeApple, []any{[]byte("cert2")}, nil
 		}
 
 		auth := AuthenticatorData{
@@ -251,7 +257,7 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		// §8.9 returns any combination of the outputs of the successful verification procedures. The type of the
 		// first sub-statement is conveyed so the credential isn't recorded as carrying no attestation.
-		assert.Equal(t, "packed-type", gotType)
+		assert.Equal(t, typePacked, gotType)
 		assert.Nil(t, gotX5Cs)
 
 		require.Len(t, calls, 2)
@@ -278,13 +284,13 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (string, []any, error) {
 			calls = append(calls, call{format: att.Format, policy: policy})
 
-			return "packed-type", nil, nil
+			return typePacked, nil, nil
 		}
 
 		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (string, []any, error) {
 			calls = append(calls, call{format: att.Format, policy: policy})
 
-			return "apple-type", nil, nil
+			return typeApple, nil, nil
 		}
 
 		att := AttestationObject{
@@ -463,7 +469,267 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 	})
 }
 
+func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.T) {
+	var (
+		policyAll = AttestationPolicy{Compound: CompoundPolicy{SubStatementScope: CompoundSubStatementScopeAll}}
+		policyAny = AttestationPolicy{Compound: CompoundPolicy{SubStatementScope: CompoundSubStatementScopeAny}}
+	)
+
+	t.Run("ShouldAcceptWhenALaterSubStatementVerifies", func(t *testing.T) {
+		errPacked := ErrInvalidAttestation.WithDetails("packed sub-statement failed")
+
+		register := func(t *testing.T) {
+			t.Helper()
+
+			withFreshAttestationRegistry(t)
+
+			attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+				return "", nil, errPacked
+			}
+
+			attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+				return typeApple, nil, nil
+			}
+		}
+
+		t.Run("Any", func(t *testing.T) {
+			register(t)
+
+			// The type recorded against the credential is that of the sub-statement which was verified, not that of
+			// the first sub-statement which the all scope conveys.
+			attestationType, x5cs, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny)
+			require.NoError(t, err)
+			assert.Equal(t, typeApple, attestationType)
+			assert.Nil(t, x5cs)
+		})
+
+		t.Run("All", func(t *testing.T) {
+			register(t)
+
+			_, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAll)
+			require.Error(t, err)
+			assert.True(t, errors.Is(err, errPacked))
+		})
+	})
+
+	t.Run("ShouldNotVerifySubStatementsAfterTheFirstSuccess", func(t *testing.T) {
+		withFreshAttestationRegistry(t)
+
+		var packedCalls, appleCalls int
+
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			packedCalls++
+
+			return typePacked, nil, nil
+		}
+
+		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			appleCalls++
+
+			return "", nil, ErrInvalidAttestation.WithDetails("apple sub-statement failed")
+		}
+
+		attestationType, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny)
+		require.NoError(t, err)
+
+		assert.Equal(t, typePacked, attestationType)
+		assert.Equal(t, 1, packedCalls)
+		assert.Equal(t, 0, appleCalls)
+	})
+
+	// A sub-statement which verifies but whose trust path the Metadata Service rejects hasn't been verified in full,
+	// so the any scope must move on to the next sub-statement rather than accept it or reject the attestation.
+	t.Run("ShouldTreatAMetadataFailureAsASubStatementFailure", func(t *testing.T) {
+		u := uuid.New()
+
+		newProvider := func(t *testing.T) metadata.Provider {
+			t.Helper()
+
+			ctrl := gomock.NewController(t)
+
+			mds := mocks.NewMockMetadataProvider(ctrl)
+
+			entry := &metadata.Entry{
+				MetadataStatement: metadata.Statement{
+					AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+				},
+			}
+
+			mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil).AnyTimes()
+			mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true).AnyTimes()
+			mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false).AnyTimes()
+			mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false).AnyTimes()
+
+			return mds
+		}
+
+		register := func(t *testing.T) {
+			t.Helper()
+
+			withFreshAttestationRegistry(t)
+
+			// The surrogate type isn't one the metadata entry above declares, so this sub-statement verifies but is
+			// rejected by ValidateMetadata.
+			attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+				return string(metadata.BasicSurrogate), nil, nil
+			}
+
+			attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+				return string(metadata.BasicFull), nil, nil
+			}
+		}
+
+		t.Run("Any", func(t *testing.T) {
+			register(t)
+
+			attestationType, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(u[:]), []byte("hash"), newProvider(t), policyAny)
+			require.NoError(t, err)
+			assert.Equal(t, string(metadata.BasicFull), attestationType)
+		})
+
+		t.Run("All", func(t *testing.T) {
+			register(t)
+
+			_, _, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(u[:]), []byte("hash"), newProvider(t), policyAll)
+			require.Error(t, err)
+
+			protoErr, ok := err.(*Error)
+			require.True(t, ok)
+
+			assert.Equal(t, ErrInvalidAttestation.Type, protoErr.Type)
+			assert.Contains(t, protoErr.DevInfo, "Error occurred validating metadata")
+		})
+	})
+
+	t.Run("ShouldJoinTheFailuresWhenNoSubStatementVerifies", func(t *testing.T) {
+		withFreshAttestationRegistry(t)
+
+		var (
+			errPacked = ErrInvalidAttestation.WithDetails("packed sub-statement failed")
+			errApple  = ErrInvalidAttestation.WithDetails("apple sub-statement failed")
+		)
+
+		attestationRegistry[AttestationFormatPacked] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			return "", nil, errPacked
+		}
+
+		attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+			return "", nil, errApple
+		}
+
+		attestationType, x5cs, err := attestationFormatValidationHandlerCompound(compoundScopeTestAttestation(nil), []byte("hash"), nil, policyAny)
+		require.Error(t, err)
+
+		assert.Empty(t, attestationType)
+		assert.Nil(t, x5cs)
+
+		protoErr, ok := err.(*Error)
+		require.True(t, ok)
+
+		assert.Equal(t, ErrInvalidAttestation.Type, protoErr.Type)
+
+		// Every sub-statement is named alongside its reason so the failure of the set can be diagnosed without
+		// re-running the verification of each one.
+		assert.Contains(t, protoErr.Details, "packed: packed sub-statement failed")
+		assert.Contains(t, protoErr.Details, "apple: apple sub-statement failed")
+
+		assert.True(t, errors.Is(err, errPacked))
+		assert.True(t, errors.Is(err, errApple))
+	})
+
+	// The scope applies to the outcome of the verification procedures and not to the syntax of the statement, so a
+	// sub-statement which can't be verified at all is rejected regardless of the scope in effect.
+	t.Run("ShouldRejectUnsupportedSubStatementFormatUnderEveryScope", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			policy AttestationPolicy
+		}{
+			{name: "All", policy: policyAll},
+			{name: "Any", policy: policyAny},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				withFreshAttestationRegistry(t)
+
+				attestationRegistry[AttestationFormatApple] = func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (string, []any, error) {
+					return typeApple, nil, nil
+				}
+
+				att := compoundScopeTestAttestation(nil)
+				att.AttStatement[stmtAttStmt] = []any{
+					map[string]any{stmtFmt: fmtUnregistered, stmtAttStmt: map[string]any{}},
+					map[string]any{stmtFmt: string(AttestationFormatApple), stmtAttStmt: map[string]any{}},
+				}
+
+				_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, tc.policy)
+				require.Error(t, err)
+
+				protoErr, ok := err.(*Error)
+				require.True(t, ok)
+
+				assert.Equal(t, ErrAttestationFormat.Type, protoErr.Type)
+				assert.Contains(t, protoErr.DevInfo, "unsupported")
+			})
+		}
+	})
+}
+
+func TestCompoundSubStatementFailureReason(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{
+			name:     "ShouldUseTheDetails",
+			err:      ErrInvalidAttestation.WithDetails("the details").WithInfo("the info"),
+			expected: "the details",
+		},
+		{
+			name:     "ShouldFallbackToTheDevInfo",
+			err:      ErrInvalidAttestation.WithDetails("").WithInfo("the info"),
+			expected: "the info",
+		},
+		{
+			name:     "ShouldFallbackToTheType",
+			err:      ErrInvalidAttestation.WithDetails("").WithInfo(""),
+			expected: ErrInvalidAttestation.Type,
+		},
+		{
+			name:     "ShouldUseTheErrorOfANonProtocolError",
+			err:      errors.New("some other error"),
+			expected: "some other error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, compoundSubStatementFailureReason(tc.err))
+		})
+	}
+}
+
 // Supporting functions.
+
+// compoundScopeTestAttestation returns a compound attestation with a packed and an apple sub-statement, in that
+// order, which the scope tests register handlers for individually.
+func compoundScopeTestAttestation(aaguid []byte) AttestationObject {
+	if aaguid == nil {
+		aaguid = make([]byte, 0)
+	}
+
+	return AttestationObject{
+		Format: string(AttestationFormatCompound),
+		AuthData: AuthenticatorData{
+			AttData: AttestedCredentialData{AAGUID: aaguid},
+		},
+		AttStatement: map[string]any{
+			stmtAttStmt: []any{
+				map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+				map[string]any{stmtFmt: string(AttestationFormatApple), stmtAttStmt: map[string]any{}},
+			},
+		},
+	}
+}
 
 func withFreshAttestationRegistry(t *testing.T) {
 	t.Helper()
