@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
@@ -49,11 +50,28 @@ type UserVerificationMethod struct {
 	MatcherProtectionType  uint32 `json:"matcherProtectionType"`
 }
 
-// credentialProtectionPolicies maps the CTAP credProtect integer values to their policy names.
+// credentialProtectionPolicies maps the CTAP credProtect integer values to their policy names. The values are
+// ordered by increasing strictness; see [CredentialProtectionPolicy.Value].
 var credentialProtectionPolicies = map[uint64]CredentialProtectionPolicy{
 	1: CredentialProtectionPolicyUserVerificationOptional,
 	2: CredentialProtectionPolicyUserVerificationOptionalWithCredentialIDList,
 	3: CredentialProtectionPolicyUserVerificationRequired,
+}
+
+// Value returns the CTAP credProtect integer value of this policy, reporting false for a policy this library does
+// not recognise. The values increase with strictness, so an applied policy satisfies a requested one when its value
+// is greater than or equal to the requested value.
+//
+// The lookup walks [credentialProtectionPolicies] rather than duplicating it in the opposite direction so the two
+// representations cannot disagree.
+func (p CredentialProtectionPolicy) Value() (value uint64, ok bool) {
+	for candidate, policy := range credentialProtectionPolicies {
+		if policy == p {
+			return candidate, true
+		}
+	}
+
+	return 0, false
 }
 
 // ParseAuthenticatorExtensionOutputs decodes the CBOR extension outputs from the authenticator data.
@@ -87,6 +105,53 @@ func ParseAuthenticatorExtensionOutputs(data []byte) (out *AuthenticatorExtensio
 	}
 
 	return out, nil
+}
+
+// Verify checks these authenticator extension outputs against the extensions recorded in the session.
+//
+// A nil receiver is valid and means the authenticator returned no extension outputs at all, which is itself a
+// failure when a credential protection policy was requested with enforcement.
+//
+// Only the credProtect policy is asserted. CTAP requires the client to fail the ceremony when
+// 'enforceCredentialProtectionPolicy' is set and the authenticator cannot honour the requested policy, but the
+// Relying Party is the only party that can confirm this independently, and unlike the client extension outputs the
+// authenticator data is signed, so the value checked here is covered by the attestation signature.
+//
+// The applied policy is compared as at-least-as-strict rather than equal, because an authenticator is permitted to
+// apply a stricter policy than the one requested, for instance where its own default exceeds the request.
+//
+// A ceremony which is neither [CreateCeremony] nor [AssertCeremony] is treated as a registration, matching
+// [AuthenticationExtensionsClientOutputs.Verify], so an unexpected value fails closed rather than skipping the
+// assertion.
+//
+// Registry: https://www.iana.org/assignments/webauthn/webauthn.xhtml
+func (o *AuthenticatorExtensionOutputs) Verify(session SessionExtensions, ceremony CeremonyType) error {
+	// credProtect is a registration extension, so there is nothing to assert for an assertion ceremony.
+	if ceremony == AssertCeremony {
+		return nil
+	}
+
+	if !session.EnforceCredentialProtectionPolicy || session.CredentialProtectionPolicy == "" {
+		return nil
+	}
+
+	requested, ok := session.CredentialProtectionPolicy.Value()
+	if !ok {
+		return ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with enforcement but the requested policy %q is not a known policy", ExtensionCredentialProtectionPolicy, session.CredentialProtectionPolicy))
+	}
+
+	if o == nil || o.CredProtect == nil {
+		return ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with enforcement but the authenticator did not report the policy it applied", ExtensionCredentialProtectionPolicy))
+	}
+
+	// A parsed CredProtect is always one of the known policies; assign only sets it from the same map Value walks.
+	applied, _ := o.CredProtect.Value()
+
+	if applied < requested {
+		return ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with enforcement of policy %q but the authenticator applied the less restrictive policy %q", ExtensionCredentialProtectionPolicy, session.CredentialProtectionPolicy, *o.CredProtect))
+	}
+
+	return nil
 }
 
 // assign stores a single decoded extension output, reporting whether the identifier was recognised and the value

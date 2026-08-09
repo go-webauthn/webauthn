@@ -265,6 +265,7 @@ func TestAuthenticationExtensionsSession(t *testing.T) {
 	assert.Equal(t, "https://example.com", session.AppID)
 	assert.Equal(t, "https://exclude.example.com", session.AppIDExclude)
 	assert.Equal(t, LargeBlobSupportRequired, session.LargeBlob)
+	assert.True(t, session.LargeBlobWrite)
 	assert.Equal(t, map[string]any{"vendorThing": true}, session.Extra)
 	assert.Equal(t, have.Requested(), session.Requested)
 

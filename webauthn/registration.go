@@ -1,6 +1,7 @@
 package webauthn
 
 import (
+	"slices"
 	"bytes"
 	"fmt"
 	"net/http"
@@ -171,6 +172,10 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, err
 	}
 
+	if err = parsedResponse.Response.AttestationObject.AuthData.Ext.Verify(session.Extensions, protocol.CreateCeremony); err != nil {
+		return nil, err
+	}
+
 	if credential, err = NewCredential(clientDataHash, parsedResponse); err != nil {
 		return nil, err
 	}
@@ -220,13 +225,9 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 		if aaguid == uuid.Nil {
 			success = true
 		} else {
-			for _, permitted := range filtering.PermittedAAGUIDs {
-				if permitted == aaguid {
+			if slices.Contains(filtering.PermittedAAGUIDs, aaguid) {
 					success = true
-
-					break
 				}
-			}
 		}
 
 		if !success {
@@ -235,11 +236,9 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 	}
 
 	if len(filtering.ProhibitedAAGUIDs) != 0 {
-		for _, prohibited := range filtering.ProhibitedAAGUIDs {
-			if prohibited == aaguid {
+		if slices.Contains(filtering.ProhibitedAAGUIDs, aaguid) {
 				return protocol.ErrPolicyRestriction.WithInfo("Credential has an AAGUID which is prohibited")
 			}
-		}
 	}
 
 	return nil

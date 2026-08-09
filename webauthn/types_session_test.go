@@ -266,9 +266,12 @@ func newPopulatedSessionData() SessionData {
 		Expires:          time.Date(2026, time.April, 19, 12, 34, 56, 0, time.UTC),
 		UserVerification: protocol.VerificationRequired,
 		Extensions: protocol.SessionExtensions{
-			Requested: []string{"credProps", "largeBlob"},
-			LargeBlob: protocol.LargeBlobSupportPreferred,
-			Extra:     map[string]any{"credProtect": int64(2)},
+			Requested:                         []string{"credProps", "largeBlob"},
+			LargeBlob:                         protocol.LargeBlobSupportPreferred,
+			LargeBlobRead:                     true,
+			CredentialProtectionPolicy:        protocol.CredentialProtectionPolicyUserVerificationRequired,
+			EnforceCredentialProtectionPolicy: true,
+			Extra:                             map[string]any{"vendorThing": int64(2)},
 		},
 		CredParams: []protocol.CredentialParameter{
 			{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256},

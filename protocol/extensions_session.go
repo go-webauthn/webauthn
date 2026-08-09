@@ -30,6 +30,20 @@ type SessionExtensions struct {
 	// [LargeBlobSupportRequired] is asserted against the extension output.
 	LargeBlob LargeBlobSupport `json:"largeBlob,omitempty"`
 
+	// LargeBlobRead records that a large blob read was requested at authentication.
+	LargeBlobRead bool `json:"largeBlobRead,omitempty"`
+
+	// LargeBlobWrite records that a large blob write was requested at authentication. Only the intent is recorded;
+	// the payload itself is excluded because it can be large and has no verification role beyond this flag.
+	LargeBlobWrite bool `json:"largeBlobWrite,omitempty"`
+
+	// CredentialProtectionPolicy is the CTAP credProtect policy requested at registration. It is asserted against
+	// the authenticator extension output when EnforceCredentialProtectionPolicy is set.
+	CredentialProtectionPolicy CredentialProtectionPolicy `json:"credentialProtectionPolicy,omitempty"`
+
+	// EnforceCredentialProtectionPolicy records that the requested credential protection policy must be honoured.
+	EnforceCredentialProtectionPolicy bool `json:"enforceCredentialProtectionPolicy,omitempty"`
+
 	// Extra carries the inputs of extensions this library does not model, so a Relying Party can verify the
 	// outputs of its own extensions. Whatever is placed here is persisted verbatim; keep it small.
 	Extra map[string]any `json:"extra,omitempty"`
@@ -37,7 +51,9 @@ type SessionExtensions struct {
 
 // IsZero returns true when nothing needs to be persisted. It is used by the encoding/json omitzero tag option.
 func (e SessionExtensions) IsZero() bool {
-	return len(e.Requested) == 0 && e.AppID == "" && e.AppIDExclude == "" && e.LargeBlob == "" && len(e.Extra) == 0
+	return len(e.Requested) == 0 && e.AppID == "" && e.AppIDExclude == "" && e.LargeBlob == "" && !e.LargeBlobRead &&
+		!e.LargeBlobWrite && e.CredentialProtectionPolicy == "" && !e.EnforceCredentialProtectionPolicy &&
+		len(e.Extra) == 0
 }
 
 // Session returns the subset of these inputs that must be persisted in the session for the finish step of the
@@ -47,11 +63,15 @@ func (e SessionExtensions) IsZero() bool {
 // after the begin step must not retroactively change what the finish step verifies against.
 func (e AuthenticationExtensions) Session() SessionExtensions {
 	return SessionExtensions{
-		Requested:    e.Requested(),
-		AppID:        e.AppID,
-		AppIDExclude: e.AppIDExclude,
-		LargeBlob:    e.LargeBlob.Support,
-		Extra:        maps.Clone(e.Extra),
+		Requested:                         e.Requested(),
+		AppID:                             e.AppID,
+		AppIDExclude:                      e.AppIDExclude,
+		LargeBlob:                         e.LargeBlob.Support,
+		LargeBlobRead:                     e.LargeBlob.Read,
+		LargeBlobWrite:                    len(e.LargeBlob.Write) != 0,
+		CredentialProtectionPolicy:        e.CredentialProtectionPolicy,
+		EnforceCredentialProtectionPolicy: e.EnforceCredentialProtectionPolicy,
+		Extra:                             maps.Clone(e.Extra),
 	}
 }
 
@@ -101,10 +121,14 @@ func (o AuthenticationExtensionsClientOutputs) Verify(session SessionExtensions,
 	// The guard is written against AssertCeremony rather than CreateCeremony so an unrecognised ceremony still has
 	// the required-support assertion applied, matching the policy guard above. Verify is exported, so the ceremony
 	// is not necessarily one this package produced.
-	if ceremony != AssertCeremony && session.LargeBlob == LargeBlobSupportRequired {
-		if o.LargeBlob == nil || o.LargeBlob.Supported == nil || !*o.LargeBlob.Supported {
-			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with support required but the client did not report it as supported", ExtensionLargeBlob)))
+	if ceremony != AssertCeremony {
+		if session.LargeBlob == LargeBlobSupportRequired {
+			if o.LargeBlob == nil || o.LargeBlob.Supported == nil || !*o.LargeBlob.Supported {
+				errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with support required but the client did not report it as supported", ExtensionLargeBlob)))
+			}
 		}
+	} else {
+		errs = append(errs, o.verifyLargeBlobAssertion(session)...)
 	}
 
 	if len(errs) == 0 {
@@ -119,4 +143,37 @@ func (o AuthenticationExtensionsClientOutputs) Verify(session SessionExtensions,
 	return ErrBadRequest.
 		WithDetails(fmt.Sprintf("Error validating the client extension outputs: %s", strings.ReplaceAll(joined.Error(), "\n", "; "))).
 		WithError(joined)
+}
+
+// verifyLargeBlobAssertion checks the large blob outputs of an authentication ceremony against the read or write
+// that was requested. The unsolicited output check only establishes that the extension was requested at all; the
+// read and write arms produce disjoint outputs, so which one was asked for still has to be asserted.
+//
+// A write that the client reports as not performed is an error. The assertion itself is cryptographically sound at
+// this point, so the alternative is to return a successful login to a Relying Party which believes its blob was
+// stored when it was not.
+//
+// A read is not required to produce a blob: a credential with nothing stored yields an empty output, which is a
+// legitimate result rather than a failure.
+//
+// Specification: §10.1.5. Large blob storage extension (https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)
+func (o AuthenticationExtensionsClientOutputs) verifyLargeBlobAssertion(session SessionExtensions) (errs []error) {
+	switch {
+	case session.LargeBlobWrite:
+		if o.LargeBlob == nil || o.LargeBlob.Written == nil {
+			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with a blob to write but the client did not report whether it was written", ExtensionLargeBlob)))
+		} else if !*o.LargeBlob.Written {
+			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with a blob to write but the client reported it was not written", ExtensionLargeBlob)))
+		}
+
+		if o.LargeBlob != nil && len(o.LargeBlob.Blob) != 0 {
+			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with a blob to write but the client returned a blob it read", ExtensionLargeBlob)))
+		}
+	case session.LargeBlobRead:
+		if o.LargeBlob != nil && o.LargeBlob.Written != nil {
+			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with a blob to read but the client reported the outcome of a write", ExtensionLargeBlob)))
+		}
+	}
+
+	return errs
 }

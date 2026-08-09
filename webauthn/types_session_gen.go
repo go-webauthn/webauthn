@@ -575,7 +575,7 @@ func (z *sessionExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 5 bits */
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -630,20 +630,52 @@ func (z *sessionExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 				z.LargeBlob = protocol.LargeBlobSupport(zb0003)
 			}
 			zb0001Mask |= 0x8
+		case "lbRead":
+			z.LargeBlobRead, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "LargeBlobRead")
+				return
+			}
+			zb0001Mask |= 0x10
+		case "lbWrite":
+			z.LargeBlobWrite, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "LargeBlobWrite")
+				return
+			}
+			zb0001Mask |= 0x20
+		case "credProtect":
+			{
+				var zb0004 string
+				zb0004, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "CredentialProtectionPolicy")
+					return
+				}
+				z.CredentialProtectionPolicy = protocol.CredentialProtectionPolicy(zb0004)
+			}
+			zb0001Mask |= 0x40
+		case "cpEnforce":
+			z.EnforceCredentialProtectionPolicy, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "EnforceCredentialProtectionPolicy")
+				return
+			}
+			zb0001Mask |= 0x80
 		case "extra":
-			var zb0004 uint32
-			zb0004, err = dc.ReadMapHeader()
+			var zb0005 uint32
+			zb0005, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Extra")
 				return
 			}
 			if z.Extra == nil {
-				z.Extra = make(map[string]interface{}, zb0004)
+				z.Extra = make(map[string]interface{}, zb0005)
 			} else if len(z.Extra) > 0 {
 				clear(z.Extra)
 			}
-			for zb0004 > 0 {
-				zb0004--
+			for zb0005 > 0 {
+				zb0005--
 				var za0002 string
 				za0002, err = dc.ReadString()
 				if err != nil {
@@ -658,7 +690,7 @@ func (z *sessionExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Extra[za0002] = za0003
 			}
-			zb0001Mask |= 0x10
+			zb0001Mask |= 0x100
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -668,7 +700,7 @@ func (z *sessionExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1f {
+	if zb0001Mask != 0x1ff {
 		if (zb0001Mask & 0x1) == 0 {
 			z.Requested = nil
 		}
@@ -682,6 +714,18 @@ func (z *sessionExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 			z.LargeBlob = ""
 		}
 		if (zb0001Mask & 0x10) == 0 {
+			z.LargeBlobRead = false
+		}
+		if (zb0001Mask & 0x20) == 0 {
+			z.LargeBlobWrite = false
+		}
+		if (zb0001Mask & 0x40) == 0 {
+			z.CredentialProtectionPolicy = ""
+		}
+		if (zb0001Mask & 0x80) == 0 {
+			z.EnforceCredentialProtectionPolicy = false
+		}
+		if (zb0001Mask & 0x100) == 0 {
 			z.Extra = nil
 		}
 	}
@@ -691,8 +735,8 @@ func (z *sessionExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *sessionExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 	// check for omitted fields
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(9)
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	if z.Requested == nil {
 		zb0001Len--
@@ -710,9 +754,25 @@ func (z *sessionExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.Extra == nil {
+	if z.LargeBlobRead == false {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if z.LargeBlobWrite == false {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if z.CredentialProtectionPolicy == "" {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if z.EnforceCredentialProtectionPolicy == false {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	if z.Extra == nil {
+		zb0001Len--
+		zb0001Mask |= 0x100
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -778,6 +838,54 @@ func (z *sessionExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// write "lbRead"
+			err = en.Append(0xa6, 0x6c, 0x62, 0x52, 0x65, 0x61, 0x64)
+			if err != nil {
+				return
+			}
+			err = en.WriteBool(z.LargeBlobRead)
+			if err != nil {
+				err = msgp.WrapError(err, "LargeBlobRead")
+				return
+			}
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// write "lbWrite"
+			err = en.Append(0xa7, 0x6c, 0x62, 0x57, 0x72, 0x69, 0x74, 0x65)
+			if err != nil {
+				return
+			}
+			err = en.WriteBool(z.LargeBlobWrite)
+			if err != nil {
+				err = msgp.WrapError(err, "LargeBlobWrite")
+				return
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// write "credProtect"
+			err = en.Append(0xab, 0x63, 0x72, 0x65, 0x64, 0x50, 0x72, 0x6f, 0x74, 0x65, 0x63, 0x74)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(string(z.CredentialProtectionPolicy))
+			if err != nil {
+				err = msgp.WrapError(err, "CredentialProtectionPolicy")
+				return
+			}
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not omitted
+			// write "cpEnforce"
+			err = en.Append(0xa9, 0x63, 0x70, 0x45, 0x6e, 0x66, 0x6f, 0x72, 0x63, 0x65)
+			if err != nil {
+				return
+			}
+			err = en.WriteBool(z.EnforceCredentialProtectionPolicy)
+			if err != nil {
+				err = msgp.WrapError(err, "EnforceCredentialProtectionPolicy")
+				return
+			}
+		}
+		if (zb0001Mask & 0x100) == 0 { // if not omitted
 			// write "extra"
 			err = en.Append(0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
 			if err != nil {
@@ -809,8 +917,8 @@ func (z *sessionExtensions) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *sessionExtensions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// check for omitted fields
-	zb0001Len := uint32(5)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(9)
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	if z.Requested == nil {
 		zb0001Len--
@@ -828,9 +936,25 @@ func (z *sessionExtensions) MarshalMsg(b []byte) (o []byte, err error) {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if z.Extra == nil {
+	if z.LargeBlobRead == false {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if z.LargeBlobWrite == false {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if z.CredentialProtectionPolicy == "" {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if z.EnforceCredentialProtectionPolicy == false {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	if z.Extra == nil {
+		zb0001Len--
+		zb0001Mask |= 0x100
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -861,6 +985,26 @@ func (z *sessionExtensions) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendString(o, string(z.LargeBlob))
 		}
 		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// string "lbRead"
+			o = append(o, 0xa6, 0x6c, 0x62, 0x52, 0x65, 0x61, 0x64)
+			o = msgp.AppendBool(o, z.LargeBlobRead)
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// string "lbWrite"
+			o = append(o, 0xa7, 0x6c, 0x62, 0x57, 0x72, 0x69, 0x74, 0x65)
+			o = msgp.AppendBool(o, z.LargeBlobWrite)
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// string "credProtect"
+			o = append(o, 0xab, 0x63, 0x72, 0x65, 0x64, 0x50, 0x72, 0x6f, 0x74, 0x65, 0x63, 0x74)
+			o = msgp.AppendString(o, string(z.CredentialProtectionPolicy))
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not omitted
+			// string "cpEnforce"
+			o = append(o, 0xa9, 0x63, 0x70, 0x45, 0x6e, 0x66, 0x6f, 0x72, 0x63, 0x65)
+			o = msgp.AppendBool(o, z.EnforceCredentialProtectionPolicy)
+		}
+		if (zb0001Mask & 0x100) == 0 { // if not omitted
 			// string "extra"
 			o = append(o, 0xa5, 0x65, 0x78, 0x74, 0x72, 0x61)
 			o = msgp.AppendMapHeader(o, uint32(len(z.Extra)))
@@ -887,7 +1031,7 @@ func (z *sessionExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 5 bits */
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -942,21 +1086,53 @@ func (z *sessionExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.LargeBlob = protocol.LargeBlobSupport(zb0003)
 			}
 			zb0001Mask |= 0x8
+		case "lbRead":
+			z.LargeBlobRead, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "LargeBlobRead")
+				return
+			}
+			zb0001Mask |= 0x10
+		case "lbWrite":
+			z.LargeBlobWrite, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "LargeBlobWrite")
+				return
+			}
+			zb0001Mask |= 0x20
+		case "credProtect":
+			{
+				var zb0004 string
+				zb0004, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CredentialProtectionPolicy")
+					return
+				}
+				z.CredentialProtectionPolicy = protocol.CredentialProtectionPolicy(zb0004)
+			}
+			zb0001Mask |= 0x40
+		case "cpEnforce":
+			z.EnforceCredentialProtectionPolicy, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "EnforceCredentialProtectionPolicy")
+				return
+			}
+			zb0001Mask |= 0x80
 		case "extra":
-			var zb0004 uint32
-			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0005 uint32
+			zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Extra")
 				return
 			}
 			if z.Extra == nil {
-				z.Extra = make(map[string]interface{}, zb0004)
+				z.Extra = make(map[string]interface{}, zb0005)
 			} else if len(z.Extra) > 0 {
 				clear(z.Extra)
 			}
-			for zb0004 > 0 {
+			for zb0005 > 0 {
 				var za0003 interface{}
-				zb0004--
+				zb0005--
 				var za0002 string
 				za0002, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
@@ -970,7 +1146,7 @@ func (z *sessionExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Extra[za0002] = za0003
 			}
-			zb0001Mask |= 0x10
+			zb0001Mask |= 0x100
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -980,7 +1156,7 @@ func (z *sessionExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1f {
+	if zb0001Mask != 0x1ff {
 		if (zb0001Mask & 0x1) == 0 {
 			z.Requested = nil
 		}
@@ -994,6 +1170,18 @@ func (z *sessionExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			z.LargeBlob = ""
 		}
 		if (zb0001Mask & 0x10) == 0 {
+			z.LargeBlobRead = false
+		}
+		if (zb0001Mask & 0x20) == 0 {
+			z.LargeBlobWrite = false
+		}
+		if (zb0001Mask & 0x40) == 0 {
+			z.CredentialProtectionPolicy = ""
+		}
+		if (zb0001Mask & 0x80) == 0 {
+			z.EnforceCredentialProtectionPolicy = false
+		}
+		if (zb0001Mask & 0x100) == 0 {
 			z.Extra = nil
 		}
 	}
@@ -1007,7 +1195,7 @@ func (z *sessionExtensions) Msgsize() (s int) {
 	for za0001 := range z.Requested {
 		s += msgp.StringPrefixSize + len(z.Requested[za0001])
 	}
-	s += 6 + msgp.StringPrefixSize + len(z.AppID) + 13 + msgp.StringPrefixSize + len(z.AppIDExclude) + 10 + msgp.StringPrefixSize + len(string(z.LargeBlob)) + 6 + msgp.MapHeaderSize
+	s += 6 + msgp.StringPrefixSize + len(z.AppID) + 13 + msgp.StringPrefixSize + len(z.AppIDExclude) + 10 + msgp.StringPrefixSize + len(string(z.LargeBlob)) + 7 + msgp.BoolSize + 8 + msgp.BoolSize + 12 + msgp.StringPrefixSize + len(string(z.CredentialProtectionPolicy)) + 10 + msgp.BoolSize + 6 + msgp.MapHeaderSize
 	if z.Extra != nil {
 		for za0002, za0003 := range z.Extra {
 			_ = za0003

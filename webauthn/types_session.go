@@ -12,6 +12,7 @@ import (
 //msgp:replace protocol.CredentialMediationRequirement with:string
 //msgp:replace protocol.SessionExtensions with:sessionExtensions
 //msgp:replace protocol.LargeBlobSupport with:string
+//msgp:replace protocol.CredentialProtectionPolicy with:string
 //msgp:clearomitted
 
 // sessionExtensions shadows [protocol.SessionExtensions] for the msgp code generator, which cannot inspect types
@@ -23,12 +24,22 @@ import (
 // The exts field of [SessionData] deliberately carries no omitempty tag option. msgp cannot test a replaced struct
 // for emptiness, so the option never suppressed the field on the wire, while //msgp:clearomitted additionally
 // emitted an assignment to the field's address which does not compile. Do not add it back (msgp v1.6.4).
+// A msg tag MUST NOT exceed 16 characters. The generated EncodeMsg emits each map key as a single
+// msgp.Writer.Append call carrying the fixstr header plus the tag, and that method silently truncates a payload
+// larger than the writer's buffer while still returning a nil error (msgp v1.6.4). The smallest buffer msgp will
+// construct is 18 bytes, so a tag of 18 characters or more corrupts the encoded session for any caller using
+// msgp.NewWriterSize with a small size. TestSessionData_MsgpEncodeErrorPaths encodes through an 18 byte writer and
+// fails if this is reintroduced.
 type sessionExtensions struct {
-	Requested    []string                  `msg:"req,omitempty"`
-	AppID        string                    `msg:"appid,omitempty"`
-	AppIDExclude string                    `msg:"appidExclude,omitempty"`
-	LargeBlob    protocol.LargeBlobSupport `msg:"largeBlob,omitempty"`
-	Extra        map[string]any            `msg:"extra,omitempty"`
+	Requested                         []string                            `msg:"req,omitempty"`
+	AppID                             string                              `msg:"appid,omitempty"`
+	AppIDExclude                      string                              `msg:"appidExclude,omitempty"`
+	LargeBlob                         protocol.LargeBlobSupport           `msg:"largeBlob,omitempty"`
+	LargeBlobRead                     bool                                `msg:"lbRead,omitempty"`
+	LargeBlobWrite                    bool                                `msg:"lbWrite,omitempty"`
+	CredentialProtectionPolicy        protocol.CredentialProtectionPolicy `msg:"credProtect,omitempty"`
+	EnforceCredentialProtectionPolicy bool                                `msg:"cpEnforce,omitempty"`
+	Extra                             map[string]any                      `msg:"extra,omitempty"`
 }
 
 // SessionData is the data that must be stored by the Relying Party between the Begin and Finish steps of a WebAuthn

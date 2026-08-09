@@ -7,6 +7,57 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// The verification rules are only as good as what Session records for them, and the read and write arms are
+// derived rather than copied, so the derivation is asserted directly.
+func TestAuthenticationExtensionsSessionDerivation(t *testing.T) {
+	t.Run("LargeBlobRead", func(t *testing.T) {
+		session := AuthenticationExtensions{LargeBlob: LargeBlobInputs{Read: true}}.Session()
+
+		assert.True(t, session.LargeBlobRead)
+		assert.False(t, session.LargeBlobWrite)
+	})
+
+	t.Run("LargeBlobWrite", func(t *testing.T) {
+		session := AuthenticationExtensions{LargeBlob: LargeBlobInputs{Write: []byte("blob")}}.Session()
+
+		assert.False(t, session.LargeBlobRead)
+		assert.True(t, session.LargeBlobWrite)
+	})
+
+	t.Run("LargeBlobSupportIsNotAWrite", func(t *testing.T) {
+		session := AuthenticationExtensions{LargeBlob: LargeBlobInputs{Support: LargeBlobSupportRequired}}.Session()
+
+		assert.False(t, session.LargeBlobRead)
+		assert.False(t, session.LargeBlobWrite)
+		assert.Equal(t, LargeBlobSupportRequired, session.LargeBlob)
+	})
+
+	t.Run("CredentialProtectionPolicy", func(t *testing.T) {
+		session := AuthenticationExtensions{
+			CredentialProtectionPolicy:        CredentialProtectionPolicyUserVerificationRequired,
+			EnforceCredentialProtectionPolicy: true,
+		}.Session()
+
+		assert.Equal(t, CredentialProtectionPolicyUserVerificationRequired, session.CredentialProtectionPolicy)
+		assert.True(t, session.EnforceCredentialProtectionPolicy)
+	})
+
+	t.Run("ZeroValue", func(t *testing.T) {
+		assert.True(t, AuthenticationExtensions{}.Session().IsZero())
+	})
+
+	t.Run("EveryNewMemberIsCoveredByIsZero", func(t *testing.T) {
+		for name, session := range map[string]SessionExtensions{
+			"LargeBlobRead":                     {LargeBlobRead: true},
+			"LargeBlobWrite":                    {LargeBlobWrite: true},
+			"CredentialProtectionPolicy":        {CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationOptional},
+			"EnforceCredentialProtectionPolicy": {EnforceCredentialProtectionPolicy: true},
+		} {
+			assert.Falsef(t, session.IsZero(), "IsZero must not report %s as empty", name)
+		}
+	})
+}
+
 func TestClientOutputsVerify(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -100,6 +151,70 @@ func TestClientOutputsVerify(t *testing.T) {
 			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlob: LargeBlobSupportRequired},
 			ceremony: testCeremonyUnknown,
 			errs:     []string{"largeBlob", "required"},
+		},
+		{
+			name:     "LargeBlobWritten",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{Written: ptr(true)}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobWrite: true},
+			ceremony: AssertCeremony,
+		},
+		{
+			// A write the client reports as not performed must not yield a successful ceremony.
+			name:     "LargeBlobNotWritten",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{Written: ptr(false)}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobWrite: true},
+			ceremony: AssertCeremony,
+			errs:     []string{"largeBlob", "was not written"},
+		},
+		{
+			// A client which omits the outcome entirely is treated the same as one reporting failure.
+			name:     "LargeBlobWriteOutcomeMissing",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobWrite: true},
+			ceremony: AssertCeremony,
+			errs:     []string{"largeBlob", "did not report whether it was written"},
+		},
+		{
+			name:     "LargeBlobWriteOutputAbsent",
+			outputs:  AuthenticationExtensionsClientOutputs{},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobWrite: true},
+			ceremony: AssertCeremony,
+			errs:     []string{"largeBlob", "did not report whether it was written"},
+		},
+		{
+			// The read and write arms produce disjoint outputs, so a blob returned for a write is incoherent.
+			name:     "LargeBlobWriteReturnedBlob",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{Written: ptr(true), Blob: []byte("blob")}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobWrite: true},
+			ceremony: AssertCeremony,
+			errs:     []string{"largeBlob", "returned a blob it read"},
+		},
+		{
+			name:     "LargeBlobRead",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{Blob: []byte("blob")}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobRead: true},
+			ceremony: AssertCeremony,
+		},
+		{
+			// A credential with nothing stored yields an empty output, which is a legitimate read result.
+			name:     "LargeBlobReadEmpty",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobRead: true},
+			ceremony: AssertCeremony,
+		},
+		{
+			name:     "LargeBlobReadReturnedWriteOutcome",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{Written: ptr(true)}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}, LargeBlobRead: true},
+			ceremony: AssertCeremony,
+			errs:     []string{"largeBlob", "outcome of a write"},
+		},
+		{
+			// Neither arm was requested, so the registration-shaped output is left to the unsolicited check.
+			name:     "LargeBlobNeitherReadNorWrite",
+			outputs:  AuthenticationExtensionsClientOutputs{LargeBlob: &LargeBlobOutputs{Written: ptr(false)}},
+			session:  SessionExtensions{Requested: []string{ExtensionLargeBlob}},
+			ceremony: AssertCeremony,
 		},
 	}
 

@@ -10,6 +10,121 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
+func TestCredentialProtectionPolicyValue(t *testing.T) {
+	for policy, expected := range map[CredentialProtectionPolicy]uint64{
+		CredentialProtectionPolicyUserVerificationOptional:                     1,
+		CredentialProtectionPolicyUserVerificationOptionalWithCredentialIDList: 2,
+		CredentialProtectionPolicyUserVerificationRequired:                     3,
+	} {
+		value, ok := policy.Value()
+
+		assert.True(t, ok)
+		assert.Equal(t, expected, value)
+	}
+
+	value, ok := CredentialProtectionPolicy("nonsense").Value()
+
+	assert.False(t, ok)
+	assert.Equal(t, uint64(0), value)
+}
+
+func TestAuthenticatorExtensionOutputsVerify(t *testing.T) {
+	testCases := []struct {
+		name     string
+		outputs  *AuthenticatorExtensionOutputs
+		session  SessionExtensions
+		ceremony CeremonyType
+		errs     []string
+	}{
+		{
+			name:     "NotEnforcedIsNotChecked",
+			outputs:  &AuthenticatorExtensionOutputs{},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "EnforcedWithoutPolicyIsNotChecked",
+			outputs:  &AuthenticatorExtensionOutputs{},
+			session:  SessionExtensions{EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "EnforcedAndHonoured",
+			outputs:  &AuthenticatorExtensionOutputs{CredProtect: ptr(CredentialProtectionPolicyUserVerificationRequired)},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+		},
+		{
+			// An authenticator may apply a stricter policy than the one requested, for instance where its own
+			// default exceeds the request.
+			name:     "EnforcedAndExceeded",
+			outputs:  &AuthenticatorExtensionOutputs{CredProtect: ptr(CredentialProtectionPolicyUserVerificationRequired)},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationOptional, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "EnforcedAndDowngraded",
+			outputs:  &AuthenticatorExtensionOutputs{CredProtect: ptr(CredentialProtectionPolicyUserVerificationOptional)},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+			errs:     []string{"credentialProtectionPolicy", "less restrictive"},
+		},
+		{
+			name:     "EnforcedButNotReported",
+			outputs:  &AuthenticatorExtensionOutputs{},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+			errs:     []string{"credentialProtectionPolicy", "did not report the policy"},
+		},
+		{
+			// An authenticator returning no extension outputs at all decodes to a nil receiver.
+			name:     "EnforcedWithNoOutputsAtAll",
+			outputs:  nil,
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+			errs:     []string{"credentialProtectionPolicy", "did not report the policy"},
+		},
+		{
+			name:     "EnforcedWithUnknownPolicy",
+			outputs:  &AuthenticatorExtensionOutputs{CredProtect: ptr(CredentialProtectionPolicyUserVerificationRequired)},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicy("nonsense"), EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+			errs:     []string{"credentialProtectionPolicy", "not a known policy"},
+		},
+		{
+			// credProtect is a registration extension, so an assertion has nothing to assert.
+			name:     "AssertionIsNotChecked",
+			outputs:  &AuthenticatorExtensionOutputs{},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
+			ceremony: AssertCeremony,
+		},
+		{
+			// An unrecognised ceremony must fail closed, matching the client output guard.
+			name:     "UnknownCeremonyFailsClosed",
+			outputs:  &AuthenticatorExtensionOutputs{},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
+			ceremony: testCeremonyUnknown,
+			errs:     []string{"credentialProtectionPolicy", "did not report the policy"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.outputs.Verify(tc.session, tc.ceremony)
+
+			if len(tc.errs) == 0 {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			for _, fragment := range tc.errs {
+				assert.ErrorContains(t, err, fragment)
+			}
+		})
+	}
+}
+
 func TestParseAuthenticatorExtensionOutputs(t *testing.T) {
 	data, err := webauthncbor.Marshal(map[string]any{
 		"credProtect":  uint64(3),
