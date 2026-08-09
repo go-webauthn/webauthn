@@ -24,12 +24,12 @@ import (
 // The exts field of [SessionData] deliberately carries no omitempty tag option. msgp cannot test a replaced struct
 // for emptiness, so the option never suppressed the field on the wire, while //msgp:clearomitted additionally
 // emitted an assignment to the field's address which does not compile. Do not add it back (msgp v1.6.4).
-// A msg tag MUST NOT exceed 16 characters. The generated EncodeMsg emits each map key as a single
-// msgp.Writer.Append call carrying the fixstr header plus the tag, and that method silently truncates a payload
-// larger than the writer's buffer while still returning a nil error (msgp v1.6.4). The smallest buffer msgp will
-// construct is 18 bytes, so a tag of 18 characters or more corrupts the encoded session for any caller using
-// msgp.NewWriterSize with a small size. TestSessionData_MsgpEncodeErrorPaths encodes through an 18 byte writer and
-// fails if this is reintroduced.
+// A msg tag MUST NOT exceed 17 characters. The generated EncodeMsg emits each map key as a single
+// msgp.Writer.Append call carrying the one byte fixstr header plus the tag, and that method silently truncates a
+// payload larger than the writer's buffer while still returning a nil error (msgp v1.6.4). The smallest buffer msgp
+// will construct is 18 bytes, so 17 tag characters plus the header is the largest key that fits and a tag of 18
+// characters or more corrupts the encoded session for any caller using msgp.NewWriterSize with a small size.
+// TestSessionData_MsgpEncodeErrorPaths encodes through an 18 byte writer and fails if this is reintroduced.
 type sessionExtensions struct {
 	Requested                         []string                            `msg:"req,omitempty"`
 	AppID                             string                              `msg:"appid,omitempty"`

@@ -220,17 +220,8 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 	}
 
 	if len(filtering.PermittedAAGUIDs) != 0 {
-		var success = false
-
-		if aaguid == uuid.Nil {
-			success = true
-		} else {
-			if slices.Contains(filtering.PermittedAAGUIDs, aaguid) {
-				success = true
-			}
-		}
-
-		if !success {
+		// The zero AAGUID is never excluded by the permitted list; see the FilteringConfig contract.
+		if aaguid != uuid.Nil && !slices.Contains(filtering.PermittedAAGUIDs, aaguid) {
 			return protocol.ErrPolicyRestriction.WithInfo("Credential has an AAGUID which is not permitted")
 		}
 	}

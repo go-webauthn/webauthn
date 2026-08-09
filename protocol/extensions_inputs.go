@@ -107,28 +107,7 @@ func (e AuthenticationExtensions) MarshalJSON() (data []byte, err error) {
 		return nil, err
 	}
 
-	var members map[string]json.RawMessage
-
-	if err = json.Unmarshal(data, &members); err != nil {
-		return nil, err
-	}
-
-	for key, value := range e.Extra {
-		// The check is against the identifier list rather than the marshalled members so a modelled extension is
-		// rejected even when its field is zero and therefore absent from the output. Routing a modelled extension
-		// through the untyped bag would bypass the typed model and be silently dropped on the way back in. The
-		// comparison is case-insensitive because encoding/json would bind a case-variant key to the modelled field
-		// on the way back in; see extensionNameModelled.
-		if extensionNameModelled(extensionInputNames, key) {
-			return nil, fmt.Errorf("error marshalling extension inputs: extra extension %q collides with a modelled extension", key)
-		}
-
-		if members[key], err = json.Marshal(value); err != nil {
-			return nil, fmt.Errorf("error marshalling extension inputs: extra extension %q: %w", key, err)
-		}
-	}
-
-	return json.Marshal(members)
+	return extensionsMarshalExtra(data, extensionInputNames, e.Extra, "extension inputs")
 }
 
 // UnmarshalJSON implements the [json.Unmarshaler] interface, collecting unrecognised members into

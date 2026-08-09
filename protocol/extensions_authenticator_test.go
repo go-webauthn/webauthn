@@ -269,6 +269,29 @@ func TestParseAuthenticatorExtensionOutputsUVMMalformed(t *testing.T) {
 	}
 }
 
+func TestParseAuthenticatorExtensionOutputsCredProtectIdentifierPrecedence(t *testing.T) {
+	// Both identifiers assign CredProtect. A map carrying both must not resolve by map iteration order, which
+	// would otherwise make the policy, and therefore the enforcement check in Verify, differ between parses of
+	// byte-identical signed data.
+	data, err := webauthncbor.Marshal(map[string]any{
+		ExtensionCredProtect:                uint64(1),
+		ExtensionCredentialProtectionPolicy: uint64(3),
+	})
+	require.NoError(t, err)
+
+	for range 32 {
+		have, err := ParseAuthenticatorExtensionOutputs(data)
+		require.NoError(t, err)
+
+		require.NotNil(t, have.CredProtect)
+		assert.Equal(t, CredentialProtectionPolicyUserVerificationOptional, *have.CredProtect,
+			"the CTAP identifier authenticators echo must win")
+
+		// The losing value stays visible rather than being silently discarded.
+		assert.Equal(t, uint64(3), have.Extra[ExtensionCredentialProtectionPolicy])
+	}
+}
+
 func TestParseAuthenticatorExtensionOutputsRejectsTrailingBytes(t *testing.T) {
 	// The extension data is the remainder of the authenticator data, so nothing else bounds it. Anything after the
 	// map is unaccounted for and must not be silently ignored.

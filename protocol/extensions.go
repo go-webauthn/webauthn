@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -34,6 +36,36 @@ func extensionNameCanonical(names []string, key string) (name string, modelled b
 	}
 
 	return "", false
+}
+
+// extensionsMarshalExtra merges extra into the already marshalled form of the modelled members and returns the
+// combined JSON object. It backs the MarshalJSON of both the extension inputs and the extension outputs, which
+// differ only in their identifier list and in the label their errors carry. Marshalling always routes through a map
+// so the key ordering does not depend on whether extra is populated.
+//
+// The collision check is against names rather than the marshalled members so a modelled extension is rejected even
+// when its field is zero and therefore absent from the output. Routing a modelled extension through the untyped bag
+// would bypass the typed model and be silently dropped on the way back in. The comparison is case-insensitive
+// because encoding/json would bind a case-variant key to the modelled field on the way back in; see
+// extensionNameModelled.
+func extensionsMarshalExtra(data []byte, names []string, extra map[string]any, label string) (out []byte, err error) {
+	var members map[string]json.RawMessage
+
+	if err = json.Unmarshal(data, &members); err != nil {
+		return nil, err
+	}
+
+	for key, value := range extra {
+		if extensionNameModelled(names, key) {
+			return nil, fmt.Errorf("error marshalling %s: extra extension %q collides with a modelled extension", label, key)
+		}
+
+		if members[key], err = json.Marshal(value); err != nil {
+			return nil, fmt.Errorf("error marshalling %s: extra extension %q: %w", label, key, err)
+		}
+	}
+
+	return json.Marshal(members)
 }
 
 const (

@@ -105,19 +105,36 @@ func ParseAuthenticatorExtensionOutputs(data []byte) (out *AuthenticatorExtensio
 
 	out = &AuthenticatorExtensionOutputs{}
 
+	// Both credProtect identifiers assign the same field, so a map carrying both would otherwise resolve by map
+	// iteration order and yield a different policy from one parse to the next. ExtensionCredProtect is the
+	// identifier authenticators actually echo, so it wins; the other is preserved in Extra rather than discarded,
+	// leaving the conflict visible to a Relying Party which wants to inspect it.
+	_, credProtect := members[ExtensionCredProtect]
+
 	for key, value := range members {
+		if key == ExtensionCredentialProtectionPolicy && credProtect {
+			out.extra(key, value)
+
+			continue
+		}
+
 		if out.assign(key, value) {
 			continue
 		}
 
-		if out.Extra == nil {
-			out.Extra = map[string]any{}
-		}
-
-		out.Extra[key] = value
+		out.extra(key, value)
 	}
 
 	return out, nil
+}
+
+// extra records an extension output which was not assigned to a modelled field, allocating the map on first use.
+func (o *AuthenticatorExtensionOutputs) extra(key string, value any) {
+	if o.Extra == nil {
+		o.Extra = map[string]any{}
+	}
+
+	o.Extra[key] = value
 }
 
 // Verify checks these authenticator extension outputs against the extensions recorded in the session.
