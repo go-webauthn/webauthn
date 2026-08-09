@@ -361,6 +361,25 @@ func TestStatusReportJSON_Parse(t *testing.T) {
 			err: "error occurred parsing URL value: parse \"\\x7f\": net/url: invalid control character in URL",
 		},
 		{
+			name: "ShouldFailInvalidURLWithScheme",
+			have: StatusReportJSON{
+				EffectiveDate: "2025-01-01",
+				URL:           "https://" + string([]byte{0x7f}),
+			},
+			err: "error occurred parsing URL value: parse \"https://\\x7f\": net/url: invalid control character in URL",
+		},
+		{
+			name: "ShouldSucceedHostPrefixedWithHTTP",
+			have: StatusReportJSON{
+				EffectiveDate: "2025-01-01",
+				URL:           "httpbin.example.com/update",
+			},
+			expected: StatusReport{
+				EffectiveDate: timePtr(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)),
+			},
+			expectedURL: "https://httpbin.example.com/update",
+		},
+		{
 			name: "ShouldSucceedMinimal",
 			have: StatusReportJSON{
 				EffectiveDate: "2025-01-01",
