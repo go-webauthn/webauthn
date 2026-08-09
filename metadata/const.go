@@ -1,5 +1,7 @@
 package metadata
 
+import "time"
+
 const (
 	// ProductionMDSRoot is the root certificate for the MDS.
 	//
@@ -24,6 +26,10 @@ const (
 	HeaderX509URI         = "x5u"
 	HeaderX509Certificate = "x5c"
 )
+
+// DefaultMDSTimeout is the timeout applied to the [http.Client] values this package creates for itself. It is
+// deliberately generous as the production blob is several megabytes. Provide your own client to use a different value.
+const DefaultMDSTimeout = time.Second * 30
 
 var (
 	errIntermediateCertRevoked = &Error{
