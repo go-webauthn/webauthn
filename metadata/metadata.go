@@ -327,8 +327,8 @@ type Statement struct {
 	// UserVerificationDetails is a list of alternative VerificationMethodANDCombinations.
 	UserVerificationDetails [][]VerificationMethodDescriptor
 
-	// KeyProtection is a 16-bit number representing the bit fields defined by the KEY_PROTECTION constants in the FIDO
-	// Registry of Predefined Values.
+	// KeyProtection is a list of KEY_PROTECTION short form case-sensitive string name constants from the FIDO Registry
+	// of Predefined Values describing the method used by the authenticator to protect the FIDO private key material.
 	KeyProtection []string
 
 	// IsKeyRestricted is set to true or it is omitted, if the Uauth private key is restricted by the authenticator to
@@ -342,20 +342,23 @@ type Statement struct {
 	// caching time ago.
 	IsFreshUserVerificationRequired bool
 
-	// MatcherProtection is a 16-bit number representing the bit fields defined by the MATCHER_PROTECTION constants in
-	// the FIDO Registry of Predefined Values.
+	// MatcherProtection is a list of MATCHER_PROTECTION short form case-sensitive string name constants from the FIDO
+	// Registry of Predefined Values describing the method used by the authenticator to protect the matcher that
+	// performs user verification.
 	MatcherProtection []string
 
 	// CryptoStrength is the authenticator's overall claimed cryptographic strength in bits (sometimes also called
 	// security strength or security level).
 	CryptoStrength uint16
 
-	// AttachmentHint is a 32-bit number representing the bit fields defined by the ATTACHMENT_HINT constants in the
-	// FIDO Registry of Predefined Values.
+	// AttachmentHint is a list of ATTACHMENT_HINT short form case-sensitive string name constants from the FIDO
+	// Registry of Predefined Values describing the method(s) by which the authenticator communicates with the FIDO
+	// user device. These values are hints and MUST NOT be relied upon for security purposes.
 	AttachmentHint []string
 
-	// TcDisplay is a 16-bit number representing a combination of the bit flags defined by the
-	// TRANSACTION_CONFIRMATION_DISPLAY constants in the FIDO Registry of Predefined Values.
+	// TcDisplay is a list of TRANSACTION_CONFIRMATION_DISPLAY short form case-sensitive string name constants from the
+	// FIDO Registry of Predefined Values describing the availability and implementation of the transaction
+	// confirmation display. This list MUST be empty if transaction confirmation is not supported.
 	TcDisplay []string
 
 	// TcDisplayContentType is the supported MIME content type [RFC2049] for the transaction confirmation display, such
@@ -490,7 +493,7 @@ type StatementJSON struct {
 	// UserVerificationDetails is a list of alternative VerificationMethodANDCombinations.
 	UserVerificationDetails [][]VerificationMethodDescriptor `json:"userVerificationDetails"`
 
-	// KeyProtection is the key protection type(s).
+	// KeyProtection is a list of KEY_PROTECTION short form case-sensitive string name constants.
 	KeyProtection []string `json:"keyProtection"`
 
 	// IsKeyRestricted indicates if the Uauth private key is restricted to only sign valid FIDO signature assertions.
@@ -499,16 +502,16 @@ type StatementJSON struct {
 	// IsFreshUserVerificationRequired indicates if Uauth key usage always requires a fresh user verification.
 	IsFreshUserVerificationRequired bool `json:"isFreshUserVerificationRequired"`
 
-	// MatcherProtection is the matcher protection type(s).
+	// MatcherProtection is a list of MATCHER_PROTECTION short form case-sensitive string name constants.
 	MatcherProtection []string `json:"matcherProtection"`
 
 	// CryptoStrength is the authenticator's overall claimed cryptographic strength in bits.
 	CryptoStrength uint16 `json:"cryptoStrength"`
 
-	// AttachmentHint is the attachment hint(s).
+	// AttachmentHint is a list of ATTACHMENT_HINT short form case-sensitive string name constants.
 	AttachmentHint []string `json:"attachmentHint"`
 
-	// TcDisplay is the transaction confirmation display type(s).
+	// TcDisplay is a list of TRANSACTION_CONFIRMATION_DISPLAY short form case-sensitive string name constants.
 	TcDisplay []string `json:"tcDisplay"`
 
 	// TcDisplayContentType is the supported MIME content type for the transaction confirmation display.
@@ -668,8 +671,8 @@ type BiometricStatusReport struct {
 	Modality string
 
 	// EffectiveDate is an ISO-8601 formatted date since when the certLevel achieved, if applicable. If no date is
-	// given, the status is assumed to be effective while present.
-	EffectiveDate time.Time
+	// given, i.e. this value is nil, the status is assumed to be effective while present.
+	EffectiveDate *time.Time
 
 	// CertificationDescriptor describes the externally visible aspects of the Biometric Certification evaluation.
 	CertificationDescriptor string
@@ -696,7 +699,8 @@ type BiometricStatusReportJSON struct {
 	// Modality is a single USER_VERIFY short form string constant representing the biometric modality.
 	Modality string `json:"modality"`
 
-	// EffectiveDate is an ISO-8601 formatted date since when the certLevel was achieved.
+	// EffectiveDate is an ISO-8601 formatted date since when the certLevel was achieved. This value is optional and
+	// when it is omitted the parsed [BiometricStatusReport.EffectiveDate] is nil.
 	EffectiveDate string `json:"effectiveDate"`
 
 	// CertificationDescriptor describes the externally visible aspects of the Biometric Certification evaluation.
@@ -713,9 +717,9 @@ type BiometricStatusReportJSON struct {
 }
 
 func (j BiometricStatusReportJSON) Parse() (report BiometricStatusReport, err error) {
-	var effective time.Time
+	var effective *time.Time
 
-	if effective, err = time.Parse(time.DateOnly, j.EffectiveDate); err != nil {
+	if effective, err = mdsParseTimePointer(time.DateOnly, j.EffectiveDate); err != nil {
 		return report, fmt.Errorf("error occurred parsing effective date value: %w", err)
 	}
 
@@ -739,8 +743,8 @@ type StatusReport struct {
 	Status AuthenticatorStatus
 
 	// EffectiveDate is an ISO-8601 formatted date since when the status code was set, if applicable. If no date is
-	// given, the status is assumed to be effective while present.
-	EffectiveDate time.Time
+	// given, i.e. this value is nil, the status is assumed to be effective while present.
+	EffectiveDate *time.Time
 
 	// AuthenticatorVersion is the authenticator version (firmware version) that this status report relates to. In the
 	// case of FIDO_CERTIFIED* status values, the status applies to higher authenticatorVersions until there is a new
@@ -797,7 +801,8 @@ type StatusReportJSON struct {
 	// Status of the authenticator. Additional fields MAY be set depending on this value.
 	Status AuthenticatorStatus `json:"status"`
 
-	// EffectiveDate is an ISO-8601 formatted date since when the status code was set.
+	// EffectiveDate is an ISO-8601 formatted date since when the status code was set. This value is optional and when
+	// it is omitted the parsed [StatusReport.EffectiveDate] is nil.
 	EffectiveDate string `json:"effectiveDate"`
 
 	// AuthenticatorVersion is the authenticator version (firmware version) that this status report relates to.
@@ -855,11 +860,10 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 	}
 
 	var (
-		effective time.Time
-		sunset    *time.Time
+		effective, sunset *time.Time
 	)
 
-	if effective, err = time.Parse(time.DateOnly, j.EffectiveDate); err != nil {
+	if effective, err = mdsParseTimePointer(time.DateOnly, j.EffectiveDate); err != nil {
 		return report, fmt.Errorf("error occurred parsing effective date value: %w", err)
 	}
 

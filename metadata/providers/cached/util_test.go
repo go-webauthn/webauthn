@@ -1,8 +1,6 @@
 package cached
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,121 +13,59 @@ import (
 	"github.com/go-webauthn/webauthn/metadata"
 )
 
-func TestDoOpenOrCreate(t *testing.T) {
-	testCases := []struct {
-		name            string
-		setup           func(t *testing.T) string
-		expectedCreated bool
-		err             string
-	}{
-		{
-			name: "ShouldCreateNewFile",
-			setup: func(t *testing.T) string {
-				t.Helper()
+func TestDoAtomicReplace(t *testing.T) {
+	const original = "the cached blob that was already in place"
 
-				return filepath.Join(t.TempDir(), "new-file.json")
-			},
-			expectedCreated: true,
-		},
-		{
-			name: "ShouldOpenExistingFile",
-			setup: func(t *testing.T) string {
-				t.Helper()
+	t.Run("ShouldReplaceExistingCache", func(t *testing.T) {
+		dir := t.TempDir()
+		name := filepath.Join(dir, "mds.jwt")
 
-				path := filepath.Join(t.TempDir(), "existing-file.json")
+		require.NoError(t, os.WriteFile(name, []byte(original), 0600))
+		require.NoError(t, doAtomicReplace(name, []byte("the replacement blob")))
 
-				f, err := os.Create(path)
-				require.NoError(t, err)
-				require.NoError(t, f.Close())
+		content, err := os.ReadFile(name)
+		require.NoError(t, err)
+		assert.Equal(t, "the replacement blob", string(content))
 
-				return path
-			},
-			expectedCreated: false,
-		},
-		{
-			name: "ShouldFailInvalidPath",
-			setup: func(t *testing.T) string {
-				t.Helper()
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		assert.Len(t, entries, 1, "the temporary file must not be left behind")
+	})
 
-				return filepath.Join(t.TempDir(), "nonexistent-dir", "subdir", "file.json")
-			},
-			err: "no such file or directory",
-		},
-	}
+	t.Run("ShouldCreateCacheWhenAbsent", func(t *testing.T) {
+		dir := t.TempDir()
+		name := filepath.Join(dir, "mds.jwt")
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			path := tc.setup(t)
+		require.NoError(t, doAtomicReplace(name, []byte("the first blob")))
 
-			f, created, err := doOpenOrCreate(path)
+		content, err := os.ReadFile(name)
+		require.NoError(t, err)
+		assert.Equal(t, "the first blob", string(content))
+	})
 
-			if tc.err != "" {
-				assert.Nil(t, f)
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tc.err)
-			} else {
-				require.NoError(t, err)
-				require.NotNil(t, f)
-				assert.Equal(t, tc.expectedCreated, created)
+	t.Run("ShouldLeaveOriginalIntactWhenReplacementFails", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("the read only directory used to force the failure is not enforced for the root user")
+		}
 
-				require.NoError(t, f.Close())
-			}
+		dir := t.TempDir()
+		name := filepath.Join(dir, "mds.jwt")
+
+		require.NoError(t, os.WriteFile(name, []byte(original), 0600))
+
+		// Deny creation of the temporary file so the replacement cannot be written.
+		require.NoError(t, os.Chmod(dir, 0500))
+
+		t.Cleanup(func() {
+			_ = os.Chmod(dir, 0700)
 		})
-	}
-}
 
-func TestDoTruncateCopyAndSeekStart(t *testing.T) {
-	testCases := []struct {
-		name            string
-		initialContent  string
-		copyContent     string
-		expectedContent string
-		err             string
-	}{
-		{
-			name:            "ShouldTruncateAndCopy",
-			initialContent:  "old content that should be replaced",
-			copyContent:     "new data",
-			expectedContent: "new data",
-		},
-		{
-			name:            "ShouldHandleEmptyInitialContent",
-			initialContent:  "",
-			copyContent:     "fresh content",
-			expectedContent: "fresh content",
-		},
-	}
+		require.Error(t, doAtomicReplace(name, []byte("the replacement blob")))
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "test-file.json")
-
-			f, err := os.Create(path)
-			require.NoError(t, err)
-
-			_, err = f.WriteString(tc.initialContent)
-			require.NoError(t, err)
-
-			_, err = f.Seek(0, io.SeekStart)
-			require.NoError(t, err)
-
-			rc := io.NopCloser(bytes.NewReader([]byte(tc.copyContent)))
-
-			err = doTruncateCopyAndSeekStart(f, rc)
-
-			if tc.err != "" {
-				assert.EqualError(t, err, tc.err)
-			} else {
-				require.NoError(t, err)
-
-				content, err := io.ReadAll(f)
-				require.NoError(t, err)
-				assert.Equal(t, tc.expectedContent, string(content))
-			}
-
-			require.NoError(t, f.Close())
-		})
-	}
+		content, err := os.ReadFile(name)
+		require.NoError(t, err)
+		assert.Equal(t, original, string(content), "a failed replacement must not modify the cached blob")
+	})
 }
 
 func TestDefaultNew(t *testing.T) {

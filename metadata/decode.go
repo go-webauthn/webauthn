@@ -98,7 +98,7 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 
 	if token, err = d.parser.Parse(string(bytes), func(token *jwt.Token) (any, error) {
 		// 2. If the x5u attribute is present in the JWT Header.
-		if _, ok := token.Header[HeaderX509URI].([]any); ok {
+		if _, ok := token.Header[HeaderX509URI]; ok {
 			// Never seen an x5u here, although it is in the spec.
 			return nil, errors.New("x5u encountered in header of metadata TOC payload")
 		}

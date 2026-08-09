@@ -63,45 +63,54 @@ type Provider struct {
 }
 
 func (p *Provider) init() (err error) {
-	var (
-		f       *os.File
-		rc      io.ReadCloser
-		created bool
-		mds     *metadata.Metadata
-	)
+	var mds *metadata.Metadata
 
-	if f, created, err = doOpenOrCreate(p.name); err != nil {
+	if !p.force {
+		if mds, err = p.cached(); err != nil {
+			return err
+		}
+
+		if mds != nil && !p.outdated(mds) {
+			return p.setup(mds)
+		}
+	}
+
+	var data []byte
+
+	if data, err = p.get(); err != nil {
 		return err
 	}
 
-	defer f.Close()
-
-	if created || p.force {
-		if rc, err = p.get(); err != nil {
-			return err
-		}
-	} else {
-		if mds, err = p.parse(f); err != nil {
-			return err
-		}
-
-		if p.outdated(mds) {
-			if rc, err = p.get(); err != nil {
-				return err
-			}
-		}
+	if mds, err = p.parseBytes(data); err != nil {
+		return err
 	}
 
-	if rc != nil {
-		if err = doTruncateCopyAndSeekStart(f, rc); err != nil {
-			return err
-		}
-
-		if mds, err = p.parse(f); err != nil {
-			return err
-		}
+	if err = doAtomicReplace(p.name, data); err != nil {
+		return err
 	}
 
+	return p.setup(mds)
+}
+
+func (p *Provider) cached() (mds *metadata.Metadata, err error) {
+	var f *os.File
+
+	if f, err = os.Open(p.name); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	defer func() {
+		_ = f.Close()
+	}()
+
+	return p.parse(f)
+}
+
+func (p *Provider) setup(mds *metadata.Metadata) (err error) {
 	var provider metadata.Provider
 
 	if provider, err = p.newup(mds); err != nil {
@@ -113,10 +122,10 @@ func (p *Provider) init() (err error) {
 	return nil
 }
 
-func (p *Provider) parse(rc io.ReadCloser) (data *metadata.Metadata, err error) {
+func (p *Provider) parse(r io.Reader) (data *metadata.Metadata, err error) {
 	var payload *metadata.PayloadJSON
 
-	if payload, err = p.decoder.Decode(rc); err != nil {
+	if payload, err = p.decoder.Decode(r); err != nil {
 		return nil, err
 	}
 
@@ -127,11 +136,25 @@ func (p *Provider) parse(rc io.ReadCloser) (data *metadata.Metadata, err error) 
 	return data, nil
 }
 
+func (p *Provider) parseBytes(data []byte) (mds *metadata.Metadata, err error) {
+	var payload *metadata.PayloadJSON
+
+	if payload, err = p.decoder.DecodeBytes(data); err != nil {
+		return nil, err
+	}
+
+	if mds, err = p.decoder.Parse(payload); err != nil {
+		return nil, err
+	}
+
+	return mds, nil
+}
+
 func (p *Provider) outdated(mds *metadata.Metadata) bool {
 	return p.update && p.clock.Now().After(mds.Parsed.NextUpdate)
 }
 
-func (p *Provider) get() (f io.ReadCloser, err error) {
+func (p *Provider) get() (data []byte, err error) {
 	if p.client == nil {
 		p.client = &http.Client{}
 	}
@@ -142,5 +165,17 @@ func (p *Provider) get() (f io.ReadCloser, err error) {
 		return nil, err
 	}
 
-	return res.Body, nil
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error occurred requesting metadata from '%s': unexpected status code %d", p.uri, res.StatusCode)
+	}
+
+	if data, err = io.ReadAll(res.Body); err != nil {
+		return nil, fmt.Errorf("error occurred reading metadata response body from '%s': %w", p.uri, err)
+	}
+
+	return data, nil
 }
