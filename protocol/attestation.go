@@ -99,7 +99,7 @@ type NonCompoundAttestationObject struct {
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 }
 
-type attestationFormatValidationHandler func(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error)
+type attestationFormatValidationHandler func(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error)
 
 var attestationRegistry = make(map[AttestationFormat]attestationFormatValidationHandler)
 
@@ -149,7 +149,7 @@ func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationRespon
 //
 // Steps 13 through 15 are verified against the auth data. These steps are identical to 15 through 18 for assertion so we
 // handle them with AuthData.
-func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, userPresenceRequired bool, mds metadata.Provider, credParams []CredentialParameter) (err error) {
+func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte, userVerificationRequired bool, userPresenceRequired bool, mds metadata.Provider, credParams []CredentialParameter, policy AttestationPolicy) (err error) {
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
 	// Begin Step 13 through 15. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
@@ -177,12 +177,15 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 		return ErrAttestationFormat.WithInfo("Credential public key algorithm not supported")
 	}
 
-	return a.VerifyAttestation(clientDataHash, mds)
+	return a.VerifyAttestation(clientDataHash, mds, policy)
 }
 
 // VerifyAttestation only verifies the attestation object excluding the AuthData values. If you wish to also verify the
 // AuthData values you should use [Verify].
-func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider) (err error) {
+//
+// The policy carries the Relying Party decisions which §8 leaves to the Relying Party. Its zero value selects the
+// most restrictive behavior available. See [AttestationPolicy].
+func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (err error) {
 	// Step 18. Determine the attestation statement format by performing a
 	// USASCII case-sensitive match on fmt against the set of supported
 	// WebAuthn Attestation Statement Format Identifier values. The up-to-date
@@ -223,7 +226,7 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 	// Step 19. Verify that attStmt is a correct attestation statement, conveying a valid attestation signature, by using
 	// the attestation statement format fmt’s verification procedure given attStmt, authData and the hash of the serialized
 	// client data computed in step 7.
-	if attestationType, x5cs, err = handler(*a, clientDataHash, mds); err != nil {
+	if attestationType, x5cs, err = handler(*a, clientDataHash, mds, policy); err != nil {
 		var e *Error
 
 		if errors.As(err, &e) {

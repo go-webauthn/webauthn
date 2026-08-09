@@ -19,6 +19,7 @@ func TestConfig_Getters(t *testing.T) {
 		expectedTopOrigins            []string
 		expectedTopOriginVerification protocol.TopOriginVerificationMode
 		expectedMetaDataProviderIsNil bool
+		expectedAttestationPolicy     protocol.AttestationPolicy
 	}{
 		{
 			name: "ShouldReturnAllValues",
@@ -27,12 +28,18 @@ func TestConfig_Getters(t *testing.T) {
 				RPOrigins:                   []string{"https://example.com"},
 				RPTopOrigins:                []string{"https://top.example.com"},
 				RPTopOriginVerificationMode: protocol.TopOriginExplicitVerificationMode,
+				Attestation: protocol.AttestationPolicy{
+					AndroidKey: protocol.AndroidKeyPolicy{AuthorizationScope: protocol.AndroidKeyAuthorizationScopeUnion},
+				},
 			},
 			expectedRPID:                  "example.com",
 			expectedOrigins:               []string{"https://example.com"},
 			expectedTopOrigins:            []string{"https://top.example.com"},
 			expectedTopOriginVerification: protocol.TopOriginExplicitVerificationMode,
 			expectedMetaDataProviderIsNil: true,
+			expectedAttestationPolicy: protocol.AttestationPolicy{
+				AndroidKey: protocol.AndroidKeyPolicy{AuthorizationScope: protocol.AndroidKeyAuthorizationScopeUnion},
+			},
 		},
 		{
 			name: "ShouldReturnDefaults",
@@ -44,6 +51,7 @@ func TestConfig_Getters(t *testing.T) {
 			expectedTopOrigins:            nil,
 			expectedTopOriginVerification: protocol.TopOriginDefaultVerificationMode,
 			expectedMetaDataProviderIsNil: true,
+			expectedAttestationPolicy:     protocol.AttestationPolicy{},
 		},
 	}
 
@@ -53,6 +61,7 @@ func TestConfig_Getters(t *testing.T) {
 			assert.Equal(t, tc.expectedOrigins, tc.config.GetOrigins())
 			assert.Equal(t, tc.expectedTopOrigins, tc.config.GetTopOrigins())
 			assert.Equal(t, tc.expectedTopOriginVerification, tc.config.GetTopOriginVerificationMode())
+			assert.Equal(t, tc.expectedAttestationPolicy, tc.config.GetAttestationPolicy())
 
 			if tc.expectedMetaDataProviderIsNil {
 				assert.Nil(t, tc.config.GetMetaDataProvider())
@@ -178,6 +187,46 @@ func TestConfig_Validate_DefaultsRPTopOriginVerificationModeToExplicit(t *testin
 		require.NoError(t, config.validate())
 		assert.Equal(t, protocol.TopOriginExplicitVerificationMode, config.RPTopOriginVerificationMode)
 	})
+}
+
+func TestConfig_Validate_DefaultsAndroidKeyAuthorizationScopeToTEEEnforced(t *testing.T) {
+	testCases := []struct {
+		name     string
+		scope    protocol.AndroidKeyAuthorizationScope
+		expected protocol.AndroidKeyAuthorizationScope
+	}{
+		{
+			name:     "ShouldCoerceDefaultToTEEEnforced",
+			scope:    protocol.AndroidKeyAuthorizationScopeDefault,
+			expected: protocol.AndroidKeyAuthorizationScopeTEEEnforced,
+		},
+		{
+			name:     "ShouldPreserveExplicitTEEEnforced",
+			scope:    protocol.AndroidKeyAuthorizationScopeTEEEnforced,
+			expected: protocol.AndroidKeyAuthorizationScopeTEEEnforced,
+		},
+		{
+			name:     "ShouldPreserveExplicitUnion",
+			scope:    protocol.AndroidKeyAuthorizationScopeUnion,
+			expected: protocol.AndroidKeyAuthorizationScopeUnion,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+				Attestation: protocol.AttestationPolicy{
+					AndroidKey: protocol.AndroidKeyPolicy{AuthorizationScope: tc.scope},
+				},
+			}
+
+			require.NoError(t, config.validate())
+			assert.Equal(t, tc.expected, config.Attestation.AndroidKey.AuthorizationScope)
+			assert.Equal(t, config.Attestation, config.GetAttestationPolicy())
+		})
+	}
 }
 
 func TestConfig_Validate_FilteringMutuallyExclusive(t *testing.T) {

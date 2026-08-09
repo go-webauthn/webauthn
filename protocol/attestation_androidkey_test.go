@@ -100,13 +100,13 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 					tc.setup(t, mds)
 				}
 
-				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, mds)
+				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, mds, AttestationPolicy{})
 			} else {
 				if tc.setup != nil {
 					tc.setup(t, nil)
 				}
 
-				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, nil)
+				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, nil, AttestationPolicy{})
 			}
 
 			if tc.err != "" {
@@ -283,7 +283,7 @@ func TestAndroidKeyFormat_HandlerErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := attestationFormatValidationHandlerAndroidKey(tc.att, tc.clientDataHash, nil)
+			_, _, err := attestationFormatValidationHandlerAndroidKey(tc.att, tc.clientDataHash, nil, AttestationPolicy{})
 
 			assert.EqualError(t, err, tc.err)
 		})
@@ -372,9 +372,9 @@ func TestAndroidKeyAuthorizationListDecoding(t *testing.T) {
 	assert.Empty(t, decoded.SoftwareEnforced.AllApplications.FullBytes)
 }
 
-// TestAndroidKeyAuthorizationListOrigin asserts the §8.4 origin requirement is evaluated against the union of the two
-// authorization lists, matching the adjacent purpose requirement, and that an absent origin does not satisfy it. An
-// optional integer decodes to zero when absent, which is the value of KM_ORIGIN_GENERATED.
+// TestAndroidKeyAuthorizationListOrigin asserts the §8.4 origin requirement is evaluated against the authorization
+// lists the Relying Party's scope selects, and that an absent origin does not satisfy it. An optional integer
+// decodes to zero when absent, which is the value of KM_ORIGIN_GENERATED.
 func TestAndroidKeyAuthorizationListOrigin(t *testing.T) {
 	// SEQUENCE { [1] EXPLICIT SET { INTEGER 2 } [, [702] EXPLICIT INTEGER n] } where the purpose is KM_PURPOSE_SIGN.
 	list := func(t *testing.T, origin string) androidkeyAuthorizationList {
@@ -402,59 +402,187 @@ func TestAndroidKeyAuthorizationListOrigin(t *testing.T) {
 	imported := list(t, "02")  // KM_ORIGIN_IMPORTED.
 	missing := list(t, "")
 
+	const (
+		errTEE   = "Attestation certificate extensions contains teeEnforced authorization list with origin not equal KM_ORIGIN_GENERATED"
+		errUnion = "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED"
+	)
+
 	testCases := []struct {
 		name     string
 		tee      androidkeyAuthorizationList
 		software androidkeyAuthorizationList
-		err      string
+		errTEE   string
+		errUnion string
 	}{
 		{
 			name: "ShouldAcceptWhenGeneratedInTeeAndAbsentFromSoftware",
 			tee:  generated, software: missing,
 		},
 		{
-			name: "ShouldAcceptWhenGeneratedInSoftwareAndAbsentFromTee",
+			// The union is satisfied by the softwareEnforced list, but a key the trusted execution environment
+			// does not vouch for is precisely what the teeEnforced scope exists to exclude.
+			name: "ShouldAcceptOnlyUnderUnionWhenGeneratedInSoftwareAndAbsentFromTee",
 			tee:  missing, software: generated,
+			errTEE: errTEE,
 		},
 		{
 			name: "ShouldAcceptWhenGeneratedInBoth",
 			tee:  generated, software: generated,
 		},
 		{
-			// The union is satisfied by the teeEnforced list. The previous implementation required both lists to
-			// agree, which rejected this.
+			// The teeEnforced list satisfies both scopes. The softwareEnforced list is not consulted at all under
+			// the teeEnforced scope, so an imported origin there cannot detract from a generated one in the
+			// teeEnforced list.
 			name: "ShouldAcceptWhenGeneratedInTeeAndImportedInSoftware",
 			tee:  generated, software: imported,
 		},
 		{
 			name: "ShouldRejectWhenImportedInBoth",
 			tee:  imported, software: imported,
-			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
+			errTEE: errTEE, errUnion: errUnion,
 		},
 		{
 			// Neither list states an origin, so there is no value equal to KM_ORIGIN_GENERATED to verify.
 			name: "ShouldRejectWhenAbsentFromBothLists",
 			tee:  missing, software: missing,
-			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
+			errTEE: errTEE, errUnion: errUnion,
 		},
 		{
 			name: "ShouldRejectWhenImportedInTeeAndAbsentFromSoftware",
 			tee:  imported, software: missing,
-			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
+			errTEE: errTEE, errUnion: errUnion,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			decoded := androidkeyDescription{TeeEnforced: tc.tee, SoftwareEnforced: tc.software}
+			for _, sc := range []struct {
+				name  string
+				scope AndroidKeyAuthorizationScope
+				err   string
+			}{
+				{"Default", AndroidKeyAuthorizationScopeDefault, tc.errTEE},
+				{"TEEEnforced", AndroidKeyAuthorizationScopeTEEEnforced, tc.errTEE},
+				{"Union", AndroidKeyAuthorizationScopeUnion, tc.errUnion},
+			} {
+				t.Run(sc.name, func(t *testing.T) {
+					decoded := androidkeyDescription{TeeEnforced: tc.tee, SoftwareEnforced: tc.software}
 
-			protoErr := androidKeyValidateAuthorizationLists(&decoded)
+					protoErr := androidKeyValidateAuthorizationLists(&decoded, sc.scope)
 
-			if tc.err != "" {
-				require.NotNil(t, protoErr)
-				assert.EqualError(t, protoErr, tc.err)
-			} else {
-				assert.Nil(t, protoErr)
+					if sc.err != "" {
+						require.NotNil(t, protoErr)
+						assert.EqualError(t, protoErr, sc.err)
+					} else {
+						assert.Nil(t, protoErr)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestAndroidKeyAuthorizationListPurpose asserts the §8.4 purpose requirement is evaluated against the
+// authorization lists the Relying Party's scope selects, matching the adjacent origin requirement.
+func TestAndroidKeyAuthorizationListPurpose(t *testing.T) {
+	// SEQUENCE { [ [1] EXPLICIT SET { INTEGER n }, ] [702] EXPLICIT INTEGER 0 } where the origin is always
+	// KM_ORIGIN_GENERATED so a failure below is attributable to the purpose alone.
+	list := func(t *testing.T, purpose string) androidkeyAuthorizationList {
+		t.Helper()
+
+		body := ""
+
+		if purpose != "" {
+			body += "a105310302010" + purpose
+		}
+
+		body += androidKeyDEROrigin
+
+		der, err := hex.DecodeString(fmt.Sprintf("30%02x", len(body)/2) + body)
+		require.NoError(t, err)
+
+		var decoded androidkeyAuthorizationList
+
+		rest, err := asn1.Unmarshal(der, &decoded)
+		require.NoError(t, err)
+		require.Empty(t, rest)
+
+		return decoded
+	}
+
+	sign := list(t, "2")   // KM_PURPOSE_SIGN, which is 2 in protocol/attestation_androidkey_types.go:133.
+	verify := list(t, "3") // KM_PURPOSE_VERIFY, which is 3 and does not satisfy the requirement.
+	missing := list(t, "")
+
+	require.Equal(t, []int{KM_PURPOSE_SIGN}, sign.Purpose)
+	require.NotContains(t, verify.Purpose, KM_PURPOSE_SIGN)
+	require.Empty(t, missing.Purpose)
+
+	const (
+		errTEE   = "Attestation certificate extensions contains teeEnforced authorization list with purpose not equal KM_PURPOSE_SIGN"
+		errUnion = "Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN"
+	)
+
+	testCases := []struct {
+		name     string
+		tee      androidkeyAuthorizationList
+		software androidkeyAuthorizationList
+		errTEE   string
+		errUnion string
+	}{
+		{
+			name: "ShouldAcceptWhenSignInTeeAndAbsentFromSoftware",
+			tee:  sign, software: missing,
+		},
+		{
+			name: "ShouldAcceptOnlyUnderUnionWhenSignInSoftwareAndAbsentFromTee",
+			tee:  missing, software: sign,
+			errTEE: errTEE,
+		},
+		{
+			name: "ShouldAcceptOnlyUnderUnionWhenVerifyInTeeAndSignInSoftware",
+			tee:  verify, software: sign,
+			errTEE: errTEE,
+		},
+		{
+			name: "ShouldAcceptWhenSignInBoth",
+			tee:  sign, software: sign,
+		},
+		{
+			name: "ShouldRejectWhenVerifyInBoth",
+			tee:  verify, software: verify,
+			errTEE: errTEE, errUnion: errUnion,
+		},
+		{
+			name: "ShouldRejectWhenAbsentFromBothLists",
+			tee:  missing, software: missing,
+			errTEE: errTEE, errUnion: errUnion,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, sc := range []struct {
+				name  string
+				scope AndroidKeyAuthorizationScope
+				err   string
+			}{
+				{"Default", AndroidKeyAuthorizationScopeDefault, tc.errTEE},
+				{"TEEEnforced", AndroidKeyAuthorizationScopeTEEEnforced, tc.errTEE},
+				{"Union", AndroidKeyAuthorizationScopeUnion, tc.errUnion},
+			} {
+				t.Run(sc.name, func(t *testing.T) {
+					decoded := androidkeyDescription{TeeEnforced: tc.tee, SoftwareEnforced: tc.software}
+
+					protoErr := androidKeyValidateAuthorizationLists(&decoded, sc.scope)
+
+					if sc.err != "" {
+						require.NotNil(t, protoErr)
+						assert.EqualError(t, protoErr, sc.err)
+					} else {
+						assert.Nil(t, protoErr)
+					}
+				})
 			}
 		})
 	}
@@ -606,13 +734,27 @@ func TestAndroidKeyAuthorizationListAllApplicationsDER(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			protoErr := androidKeyValidateAuthorizationLists(&tc.decoded)
+			// §8.4 requires allApplications is absent from both lists in the sentence preceding the one which
+			// introduces the Relying Party's choice of scope, so the choice does not reach it.
+			for _, sc := range []struct {
+				name  string
+				scope AndroidKeyAuthorizationScope
+			}{
+				{"TEEEnforced", AndroidKeyAuthorizationScopeTEEEnforced},
+				{"Union", AndroidKeyAuthorizationScopeUnion},
+			} {
+				t.Run(sc.name, func(t *testing.T) {
+					decoded := tc.decoded
 
-			if tc.err != "" {
-				require.NotNil(t, protoErr)
-				assert.EqualError(t, protoErr, tc.err)
-			} else {
-				assert.Nil(t, protoErr)
+					protoErr := androidKeyValidateAuthorizationLists(&decoded, sc.scope)
+
+					if tc.err != "" {
+						require.NotNil(t, protoErr)
+						assert.EqualError(t, protoErr, tc.err)
+					} else {
+						assert.Nil(t, protoErr)
+					}
+				})
 			}
 		})
 	}
@@ -659,8 +801,12 @@ func TestAndroidKeyAuthorizationListUnsupportedTagBypass(t *testing.T) {
 
 	// The decode reports no error yet allApplications, which is present in the encoding, is absent from the result.
 	// The §8.4 checks alone therefore accept the attestation.
+	//
+	// The union scope is required to demonstrate this. The unmodelled tag also drops the teeEnforced origin, so
+	// under the teeEnforced scope the attestation is rejected for that unrelated reason, which would mask the
+	// bypass rather than exhibit it.
 	require.Empty(t, decoded.TeeEnforced.AllApplications.FullBytes)
-	require.Nil(t, androidKeyValidateAuthorizationLists(&decoded))
+	require.Nil(t, androidKeyValidateAuthorizationLists(&decoded, AndroidKeyAuthorizationScopeUnion))
 
 	// Verifying the tags actually present against the raw extension is what rejects it.
 	var raw androidkeyDescriptionRaw

@@ -236,8 +236,9 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 			credParams:                  []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
 			rpTopOriginVerificationMode: TopOriginExplicitVerificationMode,
 			// Both authorization lists of this vector are empty sequences, so it satisfies neither the origin nor the
-			// purpose requirement of §8.4. The origin is reported as it is the first of the two in the specification.
-			err: "Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED",
+			// purpose requirement of §8.4 under either scope. The origin is reported as it is the first of the two in
+			// the specification, and the teeEnforced list is named as the zero policy selects that scope.
+			err: "Attestation certificate extensions contains teeEnforced authorization list with origin not equal KM_ORIGIN_GENERATED",
 		},
 		{
 			// §16.15 Apple Anonymous Attestation - ES256 - Top Origin
@@ -275,7 +276,7 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 
 			challenge := base64.RawURLEncoding.EncodeToString(specTestDecodeHex(t, tc.challenge))
 
-			_, err = pcc.Verify(challenge, specTestRPID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, tc.mds, tc.credParams)
+			_, err = pcc.Verify(challenge, specTestRPID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, tc.mds, tc.credParams, AttestationPolicy{})
 
 			if tc.err == "" {
 				assert.NoError(t, err)

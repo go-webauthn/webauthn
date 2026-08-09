@@ -34,7 +34,7 @@ func init() {
 // See: https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation
 //
 //nolint:gocyclo
-func attestationFormatValidationHandlerCompound(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerCompound(att AttestationObject, clientDataHash []byte, mds metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error) {
 	var (
 		aaguid   uuid.UUID
 		raw      any
@@ -104,7 +104,7 @@ func attestationFormatValidationHandlerCompound(att AttestationObject, clientDat
 			subAttType string
 		)
 
-		if subAttType, cx5cs, err = attestationRegistry[AttestationFormat(object.Format)](object, clientDataHash, mds); err != nil {
+		if subAttType, cx5cs, err = attestationRegistry[AttestationFormat(object.Format)](object, clientDataHash, mds, policy); err != nil {
 			return "", nil, err
 		}
 

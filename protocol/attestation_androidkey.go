@@ -37,7 +37,7 @@ import (
 // See: https://www.w3.org/TR/webauthn/#sctn-android-key-attestation
 //
 //nolint:gocyclo
-func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientDataHash []byte, _ metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error) {
 	var (
 		alg int64
 		sig []byte
@@ -145,22 +145,30 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 		return "", nil, ErrAttestationFormat.WithDetails("Attestation challenge not equal to clientDataHash")
 	}
 
-	if protoErr := androidKeyValidateAuthorizationLists(&decoded); protoErr != nil {
+	if protoErr := androidKeyValidateAuthorizationLists(&decoded, policy.AndroidKey.AuthorizationScope); protoErr != nil {
 		return "", nil, protoErr
 	}
 
 	return string(metadata.BasicFull), x5c, err
 }
 
-// androidKeyValidateAuthorizationLists performs the §8.4 verification steps which apply to the authorization lists of
-// the Android key attestation certificate extension.
-func androidKeyValidateAuthorizationLists(decoded *androidkeyDescription) *Error {
+// androidKeyValidateAuthorizationLists performs the §8.4 verification steps which apply to the authorization lists
+// of the Android key attestation certificate extension.
+//
+// The scope selects the lists the origin and purpose requirements are evaluated against, which §8.4 leaves to the
+// Relying Party. See [AndroidKeyAuthorizationScope].
+func androidKeyValidateAuthorizationLists(decoded *androidkeyDescription, scope AndroidKeyAuthorizationScope) *Error {
 	// The AuthorizationList.allApplications field is not present on either authorization list (softwareEnforced nor teeEnforced), since PublicKeyCredential MUST be scoped to the RP ID.
+	//
+	// This requirement precedes the sentence which introduces the Relying Party's choice of scope, so it applies to
+	// both lists regardless of the scope in effect.
 	if len(decoded.SoftwareEnforced.AllApplications.FullBytes) != 0 || len(decoded.TeeEnforced.AllApplications.FullBytes) != 0 {
 		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains all applications field")
 	}
 
 	// For the following, use only the teeEnforced authorization list if the RP wants to accept only keys from a trusted execution environment, otherwise use the union of teeEnforced and softwareEnforced.
+	union := scope.union()
+
 	// The value in the AuthorizationList.origin field is equal to KM_ORIGIN_GENERATED (which == 0).
 	var (
 		originTee, originSoftware   int
@@ -172,24 +180,49 @@ func androidKeyValidateAuthorizationLists(decoded *androidkeyDescription) *Error
 		return ErrAttestationFormat.WithDetails("Unable to parse the origin of the teeEnforced authorization list").WithError(err)
 	}
 
-	if originSoftware, presentSoftware, err = authorizationListOrigin(&decoded.SoftwareEnforced); err != nil {
-		return ErrAttestationFormat.WithDetails("Unable to parse the origin of the softwareEnforced authorization list").WithError(err)
+	// The softwareEnforced list is only parsed when the scope consults it, so a malformed origin there cannot fail
+	// an attestation the teeEnforced scope would otherwise accept on the teeEnforced list alone.
+	if union {
+		if originSoftware, presentSoftware, err = authorizationListOrigin(&decoded.SoftwareEnforced); err != nil {
+			return ErrAttestationFormat.WithDetails("Unable to parse the origin of the softwareEnforced authorization list").WithError(err)
+		}
 	}
 
-	// The union is satisfied when either list carries an origin equal to KM_ORIGIN_GENERATED. An absent origin
-	// satisfies nothing as there is no value to compare against, which mirrors the purpose check below.
-	generated := (presentTee && originTee == KM_ORIGIN_GENERATED) || (presentSoftware && originSoftware == KM_ORIGIN_GENERATED)
+	// An absent origin satisfies nothing as there is no value to compare against, which mirrors the purpose check
+	// below.
+	generated := presentTee && originTee == KM_ORIGIN_GENERATED
+
+	if union && !generated {
+		generated = presentSoftware && originSoftware == KM_ORIGIN_GENERATED
+	}
 
 	if !generated {
-		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with origin not equal KM_ORIGIN_GENERATED")
+		return ErrAttestationFormat.WithDetails(fmt.Sprintf("Attestation certificate extensions contains %s with origin not equal KM_ORIGIN_GENERATED", androidKeyScopeDescription(union)))
 	}
 
 	// The value in the AuthorizationList.purpose field is equal to KM_PURPOSE_SIGN (which == 2).
-	if !contains(decoded.SoftwareEnforced.Purpose, KM_PURPOSE_SIGN) && !contains(decoded.TeeEnforced.Purpose, KM_PURPOSE_SIGN) {
-		return ErrAttestationFormat.WithDetails("Attestation certificate extensions contains authorization list with purpose not equal KM_PURPOSE_SIGN")
+	sign := contains(decoded.TeeEnforced.Purpose, KM_PURPOSE_SIGN)
+
+	if union && !sign {
+		sign = contains(decoded.SoftwareEnforced.Purpose, KM_PURPOSE_SIGN)
+	}
+
+	if !sign {
+		return ErrAttestationFormat.WithDetails(fmt.Sprintf("Attestation certificate extensions contains %s with purpose not equal KM_PURPOSE_SIGN", androidKeyScopeDescription(union)))
 	}
 
 	return nil
+}
+
+// androidKeyScopeDescription names the authorization lists the §8.4 origin and purpose requirements were evaluated
+// against so that a failure identifies the scope in effect. The union wording is unqualified as it matches the
+// specification's own phrasing and preserves the error text of the union scope.
+func androidKeyScopeDescription(union bool) string {
+	if union {
+		return "authorization list"
+	}
+
+	return "teeEnforced authorization list"
 }
 
 // authorizationListOrigin returns the origin of an authorization list and reports whether the field was present. The
@@ -264,8 +297,10 @@ var authorizationListValidatedTags = []int{
 // [authorizationList] can't model and which precedes a field the verification procedure depends on.
 //
 // An unmodelled tag otherwise defeats the §8.4 requirement that allApplications is absent, as the element is dropped
-// along with every field declared after it while the union permits the other list to supply the origin and purpose. A
-// list which can't be modelled in full is rejected explicitly rather than silently truncated.
+// along with every field declared after it. That requirement is checked against both lists in every scope, not only
+// when the union scope draws on softwareEnforced for the origin and purpose checks, so an unmodelled tag in either
+// list needs the same protection regardless of which scope the Relying Party has selected. A list which can't be
+// modelled in full is rejected explicitly rather than silently truncated.
 func androidKeyVerifyAuthorizationListTags(raw *androidkeyDescriptionRaw) *Error {
 	for _, list := range []struct {
 		name string

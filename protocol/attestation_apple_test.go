@@ -41,7 +41,7 @@ func Test_VerifyAppleFormat(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attestationType, x5cs, err := attestationFormatValidationHandlerAppleAnonymous(tc.args.att, tc.args.clientDataHash, nil)
+			attestationType, x5cs, err := attestationFormatValidationHandlerAppleAnonymous(tc.args.att, tc.args.clientDataHash, nil, AttestationPolicy{})
 
 			assert.Equal(t, tc.attestationType, attestationType)
 			assert.Equal(t, tc.x5cs, x5cs)
