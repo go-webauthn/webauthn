@@ -30,7 +30,7 @@ import (
 // Specification: §8.6. FIDO U2F Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
-func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy) (attestationType string, x5cs []any, err error) {
 	// Signing procedure. Non-normative verification procedure of expected requirement.
 	// If the credential public key of the attested credential is not of algorithm -7 ("ES256"), stop and return an error.
 	var key webauthncose.EC2PublicKeyData

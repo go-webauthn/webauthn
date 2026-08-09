@@ -88,6 +88,11 @@ type Config struct {
 	// or [github.com/go-webauthn/webauthn/metadata/providers/cached] to create a provider instance.
 	MDS metadata.Provider
 
+	// Attestation configures Relying Party policy for the verification of attestation statements. These are the
+	// decisions §8 of the specification delegates to the Relying Party rather than fixing. The zero value selects
+	// the most restrictive behavior available for each policy it carries.
+	Attestation protocol.AttestationPolicy
+
 	// Filtering configures the filtering of authenticators based on their AAGUIDs. This is useful for enforcing
 	// policy on the authenticators that are available to be registered with the Relying Party.
 	Filtering *FilteringConfig
@@ -171,6 +176,10 @@ func (config *Config) validate() (err error) {
 		config.RPTopOriginVerificationMode = protocol.TopOriginExplicitVerificationMode
 	}
 
+	if config.Attestation.AndroidKey.AuthorizationScope == protocol.AndroidKeyAuthorizationScopeDefault {
+		config.Attestation.AndroidKey.AuthorizationScope = protocol.AndroidKeyAuthorizationScopeTEEEnforced
+	}
+
 	if config.Filtering != nil {
 		if len(config.Filtering.PermittedAAGUIDs) > 0 && len(config.Filtering.ProhibitedAAGUIDs) > 0 {
 			return fmt.Errorf("cannot set both 'PermittedAAGUIDs' and 'ProhibitedAAGUIDs' in the filtering config")
@@ -207,6 +216,11 @@ func (c *Config) GetMetaDataProvider() metadata.Provider {
 	return c.MDS
 }
 
+// GetAttestationPolicy returns the configured attestation verification policy.
+func (c *Config) GetAttestationPolicy() protocol.AttestationPolicy {
+	return c.Attestation
+}
+
 // ConfigProvider is an interface that provides access to the WebAuthn [Config] values. This is useful for
 // implementations that wish to provide configuration from alternative sources.
 type ConfigProvider interface {
@@ -215,6 +229,7 @@ type ConfigProvider interface {
 	GetTopOrigins() []string
 	GetTopOriginVerificationMode() protocol.TopOriginVerificationMode
 	GetMetaDataProvider() metadata.Provider
+	GetAttestationPolicy() protocol.AttestationPolicy
 }
 
 // User is an interface with the Relying Party's User entry and provides the fields and methods needed for WebAuthn

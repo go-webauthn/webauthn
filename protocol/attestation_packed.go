@@ -38,7 +38,7 @@ func init() {
 // Specification: §8.2. Packed Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-packed-attestation
-func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataHash []byte, mds metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerPacked(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (attestationType string, x5cs []any, err error) {
 	var (
 		alg int64
 		sig []byte

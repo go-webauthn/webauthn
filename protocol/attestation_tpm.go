@@ -43,7 +43,7 @@ import (
 // See: https://www.w3.org/TR/webauthn/#sctn-tpm-attestation
 //
 //nolint:gocyclo
-func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy) (attestationType string, x5cs []any, err error) {
 	var statement *tpm2AttStatement
 
 	if statement, err = newTPM2AttStatement(att.AttStatement); err != nil {

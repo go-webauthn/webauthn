@@ -76,7 +76,7 @@ func TestNewCredentialFlags(t *testing.T) {
 }
 
 func TestCredential_Verify(t *testing.T) {
-	assert.EqualError(t, (&Credential{}).Verify(nil), "error verifying credential: the metadata provider must be provided but it's nil")
+	assert.EqualError(t, (&Credential{}).Verify(nil, protocol.AttestationPolicy{}), "error verifying credential: the metadata provider must be provided but it's nil")
 
 	testCases := []struct {
 		name       string
@@ -265,7 +265,7 @@ func TestCredential_Verify(t *testing.T) {
 
 			credential := tc.credential(t)
 
-			err := credential.Verify(provider)
+			err := credential.Verify(provider, protocol.AttestationPolicy{})
 
 			if tc.err == "" {
 				assert.NoError(t, err)
@@ -284,7 +284,7 @@ func TestCredential_Verify_RestoresAttestationType(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	provider := mocks.NewMockMetadataProvider(ctrl)
 
-	require.NoError(t, credential.Verify(provider))
+	require.NoError(t, credential.Verify(provider, protocol.AttestationPolicy{}))
 	assert.Equal(t, "none", credential.AttestationType)
 	assert.Equal(t, "none", credential.AttestationFormat)
 }
@@ -298,7 +298,7 @@ func TestCredential_Verify_LeavesExistingAttestationTypeAlone(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	provider := mocks.NewMockMetadataProvider(ctrl)
 
-	require.NoError(t, credential.Verify(provider))
+	require.NoError(t, credential.Verify(provider, protocol.AttestationPolicy{}))
 	assert.Equal(t, "caller-set-value", credential.AttestationType)
 }
 
@@ -314,7 +314,7 @@ func TestCredential_Verify_RejectsTamperedPublicKey(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		provider := mocks.NewMockMetadataProvider(ctrl)
 
-		err := credential.Verify(provider)
+		err := credential.Verify(provider, protocol.AttestationPolicy{})
 		assert.EqualError(t, err, "error verifying credential: stored public key does not match the credential public key embedded in the attestation object")
 	})
 
@@ -325,7 +325,7 @@ func TestCredential_Verify_RejectsTamperedPublicKey(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		provider := mocks.NewMockMetadataProvider(ctrl)
 
-		err := credential.Verify(provider)
+		err := credential.Verify(provider, protocol.AttestationPolicy{})
 		assert.EqualError(t, err, "error verifying credential: stored public key does not match the credential public key embedded in the attestation object")
 	})
 }
@@ -437,7 +437,7 @@ func TestCredential_VerifyAttestationType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			credential := tc.credential(t)
 
-			err := credential.VerifyAttestationType()
+			err := credential.VerifyAttestationType(protocol.AttestationPolicy{})
 
 			if tc.err == "" {
 				require.NoError(t, err)
