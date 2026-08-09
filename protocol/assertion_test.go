@@ -50,8 +50,8 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 						Type: string(PublicKeyCredentialType),
 					},
 					RawID: byteID,
-					ClientExtensionResults: map[string]any{
-						"appID": "example.com",
+					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+						Extra: map[string]any{"vendorAppID": "example.com"},
 					},
 				},
 				Response: ParsedAssertionResponse{
@@ -81,8 +81,8 @@ func TestParseCredentialRequestResponse(t *testing.T) {
 							ID:   "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
 						},
 						RawID: byteID,
-						ClientExtensionResults: map[string]any{
-							"appID": "example.com",
+						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+							Extra: map[string]any{"vendorAppID": "example.com"},
 						},
 					},
 					AssertionResponse: AuthenticatorAssertionResponse{
@@ -325,11 +325,25 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 			err:             "Error validating the assertion signature: <nil>",
 		},
 		{
-			name:            "ShouldFailWithAppID",
+			// The authenticator data of this vector is scoped to the RP ID, so an appid in play must be rejected
+			// rather than silently falling back to the RP ID hash. §10.1.1 requires the Relying Party to expect the
+			// hash of the AppID and not the hash of the RP ID once the client reports the extension was acted upon.
+			name:            "ShouldFailWithAppIDNotMatchingAuthenticatorData",
 			challenge:       challenge,
 			relyingPartyID:  "example.org",
 			rpOrigins:       []string{"https://example.org"},
 			appID:           "https://example.org",
+			credentialBytes: credPubKey,
+			err:             "Error validating the authenticator response",
+		},
+		{
+			// An appid whose hash does match the authenticator data reaches the FIDO U2F public key parser, which
+			// this CTAP2 formatted spec vector key is not valid for.
+			name:            "ShouldFailWithAppIDMatchingAuthenticatorData",
+			challenge:       challenge,
+			relyingPartyID:  "example.org",
+			rpOrigins:       []string{"https://example.org"},
+			appID:           "example.org",
 			credentialBytes: credPubKey,
 			err:             "Error parsing the assertion public key: failed to parse FIDO public key: crypto/ecdh: invalid public key",
 		},
@@ -512,7 +526,7 @@ var testAssertionResponses = map[string]string{
 	`success`: `{
 		"id":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
 		"rawId":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
-		"clientExtensionResults":{"appID":"example.com"},
+		"clientExtensionResults":{"vendorAppID":"example.com"},
 		"type":"public-key",
 		"response":{
 			"authenticatorData":"dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBFXJJiGa3OAAI1vMYKZIsLJfHwVQMANwCOw-atj9C0vhWpfWU-whzNjeQS21Lpxfdk_G-omAtffWztpGoErlNOfuXWRqm9Uj9ANJck1p6lAQIDJiABIVggKAhfsdHcBIc0KPgAcRyAIK_-Vi-nCXHkRHPNaCMBZ-4iWCBxB8fGYQSBONi9uvq0gv95dGWlhJrBwCsj_a4LJQKVHQ",
@@ -524,7 +538,7 @@ var testAssertionResponses = map[string]string{
 	`trailingData`: `{
 		"id":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
 		"rawId":"AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng",
-		"clientExtensionResults":{"appID":"example.com"},
+		"clientExtensionResults":{"vendorAppID":"example.com"},
 		"type":"public-key",
 		"response":{
 			"authenticatorData":"dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBFXJJiGa3OAAI1vMYKZIsLJfHwVQMANwCOw-atj9C0vhWpfWU-whzNjeQS21Lpxfdk_G-omAtffWztpGoErlNOfuXWRqm9Uj9ANJck1p6lAQIDJiABIVggKAhfsdHcBIc0KPgAcRyAIK_-Vi-nCXHkRHPNaCMBZ-4iWCBxB8fGYQSBONi9uvq0gv95dGWlhJrBwCsj_a4LJQKVHQ",

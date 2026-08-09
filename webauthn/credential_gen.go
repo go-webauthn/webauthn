@@ -17,7 +17,7 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 3 bits */
+	var zb0001Mask uint8 /* 4 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -99,6 +99,13 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Attestation")
 				return
 			}
+		case "ext":
+			err = z.Extensions.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Extensions")
+				return
+			}
+			zb0001Mask |= 0x8
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -108,7 +115,7 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x7 {
+	if zb0001Mask != 0xf {
 		if (zb0001Mask & 0x1) == 0 {
 			z.AttestationType = ""
 		}
@@ -118,6 +125,9 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 		if (zb0001Mask & 0x4) == 0 {
 			z.Transport = nil
 		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.Extensions = CredentialExtensions{}
+		}
 	}
 	return
 }
@@ -125,8 +135,8 @@ func (z *Credential) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *Credential) EncodeMsg(en *msgp.Writer) (err error) {
 	// check for omitted fields
-	zb0001Len := uint32(8)
-	var zb0001Mask uint8 /* 8 bits */
+	zb0001Len := uint32(9)
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	if z.AttestationType == "" {
 		zb0001Len--
@@ -241,6 +251,16 @@ func (z *Credential) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "Attestation")
 			return
 		}
+		// write "ext"
+		err = en.Append(0xa3, 0x65, 0x78, 0x74)
+		if err != nil {
+			return
+		}
+		err = z.Extensions.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "Extensions")
+			return
+		}
 	}
 	return
 }
@@ -249,8 +269,8 @@ func (z *Credential) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// check for omitted fields
-	zb0001Len := uint32(8)
-	var zb0001Mask uint8 /* 8 bits */
+	zb0001Len := uint32(9)
+	var zb0001Mask uint16 /* 9 bits */
 	_ = zb0001Mask
 	if z.AttestationType == "" {
 		zb0001Len--
@@ -310,6 +330,13 @@ func (z *Credential) MarshalMsg(b []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, "Attestation")
 			return
 		}
+		// string "ext"
+		o = append(o, 0xa3, 0x65, 0x78, 0x74)
+		o, err = z.Extensions.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Extensions")
+			return
+		}
 	}
 	return
 }
@@ -324,7 +351,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 3 bits */
+	var zb0001Mask uint8 /* 4 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -406,6 +433,13 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Attestation")
 				return
 			}
+		case "ext":
+			bts, err = z.Extensions.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Extensions")
+				return
+			}
+			zb0001Mask |= 0x8
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -415,7 +449,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x7 {
+	if zb0001Mask != 0xf {
 		if (zb0001Mask & 0x1) == 0 {
 			z.AttestationType = ""
 		}
@@ -424,6 +458,9 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if (zb0001Mask & 0x4) == 0 {
 			z.Transport = nil
+		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.Extensions = CredentialExtensions{}
 		}
 	}
 	o = bts
@@ -436,7 +473,7 @@ func (z *Credential) Msgsize() (s int) {
 	for za0001 := range z.Transport {
 		s += msgp.StringPrefixSize + len(string(z.Transport[za0001]))
 	}
-	s += 4 + msgp.ByteSize + 2 + z.Authenticator.Msgsize() + 4 + z.Attestation.Msgsize()
+	s += 4 + msgp.ByteSize + 2 + z.Authenticator.Msgsize() + 4 + z.Attestation.Msgsize() + 4 + z.Extensions.Msgsize()
 	return
 }
 
@@ -771,6 +808,677 @@ func (z *CredentialAttestation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CredentialAttestation) Msgsize() (s int) {
 	s = 1 + 4 + msgp.BytesPrefixSize + len(z.ClientDataJSON) + 4 + msgp.BytesPrefixSize + len(z.ClientDataHash) + 5 + msgp.BytesPrefixSize + len(z.AuthenticatorData) + 4 + msgp.Int64Size + 4 + msgp.BytesPrefixSize + len(z.Object)
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *CredentialExtensions) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "rk":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "RK")
+					return
+				}
+				z.RK = nil
+			} else {
+				if z.RK == nil {
+					z.RK = new(bool)
+				}
+				*z.RK, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "RK")
+					return
+				}
+			}
+			zb0001Mask |= 0x1
+		case "cp":
+			{
+				var zb0002 string
+				zb0002, err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "CredProtect")
+					return
+				}
+				z.CredProtect = protocol.CredentialProtectionPolicy(zb0002)
+			}
+			zb0001Mask |= 0x2
+		case "mpl":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "MinPinLength")
+					return
+				}
+				z.MinPinLength = nil
+			} else {
+				if z.MinPinLength == nil {
+					z.MinPinLength = new(uint)
+				}
+				*z.MinPinLength, err = dc.ReadUint()
+				if err != nil {
+					err = msgp.WrapError(err, "MinPinLength")
+					return
+				}
+			}
+			zb0001Mask |= 0x4
+		case "prf":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "PRFEnabled")
+					return
+				}
+				z.PRFEnabled = nil
+			} else {
+				if z.PRFEnabled == nil {
+					z.PRFEnabled = new(bool)
+				}
+				*z.PRFEnabled, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "PRFEnabled")
+					return
+				}
+			}
+			zb0001Mask |= 0x8
+		case "lbs":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "LargeBlobSupported")
+					return
+				}
+				z.LargeBlobSupported = nil
+			} else {
+				if z.LargeBlobSupported == nil {
+					z.LargeBlobSupported = new(bool)
+				}
+				*z.LargeBlobSupported, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "LargeBlobSupported")
+					return
+				}
+			}
+			zb0001Mask |= 0x10
+		case "hs":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+				z.HMACSecret = nil
+			} else {
+				if z.HMACSecret == nil {
+					z.HMACSecret = new(bool)
+				}
+				*z.HMACSecret, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+			}
+			zb0001Mask |= 0x20
+		case "cbs":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+				z.CredBlobSet = nil
+			} else {
+				if z.CredBlobSet == nil {
+					z.CredBlobSet = new(bool)
+				}
+				*z.CredBlobSet, err = dc.ReadBool()
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+			}
+			zb0001Mask |= 0x40
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x7f {
+		if (zb0001Mask & 0x1) == 0 {
+			z.RK = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.CredProtect = ""
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.MinPinLength = nil
+		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.PRFEnabled = nil
+		}
+		if (zb0001Mask & 0x10) == 0 {
+			z.LargeBlobSupported = nil
+		}
+		if (zb0001Mask & 0x20) == 0 {
+			z.HMACSecret = nil
+		}
+		if (zb0001Mask & 0x40) == 0 {
+			z.CredBlobSet = nil
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *CredentialExtensions) EncodeMsg(en *msgp.Writer) (err error) {
+	// check for omitted fields
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
+	if z.RK == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.CredProtect == "" {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.MinPinLength == nil {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.PRFEnabled == nil {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.LargeBlobSupported == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if z.HMACSecret == nil {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if z.CredBlobSet == nil {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	// variable map header, size zb0001Len
+	err = en.Append(0x80 | uint8(zb0001Len))
+	if err != nil {
+		return
+	}
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not omitted
+			// write "rk"
+			err = en.Append(0xa2, 0x72, 0x6b)
+			if err != nil {
+				return
+			}
+			if z.RK == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteBool(*z.RK)
+				if err != nil {
+					err = msgp.WrapError(err, "RK")
+					return
+				}
+			}
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// write "cp"
+			err = en.Append(0xa2, 0x63, 0x70)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(string(z.CredProtect))
+			if err != nil {
+				err = msgp.WrapError(err, "CredProtect")
+				return
+			}
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// write "mpl"
+			err = en.Append(0xa3, 0x6d, 0x70, 0x6c)
+			if err != nil {
+				return
+			}
+			if z.MinPinLength == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteUint(*z.MinPinLength)
+				if err != nil {
+					err = msgp.WrapError(err, "MinPinLength")
+					return
+				}
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// write "prf"
+			err = en.Append(0xa3, 0x70, 0x72, 0x66)
+			if err != nil {
+				return
+			}
+			if z.PRFEnabled == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteBool(*z.PRFEnabled)
+				if err != nil {
+					err = msgp.WrapError(err, "PRFEnabled")
+					return
+				}
+			}
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// write "lbs"
+			err = en.Append(0xa3, 0x6c, 0x62, 0x73)
+			if err != nil {
+				return
+			}
+			if z.LargeBlobSupported == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteBool(*z.LargeBlobSupported)
+				if err != nil {
+					err = msgp.WrapError(err, "LargeBlobSupported")
+					return
+				}
+			}
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// write "hs"
+			err = en.Append(0xa2, 0x68, 0x73)
+			if err != nil {
+				return
+			}
+			if z.HMACSecret == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteBool(*z.HMACSecret)
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// write "cbs"
+			err = en.Append(0xa3, 0x63, 0x62, 0x73)
+			if err != nil {
+				return
+			}
+			if z.CredBlobSet == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				err = en.WriteBool(*z.CredBlobSet)
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+			}
+		}
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *CredentialExtensions) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// check for omitted fields
+	zb0001Len := uint32(7)
+	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
+	if z.RK == nil {
+		zb0001Len--
+		zb0001Mask |= 0x1
+	}
+	if z.CredProtect == "" {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if z.MinPinLength == nil {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if z.PRFEnabled == nil {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if z.LargeBlobSupported == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if z.HMACSecret == nil {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if z.CredBlobSet == nil {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x1) == 0 { // if not omitted
+			// string "rk"
+			o = append(o, 0xa2, 0x72, 0x6b)
+			if z.RK == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendBool(o, *z.RK)
+			}
+		}
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// string "cp"
+			o = append(o, 0xa2, 0x63, 0x70)
+			o = msgp.AppendString(o, string(z.CredProtect))
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// string "mpl"
+			o = append(o, 0xa3, 0x6d, 0x70, 0x6c)
+			if z.MinPinLength == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendUint(o, *z.MinPinLength)
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
+			// string "prf"
+			o = append(o, 0xa3, 0x70, 0x72, 0x66)
+			if z.PRFEnabled == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendBool(o, *z.PRFEnabled)
+			}
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// string "lbs"
+			o = append(o, 0xa3, 0x6c, 0x62, 0x73)
+			if z.LargeBlobSupported == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendBool(o, *z.LargeBlobSupported)
+			}
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// string "hs"
+			o = append(o, 0xa2, 0x68, 0x73)
+			if z.HMACSecret == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendBool(o, *z.HMACSecret)
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// string "cbs"
+			o = append(o, 0xa3, 0x63, 0x62, 0x73)
+			if z.CredBlobSet == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendBool(o, *z.CredBlobSet)
+			}
+		}
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *CredentialExtensions) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	var zb0001Mask uint8 /* 7 bits */
+	_ = zb0001Mask
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "rk":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.RK = nil
+			} else {
+				if z.RK == nil {
+					z.RK = new(bool)
+				}
+				*z.RK, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "RK")
+					return
+				}
+			}
+			zb0001Mask |= 0x1
+		case "cp":
+			{
+				var zb0002 string
+				zb0002, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CredProtect")
+					return
+				}
+				z.CredProtect = protocol.CredentialProtectionPolicy(zb0002)
+			}
+			zb0001Mask |= 0x2
+		case "mpl":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.MinPinLength = nil
+			} else {
+				if z.MinPinLength == nil {
+					z.MinPinLength = new(uint)
+				}
+				*z.MinPinLength, bts, err = msgp.ReadUintBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MinPinLength")
+					return
+				}
+			}
+			zb0001Mask |= 0x4
+		case "prf":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.PRFEnabled = nil
+			} else {
+				if z.PRFEnabled == nil {
+					z.PRFEnabled = new(bool)
+				}
+				*z.PRFEnabled, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PRFEnabled")
+					return
+				}
+			}
+			zb0001Mask |= 0x8
+		case "lbs":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.LargeBlobSupported = nil
+			} else {
+				if z.LargeBlobSupported == nil {
+					z.LargeBlobSupported = new(bool)
+				}
+				*z.LargeBlobSupported, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "LargeBlobSupported")
+					return
+				}
+			}
+			zb0001Mask |= 0x10
+		case "hs":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.HMACSecret = nil
+			} else {
+				if z.HMACSecret == nil {
+					z.HMACSecret = new(bool)
+				}
+				*z.HMACSecret, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "HMACSecret")
+					return
+				}
+			}
+			zb0001Mask |= 0x20
+		case "cbs":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.CredBlobSet = nil
+			} else {
+				if z.CredBlobSet == nil {
+					z.CredBlobSet = new(bool)
+				}
+				*z.CredBlobSet, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "CredBlobSet")
+					return
+				}
+			}
+			zb0001Mask |= 0x40
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x7f {
+		if (zb0001Mask & 0x1) == 0 {
+			z.RK = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.CredProtect = ""
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.MinPinLength = nil
+		}
+		if (zb0001Mask & 0x8) == 0 {
+			z.PRFEnabled = nil
+		}
+		if (zb0001Mask & 0x10) == 0 {
+			z.LargeBlobSupported = nil
+		}
+		if (zb0001Mask & 0x20) == 0 {
+			z.HMACSecret = nil
+		}
+		if (zb0001Mask & 0x40) == 0 {
+			z.CredBlobSet = nil
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *CredentialExtensions) Msgsize() (s int) {
+	s = 1 + 3
+	if z.RK == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.BoolSize
+	}
+	s += 3 + msgp.StringPrefixSize + len(string(z.CredProtect)) + 4
+	if z.MinPinLength == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.UintSize
+	}
+	s += 4
+	if z.PRFEnabled == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.BoolSize
+	}
+	s += 4
+	if z.LargeBlobSupported == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.BoolSize
+	}
+	s += 3
+	if z.HMACSecret == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.BoolSize
+	}
+	s += 4
+	if z.CredBlobSet == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.BoolSize
+	}
 	return
 }
 

@@ -57,6 +57,36 @@
 //  1. Using a client side library like [@simplewebauthn/browser].
 //  2. Some browsers support the [parseCreationOptionsFromJSON] static method on the WebAuthn object.
 //
+// # Extensions
+//
+// Extension inputs are requested with [WithExtensions] for a registration ceremony and [WithAssertionExtensions]
+// for an authentication ceremony, each taking one or more [ExtensionOption] values such as
+// [WithExtensionCredProps] or [WithExtensionPRF]. An identifier this library does not model is set with
+// [WithExtension], which carries the value to the client verbatim; [protocol.ExtensionLargeBlobKey] is a
+// deliberate example of such an identifier, see its documentation for why it has no dedicated option.
+//
+// The subset of the inputs required to verify the responses is recorded in [SessionData], specifically its
+// [protocol.SessionExtensions] member. This includes the list of extension identifiers that were requested: by
+// default a client extension output the relying party did not request fails the ceremony, so a relying party
+// which reconstructs [SessionData] by hand rather than persisting the value returned by the Begin functions
+// verbatim will see legitimate outputs rejected. See [Config.ExtensionsUnsolicitedOutputPolicy] to relax this.
+//
+// That check covers client extension outputs ([protocol.AuthenticationExtensionsClientOutputs]) only. Authenticator
+// extension outputs decoded from the authenticator data ([protocol.AuthenticatorData.Ext]) are never checked
+// against what was requested, deliberately: CTAP authenticators routinely return credProtect unsolicited because
+// they apply a default protection policy of their own, and rejecting an unsolicited authenticator output would
+// fail otherwise-conforming hardware rather than a misbehaving client.
+//
+// Extension results which remain meaningful for the life of a credential, such as whether it is discoverable, are
+// recorded on [Credential.Extensions] and should be persisted with it. Pseudo-random function results are secrets
+// and are never recorded.
+//
+// A JSON extension member whose key differs from a modelled name only by case (e.g. "AppID" for "appid") is bound
+// to the modelled field by encoding/json before this library ever sees the untyped member map; if the value has
+// the wrong type for that field the whole response fails to parse, rather than the member falling back to the
+// extension's Extra map. See [protocol.AuthenticationExtensions] and [protocol.AuthenticationExtensionsClientOutputs]
+// for details.
+//
 // # Storage
 //
 // This section describes how a Relying Party should persist the state produced by the library: the [Credential]
@@ -84,6 +114,11 @@
 // One persistence shape is supported for the [SessionData] struct which is to store it as bytes via encoding/json or
 // using MessagePack as bytes in whatever storage system you're using for user sessions. This data MUST be definitively
 // anchored to a user's active session, and it must be restored between the ceremony steps.
+//
+// The serialized shape of [SessionData.Extensions] changes across releases whenever the extensions this library
+// models change, in both its JSON and MessagePack encodings. A [SessionData] value serialized by an older release
+// will not decode cleanly after such an upgrade, so in-flight sessions must be drained or invalidated as part of
+// the deployment rather than carried across it.
 //
 // Whichever encoding is used, the bytes handed back to the decoder MUST be bytes this library serialized and which the
 // Relying Party has kept integrity protected at rest and in transit. This matters most for the MessagePack decoders:

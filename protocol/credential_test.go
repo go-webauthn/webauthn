@@ -48,7 +48,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 					},
 					RawID: byteID,
 					ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-						"appid": true,
+						AppID: ptr(true),
 					},
 					AuthenticatorAttachment: Platform,
 				},
@@ -82,7 +82,7 @@ func TestParseCredentialCreationResponse(t *testing.T) {
 						},
 						RawID: byteID,
 						ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-							"appid": true,
+							AppID: ptr(true),
 						},
 						AuthenticatorAttachment: "platform",
 					},
@@ -370,22 +370,15 @@ func TestGetAppID(t *testing.T) {
 	testCases := []struct {
 		name                        string
 		ppkc                        ParsedPublicKeyCredential
-		authExt                     AuthenticationExtensions
+		authExt                     SessionExtensions
 		credentialAttestationFormat string
 		expectedAppID               string
 		err                         string
 	}{
 		{
-			name:                        "ShouldReturnEmptyWhenAuthExtNil",
-			ppkc:                        ParsedPublicKeyCredential{},
-			authExt:                     nil,
-			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			expectedAppID:               "",
-		},
-		{
 			name:                        "ShouldReturnEmptyWhenClientExtNil",
-			ppkc:                        ParsedPublicKeyCredential{},
-			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			ppkc:                        ParsedPublicKeyCredential{ClientExtensionResults: AuthenticationExtensionsClientOutputs{}},
+			authExt:                     SessionExtensions{AppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:               "",
 		},
@@ -393,10 +386,10 @@ func TestGetAppID(t *testing.T) {
 			name: "ShouldReturnEmptyWhenNotFIDOU2F",
 			ppkc: ParsedPublicKeyCredential{
 				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-					ExtensionAppID: true,
+					AppID: ptr(true),
 				},
 			},
-			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     SessionExtensions{AppID: "https://example.com"},
 			credentialAttestationFormat: "packed",
 			expectedAppID:               "",
 		},
@@ -404,67 +397,50 @@ func TestGetAppID(t *testing.T) {
 			name: "ShouldReturnEmptyWhenAppIDNotInClientExt",
 			ppkc: ParsedPublicKeyCredential{
 				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-					"other": "value",
+					AppID: nil,
+					Extra: map[string]any{"other": "value"},
 				},
 			},
-			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     SessionExtensions{AppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:               "",
-		},
-		{
-			name: "ShouldFailWhenClientAppIDNotBool",
-			ppkc: ParsedPublicKeyCredential{
-				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-					ExtensionAppID: "not-a-bool",
-				},
-			},
-			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
-			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			err:                         "Client Output appid did not have the expected type",
 		},
 		{
 			name: "ShouldReturnEmptyWhenAppIDFalse",
 			ppkc: ParsedPublicKeyCredential{
 				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-					ExtensionAppID: false,
+					AppID: ptr(false),
 				},
 			},
-			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     SessionExtensions{AppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:               "",
-		},
-		{
-			name: "ShouldFailWhenSessionAppIDMissing",
-			ppkc: ParsedPublicKeyCredential{
-				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-					ExtensionAppID: true,
-				},
-			},
-			authExt:                     AuthenticationExtensions{},
-			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			err:                         "Session Data does not have an appid but Client Output indicates it should be set",
-		},
-		{
-			name: "ShouldFailWhenSessionAppIDNotString",
-			ppkc: ParsedPublicKeyCredential{
-				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-					ExtensionAppID: true,
-				},
-			},
-			authExt:                     AuthenticationExtensions{ExtensionAppID: 123},
-			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
-			err:                         "Session Data appid did not have the expected type",
 		},
 		{
 			name: "ShouldReturnAppID",
 			ppkc: ParsedPublicKeyCredential{
 				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
-					ExtensionAppID: true,
+					AppID: ptr(true),
 				},
 			},
-			authExt:                     AuthenticationExtensions{ExtensionAppID: "https://example.com"},
+			authExt:                     SessionExtensions{AppID: "https://example.com"},
 			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
 			expectedAppID:               "https://example.com",
+		},
+		{
+			// A zero SessionExtensions is indistinguishable from one whose appid was simply never requested: the
+			// typed session has no "nil map" state to short-circuit on the way the old map-typed
+			// ClientExtensionResults did. A client reporting the appid output true against such a session is
+			// therefore treated as unsolicited and rejected, matching the documented GetAppID contract.
+			name: "ShouldFailWhenSessionAppIDMissing",
+			ppkc: ParsedPublicKeyCredential{
+				ClientExtensionResults: AuthenticationExtensionsClientOutputs{
+					AppID: ptr(true),
+				},
+			},
+			authExt:                     SessionExtensions{},
+			credentialAttestationFormat: string(AttestationFormatFIDOUniversalSecondFactor),
+			err:                         "Session Data does not have an appid but Client Output indicates it should be set",
 		},
 	}
 

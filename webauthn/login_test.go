@@ -2,6 +2,7 @@ package webauthn
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -730,16 +731,19 @@ func TestLoginOptions(t *testing.T) {
 		},
 		{
 			name: "Extensions",
-			opts: []LoginOption{WithAssertionExtensions(protocol.AuthenticationExtensions{"example": "extension"})},
+			opts: []LoginOption{WithAssertionExtensions(WithExtensionGetCredBlob())},
 			expected: protocol.PublicKeyCredentialRequestOptions{
-				Extensions: protocol.AuthenticationExtensions{"example": "extension"},
+				Extensions: protocol.AuthenticationExtensions{GetCredBlob: true},
 			},
 		},
 		{
+			// The option itself no longer inspects the allowed credentials; the appid is discarded by
+			// BeginLogin instead, which TestBeginLoginAppIDPruning covers.
 			name: "AppIDExtensionWithoutU2F",
 			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123")}}), WithAppIdExtension("example")},
 			expected: protocol.PublicKeyCredentialRequestOptions{
 				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("123")}},
+				Extensions:         protocol.AuthenticationExtensions{AppID: "example"},
 			},
 		},
 		{
@@ -747,7 +751,7 @@ func TestLoginOptions(t *testing.T) {
 			opts: []LoginOption{WithAllowedCredentials([]protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor), CredentialID: []byte("123")}}), WithAppIdExtension("example")},
 			expected: protocol.PublicKeyCredentialRequestOptions{
 				AllowedCredentials: []protocol.CredentialDescriptor{{Type: protocol.PublicKeyCredentialType, AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor), CredentialID: []byte("123")}},
-				Extensions:         protocol.AuthenticationExtensions{protocol.ExtensionAppID: "example"},
+				Extensions:         protocol.AuthenticationExtensions{AppID: "example"},
 			},
 		},
 		{
@@ -771,12 +775,116 @@ func TestLoginOptions(t *testing.T) {
 			opts := &tc.have
 
 			for _, opt := range tc.opts {
-				opt(opts)
+				require.NoError(t, opt(opts))
 			}
 
 			assert.Equal(t, tc.expected, *opts)
 		})
 	}
+}
+
+// newTestLoginUser returns a [User] with a single credential. [WebAuthn.BeginLogin] rejects a user with none, so
+// newTestUser cannot be used for an authentication ceremony.
+func newTestLoginUser(t *testing.T) User {
+	t.Helper()
+
+	return &defaultUser{
+		id:          []byte(testUserID),
+		credentials: []Credential{{ID: []byte("credential-id")}},
+	}
+}
+
+func TestBeginLoginAppIDPruning(t *testing.T) {
+	u2f := protocol.CredentialDescriptor{
+		Type:              protocol.PublicKeyCredentialType,
+		CredentialID:      []byte("u2f-credential"),
+		AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor),
+	}
+
+	packed := protocol.CredentialDescriptor{
+		Type:              protocol.PublicKeyCredentialType,
+		CredentialID:      []byte("packed-credential"),
+		AttestationFormat: string(protocol.AttestationFormatPacked),
+	}
+
+	testCases := []struct {
+		name     string
+		allow    []protocol.CredentialDescriptor
+		expected string
+	}{
+		{"U2FPresent", []protocol.CredentialDescriptor{packed, u2f}, "https://example.com"},
+		{"NoU2F", []protocol.CredentialDescriptor{packed}, ""},
+		{"Empty", nil, ""},
+	}
+
+	for _, tc := range testCases {
+		// Both orderings must produce identical results; the option previously read the allowed credentials at the
+		// moment it ran, so listing it first silently did nothing.
+		t.Run(tc.name+"/OptionAfterAllowedCredentials", func(t *testing.T) {
+			w := newTestWebAuthn(t)
+
+			assertion, session, err := w.BeginLogin(newTestLoginUser(t),
+				WithAllowedCredentials(tc.allow),
+				WithAssertionExtensions(WithExtensionAppID("https://example.com")),
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, assertion.Response.Extensions.AppID)
+			assert.Equal(t, tc.expected, session.Extensions.AppID)
+		})
+
+		t.Run(tc.name+"/OptionBeforeAllowedCredentials", func(t *testing.T) {
+			w := newTestWebAuthn(t)
+
+			assertion, session, err := w.BeginLogin(newTestLoginUser(t),
+				WithAssertionExtensions(WithExtensionAppID("https://example.com")),
+				WithAllowedCredentials(tc.allow),
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, assertion.Response.Extensions.AppID)
+			assert.Equal(t, tc.expected, session.Extensions.AppID)
+		})
+
+		// The deprecated wrapper delegates to the same option and must therefore be pruned identically.
+		t.Run(tc.name+"/DeprecatedWrapperBeforeAllowedCredentials", func(t *testing.T) {
+			w := newTestWebAuthn(t)
+
+			assertion, session, err := w.BeginLogin(newTestLoginUser(t),
+				WithAppIdExtension("https://example.com"),
+				WithAllowedCredentials(tc.allow),
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, assertion.Response.Extensions.AppID)
+			assert.Equal(t, tc.expected, session.Extensions.AppID)
+		})
+	}
+}
+
+func TestBeginDiscoverableLoginAppIDPruning(t *testing.T) {
+	w := newTestWebAuthn(t)
+
+	// A discoverable login has no allowed credentials and so can never carry a FIDO U2F credential.
+	assertion, session, err := w.BeginDiscoverableLogin(WithAssertionExtensions(WithExtensionAppID("https://example.com")))
+
+	require.NoError(t, err)
+	assert.Empty(t, assertion.Response.AllowedCredentials)
+	assert.Empty(t, assertion.Response.Extensions.AppID)
+	assert.Empty(t, session.Extensions.AppID)
+}
+
+func TestBeginLoginAppIDPruningUpdatesRequested(t *testing.T) {
+	w := newTestWebAuthn(t)
+
+	_, session, err := w.BeginLogin(newTestLoginUser(t),
+		WithAllowedCredentials(nil),
+		WithAssertionExtensions(WithExtensionAppID("https://example.com"), WithExtensionGetCredBlob()),
+	)
+
+	require.NoError(t, err)
+	assert.NotContains(t, session.Extensions.Requested, protocol.ExtensionAppID)
+	assert.Contains(t, session.Extensions.Requested, protocol.ExtensionGetCredBlob)
 }
 
 func TestValidateLogin_Full(t *testing.T) {
@@ -789,7 +897,7 @@ func TestValidateLogin_Full(t *testing.T) {
 		},
 	}
 
-	userID := []byte("test-user-id")
+	userID := []byte(testUserID)
 
 	t.Run("ShouldSucceedNoAllowedCredentials", func(t *testing.T) {
 		user := &defaultUser{
@@ -1143,10 +1251,112 @@ func TestValidateLogin_Full(t *testing.T) {
 	})
 }
 
+func TestValidateLoginRejectsUnsolicitedExtensionOutput(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	parsedResponse.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		AppID: ptr(true),
+	}
+
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	userID := []byte(testUserID)
+
+	user := &defaultUser{
+		id: userID,
+		credentials: []Credential{
+			{
+				ID:        credentialID,
+				PublicKey: credPubKey,
+				Flags: CredentialFlags{
+					UserPresent:    true,
+					BackupEligible: true,
+				},
+			},
+		},
+	}
+
+	session := SessionData{
+		UserID:     userID,
+		Challenge:  challenge,
+		Extensions: protocol.SessionExtensions{},
+	}
+
+	credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+	assert.Nil(t, credential)
+	assert.ErrorContains(t, err, "appid")
+}
+
+// TestValidateLoginAppIDFromSessionReplacesRPID asserts that an assertion whose authenticator data is scoped to the
+// RP ID is rejected once the session's appid is in play, rather than being accepted because the RP ID hash still
+// matches. The appid used is the one recorded in the session, so the failure is reported against the AppID hash.
+//
+// Specification: §10.1.1. FIDO AppID Extension (https://www.w3.org/TR/webauthn-3/#sctn-appid-extension)
+func TestValidateLoginAppIDFromSessionReplacesRPID(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	parsedResponse.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		AppID: ptr(true),
+	}
+
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	userID := []byte(testUserID)
+
+	user := &defaultUser{
+		id: userID,
+		credentials: []Credential{
+			{
+				ID:        credentialID,
+				PublicKey: credPubKey,
+				// GetAppID only resolves the session appid for a credential which came from the legacy FIDO U2F
+				// JavaScript API.
+				AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor),
+				Flags: CredentialFlags{
+					UserPresent:    true,
+					BackupEligible: true,
+				},
+			},
+		},
+	}
+
+	session := SessionData{
+		UserID:    userID,
+		Challenge: challenge,
+		Extensions: protocol.SessionExtensions{
+			Requested: []string{protocol.ExtensionAppID},
+			AppID:     "https://appid.example.com",
+		},
+	}
+
+	credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+	assert.Nil(t, credential)
+	require.EqualError(t, err, "Error validating the authenticator response")
+
+	// The expected value is the hash of the session's appid, proving the RP ID hash is no longer accepted as an
+	// alternative once the extension applies.
+	appIDHash := sha256.Sum256([]byte(session.Extensions.AppID))
+
+	var e *protocol.Error
+
+	require.ErrorAs(t, err, &e)
+	assert.Equal(t, fmt.Sprintf("RP Hash mismatch. Expected %x and Received %x", appIDHash, parsedResponse.Response.AuthenticatorData.RPIDHash), e.DevInfo)
+}
+
 func TestValidatePasskeyLogin_Full(t *testing.T) {
 	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
 
-	userID := []byte("test-user-id")
+	userID := []byte(testUserID)
 	parsedResponse.Response.UserHandle = userID
 
 	t.Run("ShouldSucceed", func(t *testing.T) {
@@ -1222,7 +1432,7 @@ func TestValidatePasskeyLogin_Full(t *testing.T) {
 func TestFinishDiscoverableLogin_Success(t *testing.T) {
 	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
 
-	userID := []byte("test-user-id")
+	userID := []byte(testUserID)
 
 	body := map[string]any{
 		"id":    base64.RawURLEncoding.EncodeToString(credentialID),
@@ -1280,7 +1490,7 @@ func TestFinishDiscoverableLogin_Success(t *testing.T) {
 func TestFinishPasskeyLogin_Success(t *testing.T) {
 	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
 
-	userID := []byte("test-user-id")
+	userID := []byte(testUserID)
 
 	body := map[string]any{
 		"id":    base64.RawURLEncoding.EncodeToString(credentialID),
@@ -1383,6 +1593,21 @@ func testLoginSpecVectorNoneES256(t *testing.T) (parsedResponse *protocol.Parsed
 	return parsedResponse, credPubKey, challenge, credentialID
 }
 
+func TestBeginLoginOptionError(t *testing.T) {
+	w, err := New(&Config{RPID: "example.com", RPDisplayName: "Test", RPOrigins: []string{"https://example.com"}})
+	require.NoError(t, err)
+
+	opt := func(pkcro *protocol.PublicKeyCredentialRequestOptions) error {
+		return fmt.Errorf("boom")
+	}
+
+	assertion, session, err := w.BeginDiscoverableLogin(opt)
+
+	assert.Nil(t, assertion)
+	assert.Nil(t, session)
+	assert.EqualError(t, err, "error applying login option: boom")
+}
+
 func testDecodeHex(t *testing.T, s string) []byte {
 	t.Helper()
 
@@ -1390,4 +1615,91 @@ func testDecodeHex(t *testing.T, s string) []byte {
 	require.NoError(t, err)
 
 	return data
+}
+
+func TestValidateLoginExtensionOutputs(t *testing.T) {
+	userID := []byte(testUserID)
+
+	newFixture := func(t *testing.T, attestationFormat string) (*WebAuthn, *defaultUser, SessionData, *protocol.ParsedCredentialAssertionData) {
+		t.Helper()
+
+		parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:                credentialID,
+					PublicKey:         credPubKey,
+					AttestationFormat: attestationFormat,
+					Flags:             CredentialFlags{UserPresent: true, BackupEligible: true},
+				},
+			},
+		}
+
+		return w, user, SessionData{UserID: userID, Challenge: challenge}, parsedResponse
+	}
+
+	t.Run("AppIDWithoutSessionValue", func(t *testing.T) {
+		// The client says it acted on the FIDO AppID extension for a credential registered through the legacy U2F
+		// API, but the session records no appid, so there is no value to verify the assertion's RP ID against.
+		w, user, session, response := newFixture(t, string(protocol.AttestationFormatFIDOUniversalSecondFactor))
+
+		response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{AppID: ptr(true)}
+
+		credential, err := w.ValidateLogin(user, session, response)
+
+		assert.Nil(t, credential)
+		assert.ErrorContains(t, err, "appid")
+	})
+
+	t.Run("UnsolicitedOutput", func(t *testing.T) {
+		// The same output against a credential which is not U2F leaves GetAppID with nothing to do, so the
+		// unsolicited check is what rejects it: the session never asked for the extension.
+		w, user, session, response := newFixture(t, string(protocol.AttestationFormatPacked))
+
+		response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{AppID: ptr(true)}
+
+		credential, err := w.ValidateLogin(user, session, response)
+
+		assert.Nil(t, credential)
+		assert.ErrorContains(t, err, "was not requested")
+	})
+
+	t.Run("SolicitedOutput", func(t *testing.T) {
+		// The discriminating case: the same output passes once the session records that it was asked for.
+		w, user, session, response := newFixture(t, string(protocol.AttestationFormatPacked))
+
+		response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{AppID: ptr(true)}
+		session.Extensions = protocol.SessionExtensions{Requested: []string{protocol.ExtensionAppID}}
+
+		credential, err := w.ValidateLogin(user, session, response)
+
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+	})
+}
+
+func TestBeginLoginRejectsInvalidConfig(t *testing.T) {
+	// As with registration, the lazily validated configuration must stop the ceremony rather than producing
+	// request options from an incomplete configuration.
+	w := &WebAuthn{Config: &Config{}}
+
+	user := &defaultUser{
+		id:          []byte(testUserID),
+		credentials: []Credential{{ID: []byte("credential")}},
+	}
+
+	assertion, session, err := w.BeginLogin(user)
+
+	assert.Nil(t, assertion)
+	assert.Nil(t, session)
+	assert.ErrorContains(t, err, "error occurred validating the configuration")
 }

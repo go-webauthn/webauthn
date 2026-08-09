@@ -13,6 +13,7 @@ import (
 //go:generate msgp
 
 //msgp:replace protocol.AuthenticatorTransport with:string
+//msgp:replace protocol.CredentialProtectionPolicy with:string
 //msgp:shim CredentialFlags as:byte using:(CredentialFlags).MsgpByte/CredentialFlagsFromMsgpByte
 //msgp:clearomitted
 
@@ -39,9 +40,54 @@ func NewCredential(clientDataHash []byte, c *protocol.ParsedCredentialCreationDa
 			PublicKeyAlgorithm: c.Raw.AttestationResponse.PublicKeyAlgorithm,
 			Object:             c.Raw.AttestationResponse.AttestationObject,
 		},
+		Extensions: newCredentialExtensions(c),
 	}
 
 	return credential, nil
+}
+
+// newCredentialExtensions selects the extension results worth persisting with the credential record from the
+// client and authenticator extension outputs of a registration ceremony.
+func newCredentialExtensions(c *protocol.ParsedCredentialCreationData) (extensions CredentialExtensions) {
+	outputs := c.ClientExtensionResults
+
+	if outputs.CredProps != nil && outputs.CredProps.RK != nil {
+		extensions.RK = ptr(*outputs.CredProps.RK)
+	}
+
+	if outputs.PRF != nil && outputs.PRF.Enabled != nil {
+		extensions.PRFEnabled = ptr(*outputs.PRF.Enabled)
+	}
+
+	if outputs.LargeBlob != nil && outputs.LargeBlob.Supported != nil {
+		extensions.LargeBlobSupported = ptr(*outputs.LargeBlob.Supported)
+	}
+
+	if outputs.HMACCreateSecret != nil {
+		extensions.HMACSecret = ptr(*outputs.HMACCreateSecret)
+	}
+
+	if ext := c.Response.AttestationObject.AuthData.Ext; ext != nil {
+		if ext.CredProtect != nil {
+			extensions.CredProtect = *ext.CredProtect
+		}
+
+		if ext.MinPinLength != nil {
+			extensions.MinPinLength = ptr(*ext.MinPinLength)
+		}
+
+		if ext.CredBlobSet != nil {
+			extensions.CredBlobSet = ptr(*ext.CredBlobSet)
+		}
+
+		// The authenticator output wins over the client's hmacCreateSecret because it is covered by the
+		// attestation signature; the client value assigned above stands only when the authenticator omits it.
+		if ext.HMACSecret != nil {
+			extensions.HMACSecret = ptr(*ext.HMACSecret)
+		}
+	}
+
+	return extensions
 }
 
 // Credential contains all needed information about a WebAuthn credential for storage. This struct is effectively the
@@ -93,6 +139,50 @@ type Credential struct {
 
 	// The attestation values that can be used to validate this Credential via the MDS3 at a later date.
 	Attestation CredentialAttestation `json:"attestation" msg:"att"`
+
+	// Extensions holds the durable extension results reported during the registration ceremony. It is a curated
+	// subset: PRF results are secrets and are never persisted, and blobs and keys do not belong in a credential
+	// record.
+	Extensions CredentialExtensions `json:"extensions,omitzero" msg:"ext,omitempty"`
+}
+
+// CredentialExtensions holds the extension results recorded at registration which remain meaningful for the life
+// of the credential.
+type CredentialExtensions struct {
+	// RK reports whether the credential is client-side discoverable, from the credProps extension. A false value
+	// is meaningful and distinct from the client not reporting the property.
+	RK *bool `json:"rk,omitempty" msg:"rk,omitempty"`
+
+	// CredProtect is the credential protection policy applied by the authenticator. The empty value means the
+	// authenticator did not report one.
+	CredProtect protocol.CredentialProtectionPolicy `json:"credProtect,omitempty" msg:"cp,omitempty"`
+
+	// MinPinLength is the authenticator's minimum PIN length at the time of registration.
+	MinPinLength *uint `json:"minPinLength,omitempty" msg:"mpl,omitempty"`
+
+	// PRFEnabled reports whether the pseudo-random function is available for this credential. It is populated when
+	// the registration requested the extension, typically with [WithExtensionPRFSupport].
+	PRFEnabled *bool `json:"prfEnabled,omitempty" msg:"prf,omitempty"`
+
+	// LargeBlobSupported reports whether the credential supports large blob storage.
+	LargeBlobSupported *bool `json:"largeBlobSupported,omitempty" msg:"lbs,omitempty"`
+
+	// HMACSecret reports whether the authenticator provisioned a CTAP hmac-secret for this credential, which is
+	// what determines whether requesting [WithExtensionHMACGetSecret] at authentication can succeed.
+	//
+	// The value is taken from the authenticator extension outputs where present, because those are covered by the
+	// attestation signature, and from the client's 'hmacCreateSecret' output otherwise. The two are the signed and
+	// client-reported views of one capability rather than two separate properties, so they share a field.
+	//
+	// This is a sibling of PRFEnabled rather than a duplicate of it: the pseudo-random function extension is the
+	// WebAuthn level abstraction over the same authenticator capability, and a client may report either, both, or
+	// neither depending on which extension the Relying Party requested.
+	HMACSecret *bool `json:"hmacSecret,omitempty" msg:"hs,omitempty"`
+
+	// CredBlobSet reports whether the blob submitted with [WithExtensionCredBlob] at registration was stored by
+	// the authenticator, which is what determines whether requesting [WithExtensionGetCredBlob] at authentication
+	// can return anything.
+	CredBlobSet *bool `json:"credBlobSet,omitempty" msg:"cbs,omitempty"`
 }
 
 // UnmarshalJSON decodes a [Credential] from JSON, applying a backward-compatibility migration for records produced

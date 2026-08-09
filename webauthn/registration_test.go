@@ -302,8 +302,10 @@ func TestBeginMediatedRegistration_ChallengeLength(t *testing.T) {
 	// WithChallenge login option; no equivalent is exported for registration, so we synthesise one here to exercise
 	// the minimum-length guard.
 	withTestChallenge := func(challenge []byte) RegistrationOption {
-		return func(cco *protocol.PublicKeyCredentialCreationOptions) {
+		return func(cco *protocol.PublicKeyCredentialCreationOptions) error {
 			cco.Challenge = challenge
+
+			return nil
 		}
 	}
 
@@ -515,15 +517,19 @@ func TestRegistrationOptions(t *testing.T) {
 		},
 		{
 			name: "Extensions",
-			opts: []RegistrationOption{WithExtensions(map[string]any{"appID": "example"})},
+			opts: []RegistrationOption{WithExtensions(WithExtensionCredProps())},
 			expected: protocol.PublicKeyCredentialCreationOptions{
-				Extensions: map[string]any{"appID": "example"},
+				Extensions: protocol.AuthenticationExtensions{CredProps: true},
 			},
 		},
 		{
-			name:     "AppIDExcludeExtensionWithNoExclusions",
-			opts:     []RegistrationOption{WithAppIdExcludeExtension("apple")},
-			expected: protocol.PublicKeyCredentialCreationOptions{},
+			// The option itself no longer inspects the exclude list; the appid is discarded by
+			// BeginRegistration instead, which TestBeginRegistrationAppIDExcludePruning covers.
+			name: "AppIDExcludeExtensionWithNoExclusions",
+			opts: []RegistrationOption{WithAppIdExcludeExtension("apple")},
+			expected: protocol.PublicKeyCredentialCreationOptions{
+				Extensions: protocol.AuthenticationExtensions{AppIDExclude: "apple"},
+			},
 		},
 		{
 			name: "AppIDExcludeExtensionWithExclusions",
@@ -534,7 +540,7 @@ func TestRegistrationOptions(t *testing.T) {
 				CredentialExcludeList: []protocol.CredentialDescriptor{
 					{Type: protocol.PublicKeyCredentialType, AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor), CredentialID: []byte("123"), Transport: []protocol.AuthenticatorTransport{protocol.Hybrid}},
 				},
-				Extensions: map[string]any{"appidExclude": "apple"},
+				Extensions: protocol.AuthenticationExtensions{AppIDExclude: "apple"},
 			},
 		},
 	}
@@ -544,7 +550,7 @@ func TestRegistrationOptions(t *testing.T) {
 			opts := &tc.have
 
 			for _, opt := range tc.opts {
-				opt(opts)
+				require.NoError(t, opt(opts))
 			}
 
 			assert.Equal(t, tc.expected, *opts)
@@ -739,7 +745,7 @@ func TestCreateCredential_Full(t *testing.T) {
 				challenge = tc.have.challenge
 			}
 
-			userID := []byte("test-user-id")
+			userID := []byte(testUserID)
 
 			config := &Config{
 				RPID:      "example.org",
@@ -787,7 +793,7 @@ func TestFinishRegistration_Success(t *testing.T) {
 	body, challenge, credentialID := testRegistrationSpecVectorNoneES256(t)
 	credParams := []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}}
 
-	userID := []byte("test-user-id")
+	userID := []byte(testUserID)
 
 	w := &WebAuthn{
 		Config: &Config{
@@ -1038,6 +1044,151 @@ func testRegistrationSpecVectorPackedSelfES256(t *testing.T) (body []byte, chall
 	return body, challenge, credentialID
 }
 
+func TestBeginRegistrationOptionError(t *testing.T) {
+	w, err := New(&Config{RPID: "example.com", RPDisplayName: "Test", RPOrigins: []string{"https://example.com"}})
+	require.NoError(t, err)
+
+	opt := func(cco *protocol.PublicKeyCredentialCreationOptions) error {
+		return fmt.Errorf("boom")
+	}
+
+	creation, session, err := w.BeginRegistration(&defaultUser{id: []byte("1234567890")}, opt)
+
+	assert.Nil(t, creation)
+	assert.Nil(t, session)
+	assert.EqualError(t, err, "error applying registration option: boom")
+}
+
+func TestBeginRegistration_StoresSessionExtensions(t *testing.T) {
+	w, err := New(&Config{RPID: "example.com", RPDisplayName: "Test", RPOrigins: []string{"https://example.com"}})
+	require.NoError(t, err)
+
+	_, session, err := w.BeginRegistration(&defaultUser{id: []byte("1234567890")}, WithExtensions(
+		WithExtensionCredProps(),
+		WithExtensionLargeBlobSupport(protocol.LargeBlobSupportRequired),
+	))
+	require.NoError(t, err)
+
+	// Registration ceremonies previously stored no extensions in the session at all.
+	assert.Equal(t, protocol.SessionExtensions{
+		Requested: []string{protocol.ExtensionCredProps, protocol.ExtensionLargeBlob},
+		LargeBlob: protocol.LargeBlobSupportRequired,
+	}, session.Extensions)
+}
+
+func TestBeginRegistrationAppIDExcludePruning(t *testing.T) {
+	u2f := protocol.CredentialDescriptor{
+		Type:              protocol.PublicKeyCredentialType,
+		CredentialID:      []byte("u2f-credential"),
+		AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor),
+	}
+
+	packed := protocol.CredentialDescriptor{
+		Type:              protocol.PublicKeyCredentialType,
+		CredentialID:      []byte("packed-credential"),
+		AttestationFormat: string(protocol.AttestationFormatPacked),
+	}
+
+	testCases := []struct {
+		name     string
+		exclude  []protocol.CredentialDescriptor
+		expected string
+	}{
+		{"U2FPresent", []protocol.CredentialDescriptor{packed, u2f}, "https://example.com"},
+		{"NoU2F", []protocol.CredentialDescriptor{packed}, ""},
+		{"Empty", nil, ""},
+	}
+
+	for _, tc := range testCases {
+		// Both orderings must produce identical results; the option previously read the exclude list at the moment
+		// it ran, so listing it first silently did nothing.
+		t.Run(tc.name+"/OptionAfterExclusions", func(t *testing.T) {
+			w := newTestWebAuthn(t)
+
+			creation, session, err := w.BeginRegistration(newTestUser(t),
+				WithExclusions(tc.exclude),
+				WithExtensions(WithExtensionAppIDExclude("https://example.com")),
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, creation.Response.Extensions.AppIDExclude)
+			assert.Equal(t, tc.expected, session.Extensions.AppIDExclude)
+		})
+
+		t.Run(tc.name+"/OptionBeforeExclusions", func(t *testing.T) {
+			w := newTestWebAuthn(t)
+
+			creation, session, err := w.BeginRegistration(newTestUser(t),
+				WithExtensions(WithExtensionAppIDExclude("https://example.com")),
+				WithExclusions(tc.exclude),
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, creation.Response.Extensions.AppIDExclude)
+			assert.Equal(t, tc.expected, session.Extensions.AppIDExclude)
+		})
+
+		// The deprecated wrapper delegates to the same option and must therefore be pruned identically.
+		t.Run(tc.name+"/DeprecatedWrapperBeforeExclusions", func(t *testing.T) {
+			w := newTestWebAuthn(t)
+
+			creation, session, err := w.BeginRegistration(newTestUser(t),
+				WithAppIdExcludeExtension("https://example.com"),
+				WithExclusions(tc.exclude),
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, creation.Response.Extensions.AppIDExclude)
+			assert.Equal(t, tc.expected, session.Extensions.AppIDExclude)
+		})
+	}
+}
+
+func TestBeginRegistrationAppIDExcludePruningUpdatesRequested(t *testing.T) {
+	w := newTestWebAuthn(t)
+
+	_, session, err := w.BeginRegistration(newTestUser(t),
+		WithExtensions(WithExtensionAppIDExclude("https://example.com"), WithExtensionCredProps()),
+	)
+
+	require.NoError(t, err)
+	assert.NotContains(t, session.Extensions.Requested, protocol.ExtensionAppIDExclude)
+	assert.Contains(t, session.Extensions.Requested, protocol.ExtensionCredProps)
+}
+
+func TestCreateCredentialRejectsUnsolicitedExtensionOutput(t *testing.T) {
+	w, session, response := newRegistrationFixture(t)
+
+	response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		CredProps: &protocol.CredentialPropertiesOutput{RK: ptr(true)},
+	}
+	session.Extensions = protocol.SessionExtensions{}
+
+	credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+	assert.Nil(t, credential)
+	assert.ErrorContains(t, err, "credProps")
+}
+
+func TestCreateCredentialAcceptsSolicitedExtensionOutput(t *testing.T) {
+	// The sibling of the rejection case: the same output must pass once the session records that it was asked
+	// for, so the check is known to discriminate rather than to reject the extension outright.
+	w, session, response := newRegistrationFixture(t)
+
+	response.ClientExtensionResults = protocol.AuthenticationExtensionsClientOutputs{
+		CredProps: &protocol.CredentialPropertiesOutput{RK: ptr(true)},
+	}
+	session.Extensions = protocol.SessionExtensions{Requested: []string{protocol.ExtensionCredProps}}
+
+	credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+	require.NoError(t, err)
+	require.NotNil(t, credential)
+
+	require.NotNil(t, credential.Extensions.RK)
+	assert.True(t, *credential.Extensions.RK)
+}
+
 func testRegDecodeHex(t *testing.T, s string) []byte {
 	t.Helper()
 
@@ -1045,4 +1196,107 @@ func testRegDecodeHex(t *testing.T, s string) []byte {
 	require.NoError(t, err)
 
 	return data
+}
+
+// testUserID is the user handle shared by [newTestUser], [newRegistrationFixture] and the login tests.
+// [WebAuthn.CreateCredential] and [WebAuthn.ValidateLogin] both reject a user whose handle differs from the one in
+// the session, so these must agree.
+const testUserID = "test-user-id"
+
+// newTestUser returns the [User] matching the session and response produced by [newRegistrationFixture]. It has no
+// credentials and is therefore unsuitable for [WebAuthn.BeginLogin], which requires at least one.
+func newTestUser(t *testing.T) User {
+	t.Helper()
+
+	return &defaultUser{id: []byte(testUserID)}
+}
+
+// newTestWebAuthn returns a [*WebAuthn] with the minimal valid configuration used by the ceremony tests.
+func newTestWebAuthn(t *testing.T) *WebAuthn {
+	t.Helper()
+
+	w, err := New(&Config{RPID: "example.com", RPDisplayName: "Test", RPOrigins: []string{"https://example.com"}})
+	require.NoError(t, err)
+
+	return w
+}
+
+// newRegistrationFixture returns a configured [*WebAuthn], a [SessionData], and a
+// [*protocol.ParsedCredentialCreationData] that verifies cleanly against each other, for tests that need a
+// successful registration to then mutate.
+func newRegistrationFixture(t *testing.T) (w *WebAuthn, session SessionData, response *protocol.ParsedCredentialCreationData) {
+	t.Helper()
+
+	body, challenge, _ := testRegistrationSpecVectorNoneES256(t)
+	credParams := []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}}
+
+	userID := []byte(testUserID)
+
+	w = &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	session = SessionData{
+		Challenge:  challenge,
+		UserID:     userID,
+		CredParams: credParams,
+	}
+
+	response, err := protocol.ParseCredentialCreationResponseBytes(body)
+	require.NoError(t, err)
+
+	return w, session, response
+}
+
+func TestCreateCredentialRejectsUnhonouredCredentialProtectionPolicy(t *testing.T) {
+	// End to end cover for the authenticator extension output check: the session required enforcement, and this
+	// authenticator's data carries no extension outputs at all, so it cannot have honoured the policy.
+	w, session, response := newRegistrationFixture(t)
+
+	session.Extensions = protocol.SessionExtensions{
+		Requested:                         []string{protocol.ExtensionCredentialProtectionPolicy},
+		CredentialProtectionPolicy:        protocol.CredentialProtectionPolicyUserVerificationRequired,
+		EnforceCredentialProtectionPolicy: true,
+	}
+
+	credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+	assert.Nil(t, credential)
+	assert.ErrorContains(t, err, "credentialProtectionPolicy")
+	assert.ErrorContains(t, err, "did not report the policy")
+}
+
+func TestCreateCredentialPropagatesFilteringFailure(t *testing.T) {
+	// The filtering step runs after the credential is built, so its rejection has to reach the caller rather than
+	// yielding a credential the configuration prohibits.
+	w, session, response := newRegistrationFixture(t)
+
+	w.Config.Filtering = &FilteringConfig{ProhibitBackupEligibility: true}
+
+	credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+	assert.Nil(t, credential)
+	require.NotNil(t, err)
+
+	// The rejection reason is carried in DevInfo rather than the message, which is deliberately generic.
+	var e *protocol.Error
+
+	require.ErrorAs(t, err, &e)
+	assert.Equal(t, protocol.ErrPolicyRestriction.Type, e.Type)
+	assert.Contains(t, e.DevInfo, "Backup Eligible")
+}
+
+func TestBeginMediatedRegistrationRejectsInvalidConfig(t *testing.T) {
+	// The configuration is validated lazily on first use, so a WebAuthn built without New must fail the ceremony
+	// rather than emitting creation options derived from an incomplete configuration.
+	w := &WebAuthn{Config: &Config{}}
+
+	creation, session, err := w.BeginRegistration(newTestUser(t))
+
+	assert.Nil(t, creation)
+	assert.Nil(t, session)
+	assert.ErrorContains(t, err, "error occurred validating the configuration")
 }

@@ -160,13 +160,19 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 	// Begin Step 11. Verify that the rpIdHash in authData is the SHA-256 hash of the RP ID expected by the RP.
 	rpIDHash := sha256.Sum256([]byte(relyingPartyID))
 
-	var appIDHash [32]byte
+	// The appid is only non-empty when the Relying Party requested the FIDO AppID Extension and the client reported
+	// having acted on it; see [ParsedPublicKeyCredential.GetAppID], which derives it from the session data. In that
+	// case §10.1.1 requires the AppID hash to be the expected rpIdHash in place of the RP ID hash, so the hash is
+	// left nil rather than zeroed when the extension does not apply.
+	var appIDHash []byte
+
 	if appID != "" {
-		appIDHash = sha256.Sum256([]byte(appID))
+		sum := sha256.Sum256([]byte(appID))
+		appIDHash = sum[:]
 	}
 
 	// Handle steps 11 through 14, verifying the authenticator data.
-	validError = p.Response.AuthenticatorData.Verify(rpIDHash[:], appIDHash[:], verifyUser, verifyUserPresence)
+	validError = p.Response.AuthenticatorData.Verify(rpIDHash[:], appIDHash, verifyUser, verifyUserPresence)
 	if validError != nil {
 		return validError
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,7 +15,9 @@ import (
 // RegistrationOption is a functional option that modifies the [protocol.PublicKeyCredentialCreationOptions] sent
 // to the client during a registration ceremony. Use the With* functions in this package (i.e.
 // [WithConveyancePreference], [WithExclusions], [WithAuthenticatorSelection]) to create registration options.
-type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions)
+//
+// An option returns an error to reject the ceremony; [WebAuthn.BeginRegistration] aborts on the first error.
+type RegistrationOption func(*protocol.PublicKeyCredentialCreationOptions) error
 
 // BeginRegistration generates a new set of registration data to be sent to the client and authenticator. To set a
 // conditional mediation requirement for the registration see [WebAuthn.BeginMediatedRegistration].
@@ -74,7 +77,9 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	for _, opt := range opts {
-		opt(&creation.Response)
+		if err = opt(&creation.Response); err != nil {
+			return nil, nil, fmt.Errorf("error applying registration option: %w", err)
+		}
 	}
 
 	if len(creation.Response.RelyingParty.ID) == 0 {
@@ -100,11 +105,19 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		}
 	}
 
+	// The FIDO AppID Exclusion Extension is only meaningful when the exclude list contains a credential registered
+	// through the legacy FIDO U2F JavaScript API. Pruning here rather than inside the option makes the result
+	// independent of the order the options were supplied in.
+	if !hasU2FCredential(creation.Response.CredentialExcludeList) {
+		creation.Response.Extensions.AppIDExclude = ""
+	}
+
 	session = &SessionData{
 		Challenge:        creation.Response.Challenge.String(),
 		RelyingPartyID:   creation.Response.RelyingParty.ID,
 		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
+		Extensions:       creation.Response.Extensions.Session(),
 		CredParams:       creation.Response.Parameters,
 		Mediation:        creation.Mediation,
 	}
@@ -155,6 +168,14 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, err
 	}
 
+	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.CreateCeremony, webauthn.Config.ExtensionsUnsolicitedOutputPolicy); err != nil {
+		return nil, err
+	}
+
+	if err = parsedResponse.Response.AttestationObject.AuthData.Ext.Verify(session.Extensions, protocol.CreateCeremony); err != nil {
+		return nil, err
+	}
+
 	if credential, err = NewCredential(clientDataHash, parsedResponse); err != nil {
 		return nil, err
 	}
@@ -199,30 +220,15 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 	}
 
 	if len(filtering.PermittedAAGUIDs) != 0 {
-		var success = false
-
-		if aaguid == uuid.Nil {
-			success = true
-		} else {
-			for _, permitted := range filtering.PermittedAAGUIDs {
-				if permitted == aaguid {
-					success = true
-
-					break
-				}
-			}
-		}
-
-		if !success {
+		// The zero AAGUID is never excluded by the permitted list; see the FilteringConfig contract.
+		if aaguid != uuid.Nil && !slices.Contains(filtering.PermittedAAGUIDs, aaguid) {
 			return protocol.ErrPolicyRestriction.WithInfo("Credential has an AAGUID which is not permitted")
 		}
 	}
 
 	if len(filtering.ProhibitedAAGUIDs) != 0 {
-		for _, prohibited := range filtering.ProhibitedAAGUIDs {
-			if prohibited == aaguid {
-				return protocol.ErrPolicyRestriction.WithInfo("Credential has an AAGUID which is prohibited")
-			}
+		if slices.Contains(filtering.ProhibitedAAGUIDs, aaguid) {
+			return protocol.ErrPolicyRestriction.WithInfo("Credential has an AAGUID which is prohibited")
 		}
 	}
 
