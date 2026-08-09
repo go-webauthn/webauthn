@@ -874,12 +874,15 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 	var uri *url.URL
 
 	if len(j.URL) != 0 {
-		if uri, err = url.ParseRequestURI(j.URL); err != nil {
-			if !strings.HasPrefix(j.URL, "http") {
-				var e error
-				if uri, e = url.ParseRequestURI(fmt.Sprintf("https://%s", j.URL)); e != nil {
-					return report, fmt.Errorf("error occurred parsing URL value: %w", err)
-				}
+		var uerr error
+
+		if uri, uerr = url.ParseRequestURI(j.URL); uerr != nil {
+			if strings.HasPrefix(j.URL, "http://") || strings.HasPrefix(j.URL, "https://") {
+				return report, fmt.Errorf("error occurred parsing URL value: %w", uerr)
+			}
+
+			if uri, err = url.ParseRequestURI(fmt.Sprintf("https://%s", j.URL)); err != nil {
+				return report, fmt.Errorf("error occurred parsing URL value: %w", uerr)
 			}
 		}
 	}
