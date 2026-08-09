@@ -270,7 +270,7 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 				Raw:                       tc.fields.Raw,
 			}
 
-			actual, err := pcc.Verify(tc.args.storedChallenge.String(), tc.args.relyingPartyID, tc.args.relyingPartyOrigin, nil, TopOriginExplicitVerificationMode, false, tc.args.verifyUser, false, nil, tc.args.credParams, AttestationPolicy{})
+			actual, err := pcc.Verify(tc.args.storedChallenge.String(), tc.args.relyingPartyID, tc.args.relyingPartyOrigin, nil, TopOriginExplicitVerificationMode, false, tc.args.verifyUser, false, nil, tc.args.credParams, AttestationPolicy{}, SignaturePolicy{})
 
 			assert.Equal(t, tc.expected, actual)
 

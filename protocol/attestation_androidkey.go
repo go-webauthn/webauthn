@@ -37,7 +37,7 @@ import (
 // See: https://www.w3.org/TR/webauthn/#sctn-android-key-attestation
 //
 //nolint:gocyclo
-func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientDataHash []byte, _ metadata.Provider, policy AttestationPolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientDataHash []byte, _ metadata.Provider, policy AttestationPolicy, signature SignaturePolicy) (attestationType string, x5cs []any, err error) {
 	var (
 		alg int64
 		sig []byte
@@ -83,7 +83,7 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 
 	if sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.COSEAlgorithmIdentifier(alg)); sigAlg == x509.UnknownSignatureAlgorithm {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", alg))
-	} else if err = attestationCertCheckSignature(credCert, sigAlg, signatureData, sig, policy.Signature); err != nil {
+	} else if err = certCheckSignature(credCert, sigAlg, signatureData, sig, signature); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Signature validation error: %+v", err)).WithError(err)
 	}
 
@@ -99,7 +99,7 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 	// as each selects the digest from the algorithm it carries.
 	var valid bool
 
-	if valid, err = attestationKeyVerifySignature(credentialPublicKey, signatureData, sig, policy.Signature); err != nil {
+	if valid, err = keyVerifySignature(credentialPublicKey, signatureData, sig, signature); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error verifying the signature with the credential public key: %+v", err)).WithError(err)
 	} else if !valid {
 		return "", nil, ErrInvalidAttestation.WithDetails("Signature is not valid for the credential public key")

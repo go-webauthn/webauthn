@@ -100,13 +100,13 @@ func TestVerifyAndroidKeyFormat(t *testing.T) {
 					tc.setup(t, mds)
 				}
 
-				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, mds, AttestationPolicy{})
+				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, mds, AttestationPolicy{}, SignaturePolicy{})
 			} else {
 				if tc.setup != nil {
 					tc.setup(t, nil)
 				}
 
-				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, nil, AttestationPolicy{})
+				attestationType, x5cs, err = attestationFormatValidationHandlerAndroidKey(tc.args.att, tc.args.clientDataHash, nil, AttestationPolicy{}, SignaturePolicy{})
 			}
 
 			if tc.err != "" {
@@ -283,7 +283,7 @@ func TestAndroidKeyFormat_HandlerErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := attestationFormatValidationHandlerAndroidKey(tc.att, tc.clientDataHash, nil, AttestationPolicy{})
+			_, _, err := attestationFormatValidationHandlerAndroidKey(tc.att, tc.clientDataHash, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			assert.EqualError(t, err, tc.err)
 		})

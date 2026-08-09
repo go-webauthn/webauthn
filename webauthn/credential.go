@@ -174,9 +174,9 @@ func (c *Credential) Descriptor() (descriptor protocol.CredentialDescriptor) {
 // See [CredentialAttestation] for guidance on persisting these raw values securely.
 //
 // The policy carries the Relying Party decisions which §8 leaves to the Relying Party; pass
-// [Config.Attestation] to apply the same policy the registration ceremony applied. Its zero value selects the
-// most restrictive behavior available. See [protocol.AttestationPolicy].
-func (c *Credential) Verify(mds metadata.Provider, policy protocol.AttestationPolicy) (err error) {
+// [Config.Attestation] and [Config.Signature] to apply the same policies the registration ceremony applied. Their
+// zero values select the most restrictive behavior available. See [protocol.AttestationPolicy] and [protocol.SignaturePolicy].
+func (c *Credential) Verify(mds metadata.Provider, policy protocol.AttestationPolicy, signature protocol.SignaturePolicy) (err error) {
 	if mds == nil {
 		return fmt.Errorf("error verifying credential: the metadata provider must be provided but it's nil")
 	}
@@ -201,7 +201,7 @@ func (c *Credential) Verify(mds metadata.Provider, policy protocol.AttestationPo
 		clientDataHash = sum[:]
 	}
 
-	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, mds, policy); err != nil {
+	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, mds, policy, signature); err != nil {
 		return fmt.Errorf("error verifying credential: error verifying attestation: %w", err)
 	}
 
@@ -216,9 +216,9 @@ func (c *Credential) Verify(mds metadata.Provider, policy protocol.AttestationPo
 // AttestationType if it's unset. For full verification use Verify.
 //
 // The policy carries the Relying Party decisions which §8 leaves to the Relying Party; pass
-// [Config.Attestation] to apply the same policy the registration ceremony applied. Its zero value selects the
-// most restrictive behavior available. See [protocol.AttestationPolicy].
-func (c *Credential) VerifyAttestationType(policy protocol.AttestationPolicy) (err error) {
+// [Config.Attestation] and [Config.Signature] to apply the same policies the registration ceremony applied. Their
+// zero values select the most restrictive behavior available. See [protocol.AttestationPolicy] and [protocol.SignaturePolicy].
+func (c *Credential) VerifyAttestationType(policy protocol.AttestationPolicy, signature protocol.SignaturePolicy) (err error) {
 	if c.AttestationType != "" {
 		return nil
 	}
@@ -243,7 +243,7 @@ func (c *Credential) VerifyAttestationType(policy protocol.AttestationPolicy) (e
 		clientDataHash = sum[:]
 	}
 
-	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, nil, policy); err != nil {
+	if err = attestation.AttestationObject.VerifyAttestation(clientDataHash, nil, policy, signature); err != nil {
 		return fmt.Errorf("error verifying credential: error verifying attestation: %w", err)
 	}
 

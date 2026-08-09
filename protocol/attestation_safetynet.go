@@ -39,7 +39,7 @@ import (
 // Specification: §8.5. Android SafetyNet Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation
-func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
 	//                           fmt: "android-safetynet",

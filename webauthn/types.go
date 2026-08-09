@@ -93,6 +93,11 @@ type Config struct {
 	// the most restrictive behavior available for each policy it carries.
 	Attestation protocol.AttestationPolicy
 
+	// Signature configures Relying Party policy for the verification of signatures. It applies to the attestation
+	// signature of a registration and the assertion signature of an authentication alike. The zero value selects
+	// the behavior the specification requires.
+	Signature protocol.SignaturePolicy
+
 	// Filtering configures the filtering of authenticators based on their AAGUIDs. This is useful for enforcing
 	// policy on the authenticators that are available to be registered with the Relying Party.
 	Filtering *FilteringConfig
@@ -189,10 +194,10 @@ func (config *Config) validate() (err error) {
 	return nil
 }
 
-// validateAttestationPolicy rewrites each zero value of the attestation policy to the explicit constant it evaluates
-// as, so a Relying Party can tell an unset field apart from a deliberate choice of the same behavior. Every default
-// is the most restrictive behavior the policy offers, which for the encoding of a signature is the one the
-// specification requires.
+// validateAttestationPolicy rewrites each zero value of the verification policies to the explicit constant it
+// evaluates as, so a Relying Party can tell an unset field apart from a deliberate choice of the same behavior.
+// Every default is the most restrictive behavior the policy offers, which for the encoding of a signature is the
+// one the specification requires.
 func (config *Config) validateAttestationPolicy() {
 	if config.Attestation.AndroidKey.AuthorizationScope == protocol.AndroidKeyAuthorizationScopeDefault {
 		config.Attestation.AndroidKey.AuthorizationScope = protocol.AndroidKeyAuthorizationScopeTEEEnforced
@@ -202,8 +207,8 @@ func (config *Config) validateAttestationPolicy() {
 		config.Attestation.Compound.SubStatementScope = protocol.CompoundSubStatementScopeAll
 	}
 
-	if config.Attestation.Signature.ECDSAEncoding == protocol.ECDSASignatureEncodingDefault {
-		config.Attestation.Signature.ECDSAEncoding = protocol.ECDSASignatureEncodingDER
+	if config.Signature.ECDSAEncoding == protocol.ECDSASignatureEncodingDefault {
+		config.Signature.ECDSAEncoding = protocol.ECDSASignatureEncodingDER
 	}
 }
 
@@ -237,6 +242,11 @@ func (c *Config) GetAttestationPolicy() protocol.AttestationPolicy {
 	return c.Attestation
 }
 
+// GetSignaturePolicy returns the configured signature verification policy.
+func (c *Config) GetSignaturePolicy() protocol.SignaturePolicy {
+	return c.Signature
+}
+
 // ConfigProvider is an interface that provides access to the WebAuthn [Config] values. This is useful for
 // implementations that wish to provide configuration from alternative sources.
 type ConfigProvider interface {
@@ -246,6 +256,7 @@ type ConfigProvider interface {
 	GetTopOriginVerificationMode() protocol.TopOriginVerificationMode
 	GetMetaDataProvider() metadata.Provider
 	GetAttestationPolicy() protocol.AttestationPolicy
+	GetSignaturePolicy() protocol.SignaturePolicy
 }
 
 // User is an interface with the Relying Party's User entry and provides the fields and methods needed for WebAuthn

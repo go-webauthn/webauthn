@@ -39,7 +39,7 @@ func TestVerifyU2FFormat(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attestationType, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, tc.clientDataHash, nil, AttestationPolicy{})
+			attestationType, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, tc.clientDataHash, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)
@@ -176,7 +176,7 @@ func TestVerifyU2FFormat_Errors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, []byte("hash"), nil, AttestationPolicy{})
+			_, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}
@@ -264,7 +264,7 @@ func TestVerifyU2FFormat_CertificateErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, []byte("hash"), nil, AttestationPolicy{})
+			_, _, err := attestationFormatValidationHandlerFIDOU2F(tc.att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}

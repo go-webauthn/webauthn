@@ -64,7 +64,7 @@ func TestSafetyNetFormat_AttStatementErrors(t *testing.T) {
 				AttStatement: tc.attStatement,
 			}
 
-			_, _, err := attestationFormatValidationHandlerAndroidSafetyNet(att, []byte("hash"), nil, AttestationPolicy{})
+			_, _, err := attestationFormatValidationHandlerAndroidSafetyNet(att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}
@@ -255,7 +255,7 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 				},
 			}
 
-			attestationType, _, err := attestationFormatValidationHandlerAndroidSafetyNet(att, tc.clientDataHash, tc.mds, AttestationPolicy{})
+			attestationType, _, err := attestationFormatValidationHandlerAndroidSafetyNet(att, tc.clientDataHash, tc.mds, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)

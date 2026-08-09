@@ -59,7 +59,7 @@ func TestSpecVectors_PackedSelfES256(t *testing.T) {
 	rawClientDataJSON := specTestDecodeHex(t, clientDataJSONHex)
 	clientDataHash := sha256.Sum256(rawClientDataJSON)
 
-	attestationType, _, err := attestationFormatValidationHandlerPacked(att, clientDataHash[:], nil, AttestationPolicy{})
+	attestationType, _, err := attestationFormatValidationHandlerPacked(att, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
 	require.NoError(t, err)
 	assert.Equal(t, string(metadata.BasicSurrogate), attestationType)
 }
@@ -80,7 +80,7 @@ func TestSpecVectors_PackedES256(t *testing.T) {
 	rawClientDataJSON := specTestDecodeHex(t, clientDataJSONHex)
 	clientDataHash := sha256.Sum256(rawClientDataJSON)
 
-	attestationType, x5cs, err := attestationFormatValidationHandlerPacked(att, clientDataHash[:], nil, AttestationPolicy{})
+	attestationType, x5cs, err := attestationFormatValidationHandlerPacked(att, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
 	require.NoError(t, err)
 	assert.Equal(t, string(metadata.BasicFull), attestationType)
 	assert.NotEmpty(t, x5cs)
@@ -105,7 +105,7 @@ func TestSpecVectors_TPMES256(t *testing.T) {
 
 	clientDataHash := sha256.Sum256(specTestDecodeHex(t, clientDataJSONHex))
 
-	_, _, err := attestationFormatValidationHandlerTPM(att, clientDataHash[:], nil, AttestationPolicy{})
+	_, _, err := attestationFormatValidationHandlerTPM(att, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
 	assert.NoError(t, err)
 }
 
@@ -148,7 +148,7 @@ func TestSpecVectors_AppleES256(t *testing.T) {
 
 	clientDataHash := sha256.Sum256(specTestDecodeHex(t, clientDataJSONHex))
 
-	_, _, err := attestationFormatValidationHandlerAppleAnonymous(att, clientDataHash[:], nil, AttestationPolicy{})
+	_, _, err := attestationFormatValidationHandlerAppleAnonymous(att, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
 	assert.NoError(t, err)
 }
 
@@ -178,7 +178,7 @@ func TestSpecVectors_FIDOU2FES256(t *testing.T) {
 
 	clientDataHash := sha256.Sum256(specTestDecodeHex(t, clientDataJSONHex))
 
-	_, _, err := attestationFormatValidationHandlerFIDOU2F(att, clientDataHash[:], nil, AttestationPolicy{})
+	_, _, err := attestationFormatValidationHandlerFIDOU2F(att, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
 	assert.NoError(t, err)
 }
 
@@ -213,7 +213,7 @@ func specTestParseAndVerify(t *testing.T, attObjHex, clientDataJSONHex string, c
 
 	clientDataHash := sha256.Sum256(rawClientDataJSON)
 
-	require.NoError(t, att.Verify(specTestRPID, clientDataHash[:], false, true, nil, credParams, AttestationPolicy{}))
+	require.NoError(t, att.Verify(specTestRPID, clientDataHash[:], false, true, nil, credParams, AttestationPolicy{}, SignaturePolicy{}))
 
 	return att
 }

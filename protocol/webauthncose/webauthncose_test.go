@@ -428,15 +428,6 @@ func TestParsePublicKey(t *testing.T) {
 			assert.True(t, ok)
 			assert.Equal(t, tc.expected, result)
 
-			SetExperimentalInsecureAllowBERIntegers(true)
-
-			ok, err = VerifySignature(result, data, signature)
-			assert.NoError(t, err)
-			assert.True(t, ok)
-			assert.Equal(t, tc.expected, result)
-
-			SetExperimentalInsecureAllowBERIntegers(false)
-
 			display := DisplayPublicKey(keyBytes)
 
 			assert.NotEmpty(t, display)

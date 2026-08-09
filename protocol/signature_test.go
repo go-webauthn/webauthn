@@ -21,7 +21,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-func TestAttestationCertCheckSignature(t *testing.T) {
+func TestCertCheckSignature(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestAttestationCertCheckSignature(t *testing.T) {
 			"ShouldRejectUndecodableUnderBER",
 			ECDSASignatureEncodingBER,
 			[]byte{0x30, 0x03, 0x02, 0x01},
-			"Signature validation error: asn1: syntax error: data truncated",
+			"asn1: syntax error: data truncated",
 		},
 		{
 			// A signature of a valid encoding but the wrong value is still rejected, as only the encoding is relaxed.
@@ -100,7 +100,7 @@ func TestAttestationCertCheckSignature(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err = attestationCertCheckSignature(cert, x509.ECDSAWithSHA256, signed, tc.sig, SignaturePolicy{ECDSAEncoding: tc.encoding})
+			err = certCheckSignature(cert, x509.ECDSAWithSHA256, signed, tc.sig, SignaturePolicy{ECDSAEncoding: tc.encoding})
 
 			if tc.err == "" {
 				assert.NoError(t, err)
@@ -121,9 +121,9 @@ func mustSignASN1(t *testing.T, key *ecdsa.PrivateKey, digest [32]byte) []byte {
 	return sig
 }
 
-// TestAttestationCertCheckSignatureShouldNotAlterRSA checks that the encoding has no effect on a signature which
+// TestCertCheckSignatureShouldNotAlterRSA checks that the encoding has no effect on a signature which
 // isn't an ASN.1 ECDSA signature, as the normalizer would otherwise be handed a PKCS #1 v1.5 signature.
-func TestAttestationCertCheckSignatureShouldNotAlterRSA(t *testing.T) {
+func TestCertCheckSignatureShouldNotAlterRSA(t *testing.T) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 
 	require.NoError(t, err)
@@ -138,14 +138,14 @@ func TestAttestationCertCheckSignatureShouldNotAlterRSA(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, encoding := range []ECDSASignatureEncoding{ECDSASignatureEncodingDefault, ECDSASignatureEncodingDER, ECDSASignatureEncodingBER} {
-		assert.NoError(t, attestationCertCheckSignature(cert, x509.SHA256WithRSA, signed, sig, SignaturePolicy{ECDSAEncoding: encoding}))
+		assert.NoError(t, certCheckSignature(cert, x509.SHA256WithRSA, signed, sig, SignaturePolicy{ECDSAEncoding: encoding}))
 	}
 }
 
-// TestAttestationKeyVerifySignature checks that a signature verified against the credential public key accepts the
+// TestKeyVerifySignature checks that a signature verified against the credential public key accepts the
 // same encodings under the same policy as one verified against a certificate, so that the two checks an attestation
 // format may perform can't disagree.
-func TestAttestationKeyVerifySignature(t *testing.T) {
+func TestKeyVerifySignature(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 
 	require.NoError(t, err)
@@ -177,12 +177,12 @@ func TestAttestationKeyVerifySignature(t *testing.T) {
 		{"ShouldAcceptDERUnderBER", ECDSASignatureEncodingBER, der, true, ""},
 		{"ShouldRejectBERUnderDefault", ECDSASignatureEncodingDefault, ber, false, "Signature invalid or not provided"},
 		{"ShouldAcceptBERUnderBER", ECDSASignatureEncodingBER, ber, true, ""},
-		{"ShouldRejectUndecodableUnderBER", ECDSASignatureEncodingBER, []byte{0x30, 0x03, 0x02, 0x01}, false, "Signature validation error: asn1: syntax error: data truncated"},
+		{"ShouldRejectUndecodableUnderBER", ECDSASignatureEncodingBER, []byte{0x30, 0x03, 0x02, 0x01}, false, "asn1: syntax error: data truncated"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			valid, err := attestationKeyVerifySignature(credentialPublicKey, signed, tc.sig, SignaturePolicy{ECDSAEncoding: tc.encoding})
+			valid, err := keyVerifySignature(credentialPublicKey, signed, tc.sig, SignaturePolicy{ECDSAEncoding: tc.encoding})
 
 			assert.Equal(t, tc.valid, valid)
 
@@ -296,4 +296,38 @@ func testSignatureCert(t *testing.T, key crypto.Signer) *x509.Certificate {
 	require.NoError(t, err)
 
 	return cert
+}
+
+// TestAssertionVerifyHonoursSignaturePolicy checks the policy reaches the assertion ceremony, which the attestation
+// policy never did. A BER signature fails an otherwise sound assertion under the conforming default and is accepted
+// under the BER encoding, so the same authenticator deviation is tolerated in both ceremonies by one decision.
+func TestAssertionVerifyHonoursSignaturePolicy(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+
+	require.NoError(t, err)
+
+	credentialPublicKey := webauthncose.EC2PublicKeyData{
+		PublicKeyData: webauthncose.PublicKeyData{
+			KeyType:   int64(webauthncose.EllipticKey),
+			Algorithm: int64(webauthncose.AlgES256),
+		},
+		Curve:  int64(webauthncose.P256),
+		XCoord: padP256Coord(key.X),
+		YCoord: padP256Coord(key.Y),
+	}
+
+	signed := []byte("authenticator data and client data hash")
+	digest := sha256.Sum256(signed)
+
+	ber := testSignatureBER(t, mustSignASN1(t, key, digest))
+
+	valid, err := keyVerifySignature(credentialPublicKey, signed, ber, SignaturePolicy{})
+
+	assert.False(t, valid)
+	assert.EqualError(t, err, "Signature invalid or not provided")
+
+	valid, err = keyVerifySignature(credentialPublicKey, signed, ber, SignaturePolicy{ECDSAEncoding: ECDSASignatureEncodingBER})
+
+	assert.True(t, valid)
+	assert.NoError(t, err)
 }

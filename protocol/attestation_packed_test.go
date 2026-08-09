@@ -55,7 +55,7 @@ func Test_VerifyPackedFormat(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attestationType, _, err := attestationFormatValidationHandlerPacked(tc.att, tc.clientDataHash, nil, AttestationPolicy{})
+			attestationType, _, err := attestationFormatValidationHandlerPacked(tc.att, tc.clientDataHash, nil, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)
@@ -108,7 +108,7 @@ func TestPackedFormat_HandlerErrors(t *testing.T) {
 				AttStatement: tc.attStatement,
 			}
 
-			_, _, err := attestationFormatValidationHandlerPacked(att, []byte("hash"), nil, AttestationPolicy{})
+			_, _, err := attestationFormatValidationHandlerPacked(att, []byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{})
 			require.EqualError(t, err, tc.err)
 		})
 	}
