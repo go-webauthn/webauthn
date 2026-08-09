@@ -97,7 +97,7 @@ const (
 
 // KeyScope represents the scope of keys generated and maintained by an authenticator model.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-md-keys
 type KeyScope string
 
 const (
@@ -118,7 +118,7 @@ const (
 
 // MultiDeviceCredentialSupport describes whether an authenticator supports multi-device credentials (passkeys).
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-md-keys
 type MultiDeviceCredentialSupport string
 
 const (
@@ -138,7 +138,7 @@ const (
 // AuthenticatorStatus describes the status of an authenticator model as identified by its AAID/AAGUID and potentially
 // some additional information (such as a specific attestation key).
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-authnr-stat
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-authnr-stat
 type AuthenticatorStatus string
 
 const (
@@ -167,7 +167,7 @@ const (
 	// Retired - The authenticator vendor has decided to retire the product, and this authenticator should not be
 	// accepted any longer.
 	//
-	// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#dom-authenticatorstatus-retired
+	// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#dom-authenticatorstatus-retired
 	Retired AuthenticatorStatus = "RETIRED"
 
 	// Revoked - The FIDO Alliance has determined that this authenticator should not be trusted for any reason, for example if it is known to be a fraudulent product or contain a deliberate backdoor.

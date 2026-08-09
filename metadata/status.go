@@ -12,7 +12,7 @@ import (
 // sunset date has expired. An absent effective date means the report is in effect while present, and an absent sunset
 // date means it has no scheduled expiry.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-stat-rep
 func (r StatusReport) InEffectAt(at time.Time) bool {
 	if r.EffectiveDate != nil && r.EffectiveDate.After(at) {
 		return false

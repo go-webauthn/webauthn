@@ -69,7 +69,7 @@ func (m *Metadata) ToMap() (metadata map[uuid.UUID]*Entry) {
 
 // Parsed is a structure representing the Metadata BLOB Payload dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-payload
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-mds-blob-payload
 type Parsed struct {
 	// The legalHeader, which MUST be in each BLOB, is an indication of the acceptance of the relevant legal agreement
 	// for using the MDS.
@@ -91,7 +91,7 @@ type Parsed struct {
 // PayloadJSON is an intermediary JSON/JWT representation of the Metadata BLOB Payload dictionary and the JSON
 // representation of the [Parsed] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-payload
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-mds-blob-payload
 type PayloadJSON struct {
 	// LegalHeader is an indication of the acceptance of the relevant legal agreement for using the MDS.
 	LegalHeader string `json:"legalHeader"`
@@ -133,7 +133,7 @@ func (j PayloadJSON) Parse() (payload Parsed, err error) {
 
 // Entry is a structure representing the Metadata BLOB Payload Entry dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-pe
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-mds-blob-pe
 type Entry struct {
 	// Aaid is the AAID of the authenticator this metadata BLOB payload entry relates to. This field MUST be set if
 	// the authenticator implements FIDO UAF.
@@ -172,7 +172,7 @@ type Entry struct {
 // EntryJSON is an intermediary JSON/JWT structure representing the Metadata BLOB Payload Entry dictionary and
 // the JSON representation of the [Entry] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-mds-blob-pe
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-mds-blob-pe
 type EntryJSON struct {
 	// Aaid is the AAID of the authenticator. Set if the authenticator implements FIDO UAF.
 	Aaid string `json:"aaid"`
@@ -274,7 +274,7 @@ func (j EntryJSON) Parse() (entry Entry, err error) {
 // directly by the FIDO server at a relying party, but the information contained in the authoritative statement is used
 // in several other places.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-md-keys
 type Statement struct {
 	// The LegalHeader, if present, contains a legal guide for accessing and using metadata, which itself MAY contain
 	// URL(s) pointing to further information, such as a full Terms and Conditions statement.
@@ -407,6 +407,9 @@ type Statement struct {
 	SupportedExtensions []ExtensionDescriptor
 
 	// KeyScope of keys generated and maintained by this authenticator model.
+	//
+	// Deprecated: this member was removed from the Metadata Statement in v3.1.1, so it is not populated by current
+	// metadata. It is retained for consumers of blobs which predate that revision.
 	KeyScope KeyScope
 
 	// MultiDeviceCredentialSupport describes the support for multi-device credentials.
@@ -415,9 +418,10 @@ type Statement struct {
 	// AuthenticatorGetInfo describes supported versions, extensions, AAGUID of the device and its capabilities.
 	AuthenticatorGetInfo AuthenticatorGetInfo
 
-	// CredentialExportProtocolConfigURL specifies the URL for retrieving the configuration details for the credential
-	// export protocol (CXP).
-	CredentialExportProtocolConfigURL *url.URL
+	// CredentialExchangeConfigURL specifies the URL for retrieving the configuration details for credential exchange
+	// (CX). When exchanging credentials the exporting passkey provider might retrieve the credential exchange
+	// configuration details of the importing provider in order to provide additional security.
+	CredentialExchangeConfigURL *url.URL
 }
 
 func (s *Statement) Verifier(x5cis []*x509.Certificate) (opts x509.VerifyOptions) {
@@ -446,7 +450,7 @@ func (s *Statement) Verifier(x5cis []*x509.Certificate) (opts x509.VerifyOptions
 
 // StatementJSON is the JSON representation of the [Statement] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-md-keys
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-md-keys
 type StatementJSON struct {
 	// LegalHeader contains a legal guide for accessing and using metadata.
 	LegalHeader string `json:"legalHeader"`
@@ -542,6 +546,8 @@ type StatementJSON struct {
 	SupportedExtensions []ExtensionDescriptor `json:"supportedExtensions"`
 
 	// KeyScope of keys generated and maintained by this authenticator model.
+	//
+	// Deprecated: this member was removed from the Metadata Statement in v3.1.1, so it is absent from current metadata.
 	KeyScope KeyScope `json:"keyScope"`
 
 	// MultiDeviceCredentialSupport describes the support for multi-device credentials.
@@ -550,8 +556,8 @@ type StatementJSON struct {
 	// AuthenticatorGetInfo describes supported versions, extensions, AAGUID of the device and its capabilities.
 	AuthenticatorGetInfo AuthenticatorGetInfoJSON `json:"authenticatorGetInfo"`
 
-	// CredentialExportProtocolConfigURL specifies the URL for the credential export protocol (CXP) configuration.
-	CredentialExportProtocolConfigURL string `json:"cxpConfigURL"`
+	// CredentialExchangeConfigURL specifies the URL for the credential exchange (CX) configuration.
+	CredentialExchangeConfigURL string `json:"cxConfigURL"`
 }
 
 // Parse converts StatementJSON into a [Statement] object, validating and parsing its fields. Returns an error on failure.
@@ -581,7 +587,7 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 
 		logoLight, logoDark *url.URL
 
-		cxpConfigURL *url.URL
+		cxConfigURL *url.URL
 	)
 
 	if len(j.Icon) != 0 {
@@ -608,9 +614,9 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 		}
 	}
 
-	if len(j.CredentialExportProtocolConfigURL) != 0 {
-		if cxpConfigURL, err = url.ParseRequestURI(j.CredentialExportProtocolConfigURL); err != nil {
-			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing cxp config url value: %w", j.Description, err)
+	if len(j.CredentialExchangeConfigURL) != 0 {
+		if cxConfigURL, err = url.ParseRequestURI(j.CredentialExchangeConfigURL); err != nil {
+			return statement, fmt.Errorf("error occurred parsing statement with description '%s': error occurred parsing cx config url value: %w", j.Description, err)
 		}
 	}
 
@@ -655,14 +661,14 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 		KeyScope:                             j.KeyScope,
 		MultiDeviceCredentialSupport:         j.MultiDeviceCredentialSupport,
 		AuthenticatorGetInfo:                 info,
-		CredentialExportProtocolConfigURL:    cxpConfigURL,
+		CredentialExchangeConfigURL:          cxConfigURL,
 	}, nil
 }
 
 // BiometricStatusReport is a structure representing the BiometricStatusReport dictionary. Contains the current
 // BiometricStatusReport of one of the authenticator's biometric component.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-bio-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-bio-stat-rep
 type BiometricStatusReport struct {
 	// CertLevel is the achieved level of the biometric certification of this biometric component of the authenticator.
 	CertLevel uint16
@@ -691,7 +697,7 @@ type BiometricStatusReport struct {
 
 // BiometricStatusReportJSON is the JSON representation of the [BiometricStatusReport] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-bio-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-bio-stat-rep
 type BiometricStatusReportJSON struct {
 	// CertLevel is the achieved level of the biometric certification of this biometric component.
 	CertLevel uint16 `json:"certLevel"`
@@ -737,7 +743,7 @@ func (j BiometricStatusReportJSON) Parse() (report BiometricStatusReport, err er
 // StatusReport is a structure representing the StatusReport dictionary. Contains an [AuthenticatorStatus] and additional
 // data associated with it, if any.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-stat-rep
 type StatusReport struct {
 	// Status of the authenticator. Additional fields MAY be set depending on this value.
 	Status AuthenticatorStatus
@@ -796,7 +802,7 @@ type StatusReport struct {
 
 // StatusReportJSON is the JSON representation of the [StatusReport] struct.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-stat-rep
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-stat-rep
 type StatusReportJSON struct {
 	// Status of the authenticator. Additional fields MAY be set depending on this value.
 	Status AuthenticatorStatus `json:"status"`
@@ -907,7 +913,7 @@ func (j StatusReportJSON) Parse() (report StatusReport, err error) {
 
 // RogueListEntry is a structure representing the RogueListEntry dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-rd-20251016.html#sctn-rogue-list-entry
+// See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-rogue-list-entry
 type RogueListEntry struct {
 	// Sk is the base64url encoding of the rogue authenticator's secret key.
 	Sk string `json:"sk"`
@@ -919,7 +925,7 @@ type RogueListEntry struct {
 // CodeAccuracyDescriptor is a structure representing the CodeAccuracyDescriptor dictionary.
 // It describes the relevant accuracy/complexity aspects of passcode user verification methods.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-cad
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-cad
 type CodeAccuracyDescriptor struct {
 	// Base is the numeric system base (radix) of the code, i.e. 10 in the case of decimal digits.
 	Base uint16 `json:"base"`
@@ -942,7 +948,7 @@ type CodeAccuracyDescriptor struct {
 // BiometricAccuracyDescriptor is a structure representing the BiometricAccuracyDescriptor dictionary.
 // It describes relevant accuracy/complexity aspects in the case of a biometric user verification method.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-bad
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-bad
 type BiometricAccuracyDescriptor struct {
 	// SelfAttestedFRR is the false rejection rate [ISO19795-1] for a single template, i.e. the percentage of
 	// verification transactions with truthful claims of identity that are incorrectly denied.
@@ -976,7 +982,7 @@ type BiometricAccuracyDescriptor struct {
 // PatternAccuracyDescriptor is a structure representing the PatternAccuracyDescriptor dictionary.
 // It describes relevant accuracy/complexity aspects in the case that a pattern is used as the user verification method.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-pad
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-pad
 type PatternAccuracyDescriptor struct {
 	// MinComplexity is the number of possible patterns (having the minimum length) out of which exactly one would be
 	// the right one, i.e. 1/probability in the case of equal distribution.
@@ -996,7 +1002,7 @@ type PatternAccuracyDescriptor struct {
 // VerificationMethodDescriptor is a structure representing the VerificationMethodDescriptor dictionary.
 // It describes a descriptor for a specific base user verification method as implemented by the authenticator.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-vmd
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-vmd
 type VerificationMethodDescriptor struct {
 	// UserVerificationMethod is a single USER_VERIFY constant (see [FIDORegistry]), not a bit flag combination. This
 	// value MUST be non-zero.
@@ -1016,7 +1022,7 @@ type VerificationMethodDescriptor struct {
 // RGBPaletteEntry is a structure representing the RGBPaletteEntry dictionary.
 // It describes an RGB three-sample tuple palette entry.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-rgbpe
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-rgbpe
 type RGBPaletteEntry struct {
 	// R is the red channel sample value.
 	R uint16 `json:"r"`
@@ -1032,7 +1038,7 @@ type RGBPaletteEntry struct {
 // dictionary. It describes a PNG image characteristics as defined in the PNG [PNG] spec for IHDR (image header) and
 // PLTE (palette table).
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-dpngcd
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-dpngcd
 type DisplayPNGCharacteristicsDescriptor struct {
 	// Width of the image.
 	Width uint32 `json:"width"`
@@ -1062,7 +1068,7 @@ type DisplayPNGCharacteristicsDescriptor struct {
 // EcdaaTrustAnchor is a structure representing the EcdaaTrustAnchor dictionary.
 // In the case of ECDAA attestation, the ECDAA-Issuer's trust anchor MUST be specified in this field.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ecdaata
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-ecdaata
 type EcdaaTrustAnchor struct {
 	// X is the base64url encoding of the result of ECPoint2ToB of the ECPoint2 X.
 	X string `json:"X"`
@@ -1087,7 +1093,7 @@ type EcdaaTrustAnchor struct {
 // ExtensionDescriptor is a structure representing the ExtensionDescriptor dictionary.
 // This descriptor contains an extension supported by the authenticator.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-ed
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-ed
 type ExtensionDescriptor struct {
 	// ID identifies the extension.
 	ID string `json:"id"`
@@ -1118,7 +1124,7 @@ type Version struct {
 
 // AuthenticatorGetInfo is a structure representing the AuthenticatorGetInfo dictionary.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-agid
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-agid
 type AuthenticatorGetInfo struct {
 	// Versions is a list of supported versions.
 	Versions []string
@@ -1190,12 +1196,48 @@ type AuthenticatorGetInfo struct {
 	// VendorPrototypeConfigCommands if present the authenticator supports the authenticatorConfig vendorPrototype
 	// subcommand, and its value is a list of authenticatorConfig vendorCommandId values supported, which MAY be empty.
 	VendorPrototypeConfigCommands []uint
+
+	// AttestationFormats is the list of supported attestation formats. Authenticators supporting multiple attestation
+	// formats, not counting "none", MUST set this field.
+	AttestationFormats []string
+
+	// UvCountSinceLastPinEntry if present is the number of internal user verification operations since the last PIN
+	// entry, including all failed attempts.
+	UvCountSinceLastPinEntry uint
+
+	// LongTouchForReset if present and true indicates a touch of at least 5 seconds is required for reset.
+	LongTouchForReset bool
+
+	// EncIdentifier is the base64 encoded encryption of a 128-bit device identifier.
+	EncIdentifier string
+
+	// TransportsForReset is the list of transports which support the reset command, taken from the
+	// AuthenticatorTransport enum in WebAuthn.
+	TransportsForReset []string
+
+	// PinComplexityPolicy if present and true indicates the authenticator enforces a PIN complexity policy beyond
+	// MinPINLength.
+	PinComplexityPolicy bool
+
+	// PinComplexityPolicyURL is the base64 encoded URL the platform may use to give the user more information about the
+	// enforced PIN policy.
+	PinComplexityPolicyURL string
+
+	// MaxPINLength specifies the maximum PIN length, in Unicode code points, the authenticator enforces for ClientPIN.
+	MaxPINLength uint
+
+	// EncCredStoreState is the base64 encoded encryption of a 128-bit credential store state.
+	EncCredStoreState string
+
+	// AuthenticatorConfigCommands if present the authenticator supports the authenticatorConfig command, and its value
+	// is a list of the authenticatorConfig subcommand values supported, which MAY be empty.
+	AuthenticatorConfigCommands []uint
 }
 
 // AuthenticatorGetInfoJSON is the JSON representation of the [AuthenticatorGetInfo] struct. The members mirror the
 // fields returned by the CTAP authenticatorGetInfo command.
 //
-// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1-ps-20250521.html#sctn-type-agid
+// See: https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.1.1-ps-20260105.html#sctn-type-agid
 type AuthenticatorGetInfoJSON struct {
 	// Versions is a list of supported CTAP versions.
 	Versions []string `json:"versions"`
@@ -1260,6 +1302,36 @@ type AuthenticatorGetInfoJSON struct {
 
 	// VendorPrototypeConfigCommands is a list of supported authenticatorConfig vendorCommandId values.
 	VendorPrototypeConfigCommands []uint `json:"vendorPrototypeConfigCommands"`
+
+	// AttestationFormats is the list of supported attestation formats.
+	AttestationFormats []string `json:"attestationFormats"`
+
+	// UvCountSinceLastPinEntry is the number of internal user verification operations since the last PIN entry.
+	UvCountSinceLastPinEntry uint `json:"uvCountSinceLastPinEntry"`
+
+	// LongTouchForReset indicates a touch of at least 5 seconds is required for reset.
+	LongTouchForReset bool `json:"longTouchForReset"`
+
+	// EncIdentifier is the base64 encoded encryption of a 128-bit device identifier.
+	EncIdentifier string `json:"encIdentifier"`
+
+	// TransportsForReset is the list of transports which support the reset command.
+	TransportsForReset []string `json:"transportsForReset"`
+
+	// PinComplexityPolicy indicates the authenticator enforces a PIN complexity policy beyond MinPINLength.
+	PinComplexityPolicy bool `json:"pinComplexityPolicy"`
+
+	// PinComplexityPolicyURL is the base64 encoded URL describing the enforced PIN policy.
+	PinComplexityPolicyURL string `json:"pinComplexityPolicyURL"`
+
+	// MaxPINLength specifies the maximum PIN length, in Unicode code points, enforced for ClientPIN.
+	MaxPINLength uint `json:"maxPINLength"`
+
+	// EncCredStoreState is the base64 encoded encryption of a 128-bit credential store state.
+	EncCredStoreState string `json:"encCredStoreState"`
+
+	// AuthenticatorConfigCommands is a list of supported authenticatorConfig subcommand values.
+	AuthenticatorConfigCommands []uint `json:"authenticatorConfigCommands"`
 }
 
 func (j AuthenticatorGetInfoJSON) Parse() (info AuthenticatorGetInfo, err error) {
@@ -1293,6 +1365,16 @@ func (j AuthenticatorGetInfoJSON) Parse() (info AuthenticatorGetInfo, err error)
 		Certifications:                   j.Certifications,
 		RemainingDiscoverableCredentials: j.RemainingDiscoverableCredentials,
 		VendorPrototypeConfigCommands:    j.VendorPrototypeConfigCommands,
+		AttestationFormats:               j.AttestationFormats,
+		UvCountSinceLastPinEntry:         j.UvCountSinceLastPinEntry,
+		LongTouchForReset:                j.LongTouchForReset,
+		EncIdentifier:                    j.EncIdentifier,
+		TransportsForReset:               j.TransportsForReset,
+		PinComplexityPolicy:              j.PinComplexityPolicy,
+		PinComplexityPolicyURL:           j.PinComplexityPolicyURL,
+		MaxPINLength:                     j.MaxPINLength,
+		EncCredStoreState:                j.EncCredStoreState,
+		AuthenticatorConfigCommands:      j.AuthenticatorConfigCommands,
 	}, nil
 }
 
