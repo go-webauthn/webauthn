@@ -207,7 +207,19 @@ func TestProvider_ValidateStatusReports(t *testing.T) {
 				WithStatusUndesired(nil),
 			},
 			reports: []metadata.StatusReport{{Status: metadata.NotFidoCertified}},
-			err:     "The following desired status reports were absent: FIDO_CERTIFIED",
+			err:     "the current status report 'NOT_FIDO_CERTIFIED' was not one of the desired statuses: FIDO_CERTIFIED",
+		},
+		{
+			// The desired status must be the current one rather than merely present in the history.
+			name: "ShouldFailWithDesiredStatusSuperseded",
+			opts: []Option{
+				WithMetadata(map[uuid.UUID]*metadata.Entry{}),
+				WithValidateStatus(true),
+				WithStatusDesired([]metadata.AuthenticatorStatus{metadata.FidoCertifiedL2}),
+				WithStatusUndesired(nil),
+			},
+			reports: []metadata.StatusReport{{Status: metadata.FidoCertifiedL2}, {Status: metadata.Revoked}},
+			err:     "the current status report 'REVOKED' was not one of the desired statuses: FIDO_CERTIFIED_L2",
 		},
 	}
 
