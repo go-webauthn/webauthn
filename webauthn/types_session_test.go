@@ -14,6 +14,39 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
+func TestSessionData_GetRelyingPartyID(t *testing.T) {
+	testCases := []struct {
+		name     string
+		session  SessionData
+		fallback string
+		expected string
+	}{
+		{
+			name:     "ShouldUseSessionValue",
+			session:  SessionData{RelyingPartyID: "a.example.com"},
+			fallback: "example.com",
+			expected: "a.example.com",
+		},
+		{
+			name:     "ShouldFallBackWhenSessionValueIsEmpty",
+			session:  SessionData{},
+			fallback: "example.com",
+			expected: "example.com",
+		},
+		{
+			name:     "ShouldFallBackToEmptyWhenNeitherIsSet",
+			session:  SessionData{},
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.session.GetRelyingPartyID(tc.fallback))
+		})
+	}
+}
+
 func TestSessionData_MsgpRoundTrip(t *testing.T) {
 	original := newPopulatedSessionData()
 

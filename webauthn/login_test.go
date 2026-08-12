@@ -1393,6 +1393,44 @@ func TestValidateLoginLatchesUserVerified(t *testing.T) {
 	assert.True(t, credential.Flags.BackupState)
 }
 
+func TestValidateLoginUsesSessionRelyingPartyID(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.com",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	userID := []byte(testUserID)
+
+	user := &defaultUser{
+		id: userID,
+		credentials: []Credential{
+			{
+				ID:        credentialID,
+				PublicKey: credPubKey,
+				Flags: CredentialFlags{
+					UserPresent:    true,
+					BackupEligible: true,
+				},
+			},
+		},
+	}
+
+	session := SessionData{
+		UserID:         userID,
+		Challenge:      challenge,
+		RelyingPartyID: "example.org",
+	}
+
+	credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+	require.NoError(t, err)
+	require.NotNil(t, credential)
+	assert.Equal(t, credentialID, credential.ID)
+}
+
 func TestValidatePasskeyLogin_Full(t *testing.T) {
 	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
 
