@@ -168,6 +168,11 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, err
 	}
 
+	// Specification: §7.1. Registering a New Credential, step 18 (https://www.w3.org/TR/webauthn-3/#sctn-registering-a-new-credential)
+	if flags := parsedResponse.Response.AttestationObject.AuthData.Flags; !flags.HasBackupEligible() && flags.HasBackupState() {
+		return nil, protocol.ErrBadRequest.WithDetails("Backup State Flag is true but Backup Eligible flag is false which is invalid")
+	}
+
 	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.CreateCeremony, webauthn.Config.ExtensionsUnsolicitedOutputPolicy); err != nil {
 		return nil, err
 	}

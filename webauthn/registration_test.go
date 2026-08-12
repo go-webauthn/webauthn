@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -789,6 +790,35 @@ func TestCreateCredential_Full(t *testing.T) {
 	}
 }
 
+// TestCreateCredential_RejectsBackupStateWithoutBackupEligibility covers §7.1 step 18, which requires the BS bit to
+// be unset when the BE bit is unset. The equivalent assertion step is covered by the login validation.
+func TestCreateCredential_RejectsBackupStateWithoutBackupEligibility(t *testing.T) {
+	body, challenge, _ := testRegistrationSpecVectorNoneES256Flags(t, protocol.FlagUserPresent|protocol.FlagBackupState|protocol.FlagAttestedCredentialData)
+
+	parsedResponse, err := protocol.ParseCredentialCreationResponseBytes(body)
+	require.NoError(t, err)
+
+	userID := []byte(testUserID)
+
+	w := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	session := SessionData{
+		Challenge:  challenge,
+		UserID:     userID,
+		CredParams: []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
+	}
+
+	credential, err := w.CreateCredential(&defaultUser{id: userID}, session, parsedResponse)
+
+	assert.Nil(t, credential)
+	assert.EqualError(t, err, "Backup State Flag is true but Backup Eligible flag is false which is invalid")
+}
+
 func TestFinishRegistration_Success(t *testing.T) {
 	body, challenge, credentialID := testRegistrationSpecVectorNoneES256(t)
 	credParams := []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}}
@@ -975,11 +1005,26 @@ func TestValidateFilteredCredential(t *testing.T) {
 func testRegistrationSpecVectorNoneES256(t *testing.T) (body []byte, challenge string, credentialID []byte) {
 	t.Helper()
 
+	// The flags of the vector as published: UP, BE, BS, and AT.
+	return testRegistrationSpecVectorNoneES256Flags(t, protocol.FlagUserPresent|protocol.FlagBackupEligible|protocol.FlagBackupState|protocol.FlagAttestedCredentialData)
+}
+
+// testRegistrationSpecVectorNoneES256Flags returns the spec test vector data for NoneES256 registration with the
+// authenticator data flags byte replaced by flags. The none attestation statement format conveys no signature over
+// the authenticator data, so the flags can be varied without invalidating the vector.
+func testRegistrationSpecVectorNoneES256Flags(t *testing.T, flags protocol.AuthenticatorFlags) (body []byte, challenge string, credentialID []byte) {
+	t.Helper()
+
 	const (
 		attestationObjectHex = "a363666d74646e6f6e656761747453746d74a068617574684461746158a4bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b559000000008446ccb9ab1db374750b2367ff6f3a1f0020f91f391db4c9b2fde0ea70189cba3fb63f579ba6122b33ad94ff3ec330084be4a5010203262001215820afefa16f97ca9b2d23eb86ccb64098d20db90856062eb249c33a9b672f26df61225820930a56b87a2fca66334b03458abf879717c12cc68ed73290af2e2664796b9220"
 		clientDataJSONHex    = "7b2274797065223a22776562617574686e2e637265617465222c226368616c6c656e6765223a22414d4d507434557878475453746e63647134313759447742466938767049612d7077386f4f755657345441222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a66616c73652c22657874726144617461223a22636c69656e74446174614a534f4e206d617920626520657874656e6465642077697468206164646974696f6e616c206669656c647320696e20746865206675747572652c207375636820617320746869733a20426b5165446a646354427258426941774a544c453551227d"
 		credentialIDHex      = "f91f391db4c9b2fde0ea70189cba3fb63f579ba6122b33ad94ff3ec330084be4" //nolint:gosec
 		challengeHex         = "00c30fb78531c464d2b6771dab8d7b603c01162f2fa486bea70f283ae556e130"
+
+		// The flags byte of the authenticator data immediately follows the RP ID hash, which is what makes this
+		// prefix sufficient to locate it unambiguously within the attestation object.
+		rpIDHashHex   = "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b5"
+		vectorFlagHex = "59"
 	)
 
 	credentialID, err := hex.DecodeString(credentialIDHex)
@@ -987,8 +1032,11 @@ func testRegistrationSpecVectorNoneES256(t *testing.T) (body []byte, challenge s
 
 	challenge = base64.RawURLEncoding.EncodeToString(testRegDecodeHex(t, challengeHex))
 
+	attestationObjectFlagsHex := strings.Replace(attestationObjectHex, rpIDHashHex+vectorFlagHex, rpIDHashHex+hex.EncodeToString([]byte{byte(flags)}), 1)
+	require.Contains(t, attestationObjectFlagsHex, rpIDHashHex+hex.EncodeToString([]byte{byte(flags)}))
+
 	id := base64.RawURLEncoding.EncodeToString(credentialID)
-	attObj := base64.RawURLEncoding.EncodeToString(testRegDecodeHex(t, attestationObjectHex))
+	attObj := base64.RawURLEncoding.EncodeToString(testRegDecodeHex(t, attestationObjectFlagsHex))
 	cdj := base64.RawURLEncoding.EncodeToString(testRegDecodeHex(t, clientDataJSONHex))
 
 	response := map[string]any{
