@@ -790,8 +790,34 @@ func TestCreateCredential_Full(t *testing.T) {
 	}
 }
 
-// TestCreateCredential_RejectsBackupStateWithoutBackupEligibility covers §7.1 step 18, which requires the BS bit to
-// be unset when the BE bit is unset. The equivalent assertion step is covered by the login validation.
+func TestCreateCredentialUsesSessionRelyingPartyID(t *testing.T) {
+	body, challenge, credentialID := testRegistrationSpecVectorNoneES256(t)
+
+	parsedResponse, err := protocol.ParseCredentialCreationResponseBytes(body)
+	require.NoError(t, err)
+
+	userID := []byte(testUserID)
+
+	w := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.com",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	session := SessionData{
+		Challenge:      challenge,
+		RelyingPartyID: "example.org",
+		UserID:         userID,
+		CredParams:     []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
+	}
+
+	credential, err := w.CreateCredential(&defaultUser{id: userID}, session, parsedResponse)
+	require.NoError(t, err)
+	require.NotNil(t, credential)
+	assert.Equal(t, credentialID, credential.ID)
+}
+
 func TestCreateCredential_RejectsBackupStateWithoutBackupEligibility(t *testing.T) {
 	body, challenge, _ := testRegistrationSpecVectorNoneES256Flags(t, protocol.FlagUserPresent|protocol.FlagBackupState|protocol.FlagAttestedCredentialData)
 

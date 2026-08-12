@@ -364,7 +364,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
 	shouldVerifyUserPresence := true
 
-	rpID := webauthn.Config.RPID
+	rpID := session.GetRelyingPartyID(webauthn.Config.RPID)
 	rpOrigins := webauthn.Config.RPOrigins
 	rpTopOrigins := webauthn.Config.RPTopOrigins
 

@@ -75,3 +75,18 @@ type SessionData struct {
 	CredParams       []protocol.CredentialParameter          `json:"credParams,omitempty" msg:"params,omitempty"`
 	Mediation        protocol.CredentialMediationRequirement `json:"mediation,omitempty" msg:"cmr,omitempty"`
 }
+
+// GetRelyingPartyID returns the Relying Party ID the ceremony was begun with, which is the value the rpIdHash in the
+// authenticator data must be verified against. The Begin* functions always record it, so it reflects any per-ceremony
+// override applied by [WithRegistrationRelyingPartyID] or [WithLoginRelyingPartyID].
+//
+// The supplied fallback, which callers take from [Config.RPID], is returned when the session carries no Relying Party
+// ID. That is the case for a session encoded before this member existed, and for one a caller constructed directly,
+// neither of which can have used a per-ceremony override.
+func (s SessionData) GetRelyingPartyID(fallback string) string {
+	if len(s.RelyingPartyID) == 0 {
+		return fallback
+	}
+
+	return s.RelyingPartyID
+}
