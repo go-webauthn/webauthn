@@ -37,6 +37,11 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		entityUserID any
 	)
 
+	// Specification: §5.1.3. Create a New Credential, step 5 (https://www.w3.org/TR/webauthn-3/#sctn-createCredential)
+	if n := len(user.WebAuthnID()); n < protocol.MinimumUserHandleLength || n > protocol.MaximumUserHandleLength {
+		return nil, nil, fmt.Errorf("error generating credential creation: the user id must be between %d and %d bytes but it has a length of %d", protocol.MinimumUserHandleLength, protocol.MaximumUserHandleLength, n)
+	}
+
 	if challenge, err = protocol.CreateChallenge(); err != nil {
 		return nil, nil, err
 	}
@@ -105,12 +110,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		}
 	}
 
-	// The FIDO AppID Exclusion Extension is only meaningful when the exclude list contains a credential registered
-	// through the legacy FIDO U2F JavaScript API. Pruning here rather than inside the option makes the result
-	// independent of the order the options were supplied in.
-	if !hasU2FCredential(creation.Response.CredentialExcludeList) {
-		creation.Response.Extensions.AppIDExclude = ""
-	}
+	normalizeCreationOptions(&creation.Response)
 
 	session = &SessionData{
 		Challenge:        creation.Response.Challenge.String(),
@@ -127,6 +127,24 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	return creation, session, nil
+}
+
+// normalizeCreationOptions applies the adjustments which depend on the creation options as a whole. It runs after
+// every [RegistrationOption] has been applied so the result does not depend on the order they were supplied in,
+// which is why neither adjustment lives inside the option that motivates it.
+func normalizeCreationOptions(response *protocol.PublicKeyCredentialCreationOptions) {
+	// The FIDO AppID Exclusion Extension is only meaningful when the exclude list contains a credential registered
+	// through the legacy FIDO U2F JavaScript API.
+	if !hasU2FCredential(response.CredentialExcludeList) {
+		response.Extensions.AppIDExclude = ""
+	}
+
+	// For compatibility with user agents which predate hints, the attachment the most preferred hint implies is set
+	// when the Relying Party did not select one itself; see
+	// [protocol.PublicKeyCredentialHints.AuthenticatorAttachment].
+	if len(response.Hints) != 0 && response.AuthenticatorSelection.AuthenticatorAttachment == "" {
+		response.AuthenticatorSelection.AuthenticatorAttachment = response.Hints[0].AuthenticatorAttachment()
+	}
 }
 
 // FinishRegistration takes the response from the authenticator and client and verify the credential against the user's

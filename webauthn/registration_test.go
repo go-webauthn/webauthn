@@ -96,7 +96,7 @@ func TestWithRegistrationRelyingPartyID(t *testing.T) {
 			w, err := New(tc.have)
 			assert.NoError(t, err)
 
-			user := &defaultUser{}
+			user := &defaultUser{id: []byte(testUserID)}
 
 			creation, _, err := w.BeginRegistration(user, tc.opts...)
 			if tc.err != "" {
@@ -843,6 +843,131 @@ func TestCreateCredential_RejectsBackupStateWithoutBackupEligibility(t *testing.
 
 	assert.Nil(t, credential)
 	assert.EqualError(t, err, "Backup State Flag is true but Backup Eligible flag is false which is invalid")
+}
+
+func TestBeginRegistrationUserIDLength(t *testing.T) {
+	testCases := []struct {
+		name string
+		id   []byte
+		err  string
+	}{
+		{
+			name: "ShouldRejectEmpty",
+			id:   nil,
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 0",
+		},
+		{
+			name: "ShouldAcceptMinimum",
+			id:   bytes.Repeat([]byte("a"), 1),
+		},
+		{
+			name: "ShouldAcceptMaximum",
+			id:   bytes.Repeat([]byte("a"), 64),
+		},
+		{
+			name: "ShouldRejectAboveMaximum",
+			id:   bytes.Repeat([]byte("a"), 65),
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 65",
+		},
+	}
+
+	w, err := New(&Config{
+		RPID:          "example.com",
+		RPDisplayName: "Test Display Name",
+		RPOrigins:     []string{"https://example.com"},
+	})
+	require.NoError(t, err)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			creation, session, err := w.BeginRegistration(&defaultUser{id: tc.id})
+
+			if tc.err != "" {
+				assert.Nil(t, creation)
+				assert.Nil(t, session)
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+				require.NotNil(t, creation)
+			}
+		})
+	}
+}
+
+// TestBeginRegistrationHintsSetAuthenticatorAttachment covers the compatibility guidance of §5.8.7, which asks a
+// Relying Party using a hint to also set the authenticator attachment the hint implies so user agents which predate
+// hints behave consistently. A user agent which does implement hints gives them precedence over the attachment, so
+// this cannot narrow a ceremony such a client would otherwise honour.
+func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
+	testCases := []struct {
+		name     string
+		hints    []protocol.PublicKeyCredentialHints
+		selected protocol.AuthenticatorAttachment
+		expected protocol.AuthenticatorAttachment
+	}{
+		{
+			name:     "ShouldSetCrossPlatformForSecurityKey",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintSecurityKey},
+			expected: protocol.CrossPlatform,
+		},
+		{
+			name:     "ShouldSetPlatformForClientDevice",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintClientDevice},
+			expected: protocol.Platform,
+		},
+		{
+			name:     "ShouldSetCrossPlatformForHybrid",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintHybrid},
+			expected: protocol.CrossPlatform,
+		},
+		{
+			name:     "ShouldUseTheFirstHint",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintClientDevice, protocol.PublicKeyCredentialHintSecurityKey},
+			expected: protocol.Platform,
+		},
+		{
+			name:     "ShouldNotOverrideAnExplicitAttachment",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintSecurityKey},
+			selected: protocol.Platform,
+			expected: protocol.Platform,
+		},
+		{
+			name:     "ShouldNotSetAnAttachmentWithoutHints",
+			expected: "",
+		},
+		{
+			name:     "ShouldNotSetAnAttachmentForAnUnknownHint",
+			hints:    []protocol.PublicKeyCredentialHints{"future-hint"},
+			expected: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+				AuthenticatorSelection: protocol.AuthenticatorSelection{
+					AuthenticatorAttachment: tc.selected,
+				},
+			})
+			require.NoError(t, err)
+
+			var opts []RegistrationOption
+
+			if len(tc.hints) != 0 {
+				opts = append(opts, WithPublicKeyCredentialHints(tc.hints))
+			}
+
+			creation, _, err := w.BeginRegistration(&defaultUser{id: []byte(testUserID)}, opts...)
+			require.NoError(t, err)
+			require.NotNil(t, creation)
+
+			assert.Equal(t, tc.expected, creation.Response.AuthenticatorSelection.AuthenticatorAttachment)
+			assert.Equal(t, tc.hints, creation.Response.Hints)
+		})
+	}
 }
 
 func TestFinishRegistration_Success(t *testing.T) {

@@ -234,6 +234,22 @@ const (
 	AttestationFormatNone AttestationFormat = none
 )
 
+// PublicKeyCredentialHints represents an entry of the hints member, which conveys the Relying Party's belief about
+// how the user will satisfy the request, in descending order of preference.
+//
+// The IDL types the hints member as a sequence of strings rather than as this enumeration, and requires clients to
+// ignore values they do not recognise, so values are deliberately not validated against the constants below: a
+// Relying Party may send a hint ratified after this release, or one a particular user agent understands. Clients
+// also ignore the second and later appearances of a repeated hint.
+//
+// Hints may contradict the authenticator attachment and the transports of the allowed credentials. Where they do,
+// a client which implements hints gives the hints precedence; see
+// [PublicKeyCredentialHints.AuthenticatorAttachment] for how a registration ceremony pairs the two for the benefit
+// of clients which do not.
+//
+// WebAuthn Level 3.
+//
+// Specification: §5.8.7. User-agent Hints Enumeration (https://www.w3.org/TR/webauthn-3/#enum-hints)
 type PublicKeyCredentialHints string
 
 const (
@@ -262,6 +278,26 @@ const (
 	// authenticatorAttachment SHOULD be set to cross-platform.
 	PublicKeyCredentialHintHybrid PublicKeyCredentialHints = "hybrid"
 )
+
+// AuthenticatorAttachment returns the authenticator attachment a Relying Party using this hint during registration
+// SHOULD also set, so user agents which predate hints filter authenticators consistently with the hint. An
+// identifier this library does not model, which includes any hint ratified after this release, returns an empty
+// value rather than a guess.
+//
+// A user agent which does implement hints gives them precedence over the authenticator attachment, so pairing the
+// two cannot narrow a ceremony such a user agent would otherwise honour.
+//
+// Specification: §5.8.7. User-agent Hints Enumeration (https://www.w3.org/TR/webauthn-3/#enum-hints)
+func (h PublicKeyCredentialHints) AuthenticatorAttachment() AuthenticatorAttachment {
+	switch h {
+	case PublicKeyCredentialHintSecurityKey, PublicKeyCredentialHintHybrid:
+		return CrossPlatform
+	case PublicKeyCredentialHintClientDevice:
+		return Platform
+	default:
+		return ""
+	}
+}
 
 func (a *PublicKeyCredentialRequestOptions) GetAllowedCredentialIDs() [][]byte {
 	var allowedCredentialIDs = make([][]byte, len(a.AllowedCredentials))

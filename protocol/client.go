@@ -36,6 +36,12 @@ type CollectedClientData struct {
 	CrossOrigin bool `json:"crossOrigin,omitempty"`
 
 	// TokenBinding contains information about the state of the Token Binding protocol.
+	//
+	// WebAuthn Level 3 removes this member from the CollectedClientData dictionary. It is retained because a client
+	// implementing Level 1 or Level 2 may still include it, and a member present in the client data has to be
+	// modelled to be validated; it is not something a Relying Party should expect to receive.
+	//
+	// Deprecated: removed from the CollectedClientData dictionary by WebAuthn Level 3.
 	TokenBinding *TokenBinding `json:"tokenBinding,omitempty"`
 
 	// Hint is an opaque field that may be added by the client. Chromium-based browsers include this field to remind
@@ -60,12 +66,18 @@ const (
 // Relying Party. Its absence indicates that the client doesn't support token binding.
 //
 // Specification: §5.8.1. Client Data Used in WebAuthn Signatures (https://www.w3.org/TR/webauthn/#dom-collectedclientdata-tokenbinding)
+//
+// Deprecated: WebAuthn Level 3 removes the tokenBinding member from the CollectedClientData dictionary; see
+// [CollectedClientData.TokenBinding].
 type TokenBinding struct {
 	Status TokenBindingStatus `json:"status"`
 	ID     string             `json:"id,omitempty"`
 }
 
 // TokenBindingStatus represents the state of Token Binding between the client and the Relying Party.
+//
+// Deprecated: WebAuthn Level 3 removes the tokenBinding member from the CollectedClientData dictionary; see
+// [CollectedClientData.TokenBinding].
 type TokenBindingStatus string
 
 const (
@@ -79,6 +91,10 @@ const (
 
 	// NotSupported indicates token binding not supported
 	// when communicating with the Relying Party.
+	//
+	// This value is accepted but has not been a member of the TokenBindingStatus enumeration since WebAuthn Level 1,
+	// which is why it is not rejected: a client which still sends it is behaving as an older level of the
+	// specification allowed, and failing the ceremony over an advisory member would serve no purpose.
 	NotSupported TokenBindingStatus = "not-supported"
 )
 
