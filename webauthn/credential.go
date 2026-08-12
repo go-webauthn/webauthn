@@ -391,6 +391,28 @@ func NewCredentialFlags(flags protocol.AuthenticatorFlags) CredentialFlags {
 	}
 }
 
+// Update returns these flags advanced to the state observed during a successful assertion, which is the credential
+// record update described by §7.2. The backup state and the remaining flags are taken from the assertion, while
+// [CredentialFlags.UserVerified] is latched: the specification only advances uvInitialized from false to true, so a
+// credential whose user has been verified at some point keeps that recorded state even when a later assertion does
+// not verify the user.
+//
+// The latch is applied to the underlying [protocol.AuthenticatorFlags] rather than only to the boolean member
+// because the raw octet is the representation the msgp encoding preserves; applying it to just the member would
+// lose it the moment the credential record is persisted.
+//
+// A Relying Party wanting to know whether a particular ceremony verified the user must read the UV flag of that
+// ceremony's authenticator data, not this value.
+//
+// Specification: §7.2. Verifying an Authentication Assertion (https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion)
+func (f CredentialFlags) Update(flags protocol.AuthenticatorFlags) CredentialFlags {
+	if f.UserVerified {
+		flags |= protocol.FlagUserVerified
+	}
+
+	return NewCredentialFlags(flags)
+}
+
 // CredentialFlagsFromMsgpByte reconstructs a [CredentialFlags] from the single-byte representation produced by
 // [CredentialFlags.MsgpByte]. It is intended for use by the msgp-generated serialization layer; normal callers
 // should prefer [NewCredentialFlags].
@@ -405,7 +427,10 @@ type CredentialFlags struct {
 	// Flag UP indicates the users presence.
 	UserPresent bool `json:"userPresent"`
 
-	// Flag UV indicates the user performed verification.
+	// Flag UV indicates the user performed verification. On a credential record this is the uvInitialized value
+	// of the specification, which is latched: once an assertion has verified the user it stays true, because
+	// [CredentialFlags.Update] only advances it. Read the UV flag of a ceremony's own authenticator data to
+	// determine whether that ceremony verified the user.
 	UserVerified bool `json:"userVerified"`
 
 	// Flag BE indicates the credential is able to be backed up and/or sync'd between devices. This should NEVER change.

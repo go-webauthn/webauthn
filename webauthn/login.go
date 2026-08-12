@@ -387,15 +387,16 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	// Check for the invalid combination BE=0 and BS=1.
-	if !parsedResponse.Response.AuthenticatorData.Flags.HasBackupEligible() && parsedResponse.Response.AuthenticatorData.Flags.HasBackupState() {
+	if flags := parsedResponse.Response.AuthenticatorData.Flags; !flags.HasBackupEligible() && flags.HasBackupState() {
 		return nil, protocol.ErrBadRequest.WithDetails("Backup State Flag is true but Backup Eligible flag is false which is invalid")
 	}
 
 	// Handle step 17.
 	credential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
 
-	// Update flags from response data.
-	credential.Flags = NewCredentialFlags(parsedResponse.Response.AuthenticatorData.Flags)
+	// Update flags from response data. The user verification flag is latched rather than replaced; see
+	// [CredentialFlags.Update].
+	credential.Flags = credential.Flags.Update(parsedResponse.Response.AuthenticatorData.Flags)
 
 	return &credential, nil
 }

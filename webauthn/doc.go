@@ -215,9 +215,12 @@
 //     RP ID to resolve the application user id, then load that user's credentials from
 //     `webauthn_credentials`.
 //
-// Fields that change across assertions; [Authenticator.SignCount], [Authenticator.CloneWarning], and
-// [CredentialFlags.BackupState] when [CredentialFlags.BackupEligible] is true MUST be written back to storage
-// on every successful FinishLogin / ValidateLogin so the next ceremony observes the current values.
+// Fields that change across assertions; [Authenticator.SignCount], [Authenticator.CloneWarning],
+// [CredentialFlags.UserVerified], and [CredentialFlags.BackupState] when [CredentialFlags.BackupEligible] is true
+// MUST be written back to storage on every successful FinishLogin / ValidateLogin so the next ceremony observes the
+// current values. [CredentialFlags.UserVerified] is the specification's uvInitialized and only ever advances from
+// false to true, so a Relying Party which does not write it back can never record that the credential has verified
+// its user.
 //
 // For [SessionData] stored in a database (rather than a server-side session store), use the same persistence
 // shapes described above. The User Handle on a [SessionData] row is per-session ceremony state rather than
