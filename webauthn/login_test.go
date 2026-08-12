@@ -1353,6 +1353,46 @@ func TestValidateLoginAppIDFromSessionReplacesRPID(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("RP Hash mismatch. Expected %x and Received %x", appIDHash, parsedResponse.Response.AuthenticatorData.RPIDHash), e.DevInfo)
 }
 
+func TestValidateLoginLatchesUserVerified(t *testing.T) {
+	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
+
+	require.False(t, parsedResponse.Response.AuthenticatorData.Flags.HasUserVerified())
+	require.True(t, parsedResponse.Response.AuthenticatorData.Flags.HasBackupState())
+
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPID:      "example.org",
+			RPOrigins: []string{"https://example.org"},
+		},
+	}
+
+	userID := []byte(testUserID)
+
+	user := &defaultUser{
+		id: userID,
+		credentials: []Credential{
+			{
+				ID:        credentialID,
+				PublicKey: credPubKey,
+				Flags:     NewCredentialFlags(protocol.FlagUserPresent | protocol.FlagUserVerified | protocol.FlagBackupEligible),
+			},
+		},
+	}
+
+	session := SessionData{
+		UserID:    userID,
+		Challenge: challenge,
+	}
+
+	credential, err := webauthn.ValidateLogin(user, session, parsedResponse)
+	require.NoError(t, err)
+	require.NotNil(t, credential)
+
+	assert.True(t, credential.Flags.UserVerified)
+	assert.True(t, credential.Flags.ProtocolValue().HasUserVerified())
+	assert.True(t, credential.Flags.BackupState)
+}
+
 func TestValidatePasskeyLogin_Full(t *testing.T) {
 	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
 

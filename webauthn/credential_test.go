@@ -19,6 +19,49 @@ import (
 	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
+func TestCredentialFlags_Update(t *testing.T) {
+	testCases := []struct {
+		name      string
+		stored    protocol.AuthenticatorFlags
+		assertion protocol.AuthenticatorFlags
+		expected  protocol.AuthenticatorFlags
+	}{
+		{
+			name:      "ShouldLatchUserVerifiedWhenAssertionDoesNotVerify",
+			stored:    protocol.FlagUserPresent | protocol.FlagUserVerified,
+			assertion: protocol.FlagUserPresent,
+			expected:  protocol.FlagUserPresent | protocol.FlagUserVerified,
+		},
+		{
+			name:      "ShouldAdvanceUserVerifiedWhenAssertionVerifies",
+			stored:    protocol.FlagUserPresent,
+			assertion: protocol.FlagUserPresent | protocol.FlagUserVerified,
+			expected:  protocol.FlagUserPresent | protocol.FlagUserVerified,
+		},
+		{
+			name:      "ShouldLeaveUserVerifiedUnsetWhenNeitherVerifies",
+			stored:    protocol.FlagUserPresent,
+			assertion: protocol.FlagUserPresent,
+			expected:  protocol.FlagUserPresent,
+		},
+		{
+			name:      "ShouldTakeBackupStateFromTheAssertion",
+			stored:    protocol.FlagUserPresent | protocol.FlagBackupEligible | protocol.FlagBackupState,
+			assertion: protocol.FlagUserPresent | protocol.FlagBackupEligible,
+			expected:  protocol.FlagUserPresent | protocol.FlagBackupEligible,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			updated := NewCredentialFlags(tc.stored).Update(tc.assertion)
+
+			assert.Equal(t, NewCredentialFlags(tc.expected), updated)
+			assert.Equal(t, tc.expected, updated.ProtocolValue())
+		})
+	}
+}
+
 func TestNewCredentialFlags(t *testing.T) {
 	testCases := []struct {
 		name                   string
