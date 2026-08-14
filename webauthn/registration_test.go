@@ -940,6 +940,14 @@ func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
 			hints:    []protocol.PublicKeyCredentialHints{"future-hint"},
 			expected: "",
 		},
+		{
+			// A Relying Party is expected to send a more specific hint before less specific ones so a user agent
+			// which does not recognise the former can act on the latter, so an unrecognised leading hint must not
+			// stop a recognised one behind it from supplying the attachment.
+			name:     "ShouldUseTheFirstRecognisedHint",
+			hints:    []protocol.PublicKeyCredentialHints{"future-hint", protocol.PublicKeyCredentialHintSecurityKey},
+			expected: protocol.CrossPlatform,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -966,6 +974,85 @@ func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
 
 			assert.Equal(t, tc.expected, creation.Response.AuthenticatorSelection.AuthenticatorAttachment)
 			assert.Equal(t, tc.hints, creation.Response.Hints)
+		})
+	}
+}
+
+// TestBeginRegistrationUserHandleAfterOptions covers the user handle bounds being enforced against the handle which
+// is actually sent to the client. A [RegistrationOption] receives the whole creation options, so one supplied by the
+// caller can replace the user entity id after it has been derived from the [User]; the bounds must hold for that
+// final value, and the session must record it rather than the handle the ceremony started from.
+func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
+	withUserHandle := func(id any) RegistrationOption {
+		return func(cco *protocol.PublicKeyCredentialCreationOptions) error {
+			cco.User.ID = id
+
+			return nil
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		encodeAsString bool
+		opts           []RegistrationOption
+		expected       []byte
+		err            string
+	}{
+		{
+			name: "ShouldRejectAnEmptyHandleSetByAnOption",
+			opts: []RegistrationOption{withUserHandle(protocol.URLEncodedBase64(nil))},
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 0",
+		},
+		{
+			name: "ShouldRejectAnOverlengthHandleSetByAnOption",
+			opts: []RegistrationOption{withUserHandle(protocol.URLEncodedBase64(bytes.Repeat([]byte("a"), 65)))},
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 65",
+		},
+		{
+			name:     "ShouldRecordAHandleSetByAnOptionInTheSession",
+			opts:     []RegistrationOption{withUserHandle(protocol.URLEncodedBase64("replacement"))},
+			expected: []byte("replacement"),
+		},
+		{
+			name:           "ShouldRecordAStringHandleInTheSession",
+			encodeAsString: true,
+			opts:           []RegistrationOption{withUserHandle("replacement")},
+			expected:       []byte("replacement"),
+		},
+		{
+			name: "ShouldRejectAHandleOfAnUnusableType",
+			opts: []RegistrationOption{withUserHandle(42)},
+			err:  "error generating credential creation: the user id must be a string, []byte, or protocol.URLEncodedBase64 but it has a type of int",
+		},
+		{
+			name:     "ShouldRecordTheUsersHandleWithoutAnOption",
+			expected: []byte(testUserID),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:                 "example.com",
+				RPDisplayName:        "Test Display Name",
+				RPOrigins:            []string{"https://example.com"},
+				EncodeUserIDAsString: tc.encodeAsString,
+			})
+			require.NoError(t, err)
+
+			creation, session, err := w.BeginRegistration(&defaultUser{id: []byte(testUserID)}, tc.opts...)
+
+			if tc.err != "" {
+				assert.Nil(t, creation)
+				assert.Nil(t, session)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, session)
+			assert.Equal(t, tc.expected, session.UserID)
 		})
 	}
 }

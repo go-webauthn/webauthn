@@ -37,11 +37,6 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		entityUserID any
 	)
 
-	// Specification: §5.1.3. Create a New Credential, step 5 (https://www.w3.org/TR/webauthn-3/#sctn-createCredential)
-	if n := len(user.WebAuthnID()); n < protocol.MinimumUserHandleLength || n > protocol.MaximumUserHandleLength {
-		return nil, nil, fmt.Errorf("error generating credential creation: the user id must be between %d and %d bytes but it has a length of %d", protocol.MinimumUserHandleLength, protocol.MaximumUserHandleLength, n)
-	}
-
 	if challenge, err = protocol.CreateChallenge(); err != nil {
 		return nil, nil, err
 	}
@@ -101,6 +96,15 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf("error generating credential creation: the challenge must be at least 16 bytes")
 	}
 
+	// The user handle is validated after the options have been applied, and the validated value is what the session
+	// records, because a [RegistrationOption] receives the whole creation options and may therefore replace the user
+	// entity id derived from the [User] above.
+	var handle []byte
+
+	if handle, err = userHandle(creation.Response.User.ID); err != nil {
+		return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
+	}
+
 	if creation.Response.Timeout == 0 {
 		switch creation.Response.AuthenticatorSelection.UserVerification {
 		case protocol.VerificationDiscouraged:
@@ -115,7 +119,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	session = &SessionData{
 		Challenge:        creation.Response.Challenge.String(),
 		RelyingPartyID:   creation.Response.RelyingParty.ID,
-		UserID:           user.WebAuthnID(),
+		UserID:           handle,
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
 		Extensions:       creation.Response.Extensions.Session(),
 		CredParams:       creation.Response.Parameters,
@@ -139,11 +143,20 @@ func normalizeCreationOptions(response *protocol.PublicKeyCredentialCreationOpti
 		response.Extensions.AppIDExclude = ""
 	}
 
-	// For compatibility with user agents which predate hints, the attachment the most preferred hint implies is set
-	// when the Relying Party did not select one itself; see
-	// [protocol.PublicKeyCredentialHints.AuthenticatorAttachment].
-	if len(response.Hints) != 0 && response.AuthenticatorSelection.AuthenticatorAttachment == "" {
-		response.AuthenticatorSelection.AuthenticatorAttachment = response.Hints[0].AuthenticatorAttachment()
+	// For compatibility with user agents which predate hints, the attachment implied by the most preferred hint which
+	// implies one is set when the Relying Party did not select an attachment itself; see
+	// [protocol.PublicKeyCredentialHints.AuthenticatorAttachment]. The hints are scanned in order rather than only the
+	// first being consulted because a Relying Party is expected to send a more specific hint ahead of less specific
+	// ones, and the more specific hint may be one this library does not model. The attachment is left unset when no
+	// hint implies one.
+	if response.AuthenticatorSelection.AuthenticatorAttachment == "" {
+		for _, hint := range response.Hints {
+			if attachment := hint.AuthenticatorAttachment(); attachment != "" {
+				response.AuthenticatorSelection.AuthenticatorAttachment = attachment
+
+				break
+			}
+		}
 	}
 }
 
