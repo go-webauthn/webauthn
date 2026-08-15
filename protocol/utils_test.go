@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,25 +37,144 @@ func TestValidateRPID(t *testing.T) {
 			value: "localhost",
 		},
 		{
-			name:  "ValidRPIDUsingIPv4",
+			name:  "ValidRPIDSubdomain",
+			value: "sub.example.com",
+		},
+		{
+			name:  "ValidRPIDPunycode",
+			value: "xn--bcher-kva.example",
+		},
+		{
+			name:  "InvalidRPIDNonASCII",
+			value: "café.example",
+			err:   errDomainNotASCII.Error(),
+		},
+		{
+			name:  "InvalidRPIDIPv4Shorthand",
+			value: "127.1",
+			err:   errDomainFinalLabelNumeric.Error(),
+		},
+		{
+			name:  "InvalidRPIDNumericFinalLabel",
+			value: "example.123",
+			err:   errDomainFinalLabelNumeric.Error(),
+		},
+		{
+			name:  "InvalidRPIDThreeOctetShorthand",
+			value: "1.2.3",
+			err:   errDomainFinalLabelNumeric.Error(),
+		},
+		{
+			name:  "InvalidRPIDOutOfRangeOctets",
+			value: "999.999.999.999",
+			err:   errDomainFinalLabelNumeric.Error(),
+		},
+		{
+			name:  "InvalidRPIDHexadecimalFinalLabel",
+			value: "example.0x1",
+			err:   errDomainFinalLabelNumeric.Error(),
+		},
+		{
+			name:  "InvalidRPIDAllDigits",
+			value: "2130706433",
+			err:   errDomainFinalLabelNumeric.Error(),
+		},
+		{
+			name:  "ValidRPIDUppercase",
+			value: "EXAMPLE.COM",
+		},
+		{
+			name:  "ValidRPIDUnderscoreIsNotForbidden",
+			value: "exa_mple.com",
+		},
+		{
+			name:  "ValidRPIDShortest",
+			value: "a.b",
+		},
+		{
+			name:  "InvalidRPIDUsingIPv4",
 			value: "127.0.0.1",
+			err:   errDomainIsIPAddress.Error(),
 		},
 		{
-			name:  "ValidRPIDUsingIPv4Alt",
+			name:  "InvalidRPIDUsingIPv4Alt",
 			value: "1.1.1.1",
+			err:   errDomainIsIPAddress.Error(),
 		},
 		{
-			name:  "ValidRPIDUsingIPv6",
+			name:  "InvalidRPIDUsingIPv6",
 			value: "2001:DB8:0:0:8:800:200C:417A",
+			err:   errDomainIsIPAddress.Error(),
 		},
 		{
-			name:  "ValidRPIDUsingIPv6Alt",
+			name:  "InvalidRPIDUsingIPv6Alt",
 			value: "::1",
+			err:   errDomainIsIPAddress.Error(),
 		},
 		{
 			name:  "InvalidRPIDNotDomain",
 			value: "example",
-			err:   "the domain component must actually be a domain",
+			err:   errDomainNotADomain.Error(),
+		},
+		{
+			name:  "InvalidRPIDTrailingDot",
+			value: "example.com.",
+			err:   errDomainEmptyLabel.Error(),
+		},
+		{
+			name:  "InvalidRPIDLocalhostTrailingDot",
+			value: "localhost.",
+			err:   errDomainEmptyLabel.Error(),
+		},
+		{
+			name:  "InvalidRPIDLeadingDot",
+			value: ".example.com",
+			err:   errDomainEmptyLabel.Error(),
+		},
+		{
+			name:  "InvalidRPIDOnlyDots",
+			value: "..",
+			err:   errDomainEmptyLabel.Error(),
+		},
+		{
+			name:  "InvalidRPIDEmptyLabel",
+			value: "a..b",
+			err:   errDomainEmptyLabel.Error(),
+		},
+		{
+			name:  "InvalidRPIDHyphenLabels",
+			value: "-.-",
+			err:   errDomainLabelHyphen.Error(),
+		},
+		{
+			name:  "InvalidRPIDLeadingHyphen",
+			value: "-example.com",
+			err:   errDomainLabelHyphen.Error(),
+		},
+		{
+			name:  "InvalidRPIDTrailingHyphen",
+			value: "example-.com",
+			err:   errDomainLabelHyphen.Error(),
+		},
+		{
+			name:  "InvalidRPIDTrailingHyphenLastLabel",
+			value: "a.b-",
+			err:   errDomainLabelHyphen.Error(),
+		},
+		{
+			name:  "InvalidRPIDLeadingSpace",
+			value: " example.com",
+			err:   errDomainForbiddenCharacter.Error(),
+		},
+		{
+			name:  "InvalidRPIDLabelTooLong",
+			value: strings.Repeat("a", 64) + ".com",
+			err:   errDomainLabelTooLong.Error(),
+		},
+		{
+			name:  "InvalidRPIDTooLong",
+			value: strings.Repeat(strings.Repeat("a", 63)+".", 4) + "com",
+			err:   errDomainTooLong.Error(),
 		},
 		{
 			name:  "InvalidRPIDScheme",

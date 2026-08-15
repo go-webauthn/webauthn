@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -251,8 +252,14 @@ func attestationCredentialPublicKey(credentialPublicKey any) (public crypto.Publ
 }
 
 // ValidateRPID performs non-exhaustive checks to ensure the string is most likely a domain string as
-// relying-party ID's are required to be. Effectively this can be an IP, localhost, or a string that contains a period.
-// The relying-party ID must not contain scheme, port, path, query, or fragment components.
+// relying-party ID's are required to be. Effectively this is localhost or a domain of two or more labels. The
+// relying-party ID must not contain scheme, port, path, query, or fragment components, and must not be an IP
+// address: §5.4.2 defines it as a valid domain string, which an address literal is not, and a client rejects one.
+//
+// No IDNA normalization is performed, so a value carrying non-ASCII characters is rejected rather than converted.
+// A Relying Party ID is hashed verbatim to compare against the rpIdHash an authenticator reports, while a client
+// normalizes the value it was handed, so a name which is not already in its ASCII form can never produce a matching
+// hash. Callers serving an internationalized domain must apply IDNA themselves and configure the resulting A-label.
 //
 // See: https://www.w3.org/TR/webauthn/#rp-id
 //
@@ -263,7 +270,7 @@ func ValidateRPID(value string) (err error) {
 	}
 
 	if ip := net.ParseIP(value); ip != nil {
-		return nil
+		return errDomainIsIPAddress
 	}
 
 	var rpid *url.URL
@@ -310,11 +317,67 @@ func ValidateRPID(value string) (err error) {
 		}
 	}
 
-	if value != "localhost" && !strings.Contains(rpid.Path, ".") {
-		return errors.New("the domain component must actually be a domain")
+	return validateDomainString(value)
+}
+
+func validateDomainString(value string) error {
+	if len(value) > maxDomainLength {
+		return errDomainTooLong
+	}
+
+	labels := strings.Split(value, ".")
+
+	for _, label := range labels {
+		if len(label) == 0 {
+			return errDomainEmptyLabel
+		}
+
+		if len(label) > maxDomainLabelLength {
+			return errDomainLabelTooLong
+		}
+
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return errDomainLabelHyphen
+		}
+
+		if strings.ContainsAny(label, forbiddenDomainCodePoints) {
+			return errDomainForbiddenCharacter
+		}
+
+		for _, r := range label {
+			if r < 0x20 || r == 0x7F {
+				return errDomainForbiddenCharacter
+			}
+
+			if r > 0x7F {
+				return errDomainNotASCII
+			}
+		}
+	}
+
+	if isNumericDomainLabel(labels[len(labels)-1]) {
+		return errDomainFinalLabelNumeric
+	}
+
+	if len(labels) == 1 && value != "localhost" {
+		return errDomainNotADomain
 	}
 
 	return nil
+}
+
+func isNumericDomainLabel(label string) bool {
+	if label == "" {
+		return false
+	}
+
+	if strings.Trim(label, "0123456789") == "" {
+		return true
+	}
+
+	_, err := strconv.ParseUint(label, 0, 64)
+
+	return err == nil
 }
 
 // IsAttestationFormatString reports whether s is one of the WebAuthn-defined attestation statement format
