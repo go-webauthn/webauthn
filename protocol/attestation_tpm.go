@@ -155,7 +155,11 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	// 3/4 Verify that extraData is set to the hash of attToBeSigned using the hash algorithm employed in "alg".
 	coseAlg := webauthncose.COSEAlgorithmIdentifier(statement.Algorithm)
 
-	h := webauthncose.HasherFromCOSEAlg(coseAlg)
+	h, supported := webauthncose.HasherFromCOSEAlg(coseAlg)
+	if !supported {
+		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", statement.Algorithm))
+	}
+
 	h.Write(attToBeSigned)
 
 	if !bytes.Equal(certInfo.ExtraData.Buffer, h.Sum(nil)) {
