@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
+	"slices"
 	"time"
 
 	"github.com/go-webauthn/webauthn/metadata"
@@ -50,7 +51,7 @@ func attestationFormatValidationHandlerAppleAnonymous(att AttestationObject, cli
 	}
 
 	// Step 2. Concatenate authenticatorData and clientDataHash to form nonceToHash.
-	nonceToHash := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
+	nonceToHash := slices.Concat(att.RawAuthData, clientDataHash)
 
 	// Step 3. Perform SHA-256 hash of nonceToHash to produce nonce.
 	nonce := sha256.Sum256(nonceToHash)

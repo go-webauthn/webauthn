@@ -22,8 +22,14 @@ func (e *URLEncodedBase64) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
+	// A JSON value which is not a string is not base64 at all. Without this check the quote trimming below is a no-op
+	// and the value itself is decoded, so a number or a boolean produces silent garbage bytes rather than an error.
+	if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
+		return errBase64NotJSONString
+	}
+
 	// Trim the leading and trailing quotes from raw JSON data (the whole value part).
-	data = bytes.Trim(data, `"`)
+	data = data[1 : len(data)-1]
 
 	// Trim the trailing equal characters.
 	data = bytes.TrimRight(data, "=")

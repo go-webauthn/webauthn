@@ -35,7 +35,7 @@ type PublicKeyCredentialCreationOptions struct {
 	Parameters             []CredentialParameter      `json:"pubKeyCredParams,omitempty"`
 	Timeout                int                        `json:"timeout,omitempty"`
 	CredentialExcludeList  []CredentialDescriptor     `json:"excludeCredentials,omitempty"`
-	AuthenticatorSelection AuthenticatorSelection     `json:"authenticatorSelection,omitempty"`
+	AuthenticatorSelection AuthenticatorSelection     `json:"authenticatorSelection,omitzero"`
 	Hints                  []PublicKeyCredentialHints `json:"hints,omitempty"`
 	Attestation            ConveyancePreference       `json:"attestation,omitempty"`
 	AttestationFormats     []AttestationFormat        `json:"attestationFormats,omitempty"`
@@ -147,6 +147,13 @@ type AuthenticatorSelection struct {
 	// the create() operation. Eligible authenticators are filtered to only those capable of satisfying this
 	// requirement.
 	UserVerification UserVerificationRequirement `json:"userVerification,omitempty"`
+}
+
+// IsZero returns true when no authenticator selection criteria are set. It is used by the encoding/json omitzero tag
+// option so a Relying Party that expresses no criteria does not send an empty authenticatorSelection member to the
+// client, which omitempty cannot do for a struct value.
+func (s AuthenticatorSelection) IsZero() bool {
+	return s.AuthenticatorAttachment == "" && s.RequireResidentKey == nil && s.ResidentKey == "" && s.UserVerification == ""
 }
 
 // ConveyancePreference is the type representing the AttestationConveyancePreference IDL.

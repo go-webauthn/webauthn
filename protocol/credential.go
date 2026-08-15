@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"io"
@@ -143,6 +144,13 @@ func (ccr CredentialCreationResponse) Parse() (pcc *ParsedCredentialCreationData
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("Type not public-key")
 	}
 
+	// The id member is defined as the base64url encoding of rawId, so the two cannot legitimately disagree. Nothing
+	// downstream reads the id, which is why a disagreement would otherwise pass unnoticed rather than being reported
+	// as the client bug it is.
+	if !bytes.Equal(testB64, ccr.RawID) {
+		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo("ID does not match rawId")
+	}
+
 	response, err := ccr.AttestationResponse.Parse()
 	if err != nil {
 		return nil, ErrParsingData.WithDetails("Error parsing attestation response")
@@ -187,6 +195,13 @@ func (pcc *ParsedCredentialCreationData) Verify(storedChallenge string, relyingP
 	// Handle steps 9 through 14 - This verifies the attestation object.
 	if err = pcc.Response.AttestationObject.Verify(relyingPartyID, clientDataHash, verifyUser, verifyUserPresence, mds, credParams, policy, signature); err != nil {
 		return clientDataHash, err
+	}
+
+	// Step 27 defines credentialRecord.id as "credential.id or credential.rawId, whichever format is preferred",
+	// which presumes the two agree. The record is built from the attested credential id, as that is the value the
+	// attestation signature covers, so a disagreement is a client which reported a credential it did not create.
+	if !bytes.Equal(pcc.RawID, pcc.Response.AttestationObject.AuthData.AttData.CredentialID) {
+		return clientDataHash, ErrVerification.WithDetails("Error validating the attested credential id").WithInfo("The credential id reported by the client does not match the credential id in the attested credential data")
 	}
 
 	// Step 15. If validation is successful, obtain a list of acceptable trust anchors (attestation root

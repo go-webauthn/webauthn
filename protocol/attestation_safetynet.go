@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -93,7 +94,7 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 
 	// §8.5.3 Verify that the nonce in the response is identical to the Base64 encoding of the SHA-256 hash of the concatenation
 	// of authenticatorData and clientDataHash.
-	nonceBuffer := sha256.Sum256(append(att.RawAuthData, clientDataHash...))
+	nonceBuffer := sha256.Sum256(slices.Concat(att.RawAuthData, clientDataHash))
 
 	nonceBytes, err := base64.StdEncoding.DecodeString(safetyNetResponse.Nonce)
 	if !bytes.Equal(nonceBuffer[:], nonceBytes) || err != nil {

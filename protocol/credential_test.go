@@ -260,6 +260,63 @@ func TestParsedCredentialCreationData_Verify(t *testing.T) {
 			expected: []byte{0xa, 0xaf, 0x43, 0xda, 0x7e, 0xd3, 0x94, 0x98, 0x9b, 0xbc, 0x47, 0xcb, 0x0, 0x72, 0x6b, 0xbc, 0xf3, 0xa2, 0x4a, 0x49, 0x5f, 0x84, 0x4f, 0x45, 0x97, 0x91, 0x6a, 0x2d, 0xff, 0x47, 0xbc, 0xad},
 			err:      "",
 		},
+		{
+			name: "ShouldFailWhenRawIDIsNotTheAttestedCredentialID",
+			fields: fields{
+				ParsedPublicKeyCredential: ParsedPublicKeyCredential{
+					ParsedCredential: ParsedCredential{
+						ID:   "bm90LXRoZS1hdHRlc3RlZC1jcmVkZW50aWFsLWlkISE",
+						Type: string(PublicKeyCredentialType),
+					},
+					RawID: []byte("not-the-attested-credential-id!!"),
+				},
+				Response: ParsedAttestationResponse{
+					CollectedClientData: CollectedClientData{
+						Type:      CeremonyType("webauthn.create"),
+						Challenge: "W8GzFU8pGjhoRbWrLDlamAfq_y4S1CZG1VuoeRLARrE",
+						Origin:    "https://webauthn.io",
+					},
+					AttestationObject: AttestationObject{
+						Format:      "none",
+						RawAuthData: byteAuthData,
+						AuthData: AuthenticatorData{
+							RPIDHash: byteRPIDHash,
+							Counter:  0,
+							Flags:    0x041,
+							AttData: AttestedCredentialData{
+								AAGUID:              make([]byte, 16),
+								CredentialID:        byteID,
+								CredentialPublicKey: byteCredentialPubKey,
+							},
+						},
+					},
+				},
+				Raw: CredentialCreationResponse{
+					PublicKeyCredential: PublicKeyCredential{
+						Credential: Credential{
+							Type: string(PublicKeyCredentialType),
+							ID:   "bm90LXRoZS1hdHRlc3RlZC1jcmVkZW50aWFsLWlkISE",
+						},
+						RawID: []byte("not-the-attested-credential-id!!"),
+					},
+					AttestationResponse: AuthenticatorAttestationResponse{
+						AuthenticatorResponse: AuthenticatorResponse{
+							ClientDataJSON: byteClientDataJSON,
+						},
+						AttestationObject: byteAttObject,
+					},
+				},
+			},
+			args: args{
+				storedChallenge:    URLEncodedBase64(byteChallenge),
+				verifyUser:         false,
+				relyingPartyID:     `webauthn.io`,
+				relyingPartyOrigin: []string{`https://webauthn.io`},
+				credParams:         []CredentialParameter{{Type: "public-key", Algorithm: webauthncose.AlgES256}},
+			},
+			expected: []byte{0xa, 0xaf, 0x43, 0xda, 0x7e, 0xd3, 0x94, 0x98, 0x9b, 0xbc, 0x47, 0xcb, 0x0, 0x72, 0x6b, 0xbc, 0xf3, 0xa2, 0x4a, 0x49, 0x5f, 0x84, 0x4f, 0x45, 0x97, 0x91, 0x6a, 0x2d, 0xff, 0x47, 0xbc, 0xad},
+			err:      "Error validating the attested credential id",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -355,6 +412,31 @@ func TestCredentialCreationResponse_Parse_Errors(t *testing.T) {
 			},
 			err: "Parse error for Registration",
 		},
+		{
+			name: "ShouldFailRawIDMismatch",
+			ccr: CredentialCreationResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "dGVzdA",
+						Type: string(PublicKeyCredentialType),
+					},
+					RawID: URLEncodedBase64("not test"),
+				},
+			},
+			err: "Parse error for Registration",
+		},
+		{
+			name: "ShouldFailRawIDMissing",
+			ccr: CredentialCreationResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "dGVzdA",
+						Type: string(PublicKeyCredentialType),
+					},
+				},
+			},
+			err: "Parse error for Registration",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -364,6 +446,29 @@ func TestCredentialCreationResponse_Parse_Errors(t *testing.T) {
 			assert.EqualError(t, err, tc.err)
 		})
 	}
+}
+
+func TestCredentialCreationResponse_Parse_RawIDMismatchIsDistinguishable(t *testing.T) {
+	ccr := CredentialCreationResponse{
+		PublicKeyCredential: PublicKeyCredential{
+			Credential: Credential{
+				ID:   "dGVzdA",
+				Type: string(PublicKeyCredentialType),
+			},
+			RawID: URLEncodedBase64("not test"),
+		},
+	}
+
+	result, err := ccr.Parse()
+	assert.Nil(t, result)
+
+	// The mismatch is structural, so it is reported before the attestation response is parsed. Without the check the
+	// response is rejected for the unrelated reason that it carries no attestation object at all.
+	var e *Error
+
+	require.ErrorAs(t, err, &e)
+	assert.Equal(t, "Parse error for Registration", e.Details)
+	assert.Equal(t, "ID does not match rawId", e.DevInfo)
 }
 
 func TestGetAppID(t *testing.T) {
