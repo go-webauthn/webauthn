@@ -66,7 +66,8 @@ type RSAPublicKeyData struct {
 type OKPPublicKeyData struct {
 	PublicKeyData
 
-	Curve int64
+	// The curve the key is on. §5.8.5 requires a key with algorithm -8 (EdDSA) to specify 6 (Ed25519) here.
+	Curve int64 `cbor:"-1,keyasint,omitempty" json:"crv"`
 
 	// A byte string that holds the x coordinate of the key.
 	XCoord []byte `cbor:"-2,keyasint,omitempty" json:"x"`
@@ -371,66 +372,57 @@ func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) hash.Hash {
 	return d.hash.New()
 }
 
-var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
-	name   string
-	hash   crypto.Hash
-	sigAlg x509.SignatureAlgorithm
-}{
-	AlgRS1:     {"SHA1-RSA", crypto.SHA1, x509.SHA1WithRSA},
-	AlgRS256:   {"SHA256-RSA", crypto.SHA256, x509.SHA256WithRSA},
-	AlgRS384:   {"SHA384-RSA", crypto.SHA384, x509.SHA384WithRSA},
-	AlgRS512:   {"SHA512-RSA", crypto.SHA512, x509.SHA512WithRSA},
-	AlgPS256:   {"SHA256-RSAPSS", crypto.SHA256, x509.SHA256WithRSAPSS},
-	AlgPS384:   {"SHA384-RSAPSS", crypto.SHA384, x509.SHA384WithRSAPSS},
-	AlgPS512:   {"SHA512-RSAPSS", crypto.SHA512, x509.SHA512WithRSAPSS},
-	AlgES256:   {"ECDSA-SHA256", crypto.SHA256, x509.ECDSAWithSHA256},
-	AlgESP256:  {"ECDSA-SHA256-Prehashed", crypto.SHA256, x509.ECDSAWithSHA256},
-	AlgES384:   {"ECDSA-SHA384", crypto.SHA384, x509.ECDSAWithSHA384},
-	AlgESP384:  {"ECDSA-SHA384-Prehashed", crypto.SHA384, x509.ECDSAWithSHA384},
-	AlgES512:   {"ECDSA-SHA512", crypto.SHA512, x509.ECDSAWithSHA512},
-	AlgESP512:  {"ECDSA-SHA512-Prehashed", crypto.SHA512, x509.ECDSAWithSHA512},
-	AlgEdDSA:   {"EdDSA", crypto.SHA512, x509.PureEd25519},
-	AlgEd25519: {"Ed25519", crypto.SHA512, x509.PureEd25519},
+// coseAlgorithmCurve describes the elliptic curve a credential public key using a particular algorithm names.
+type coseAlgorithmCurve struct {
+	// curve is the curve §5.8.5 binds to the algorithm.
+	curve COSEEllipticCurve
+
+	// required records whether the specification requires the crv parameter to be present at all.
+	required bool
 }
 
-type Error struct {
-	// Short name for the type of error that has occurred.
-	Type string `json:"type"`
+// validateKeyCurve checks the curve a credential public key names against the one §5.8.5 binds to its algorithm. The
+// keyType names the COSE key type in the error so a failure identifies which of the two key structures produced it.
+//
+// An algorithm this map does not cover is not rejected here: the callers reject an algorithm they cannot verify with
+// on their own, and an algorithm which names no curve has nothing to check.
+//
+// Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn-3/#sctn-alg-identifier)
+func validateKeyCurve(keyType string, algorithm, curve int64) error {
+	alg := COSEAlgorithmIdentifier(algorithm)
 
-	// Additional details about the error.
-	Details string `json:"error"`
-
-	// Information to help debug the error.
-	DevInfo string `json:"debug"`
-}
-
-var (
-	ErrUnsupportedKey = &Error{
-		Type:    "invalid_key_type",
-		Details: "Unsupported Public Key Type",
+	expected, ok := coseAlgorithmCurves[alg]
+	if !ok {
+		return nil
 	}
-	ErrUnsupportedAlgorithm = &Error{
-		Type:    "unsupported_key_algorithm",
-		Details: "Unsupported public key algorithm",
+
+	crv := COSEEllipticCurve(curve)
+
+	if crv == expected.curve {
+		return nil
 	}
-	ErrSigNotProvidedOrInvalid = &Error{
-		Type:    "signature_not_provided_or_invalid",
-		Details: "Signature invalid or not provided",
+
+	// The zero value is the reserved curve identifier, which is how an absent crv parameter decodes.
+	if crv == EllipticCurveReserved && !expected.required {
+		return nil
 	}
-)
 
-func (err *Error) Error() string {
-	return err.Details
-}
+	specified := "curve " + crv.String()
 
-func (passedError *Error) WithDetails(details string) *Error {
-	err := *passedError
-	err.Details = details
+	if crv == EllipticCurveReserved {
+		specified = "no curve"
+	}
 
-	return &err
+	return ErrUnsupportedKey.WithDetails(fmt.Sprintf("%s key with algorithm %s must specify curve %s but it specified %s", keyType, alg, expected.curve, specified))
 }
 
 func validateOKPPublicKey(k *OKPPublicKeyData) error {
+	// The curve is checked before the key material so that both key structures report what the key declares about
+	// itself before what it carries.
+	if err := validateKeyCurve("OKP", k.Algorithm, k.Curve); err != nil {
+		return err
+	}
+
 	if len(k.XCoord) != ed25519.PublicKeySize {
 		return ErrUnsupportedKey.WithDetails(fmt.Sprintf("OKP key x coordinate has invalid length %d, expected %d", len(k.XCoord), ed25519.PublicKeySize))
 	}
@@ -442,6 +434,10 @@ func validateEC2PublicKey(k *EC2PublicKeyData) error {
 	curve := ec2AlgCurve(k.Algorithm)
 	if curve == nil {
 		return ErrUnsupportedAlgorithm.WithDetails("Unsupported EC2 algorithm")
+	}
+
+	if err := validateKeyCurve("EC2", k.Algorithm, k.Curve); err != nil {
+		return err
 	}
 
 	byteLen := (curve.Params().BitSize + 7) / 8

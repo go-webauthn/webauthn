@@ -338,7 +338,8 @@ func TestParsePublicKey(t *testing.T) {
 			"7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a224e35446169797479376f7a686c32463465744f4d763670706672504b41546f545170694856726d48686173222c226f726967696e223a2268747470733a2f2f6578616d706c652e6f7267222c2263726f73734f726967696e223a66616c73657d",
 			"bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b51900000000",
 			"4c873571377ac019f257d6bf07249f63ac2487483c51bc511ce0f0e3266c840cb07a09cdc445a2f963d8603a9f0f6cf9ce709d7fc6a96c7c51ea08d33776010c",
-			OKPPublicKeyData{PublicKeyData: PublicKeyData{_struct: false, KeyType: 1, Algorithm: -8}, Curve: 0, XCoord: []uint8{0x89, 0xf8, 0x1e, 0xba, 0x4a, 0x1f, 0x51, 0xc, 0xb2, 0x43, 0xff, 0x7f, 0xb9, 0xe9, 0xcf, 0x89, 0x9b, 0xf6, 0x27, 0xe4, 0x9c, 0xe1, 0xac, 0x3c, 0x3e, 0xae, 0x8a, 0xdb, 0x2a, 0x8d, 0x7d, 0x7b}},
+			// The vector's key carries crv 6 (Ed25519); the curve is decoded now that the member has a CBOR tag.
+			OKPPublicKeyData{PublicKeyData: PublicKeyData{_struct: false, KeyType: 1, Algorithm: -8}, Curve: 6, XCoord: []uint8{0x89, 0xf8, 0x1e, 0xba, 0x4a, 0x1f, 0x51, 0xc, 0xb2, 0x43, 0xff, 0x7f, 0xb9, 0xe9, 0xcf, 0x89, 0x9b, 0xf6, 0x27, 0xe4, 0x9c, 0xe1, 0xac, 0x3c, 0x3e, 0xae, 0x8a, 0xdb, 0x2a, 0x8d, 0x7d, 0x7b}},
 			tpm2.TPMECCNistP256,
 			false,
 			false,
@@ -470,8 +471,9 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		err   string
 	}{
 		{
+			// §5.8.5 requires a key with algorithm -8 (EdDSA) to specify 6 (Ed25519) as its crv.
 			"ShouldAcceptValidOKPKey",
-			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-2: []byte(okpPub)}),
+			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-1: int64(Ed25519), -2: []byte(okpPub)}),
 			"",
 		},
 		{
@@ -486,7 +488,7 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		},
 		{
 			"ShouldRejectOKPWithInvalidXCoordLength",
-			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-2: make([]byte, 16)}),
+			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-1: int64(Ed25519), -2: make([]byte, 16)}),
 			"OKP key x coordinate has invalid length 16, expected 32",
 		},
 		{
