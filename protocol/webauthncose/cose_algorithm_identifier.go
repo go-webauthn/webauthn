@@ -42,7 +42,10 @@ const (
 	// AlgPS512 RSASSA-PSS with SHA-512.
 	AlgPS512 COSEAlgorithmIdentifier = -39
 
-	// AlgES256K is ECDSA using secp256k1 curve and SHA-256.
+	// AlgES256K is ECDSA using secp256k1 curve and SHA-256. It is not requested by any of the credential parameter
+	// lists this library provides, so a Relying Party that wants it must ask for it explicitly. An attestation
+	// statement whose own algorithm is AlgES256K cannot convey an x5c chain, as certificates on this curve cannot
+	// be parsed.
 	AlgES256K COSEAlgorithmIdentifier = -47
 
 	// AlgMLDSA44 is ML-DSA with parameter set ML-DSA-44 (FIPS 204).
@@ -132,6 +135,7 @@ var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
 	AlgESP384:  {"ECDSA-SHA384-Prehashed", crypto.SHA384, x509.ECDSAWithSHA384},
 	AlgES512:   {"ECDSA-SHA512", crypto.SHA512, x509.ECDSAWithSHA512},
 	AlgESP512:  {"ECDSA-SHA512-Prehashed", crypto.SHA512, x509.ECDSAWithSHA512},
+	AlgES256K:  {"ECDSA-SHA256", crypto.SHA256, x509.ECDSAWithSHA256},
 	AlgEdDSA:   {"EdDSA", crypto.SHA512, x509.PureEd25519},
 	AlgEd25519: {"Ed25519", crypto.SHA512, x509.PureEd25519},
 }
@@ -141,8 +145,10 @@ var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
 //
 // The specification requires the crv parameter for ES256, ES384, ES512 and EdDSA. It states no requirement for the
 // fully specified algorithms ESP256, ESP384, ESP512 and Ed25519, because those identifiers name their curve
-// themselves and leave nothing for the parameter to settle. A crv such a key does carry is still held to the curve
-// its algorithm names, as a key which contradicts itself is malformed however the requirement is written.
+// themselves and leave nothing for the parameter to settle. ES256K is treated the same way for the same reason: the
+// specification does not list it, and the identifier names secp256k1 on its own. A crv such a key does carry is
+// still held to the curve its algorithm names, as a key which contradicts itself is malformed however the
+// requirement is written.
 //
 // Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn-3/#sctn-alg-identifier)
 var coseAlgorithmCurves = map[COSEAlgorithmIdentifier]coseAlgorithmCurve{
@@ -154,4 +160,5 @@ var coseAlgorithmCurves = map[COSEAlgorithmIdentifier]coseAlgorithmCurve{
 	AlgESP384:  {curve: P384},
 	AlgESP512:  {curve: P521},
 	AlgEd25519: {curve: Ed25519},
+	AlgES256K:  {curve: Secp256k1},
 }
