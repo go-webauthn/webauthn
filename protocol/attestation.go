@@ -78,12 +78,69 @@ type AttestationObject struct {
 	// The attestation statement data sent back if attestation is requested.
 	AttStatement map[string]any `json:"attStmt,omitempty"`
 
+	// SubStatements holds the sub-statements of a compound attestation statement, which §8.9 encodes as an array
+	// rather than as the map every other format uses for its attestation statement. It is populated by
+	// [AttestationObject.UnmarshalCBOR] when, and only when, Format is "compound", and for such an attestation
+	// AttStatement is empty because the wire format carries no map to put there.
+	//
+	// Specification: §8.9. Compound Attestation Statement Format (https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation)
+	SubStatements []NonCompoundAttestationObject `json:"-"`
+
 	// Type is the attestation type as conveyed by the authenticator, one of the values defined by
 	// [metadata.AuthenticatorAttestationType] (i.e. "basic_full", "basic_surrogate", "attca", "anonca", "none").
 	// It is populated as a side-effect of a successful [AttestationObject.VerifyAttestation]; before that the field
 	// is empty. This field is excluded from serialization because the attestation object wire format does not carry
 	// this value; it is derived by the format-specific verifier.
 	Type string `json:"-"`
+}
+
+// attestationObjectEncoded is the wire form of an [AttestationObject], with the attestation statement left undecoded
+// so it can be decoded as the map every attestation statement format uses or as the array §8.9 defines for the
+// compound format. Which of the two applies is determined by the fmt member of the same map, so the statement cannot
+// be decoded until the rest of the object has been.
+type attestationObjectEncoded struct {
+	RawAuthData  []byte                  `json:"authData"`
+	Format       string                  `json:"fmt"`
+	AttStatement webauthncbor.RawMessage `json:"attStmt,omitempty"`
+}
+
+// UnmarshalCBOR implements the CBOR unmarshalling of an attestation object, decoding the attestation statement
+// according to the attestation statement format the object declares.
+//
+// Every format defined by §8 other than compound encodes its attestation statement as a map, which is decoded into
+// [AttestationObject.AttStatement]. The compound format encodes an array of sub-statements instead, which is decoded
+// into [AttestationObject.SubStatements]. A single field cannot hold both, and the shape is not self-describing to
+// the decoder, hence the two passes.
+//
+// [AttestationObject.AuthData] is not populated here; it is unmarshalled from [AttestationObject.RawAuthData] by the
+// response parser, which is also where the attested credential data is required to be present.
+//
+// The receiver is zeroed first so that decoding into one which already holds an attestation object replaces it
+// rather than adding to it. Only one of the two statement members is written by any given object, the statement is
+// not written at all by an object which carries none, and [AttestationObject.AuthData] and [AttestationObject.Type]
+// are populated after decoding rather than during it, so without this every one of them could outlive the object it
+// describes. Decoding a map into a non-nil map merges into it, so a statement decoded over another would otherwise
+// inherit the members the new one does not carry.
+//
+// Specification: §8.9. Compound Attestation Statement Format (https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation)
+func (a *AttestationObject) UnmarshalCBOR(data []byte) (err error) {
+	var encoded attestationObjectEncoded
+
+	if err = webauthncbor.Unmarshal(data, &encoded); err != nil {
+		return err
+	}
+
+	*a = AttestationObject{RawAuthData: encoded.RawAuthData, Format: encoded.Format}
+
+	if len(encoded.AttStatement) == 0 {
+		return nil
+	}
+
+	if AttestationFormat(a.Format) == AttestationFormatCompound {
+		return webauthncbor.Unmarshal(encoded.AttStatement, &a.SubStatements)
+	}
+
+	return webauthncbor.Unmarshal(encoded.AttStatement, &a.AttStatement)
 }
 
 // NonCompoundAttestationObject is a subset of [AttestationObject] used within compound attestation statements. Each

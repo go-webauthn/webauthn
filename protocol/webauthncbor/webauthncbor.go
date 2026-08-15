@@ -2,7 +2,20 @@ package webauthncbor
 
 import cbor "github.com/fxamacker/cbor/v2"
 
-const nestedLevelsAllowed = 4
+// nestedLevelsAllowed bounds the depth of the CBOR structures this package will decode.
+//
+// CTAP2 limits its own message encodings to 4 levels of any combination of maps and arrays. The attestation object is a
+// WebAuthn structure rather than a CTAP message though, and the compound attestation statement format introduced by
+// WebAuthn Level 3 needs 5.
+//
+// Specification: §8.9. Compound Attestation Statement Format (https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation)
+const nestedLevelsAllowed = 5
+
+// RawMessage is a raw encoded CBOR value, which callers can use to defer the decoding of a member whose shape
+// depends on another member of the same structure. It is an alias so that a value of this type satisfies the
+// underlying library's own marshalling interfaces, and exists so that consumers of this package do not have to
+// import that library directly.
+type RawMessage = cbor.RawMessage
 
 // ctap2CBORDecMode is the cbor.DecMode following the CTAP2 canonical CBOR encoding form
 // (https://fidoalliance.org/specs/fido-v2.0-ps-20190130/fido-client-to-authenticator-protocol-v2.0-ps-20190130.html#message-encoding)

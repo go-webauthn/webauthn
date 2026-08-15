@@ -31,11 +31,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 
 		base := AttestationObject{
 			Format: string(AttestationFormatCompound),
-			AttStatement: map[string]any{
-				stmtAttStmt: []any{
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-				},
+			SubStatements: []NonCompoundAttestationObject{
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 			},
 			AuthData: AuthenticatorData{
 				AttData: AttestedCredentialData{
@@ -61,30 +59,23 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				err:      "Error occurred parsing AAGUID",
 			},
 			{
-				name: "ShouldRejectMissingAttStmt",
+				// An attStmt which is absent, or which is not an array of sub-statements, is rejected by
+				// [AttestationObject.UnmarshalCBOR] and reaches the handler as no sub-statements at all. See
+				// TestCompoundAttestation_SpecShapeRejectsMalformedAttStmt for the decoding side.
+				name: "ShouldRejectNoSubStatements",
 				mutate: func(a AttestationObject) AttestationObject {
-					delete(a.AttStatement, stmtAttStmt)
+					a.SubStatements = nil
 
 					return a
 				},
 				expected: ErrInvalidAttestation.Type,
-				err:      "Compound statement missing attStmt",
-			},
-			{
-				name: "ShouldRejectAttStmtNotArray",
-				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = "nope"
-
-					return a
-				},
-				expected: ErrInvalidAttestation.Type,
-				err:      "Compound statement attStmt isn't an array",
+				err:      "at least two",
 			},
 			{
 				name: "ShouldRejectAttStmtWithLessThanTwoItems",
 				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+					a.SubStatements = []NonCompoundAttestationObject{
+						{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 					}
 
 					return a
@@ -93,37 +84,26 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 				err:      "at least two",
 			},
 			{
-				name: "ShouldRejectAttStmtContainingNonObject",
-				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-						123,
-					}
-
-					return a
-				},
-				expected: ErrInvalidAttestation.Type,
-				err:      "isn't an object",
-			},
-			{
+				// A sub-statement whose fmt member is absent decodes to the empty string, which is indistinguishable
+				// from one which carries an empty fmt and is rejected the same way.
 				name: "ShouldRejectSubStatementMissingFmt",
 				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtAttStmt: map[string]any{}},
-						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+					a.SubStatements = []NonCompoundAttestationObject{
+						{AttStatement: map[string]any{}},
+						{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 					}
 
 					return a
 				},
 				expected: ErrInvalidAttestation.Type,
-				err:      "does not have a format",
+				err:      "empty format",
 			},
 			{
 				name: "ShouldRejectSubStatementMissingAttStmt",
 				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtFmt: string(AttestationFormatPacked)},
-						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+					a.SubStatements = []NonCompoundAttestationObject{
+						{Format: string(AttestationFormatPacked)},
+						{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 					}
 
 					return a
@@ -134,9 +114,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			{
 				name: "ShouldRejectSubStatementWithCompoundFmt",
 				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtFmt: string(AttestationFormatCompound), stmtAttStmt: map[string]any{}},
-						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+					a.SubStatements = []NonCompoundAttestationObject{
+						{Format: string(AttestationFormatCompound), AttStatement: map[string]any{}},
+						{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 					}
 
 					return a
@@ -147,9 +127,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			{
 				name: "ShouldRejectSubStatementWithEmptyFmt",
 				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtFmt: "", stmtAttStmt: map[string]any{}},
-						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+					a.SubStatements = []NonCompoundAttestationObject{
+						{Format: "", AttStatement: map[string]any{}},
+						{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 					}
 
 					return a
@@ -160,9 +140,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			{
 				name: "ShouldRejectUnsupportedSubStatementFmt",
 				mutate: func(a AttestationObject) AttestationObject {
-					a.AttStatement[stmtAttStmt] = []any{
-						map[string]any{stmtFmt: fmtUnregistered, stmtAttStmt: map[string]any{}},
-						map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
+					a.SubStatements = []NonCompoundAttestationObject{
+						{Format: fmtUnregistered, AttStatement: map[string]any{}},
+						{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 					}
 
 					return a
@@ -238,16 +218,14 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			Format:      string(AttestationFormatCompound),
 			RawAuthData: []byte{0xAA, 0xBB},
 			AuthData:    auth,
-			AttStatement: map[string]any{
-				stmtAttStmt: []any{
-					map[string]any{
-						stmtFmt:     string(AttestationFormatPacked),
-						stmtAttStmt: map[string]any{"k1": "v1"},
-					},
-					map[string]any{
-						stmtFmt:     string(AttestationFormatApple),
-						stmtAttStmt: map[string]any{"k2": "v2"},
-					},
+			SubStatements: []NonCompoundAttestationObject{
+				{
+					Format:       string(AttestationFormatPacked),
+					AttStatement: map[string]any{"k1": "v1"},
+				},
+				{
+					Format:       string(AttestationFormatApple),
+					AttStatement: map[string]any{"k2": "v2"},
 				},
 			},
 		}
@@ -298,11 +276,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			AuthData: AuthenticatorData{
 				AttData: AttestedCredentialData{AAGUID: make([]byte, 0)},
 			},
-			AttStatement: map[string]any{
-				stmtAttStmt: []any{
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-					map[string]any{stmtFmt: string(AttestationFormatApple), stmtAttStmt: map[string]any{}},
-				},
+			SubStatements: []NonCompoundAttestationObject{
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
+				{Format: string(AttestationFormatApple), AttStatement: map[string]any{}},
 			},
 		}
 
@@ -332,11 +308,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			AuthData: AuthenticatorData{
 				AttData: AttestedCredentialData{AAGUID: make([]byte, 0)},
 			},
-			AttStatement: map[string]any{
-				stmtAttStmt: []any{
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-				},
+			SubStatements: []NonCompoundAttestationObject{
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 			},
 		}
 
@@ -372,11 +346,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 					AAGUID: u[:],
 				},
 			},
-			AttStatement: map[string]any{
-				stmtAttStmt: []any{
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-				},
+			SubStatements: []NonCompoundAttestationObject{
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 			},
 		}
 
@@ -409,11 +381,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 					AAGUID: make([]byte, 0),
 				},
 			},
-			AttStatement: map[string]any{
-				stmtAttStmt: []any{
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-				},
+			SubStatements: []NonCompoundAttestationObject{
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 			},
 		}
 
@@ -439,11 +409,9 @@ func TestAttestationFormatValidationHandlerCompound(t *testing.T) {
 			AuthData: AuthenticatorData{
 				AttData: AttestedCredentialData{AAGUID: make([]byte, 0)},
 			},
-			AttStatement: map[string]any{
-				stmtAttStmt: []any{
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-					map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-				},
+			SubStatements: []NonCompoundAttestationObject{
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
+				{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
 			},
 		}
 
@@ -655,9 +623,9 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 				}
 
 				att := compoundScopeTestAttestation(nil)
-				att.AttStatement[stmtAttStmt] = []any{
-					map[string]any{stmtFmt: fmtUnregistered, stmtAttStmt: map[string]any{}},
-					map[string]any{stmtFmt: string(AttestationFormatApple), stmtAttStmt: map[string]any{}},
+				att.SubStatements = []NonCompoundAttestationObject{
+					{Format: fmtUnregistered, AttStatement: map[string]any{}},
+					{Format: string(AttestationFormatApple), AttStatement: map[string]any{}},
 				}
 
 				_, _, err := attestationFormatValidationHandlerCompound(att, []byte("hash"), nil, tc.policy, SignaturePolicy{})
@@ -722,11 +690,9 @@ func compoundScopeTestAttestation(aaguid []byte) AttestationObject {
 		AuthData: AuthenticatorData{
 			AttData: AttestedCredentialData{AAGUID: aaguid},
 		},
-		AttStatement: map[string]any{
-			stmtAttStmt: []any{
-				map[string]any{stmtFmt: string(AttestationFormatPacked), stmtAttStmt: map[string]any{}},
-				map[string]any{stmtFmt: string(AttestationFormatApple), stmtAttStmt: map[string]any{}},
-			},
+		SubStatements: []NonCompoundAttestationObject{
+			{Format: string(AttestationFormatPacked), AttStatement: map[string]any{}},
+			{Format: string(AttestationFormatApple), AttStatement: map[string]any{}},
 		},
 	}
 }
