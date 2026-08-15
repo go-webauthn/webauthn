@@ -90,6 +90,46 @@ func TestNewRelatedOrigins(t *testing.T) {
 			expected: []string{"http://example.com"},
 		},
 		{
+			name:     "ShouldNormalizeAwayAnEmptyPort",
+			have:     []string{"https://example.com:"},
+			expected: []string{"https://example.com"},
+		},
+		{
+			name:     "ShouldNormalizeAwayAnEmptyPortOfAnIPv6Literal",
+			have:     []string{"https://[::1]:"},
+			expected: []string{"https://[::1]"},
+		},
+		{
+			name:     "ShouldDeduplicateAnEmptyPortAgainstNoPort",
+			have:     []string{"https://example.com", "https://example.com:"},
+			expected: []string{"https://example.com"},
+		},
+		{
+			name: "ShouldRejectAPortAboveTheMaximum",
+			have: []string{"https://example.com:65536"},
+			err:  "error validating related origin 'https://example.com:65536': the port must be no greater than 65535 but it is '65536'",
+		},
+		{
+			name: "ShouldRejectAPortWhichOverflows",
+			have: []string{"https://example.com:999999999999999999999"},
+			err:  "error validating related origin 'https://example.com:999999999999999999999': the port must be no greater than 65535 but it is '999999999999999999999'",
+		},
+		{
+			name: "ShouldRejectAPortAboveTheMaximumOfAnIPv6Literal",
+			have: []string{"https://[::1]:70000"},
+			err:  "error validating related origin 'https://[::1]:70000': the port must be no greater than 65535 but it is '70000'",
+		},
+		{
+			name:     "ShouldAcceptTheMaximumPort",
+			have:     []string{"https://example.com:65535"},
+			expected: []string{"https://example.com:65535"},
+		},
+		{
+			name: "ShouldRejectAPortWithoutAHost",
+			have: []string{"https://:8443"},
+			err:  "error validating related origin 'https://:8443': the origin must have a host component",
+		},
+		{
 			name:     "ShouldPreserveTheBracketsOfAnIPv6Literal",
 			have:     []string{"https://[::1]:443", "https://[::1]:8443"},
 			expected: []string{"https://[::1]", "https://[::1]:8443"},

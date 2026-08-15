@@ -36,6 +36,8 @@ const (
 	mimeApplicationJSON = "application/json"
 
 	methodsRelatedOrigins = http.MethodGet + ", " + http.MethodHead
+
+	maximumPort = 65535
 )
 
 // RelatedOriginLabeler derives the registrable domain label of an origin, which is the unit a client counts against
@@ -297,11 +299,22 @@ func relatedOriginNormalize(origin string) (normalized string, err error) {
 		return "", fmt.Errorf("the scheme must be either http or https but it is '%s'", uri.Scheme)
 	}
 
-	if uri.Host == "" {
+	if uri.Hostname() == "" {
 		return "", errors.New("the origin must have a host component")
 	}
 
 	host := strings.ToLower(uri.Host)
+
+	if port := uri.Port(); port == "" {
+		// A host may carry a colon with no port after it, which is not part of the serialization of an origin.
+		host = strings.TrimSuffix(host, ":")
+	} else {
+		var number int
+
+		if number, err = strconv.Atoi(port); err != nil || number > maximumPort {
+			return "", fmt.Errorf("the port must be no greater than %d but it is '%s'", maximumPort, port)
+		}
+	}
 
 	// The default port of the scheme is not part of the serialization of an origin. Trimming the suffix rather than
 	// rebuilding from the hostname preserves the brackets of an IPv6 address literal.
