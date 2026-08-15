@@ -96,7 +96,7 @@ func TestWithRegistrationRelyingPartyID(t *testing.T) {
 			w, err := New(tc.have)
 			assert.NoError(t, err)
 
-			user := &defaultUser{}
+			user := &defaultUser{id: []byte(testUserID)}
 
 			creation, _, err := w.BeginRegistration(user, tc.opts...)
 			if tc.err != "" {
@@ -843,6 +843,213 @@ func TestCreateCredential_RejectsBackupStateWithoutBackupEligibility(t *testing.
 
 	assert.Nil(t, credential)
 	assert.EqualError(t, err, "Backup State Flag is true but Backup Eligible flag is false which is invalid")
+}
+
+func TestBeginRegistrationUserIDLength(t *testing.T) {
+	testCases := []struct {
+		name string
+		id   []byte
+		err  string
+	}{
+		{
+			name: "ShouldRejectEmpty",
+			id:   nil,
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 0",
+		},
+		{
+			name: "ShouldAcceptMinimum",
+			id:   bytes.Repeat([]byte("a"), 1),
+		},
+		{
+			name: "ShouldAcceptMaximum",
+			id:   bytes.Repeat([]byte("a"), 64),
+		},
+		{
+			name: "ShouldRejectAboveMaximum",
+			id:   bytes.Repeat([]byte("a"), 65),
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 65",
+		},
+	}
+
+	w, err := New(&Config{
+		RPID:          "example.com",
+		RPDisplayName: "Test Display Name",
+		RPOrigins:     []string{"https://example.com"},
+	})
+	require.NoError(t, err)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			creation, session, err := w.BeginRegistration(&defaultUser{id: tc.id})
+
+			if tc.err != "" {
+				assert.Nil(t, creation)
+				assert.Nil(t, session)
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+				require.NotNil(t, creation)
+			}
+		})
+	}
+}
+
+func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
+	testCases := []struct {
+		name     string
+		hints    []protocol.PublicKeyCredentialHints
+		selected protocol.AuthenticatorAttachment
+		expected protocol.AuthenticatorAttachment
+	}{
+		{
+			name:     "ShouldSetCrossPlatformForSecurityKey",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintSecurityKey},
+			expected: protocol.CrossPlatform,
+		},
+		{
+			name:     "ShouldSetPlatformForClientDevice",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintClientDevice},
+			expected: protocol.Platform,
+		},
+		{
+			name:     "ShouldSetCrossPlatformForHybrid",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintHybrid},
+			expected: protocol.CrossPlatform,
+		},
+		{
+			name:     "ShouldUseTheFirstHint",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintClientDevice, protocol.PublicKeyCredentialHintSecurityKey},
+			expected: protocol.Platform,
+		},
+		{
+			name:     "ShouldNotOverrideAnExplicitAttachment",
+			hints:    []protocol.PublicKeyCredentialHints{protocol.PublicKeyCredentialHintSecurityKey},
+			selected: protocol.Platform,
+			expected: protocol.Platform,
+		},
+		{
+			name:     "ShouldNotSetAnAttachmentWithoutHints",
+			expected: "",
+		},
+		{
+			name:     "ShouldNotSetAnAttachmentForAnUnknownHint",
+			hints:    []protocol.PublicKeyCredentialHints{"future-hint"},
+			expected: "",
+		},
+		{
+			name:     "ShouldUseTheFirstRecognisedHint",
+			hints:    []protocol.PublicKeyCredentialHints{"future-hint", protocol.PublicKeyCredentialHintSecurityKey},
+			expected: protocol.CrossPlatform,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:          "example.com",
+				RPDisplayName: "Test Display Name",
+				RPOrigins:     []string{"https://example.com"},
+				AuthenticatorSelection: protocol.AuthenticatorSelection{
+					AuthenticatorAttachment: tc.selected,
+				},
+			})
+			require.NoError(t, err)
+
+			var opts []RegistrationOption
+
+			if len(tc.hints) != 0 {
+				opts = append(opts, WithPublicKeyCredentialHints(tc.hints))
+			}
+
+			creation, _, err := w.BeginRegistration(&defaultUser{id: []byte(testUserID)}, opts...)
+			require.NoError(t, err)
+			require.NotNil(t, creation)
+
+			assert.Equal(t, tc.expected, creation.Response.AuthenticatorSelection.AuthenticatorAttachment)
+			assert.Equal(t, tc.hints, creation.Response.Hints)
+		})
+	}
+}
+
+func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
+	withUserHandle := func(id any) RegistrationOption {
+		return func(cco *protocol.PublicKeyCredentialCreationOptions) error {
+			cco.User.ID = id
+
+			return nil
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		encodeAsString bool
+		opts           []RegistrationOption
+		entity         any
+		expected       []byte
+		err            string
+	}{
+		{
+			name: "ShouldRejectAnEmptyHandleSetByAnOption",
+			opts: []RegistrationOption{withUserHandle(protocol.URLEncodedBase64(nil))},
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 0",
+		},
+		{
+			name: "ShouldRejectAnOverlengthHandleSetByAnOption",
+			opts: []RegistrationOption{withUserHandle(protocol.URLEncodedBase64(bytes.Repeat([]byte("a"), 65)))},
+			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 65",
+		},
+		{
+			name:     "ShouldSendAHandleSetByAnOptionButRecordTheUsersInTheSession",
+			opts:     []RegistrationOption{withUserHandle(protocol.URLEncodedBase64("replacement"))},
+			entity:   protocol.URLEncodedBase64("replacement"),
+			expected: []byte(testUserID),
+		},
+		{
+			name:           "ShouldSendAStringHandleSetByAnOptionButRecordTheUsersInTheSession",
+			encodeAsString: true,
+			opts:           []RegistrationOption{withUserHandle("replacement")},
+			entity:         "replacement",
+			expected:       []byte(testUserID),
+		},
+		{
+			name: "ShouldRejectAHandleOfAnUnusableType",
+			opts: []RegistrationOption{withUserHandle(42)},
+			err:  "error generating credential creation: the user id must be a string, []byte, or protocol.URLEncodedBase64 but it has a type of int",
+		},
+		{
+			name:     "ShouldRecordTheUsersHandleWithoutAnOption",
+			entity:   protocol.URLEncodedBase64(testUserID),
+			expected: []byte(testUserID),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:                 "example.com",
+				RPDisplayName:        "Test Display Name",
+				RPOrigins:            []string{"https://example.com"},
+				EncodeUserIDAsString: tc.encodeAsString,
+			})
+			require.NoError(t, err)
+
+			creation, session, err := w.BeginRegistration(&defaultUser{id: []byte(testUserID)}, tc.opts...)
+
+			if tc.err != "" {
+				assert.Nil(t, creation)
+				assert.Nil(t, session)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, creation)
+			require.NotNil(t, session)
+			assert.Equal(t, tc.entity, creation.Response.User.ID)
+			assert.Equal(t, tc.expected, session.UserID)
+		})
+	}
 }
 
 func TestFinishRegistration_Success(t *testing.T) {

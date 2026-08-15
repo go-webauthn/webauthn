@@ -64,6 +64,26 @@ func TestPublicKeyCredentialRequestOptions_GetAllowedCredentialIDs(t *testing.T)
 	}
 }
 
+func TestPublicKeyCredentialHints_AuthenticatorAttachment(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     PublicKeyCredentialHints
+		expected AuthenticatorAttachment
+	}{
+		{"ShouldMapSecurityKeyToCrossPlatform", PublicKeyCredentialHintSecurityKey, CrossPlatform},
+		{"ShouldMapHybridToCrossPlatform", PublicKeyCredentialHintHybrid, CrossPlatform},
+		{"ShouldMapClientDeviceToPlatform", PublicKeyCredentialHintClientDevice, Platform},
+		{"ShouldNotGuessForAnUnknownHint", "future-hint", ""},
+		{"ShouldNotGuessForAnEmptyHint", "", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.have.AuthenticatorAttachment())
+		})
+	}
+}
+
 func TestCredentialDescriptor_SignalUnknownCredential(t *testing.T) {
 	testCases := []struct {
 		name         string

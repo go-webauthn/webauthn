@@ -96,6 +96,14 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf("error generating credential creation: the challenge must be at least 16 bytes")
 	}
 
+	// The user handle is validated after the options have been applied because a [RegistrationOption] receives the
+	// whole creation options and may therefore replace the user entity id derived from the [User] above, and it is
+	// the id which is actually sent to the client that has to satisfy the bounds. The session records the id of the
+	// [User] itself rather than this one, as that is what [WebAuthn.CreateCredential] is given to compare it against.
+	if err = validateUserHandle(creation.Response.User.ID); err != nil {
+		return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
+	}
+
 	if creation.Response.Timeout == 0 {
 		switch creation.Response.AuthenticatorSelection.UserVerification {
 		case protocol.VerificationDiscouraged:
@@ -105,12 +113,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		}
 	}
 
-	// The FIDO AppID Exclusion Extension is only meaningful when the exclude list contains a credential registered
-	// through the legacy FIDO U2F JavaScript API. Pruning here rather than inside the option makes the result
-	// independent of the order the options were supplied in.
-	if !hasU2FCredential(creation.Response.CredentialExcludeList) {
-		creation.Response.Extensions.AppIDExclude = ""
-	}
+	normalizeCreationOptions(&creation.Response)
 
 	session = &SessionData{
 		Challenge:        creation.Response.Challenge.String(),
@@ -127,6 +130,33 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	return creation, session, nil
+}
+
+// normalizeCreationOptions applies the adjustments which depend on the creation options as a whole. It runs after
+// every [RegistrationOption] has been applied so the result does not depend on the order they were supplied in,
+// which is why neither adjustment lives inside the option that motivates it.
+func normalizeCreationOptions(response *protocol.PublicKeyCredentialCreationOptions) {
+	// The FIDO AppID Exclusion Extension is only meaningful when the exclude list contains a credential registered
+	// through the legacy FIDO U2F JavaScript API.
+	if !hasU2FCredential(response.CredentialExcludeList) {
+		response.Extensions.AppIDExclude = ""
+	}
+
+	// For compatibility with user agents which predate hints, the attachment implied by the most preferred hint which
+	// implies one is set when the Relying Party did not select an attachment itself; see
+	// [protocol.PublicKeyCredentialHints.AuthenticatorAttachment]. The hints are scanned in order rather than only the
+	// first being consulted because a Relying Party is expected to send a more specific hint ahead of less specific
+	// ones, and the more specific hint may be one this library does not model. The attachment is left unset when no
+	// hint implies one.
+	if response.AuthenticatorSelection.AuthenticatorAttachment == "" {
+		for _, hint := range response.Hints {
+			if attachment := hint.AuthenticatorAttachment(); attachment != "" {
+				response.AuthenticatorSelection.AuthenticatorAttachment = attachment
+
+				break
+			}
+		}
+	}
 }
 
 // FinishRegistration takes the response from the authenticator and client and verify the credential against the user's
