@@ -37,6 +37,9 @@ func TestParsePublicKeyCurveBinding(t *testing.T) {
 	p384Pub := p384.PublicKey().Bytes()
 	p384X, p384Y := p384Pub[1:49], p384Pub[49:97]
 
+	_, k256 := secp256k1TestKey(t)
+	k256X, k256Y := k256.XCoord, k256.YCoord
+
 	ec2 := func(alg COSEAlgorithmIdentifier, crv any, x, y []byte) map[int64]any {
 		key := map[int64]any{1: int64(EllipticKey), 3: int64(alg), -2: x, -3: y}
 
@@ -98,6 +101,20 @@ func TestParsePublicKeyCurveBinding(t *testing.T) {
 			name: "ShouldRejectESP256WithP384",
 			key:  ec2(AlgESP256, int64(P384), p256X, p256Y),
 			err:  "EC2 key with algorithm ESP256 must specify curve P-256 but it specified curve P-384",
+		},
+		{
+			name: "ShouldAcceptES256KWithSecp256k1",
+			key:  ec2(AlgES256K, int64(Secp256k1), k256X, k256Y),
+		},
+		{
+			// ES256K names secp256k1 in the algorithm itself, so §5.8.5 does not require the crv.
+			name: "ShouldAcceptES256KWithoutCurve",
+			key:  ec2(AlgES256K, nil, k256X, k256Y),
+		},
+		{
+			name: "ShouldRejectES256KWithP256",
+			key:  ec2(AlgES256K, int64(P256), k256X, k256Y),
+			err:  "EC2 key with algorithm ES256K must specify curve secp256k1 but it specified curve P-256",
 		},
 		{
 			name: "ShouldAcceptEdDSAWithEd25519",

@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/go-tpm/tpm2"
 
+	"github.com/go-webauthn/x/crypto/secp256k1"
 	"github.com/go-webauthn/x/encoding/asn1"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
@@ -92,12 +93,6 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 		return false, err
 	}
 
-	pubkey := &ecdsa.PublicKey{
-		Curve: ec2AlgCurve(k.Algorithm),
-		X:     big.NewInt(0).SetBytes(k.XCoord),
-		Y:     big.NewInt(0).SetBytes(k.YCoord),
-	}
-
 	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.Algorithm))
 	h.Write(data)
 
@@ -118,7 +113,21 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 		return false, ErrSigNotProvidedOrInvalid
 	}
 
-	return ecdsa.Verify(pubkey, h.Sum(nil), e.R, e.S), nil
+	digest := h.Sum(nil)
+
+	// secp256k1 is verified by a dedicated implementation, reached only once the signature has satisfied the same
+	// encoding requirements as every other curve.
+	if COSEAlgorithmIdentifier(k.Algorithm) == AlgES256K {
+		return verifySecp256k1(k, digest, e.R, e.S)
+	}
+
+	pubkey := &ecdsa.PublicKey{
+		Curve: ec2AlgCurve(k.Algorithm),
+		X:     big.NewInt(0).SetBytes(k.XCoord),
+		Y:     big.NewInt(0).SetBytes(k.YCoord),
+	}
+
+	return ecdsa.Verify(pubkey, digest, e.R, e.S), nil
 }
 
 // ToECDSA converts the EC2PublicKeyData to an ecdsa.PublicKey.
@@ -292,6 +301,15 @@ func DisplayPublicKey(cpk []byte) string {
 			return keyCannotDisplay
 		}
 
+		// The standard library has no object identifier for secp256k1 and refuses to marshal a key on it.
+		if COSEAlgorithmIdentifier(k.Algorithm) == AlgES256K {
+			if data, err = marshalSecp256k1PublicKey(&k); err != nil {
+				return keyCannotDisplay
+			}
+
+			break
+		}
+
 		eKey := &ecdsa.PublicKey{
 			Curve: curve,
 			X:     big.NewInt(0).SetBytes(k.XCoord),
@@ -346,6 +364,11 @@ func ec2AlgCurve(coseAlg int64) elliptic.Curve {
 		return elliptic.P384()
 	case AlgES256, AlgESP256:
 		return elliptic.P256()
+	case AlgES256K:
+		// The adaptor is returned so a secp256k1 key is measured and represented like any other, but neither the
+		// point check nor the signature verification goes through this interface: both use the specialized
+		// implementation instead. See [validateEC2PublicKey] and [verifySecp256k1].
+		return secp256k1.S256() //nolint:staticcheck // The adaptor supplies the curve parameters and nothing else.
 	default:
 		return nil
 	}
@@ -444,6 +467,17 @@ func validateEC2PublicKey(k *EC2PublicKeyData) error {
 
 	if len(k.XCoord) != byteLen || len(k.YCoord) != byteLen {
 		return ErrUnsupportedKey.WithDetails("EC2 key x or y coordinate has invalid length")
+	}
+
+	// A secp256k1 point is checked by the same parser which verification uses, so the two agree on what a valid
+	// key is. It additionally rejects a coordinate which is not reduced modulo the field prime, where the generic
+	// curve reduces it and reports the resulting point as valid.
+	if COSEAlgorithmIdentifier(k.Algorithm) == AlgES256K {
+		if _, err := secp256k1.ParsePubKey(secp256k1PointUncompressed(k)); err != nil {
+			return ErrUnsupportedKey.WithDetails("EC2 key point is not on curve")
+		}
+
+		return nil
 	}
 
 	x := new(big.Int).SetBytes(k.XCoord)
