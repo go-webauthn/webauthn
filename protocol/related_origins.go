@@ -281,17 +281,164 @@ func DefaultRelatedOriginLabeler(origin string) (label string, err error) {
 	return labels[len(labels)-2], nil
 }
 
+const (
+	// OpaqueOriginPrefixAndroidAPKKeyHash is the prefix of the opaque origin a client on Android conveys for a native
+	// application. The remainder is the base64url encoding, without padding, of the SHA-1 digest of the signing
+	// certificate of the APK.
+	OpaqueOriginPrefixAndroidAPKKeyHash = "android:apk-key-hash:"
+
+	// OpaqueOriginPrefixAndroidAPKKeyHashSHA256 is the prefix of the opaque origin a client on Android conveys for a
+	// native application when the digest of the signing certificate of the APK is taken with SHA-256 rather than the
+	// SHA-1 of [OpaqueOriginPrefixAndroidAPKKeyHash].
+	OpaqueOriginPrefixAndroidAPKKeyHashSHA256 = "android:apk-key-hash-sha256:"
+
+	// OpaqueOriginPrefixAndroidAPKKeyID is the prefix of the opaque origin a client on Android conveys for a native
+	// application when it identifies the signing key of the APK by its id rather than by a digest of the signing
+	// certificate.
+	OpaqueOriginPrefixAndroidAPKKeyID = "android:apk-key-id:"
+
+	// OpaqueOriginPrefixIOSBundleID is the prefix of the opaque origin a client on iOS conveys for a native
+	// application. The remainder is the bundle identifier of the application.
+	OpaqueOriginPrefixIOSBundleID = "ios:bundle-id:"
+
+	// OpaqueOriginPrefixIOSBundleKey is the prefix of the opaque origin a client on iOS conveys for a native
+	// application when it identifies the application by its signing key rather than by the bundle identifier of
+	// [OpaqueOriginPrefixIOSBundleID].
+	OpaqueOriginPrefixIOSBundleKey = "ios:bundle-key:"
+
+	// OpaqueOriginPrefixChromeExtension is the prefix of the origin a Chromium based browser conveys for an extension.
+	// The remainder is the id of the extension.
+	OpaqueOriginPrefixChromeExtension = "chrome-extension://"
+
+	// OpaqueOriginPrefixMozExtension is the prefix of the origin Firefox conveys for an extension. The remainder is
+	// the id the browser assigned the extension for the profile it is installed in, which differs between
+	// installations of the same extension.
+	OpaqueOriginPrefixMozExtension = "moz-extension://"
+
+	// OpaqueOriginPrefixFile is the origin a browser conveys for a document loaded from the local file system. A file
+	// origin has no host to serialize, so this is a complete origin rather than a prefix and a client conveys it
+	// exactly as it is given here; see [IsKnownOpaqueOrigin].
+	OpaqueOriginPrefixFile = "file://"
+
+	// OpaqueOriginPrefixMSAppX is the prefix of the origin a client conveys for a Windows application package. The
+	// remainder is the package identity of the application.
+	OpaqueOriginPrefixMSAppX = "ms-appx://"
+)
+
+// opaqueOriginPrefixes is the set of prefixes [IsKnownOpaqueOrigin] accepts. The order is the order the prefixes are
+// rendered in when a caller lists them for a user, so the forms of one platform sit together.
+var opaqueOriginPrefixes = []string{
+	OpaqueOriginPrefixAndroidAPKKeyHash,
+	OpaqueOriginPrefixAndroidAPKKeyHashSHA256,
+	OpaqueOriginPrefixAndroidAPKKeyID,
+	OpaqueOriginPrefixIOSBundleID,
+	OpaqueOriginPrefixIOSBundleKey,
+	OpaqueOriginPrefixChromeExtension,
+	OpaqueOriginPrefixMozExtension,
+	OpaqueOriginPrefixFile,
+	OpaqueOriginPrefixMSAppX,
+}
+
+// opaqueOriginsComplete is the set of opaque origins which are complete as they are, i.e. those a client conveys with
+// nothing following the prefix because the origin has no host to serialize. They are the exception to the rule
+// [hasOpaqueOriginPrefix] otherwise applies, which is that a prefix on its own is a value no client ever conveys.
+var opaqueOriginsComplete = []string{
+	OpaqueOriginPrefixFile,
+}
+
+// OpaqueOriginPrefixes returns the prefixes of the opaque origins this library knows a client conveys, i.e. those
+// which [IsKnownOpaqueOrigin] accepts.
+func OpaqueOriginPrefixes() []string {
+	prefixes := make([]string, len(opaqueOriginPrefixes))
+
+	copy(prefixes, opaqueOriginPrefixes)
+
+	return prefixes
+}
+
 // IsOpaqueOrigin returns true when the origin is not one a [RelatedOrigins] document can express, i.e. anything which
 // is not an absolute http or https URL with a host component. An opaque origin is matched by simple string comparison
 // rather than by the origin equality semantics of [IsOriginInHaystack], and a client never resolves one through the
 // well-known resource, so a Relying Party which accepts an opaque origin such as 'android:apk-key-hash:...' declares
 // it separately from the origins it serves at [WellKnownPathWebAuthn].
 //
+// This says nothing about whether a client conveys the origin; see [IsKnownOpaqueOrigin] for that.
+//
 // Specification: §5.11. Related Origin Requests (https://www.w3.org/TR/webauthn-3/#sctn-related-origins)
 func IsOpaqueOrigin(origin string) bool {
 	_, err := relatedOriginNormalize(origin)
 
 	return err != nil
+}
+
+// IsKnownOpaqueOrigin returns true when the origin is opaque per [IsOpaqueOrigin] and additionally carries one of the
+// prefixes of [OpaqueOriginPrefixes] followed by at least one character, or is one of the few such prefixes which is a
+// complete origin in itself, i.e. [OpaqueOriginPrefixFile]. Those are the forms a client is known to convey for a
+// native application, a browser extension, or a document loaded from the local file system, which are the only opaque
+// origins a Relying Party can meaningfully accept: an opaque origin is matched by simple string comparison against a
+// value the Relying Party configured, so a value no client ever produces can only ever fail to match.
+//
+// The prefix is matched case-sensitively, as the whole value is, because a client conveys these origins in the form
+// given here and the origin as a whole is compared byte for byte.
+func IsKnownOpaqueOrigin(origin string) bool {
+	return hasOpaqueOriginPrefix(origin) && IsOpaqueOrigin(origin)
+}
+
+// hasOpaqueOriginPrefix reports whether the origin begins with one of [opaqueOriginPrefixes] and carries a value after
+// it, or is one of [opaqueOriginsComplete].
+//
+// A complete opaque origin is matched only as itself and never as a prefix, as the value a client conveys for it ends
+// where the prefix does; appending to it, i.e. 'file://localhost', produces a value no client conveys.
+func hasOpaqueOriginPrefix(origin string) bool {
+	if isOpaqueOriginComplete(origin) {
+		return true
+	}
+
+	for _, prefix := range opaqueOriginPrefixes {
+		if isOpaqueOriginComplete(prefix) {
+			continue
+		}
+
+		if len(origin) > len(prefix) && strings.HasPrefix(origin, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isOpaqueOriginWithoutAuthority reports whether the origin is a known opaque origin which has no authority component
+// for a URL parser to reduce to a scheme and host, i.e. one whose prefix is a scheme and a value rather than a scheme
+// and the '//' which introduces an authority, or one which is complete as it is because its authority is empty. Those
+// are the origins [FullyQualifiedOrigin] returns unaltered; the ones with an authority have a serialization it can
+// derive in the usual way.
+func isOpaqueOriginWithoutAuthority(origin string) bool {
+	if isOpaqueOriginComplete(origin) {
+		return true
+	}
+
+	for _, prefix := range opaqueOriginPrefixes {
+		if strings.HasSuffix(prefix, "//") {
+			continue
+		}
+
+		if len(origin) > len(prefix) && strings.HasPrefix(origin, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isOpaqueOriginComplete reports whether the origin is one of [opaqueOriginsComplete].
+func isOpaqueOriginComplete(origin string) bool {
+	for _, complete := range opaqueOriginsComplete {
+		if origin == complete {
+			return true
+		}
+	}
+
+	return false
 }
 
 // relatedOriginNormalize reduces an origin to the scheme and host which identify it, rejecting values which are not

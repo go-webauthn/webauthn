@@ -159,6 +159,28 @@ func TestVerifyCollectedClientData(t *testing.T) {
 			errInfo:         "Expected Values: [https://example.com android:apk-key-hash:9C4B4AEEF05536E730EC4B802E767F67], Received: android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
 		},
 		{
+			name:            "ShouldFailOpaqueOriginDifferingInCase",
+			origin:          "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			rpOrigins:       []string{"https://example.com"},
+			rpOpaqueOrigins: []string{"android:apk-key-hash:2JMJ7L5RSW0YVB-VLWAYKK-YBWK"},
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			errType:         "verification_error",
+			errDetails:      "Error validating origin",
+			errInfo:         "Expected Values: [https://example.com android:apk-key-hash:2JMJ7L5RSW0YVB-VLWAYKK-YBWK], Received: android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+		},
+		{
+			name:            "ShouldFailOpaqueOriginResemblingAURLDifferingInCase",
+			origin:          "https://example.com:99999",
+			rpOrigins:       []string{"https://example.com"},
+			rpOpaqueOrigins: []string{"https://Example.com:99999"},
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			errType:         "verification_error",
+			errDetails:      "Error validating origin",
+			errInfo:         "Expected Values: [https://example.com https://Example.com:99999], Received: https://example.com:99999",
+		},
+		{
 			name:            "ShouldFailOpaqueTopOriginImplicit",
 			origin:          "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
 			topOrigin:       "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
@@ -319,6 +341,16 @@ func TestFullyQualifiedOrigin(t *testing.T) {
 		{"ShouldParseWithQuery", "https://app.example.com/?abc=123", "https://app.example.com", ``},
 		{"ShouldParseWithFragment", "https://app.example.com/#abc", "https://app.example.com", ``},
 		{"ShouldSkipParsingAndroidNative", "android:apk-key-hash:7d1043473d55bfa90e8530d35801d4e381bc69f0", "android:apk-key-hash:7d1043473d55bfa90e8530d35801d4e381bc69f0", ""},
+		{"ShouldSkipParsingAndroidNativeSHA256", "android:apk-key-hash-sha256:7d1043473d55bfa90e8530d35801d4e381bc69f07d1043473d55bfa90e8530d3", "android:apk-key-hash-sha256:7d1043473d55bfa90e8530d35801d4e381bc69f07d1043473d55bfa90e8530d3", ""},
+		{"ShouldSkipParsingAndroidNativeKeyID", "android:apk-key-id:7d1043473d55bfa90e8530d35801d4e381bc69f0", "android:apk-key-id:7d1043473d55bfa90e8530d35801d4e381bc69f0", ""},
+		{"ShouldSkipParsingIOSNative", "ios:bundle-id:com.example.app", "ios:bundle-id:com.example.app", ""},
+		{"ShouldSkipParsingIOSNativeBundleKey", "ios:bundle-key:7d1043473d55bfa90e8530d35801d4e381bc69f0", "ios:bundle-key:7d1043473d55bfa90e8530d35801d4e381bc69f0", ""},
+		{"ShouldSkipParsingFile", "file://", "file://", ""},
+		{"ShouldParseChromeExtension", "chrome-extension://mbniclmhobmnbdlbpiphghaielnnpgdp", "chrome-extension://mbniclmhobmnbdlbpiphghaielnnpgdp", ""},
+		{"ShouldParseChromeExtensionWithPath", "chrome-extension://mbniclmhobmnbdlbpiphghaielnnpgdp/popup.html", "chrome-extension://mbniclmhobmnbdlbpiphghaielnnpgdp", ""},
+		{"ShouldParseMozExtension", "moz-extension://d56a5b99-51b6-4e83-ab23-796216191c9d", "moz-extension://d56a5b99-51b6-4e83-ab23-796216191c9d", ""},
+		{"ShouldParseMSAppX", "ms-appx://microsoft.windowscalculator_8wekyb3d8bbwe", "ms-appx://microsoft.windowscalculator_8wekyb3d8bbwe", ""},
+		{"ShouldFailToParseAnOpaquePrefixWithoutAValue", "ios:bundle-id:", "", `url 'ios:bundle-id:' does not have a host`},
 		{"ShouldFailToParseMissingScheme", "app.example.com/apath", "", `parse "app.example.com/apath": invalid URI for request`},
 		{"ShouldFailToParseBlankScheme", "://app.example.com/apath", "", `parse "://app.example.com/apath": missing protocol scheme`},
 		{"ShouldFailToParseMissingHost", "https:///apath", "", `url 'https:///apath' does not have a host`},
@@ -489,6 +521,70 @@ func TestIsOriginInHaystack(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expected, IsOriginInHaystack(tc.origin, tc.haystack))
+		})
+	}
+}
+
+func TestIsOpaqueOriginInHaystack(t *testing.T) {
+	testCases := []struct {
+		name     string
+		origin   string
+		haystack []string
+		expected bool
+	}{
+		{
+			"ShouldMatchAnExactValue",
+			"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			[]string{"ios:bundle-id:com.example.app", "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			true,
+		},
+		{
+			"ShouldNotMatchADifferentCaseValue",
+			"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			[]string{"android:apk-key-hash:2JMJ7L5RSW0YVB-VLWAYKK-YBWK"},
+			false,
+		},
+		{
+			"ShouldNotMatchADifferentCasePrefix",
+			"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			[]string{"ANDROID:APK-KEY-HASH:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			false,
+		},
+		{
+			"ShouldNotMatchAPrefixOfTheValue",
+			"ios:bundle-id:com.example.app.other",
+			[]string{"ios:bundle-id:com.example.app"},
+			false,
+		},
+		{
+			"ShouldNotMatchAnEmptyHaystack",
+			"ios:bundle-id:com.example.app",
+			nil,
+			false,
+		},
+		{
+			"ShouldNotFoldTheCaseOfAHostlessHTTPSValue",
+			"https://",
+			[]string{"HTTPS://"},
+			false,
+		},
+		{
+			"ShouldNotNormalizeThePortOfAnOutOfRangeHTTPSValue",
+			"https://example.com:99999",
+			[]string{"https://Example.com:99999"},
+			false,
+		},
+		{
+			"ShouldMatchAnOutOfRangeHTTPSValueExactly",
+			"https://example.com:99999",
+			[]string{"https://example.com:99999"},
+			true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsOpaqueOriginInHaystack(tc.origin, tc.haystack))
 		})
 	}
 }
