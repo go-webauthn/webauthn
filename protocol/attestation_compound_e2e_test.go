@@ -14,8 +14,8 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
-// TestCompoundAttestation_SpecShapeDecodes asserts that a compound attestation object encoded as §8.9 defines it;
-// where attStmt is an array of sub-statements rather than a map; survives CBOR decoding and exposes its
+// TestCompoundAttestation_SpecShapeDecodes asserts that a compound attestation object using the shape defined in §8.9,
+// where attStmt is an array of sub-statements rather than a map, survives CBOR decoding and exposes its
 // sub-statements.
 //
 // Specification: §8.9. Compound Attestation Statement Format (https://www.w3.org/TR/webauthn-3/#sctn-compound-attestation)

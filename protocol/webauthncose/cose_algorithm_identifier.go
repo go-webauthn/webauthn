@@ -44,7 +44,8 @@ const (
 
 	// AlgES256K is ECDSA using secp256k1 curve and SHA-256. It is not requested by any of the credential parameter
 	// lists this library provides, so a Relying Party that wants it must ask for it explicitly. An attestation
-	// statement conveying an x5c chain cannot be used with it, as certificates on this curve are unparsable.
+	// statement whose own algorithm is AlgES256K cannot convey an x5c chain, as certificates on this curve cannot
+	// be parsed.
 	AlgES256K COSEAlgorithmIdentifier = -47
 
 	// AlgMLDSA44 is ML-DSA with parameter set ML-DSA-44 (FIPS 204).
