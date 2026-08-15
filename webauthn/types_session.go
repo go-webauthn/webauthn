@@ -66,6 +66,7 @@ type sessionExtensions struct {
 type SessionData struct {
 	Challenge            string    `json:"challenge" msg:"c"`
 	RelyingPartyID       string    `json:"rpId,omitempty" msg:"r,omitempty"`
+	Origin               string    `json:"origin,omitempty" msg:"o,omitempty"`
 	UserID               []byte    `json:"user_id,omitempty" msg:"u,omitempty"`
 	AllowedCredentialIDs [][]byte  `json:"allowed_credentials,omitempty" msg:"allow,omitempty"`
 	Expires              time.Time `json:"expires" msg:"exp"`
@@ -89,4 +90,15 @@ func (s SessionData) GetRelyingPartyID(fallback string) string {
 	}
 
 	return s.RelyingPartyID
+}
+
+// GetOrigins returns the origins the collected client data of the ceremony response may declare. A ceremony begun with
+// [WithRegistrationOrigin] or [WithLoginOrigin] is bound to exactly one of them, in which case only that origin is
+// returned and a response collected at any other origin the Relying Party serves fails verification.
+func (s SessionData) GetOrigins(fallback []string) []string {
+	if len(s.Origin) == 0 {
+		return fallback
+	}
+
+	return []string{s.Origin}
 }

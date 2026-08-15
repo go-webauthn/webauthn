@@ -17,7 +17,7 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 6 bits */
+	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -40,13 +40,20 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 			zb0001Mask |= 0x1
+		case "o":
+			z.Origin, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Origin")
+				return
+			}
+			zb0001Mask |= 0x2
 		case "u":
 			z.UserID, err = dc.ReadBytes(z.UserID)
 			if err != nil {
 				err = msgp.WrapError(err, "UserID")
 				return
 			}
-			zb0001Mask |= 0x2
+			zb0001Mask |= 0x4
 		case "allow":
 			var zb0002 uint32
 			zb0002, err = dc.ReadArrayHeader()
@@ -66,7 +73,7 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
-			zb0001Mask |= 0x4
+			zb0001Mask |= 0x8
 		case "exp":
 			z.Expires, err = dc.ReadTime()
 			if err != nil {
@@ -83,7 +90,7 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.UserVerification = protocol.UserVerificationRequirement(zb0003)
 			}
-			zb0001Mask |= 0x8
+			zb0001Mask |= 0x10
 		case "exts":
 			err = (*sessionExtensions)(&z.Extensions).DecodeMsg(dc)
 			if err != nil {
@@ -109,7 +116,7 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
-			zb0001Mask |= 0x10
+			zb0001Mask |= 0x20
 		case "cmr":
 			{
 				var zb0005 string
@@ -120,7 +127,7 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Mediation = protocol.CredentialMediationRequirement(zb0005)
 			}
-			zb0001Mask |= 0x20
+			zb0001Mask |= 0x40
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -130,23 +137,26 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x3f {
+	if zb0001Mask != 0x7f {
 		if (zb0001Mask & 0x1) == 0 {
 			z.RelyingPartyID = ""
 		}
 		if (zb0001Mask & 0x2) == 0 {
-			z.UserID = nil
+			z.Origin = ""
 		}
 		if (zb0001Mask & 0x4) == 0 {
-			z.AllowedCredentialIDs = nil
+			z.UserID = nil
 		}
 		if (zb0001Mask & 0x8) == 0 {
-			z.UserVerification = ""
+			z.AllowedCredentialIDs = nil
 		}
 		if (zb0001Mask & 0x10) == 0 {
-			z.CredParams = nil
+			z.UserVerification = ""
 		}
 		if (zb0001Mask & 0x20) == 0 {
+			z.CredParams = nil
+		}
+		if (zb0001Mask & 0x40) == 0 {
 			z.Mediation = ""
 		}
 	}
@@ -156,32 +166,36 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 	// check for omitted fields
-	zb0001Len := uint32(9)
-	var zb0001Mask uint16 /* 9 bits */
+	zb0001Len := uint32(10)
+	var zb0001Mask uint16 /* 10 bits */
 	_ = zb0001Mask
 	if z.RelyingPartyID == "" {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.UserID == nil {
+	if z.Origin == "" {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.AllowedCredentialIDs == nil {
+	if z.UserID == nil {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
+	if z.AllowedCredentialIDs == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
 	if z.UserVerification == "" {
 		zb0001Len--
-		zb0001Mask |= 0x20
+		zb0001Mask |= 0x40
 	}
 	if z.CredParams == nil {
 		zb0001Len--
-		zb0001Mask |= 0x80
+		zb0001Mask |= 0x100
 	}
 	if z.Mediation == "" {
 		zb0001Len--
-		zb0001Mask |= 0x100
+		zb0001Mask |= 0x200
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -214,6 +228,18 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// write "o"
+			err = en.Append(0xa1, 0x6f)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.Origin)
+			if err != nil {
+				err = msgp.WrapError(err, "Origin")
+				return
+			}
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
 			// write "u"
 			err = en.Append(0xa1, 0x75)
 			if err != nil {
@@ -225,7 +251,7 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 				return
 			}
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not omitted
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
 			// write "allow"
 			err = en.Append(0xa5, 0x61, 0x6c, 0x6c, 0x6f, 0x77)
 			if err != nil {
@@ -254,7 +280,7 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "Expires")
 			return
 		}
-		if (zb0001Mask & 0x20) == 0 { // if not omitted
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
 			// write "uv"
 			err = en.Append(0xa2, 0x75, 0x76)
 			if err != nil {
@@ -276,7 +302,7 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "Extensions")
 			return
 		}
-		if (zb0001Mask & 0x80) == 0 { // if not omitted
+		if (zb0001Mask & 0x100) == 0 { // if not omitted
 			// write "params"
 			err = en.Append(0xa6, 0x70, 0x61, 0x72, 0x61, 0x6d, 0x73)
 			if err != nil {
@@ -295,7 +321,7 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 				}
 			}
 		}
-		if (zb0001Mask & 0x100) == 0 { // if not omitted
+		if (zb0001Mask & 0x200) == 0 { // if not omitted
 			// write "cmr"
 			err = en.Append(0xa3, 0x63, 0x6d, 0x72)
 			if err != nil {
@@ -315,32 +341,36 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// check for omitted fields
-	zb0001Len := uint32(9)
-	var zb0001Mask uint16 /* 9 bits */
+	zb0001Len := uint32(10)
+	var zb0001Mask uint16 /* 10 bits */
 	_ = zb0001Mask
 	if z.RelyingPartyID == "" {
 		zb0001Len--
 		zb0001Mask |= 0x2
 	}
-	if z.UserID == nil {
+	if z.Origin == "" {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if z.AllowedCredentialIDs == nil {
+	if z.UserID == nil {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
+	if z.AllowedCredentialIDs == nil {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
 	if z.UserVerification == "" {
 		zb0001Len--
-		zb0001Mask |= 0x20
+		zb0001Mask |= 0x40
 	}
 	if z.CredParams == nil {
 		zb0001Len--
-		zb0001Mask |= 0x80
+		zb0001Mask |= 0x100
 	}
 	if z.Mediation == "" {
 		zb0001Len--
-		zb0001Mask |= 0x100
+		zb0001Mask |= 0x200
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -356,11 +386,16 @@ func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendString(o, z.RelyingPartyID)
 		}
 		if (zb0001Mask & 0x4) == 0 { // if not omitted
+			// string "o"
+			o = append(o, 0xa1, 0x6f)
+			o = msgp.AppendString(o, z.Origin)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not omitted
 			// string "u"
 			o = append(o, 0xa1, 0x75)
 			o = msgp.AppendBytes(o, z.UserID)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not omitted
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
 			// string "allow"
 			o = append(o, 0xa5, 0x61, 0x6c, 0x6c, 0x6f, 0x77)
 			o = msgp.AppendArrayHeader(o, uint32(len(z.AllowedCredentialIDs)))
@@ -371,7 +406,7 @@ func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 		// string "exp"
 		o = append(o, 0xa3, 0x65, 0x78, 0x70)
 		o = msgp.AppendTime(o, z.Expires)
-		if (zb0001Mask & 0x20) == 0 { // if not omitted
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
 			// string "uv"
 			o = append(o, 0xa2, 0x75, 0x76)
 			o = msgp.AppendString(o, string(z.UserVerification))
@@ -383,7 +418,7 @@ func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, "Extensions")
 			return
 		}
-		if (zb0001Mask & 0x80) == 0 { // if not omitted
+		if (zb0001Mask & 0x100) == 0 { // if not omitted
 			// string "params"
 			o = append(o, 0xa6, 0x70, 0x61, 0x72, 0x61, 0x6d, 0x73)
 			o = msgp.AppendArrayHeader(o, uint32(len(z.CredParams)))
@@ -395,7 +430,7 @@ func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 				}
 			}
 		}
-		if (zb0001Mask & 0x100) == 0 { // if not omitted
+		if (zb0001Mask & 0x200) == 0 { // if not omitted
 			// string "cmr"
 			o = append(o, 0xa3, 0x63, 0x6d, 0x72)
 			o = msgp.AppendString(o, string(z.Mediation))
@@ -414,7 +449,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 6 bits */
+	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -437,13 +472,20 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			zb0001Mask |= 0x1
+		case "o":
+			z.Origin, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Origin")
+				return
+			}
+			zb0001Mask |= 0x2
 		case "u":
 			z.UserID, bts, err = msgp.ReadBytesBytes(bts, z.UserID)
 			if err != nil {
 				err = msgp.WrapError(err, "UserID")
 				return
 			}
-			zb0001Mask |= 0x2
+			zb0001Mask |= 0x4
 		case "allow":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -463,7 +505,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
-			zb0001Mask |= 0x4
+			zb0001Mask |= 0x8
 		case "exp":
 			z.Expires, bts, err = msgp.ReadTimeBytes(bts)
 			if err != nil {
@@ -480,7 +522,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.UserVerification = protocol.UserVerificationRequirement(zb0003)
 			}
-			zb0001Mask |= 0x8
+			zb0001Mask |= 0x10
 		case "exts":
 			bts, err = (*sessionExtensions)(&z.Extensions).UnmarshalMsg(bts)
 			if err != nil {
@@ -506,7 +548,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
-			zb0001Mask |= 0x10
+			zb0001Mask |= 0x20
 		case "cmr":
 			{
 				var zb0005 string
@@ -517,7 +559,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Mediation = protocol.CredentialMediationRequirement(zb0005)
 			}
-			zb0001Mask |= 0x20
+			zb0001Mask |= 0x40
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -527,23 +569,26 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x3f {
+	if zb0001Mask != 0x7f {
 		if (zb0001Mask & 0x1) == 0 {
 			z.RelyingPartyID = ""
 		}
 		if (zb0001Mask & 0x2) == 0 {
-			z.UserID = nil
+			z.Origin = ""
 		}
 		if (zb0001Mask & 0x4) == 0 {
-			z.AllowedCredentialIDs = nil
+			z.UserID = nil
 		}
 		if (zb0001Mask & 0x8) == 0 {
-			z.UserVerification = ""
+			z.AllowedCredentialIDs = nil
 		}
 		if (zb0001Mask & 0x10) == 0 {
-			z.CredParams = nil
+			z.UserVerification = ""
 		}
 		if (zb0001Mask & 0x20) == 0 {
+			z.CredParams = nil
+		}
+		if (zb0001Mask & 0x40) == 0 {
 			z.Mediation = ""
 		}
 	}
@@ -553,7 +598,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SessionData) Msgsize() (s int) {
-	s = 1 + 2 + msgp.StringPrefixSize + len(z.Challenge) + 2 + msgp.StringPrefixSize + len(z.RelyingPartyID) + 2 + msgp.BytesPrefixSize + len(z.UserID) + 6 + msgp.ArrayHeaderSize
+	s = 1 + 2 + msgp.StringPrefixSize + len(z.Challenge) + 2 + msgp.StringPrefixSize + len(z.RelyingPartyID) + 2 + msgp.StringPrefixSize + len(z.Origin) + 2 + msgp.BytesPrefixSize + len(z.UserID) + 6 + msgp.ArrayHeaderSize
 	for za0001 := range z.AllowedCredentialIDs {
 		s += msgp.BytesPrefixSize + len(z.AllowedCredentialIDs[za0001])
 	}

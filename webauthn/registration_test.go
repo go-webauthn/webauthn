@@ -1391,6 +1391,164 @@ func TestCreateCredentialOpaqueOrigin(t *testing.T) {
 	}
 }
 
+// TestBeginRegistrationOrigin covers [WithRegistrationOrigin] recording the bound origin in the session, and the
+// narrowing rule which requires the bound value to be one of the configured [Config.RPOrigins].
+func TestBeginRegistrationOrigin(t *testing.T) {
+	const opaque = "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"
+
+	testCases := []struct {
+		name            string
+		origin          string
+		rpOpaqueOrigins []string
+		expected        string
+		err             string
+	}{
+		{
+			name:     "ShouldNotBindAnOriginWhenTheOptionIsNotSupplied",
+			expected: "",
+		},
+		{
+			name:     "ShouldBindAConfiguredOrigin",
+			origin:   "https://b.example.com",
+			expected: "https://b.example.com",
+		},
+		{
+			name:     "ShouldBindAConfiguredOriginWithAnExplicitDefaultPort",
+			origin:   "https://b.example.com:443",
+			expected: "https://b.example.com:443",
+		},
+		{
+			name:   "ShouldRejectAnOriginWhichIsNotConfigured",
+			origin: "https://c.example.com",
+			err:    "error generating credential creation: the ceremony origin 'https://c.example.com' must be one of the origins in the 'RPOrigins' configuration",
+		},
+		{
+			name:            "ShouldRejectAnOpaqueOriginEvenWhenItIsConfigured",
+			origin:          opaque,
+			rpOpaqueOrigins: []string{opaque},
+			err:             "error generating credential creation: the ceremony origin 'android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk' can't be bound as it's opaque and an opaque origin is only conveyed in the ceremony response",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:            "example.com",
+				RPDisplayName:   "Test",
+				RPOrigins:       []string{"https://a.example.com", "https://b.example.com"},
+				RPOpaqueOrigins: tc.rpOpaqueOrigins,
+			})
+			require.NoError(t, err)
+
+			var opts []RegistrationOption
+
+			if tc.origin != "" {
+				opts = append(opts, WithRegistrationOrigin(tc.origin))
+			}
+
+			creation, session, err := w.BeginRegistration(&defaultUser{id: []byte(testUserID)}, opts...)
+
+			if tc.err != "" {
+				assert.Nil(t, creation)
+				assert.Nil(t, session)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, session)
+			assert.Equal(t, tc.expected, session.Origin)
+		})
+	}
+}
+
+// TestCreateCredentialBoundOrigin covers [SessionData.Origin] narrowing the origins the registration ceremony is
+// verified against to the single origin the ceremony was begun with.
+func TestCreateCredentialBoundOrigin(t *testing.T) {
+	const (
+		originVector = "https://example.org"
+		originOther  = "https://other.example.org"
+		originOpaque = "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"
+	)
+
+	testCases := []struct {
+		name            string
+		responseOrigin  string
+		sessionOrigin   string
+		rpOpaqueOrigins []string
+		err             string
+	}{
+		{
+			name:          "ShouldAcceptTheBoundOrigin",
+			sessionOrigin: originVector,
+		},
+		{
+			name: "ShouldAcceptAnyConfiguredOriginWhenTheSessionIsNotBound",
+		},
+		{
+			name:          "ShouldRejectAnotherConfiguredOriginWhenTheSessionIsBound",
+			sessionOrigin: originOther,
+			err:           "Error validating origin",
+		},
+		{
+			name:            "ShouldAcceptAConfiguredOpaqueOriginWhileTheSessionIsBound",
+			responseOrigin:  originOpaque,
+			sessionOrigin:   originVector,
+			rpOpaqueOrigins: []string{originOpaque},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				body         []byte
+				challenge    string
+				credentialID []byte
+			)
+
+			if tc.responseOrigin == "" {
+				body, challenge, credentialID = testRegistrationSpecVectorNoneES256(t)
+			} else {
+				body, challenge, credentialID = testRegistrationSpecVectorNoneES256Origin(t, tc.responseOrigin)
+			}
+
+			parsedResponse, err := protocol.ParseCredentialCreationResponseBytes(body)
+			require.NoError(t, err)
+
+			userID := []byte(testUserID)
+
+			w := &WebAuthn{
+				Config: &Config{
+					RPID:            "example.org",
+					RPOrigins:       []string{originVector, originOther},
+					RPOpaqueOrigins: tc.rpOpaqueOrigins,
+				},
+			}
+
+			session := SessionData{
+				Challenge:  challenge,
+				Origin:     tc.sessionOrigin,
+				UserID:     userID,
+				CredParams: []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
+			}
+
+			credential, err := w.CreateCredential(&defaultUser{id: userID}, session, parsedResponse)
+
+			if tc.err != "" {
+				assert.Nil(t, credential)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, credential)
+			assert.Equal(t, credentialID, credential.ID)
+		})
+	}
+}
+
 // testRegistrationSpecVectorPackedSelfES256 returns the spec test vector data for Packed Self ES256 registration.
 // See: https://www.w3.org/TR/webauthn-3/#sctn-test-vectors-packed-self-es256
 func testRegistrationSpecVectorPackedSelfES256(t *testing.T) (body []byte, challenge string, credentialID []byte) {

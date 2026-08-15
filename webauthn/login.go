@@ -117,6 +117,12 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		return nil, nil, fmt.Errorf("error generating assertion: the relying party id failed to validate as it's not a valid domain string with error: %w", err)
 	}
 
+	if len(assertion.Response.Origin) != 0 {
+		if err = validateCeremonyOrigin(assertion.Response.Origin, webauthn.Config.RPOrigins); err != nil {
+			return nil, nil, fmt.Errorf("error generating assertion: %w", err)
+		}
+	}
+
 	if assertion.Response.Timeout == 0 {
 		switch assertion.Response.UserVerification {
 		case protocol.VerificationDiscouraged:
@@ -135,6 +141,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	session = &SessionData{
 		Challenge:            assertion.Response.Challenge.String(),
 		RelyingPartyID:       assertion.Response.RelyingPartyID,
+		Origin:               assertion.Response.Origin,
 		UserID:               userID,
 		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
 		UserVerification:     assertion.Response.UserVerification,
@@ -365,7 +372,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	shouldVerifyUserPresence := true
 
 	rpID := session.GetRelyingPartyID(webauthn.Config.RPID)
-	rpOrigins := webauthn.Config.RPOrigins
+	rpOrigins := session.GetOrigins(webauthn.Config.RPOrigins)
 	rpOpaqueOrigins := webauthn.Config.RPOpaqueOrigins
 	rpTopOrigins := webauthn.Config.RPTopOrigins
 

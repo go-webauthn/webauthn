@@ -40,6 +40,12 @@ type PublicKeyCredentialCreationOptions struct {
 	Attestation            ConveyancePreference       `json:"attestation,omitempty"`
 	AttestationFormats     []AttestationFormat        `json:"attestationFormats,omitempty"`
 	Extensions             AuthenticationExtensions   `json:"extensions,omitzero"`
+
+	// Origin binds the ceremony to the single origin the response must declare. Used internally only; not
+	// serialized, as the origin is not a member of the IDL and is never conveyed to the client. It is recorded in
+	// the [github.com/go-webauthn/webauthn/webauthn.SessionData] instead, which the Finish step verifies the
+	// collected client data against in place of the configured origins.
+	Origin string `json:"-"`
 }
 
 // The PublicKeyCredentialRequestOptions dictionary supplies get() with the data it needs to generate an assertion.
@@ -56,6 +62,12 @@ type PublicKeyCredentialRequestOptions struct {
 	UserVerification   UserVerificationRequirement `json:"userVerification,omitempty"`
 	Hints              []PublicKeyCredentialHints  `json:"hints,omitempty"`
 	Extensions         AuthenticationExtensions    `json:"extensions,omitzero"`
+
+	// Origin binds the ceremony to the single origin the response must declare. Used internally only; not
+	// serialized, as the origin is not a member of the IDL and is never conveyed to the client. It is recorded in
+	// the [github.com/go-webauthn/webauthn/webauthn.SessionData] instead, which the Finish step verifies the
+	// collected client data against in place of the configured origins.
+	Origin string `json:"-"`
 }
 
 // CredentialDescriptor represents the PublicKeyCredentialDescriptor IDL.
