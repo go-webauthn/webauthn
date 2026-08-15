@@ -45,7 +45,8 @@ type AuthenticationExtensions struct {
 	LargeBlob LargeBlobInputs `json:"largeBlob,omitzero"`
 
 	// RemoteClientDataJSON is the Remote Client Data JSON Extension input. This member is set by a remote desktop
-	// web client and a Relying Party should not normally set it. See [ExtensionRemoteClientDataJSON].
+	// web client and a Relying Party should not normally set it. See [ExtensionRemoteClientDataJSON], which records
+	// that this extension is not yet ratified.
 	RemoteClientDataJSON string `json:"remoteClientDataJSON,omitempty"`
 
 	// CredentialProtectionPolicy is the CTAP credProtect policy. Registration only.

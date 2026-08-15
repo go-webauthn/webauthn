@@ -174,7 +174,10 @@ func WithExtensionPRF(eval protocol.PRFValues) ExtensionOption {
 // desktop web client and a Relying Party should not normally set it; a Relying Party which receives the matching
 // output should understand that the local client delegated every RP ID and origin check to a remote host.
 //
-// Specification: §10.1.6. Remote Client Data JSON extension (https://www.w3.org/TR/webauthn-3/#sctn-remote-client-data-json-extension)
+// This extension is not defined by WebAuthn Level 3. It exists only in the Editor's Draft and is modelled here ahead
+// of ratification, so its definition may change before it is published in a Recommendation.
+//
+// Specification: §10.1.6. Remote Client Data JSON extension (https://w3c.github.io/webauthn/#sctn-remote-client-data-json-extension)
 func WithExtensionRemoteClientDataJSON(clientDataJSON string) ExtensionOption {
 	return forAnyCeremony(func(e *protocol.AuthenticationExtensions) {
 		e.RemoteClientDataJSON = clientDataJSON
