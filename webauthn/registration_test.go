@@ -894,10 +894,6 @@ func TestBeginRegistrationUserIDLength(t *testing.T) {
 	}
 }
 
-// TestBeginRegistrationHintsSetAuthenticatorAttachment covers the compatibility guidance of §5.8.7, which asks a
-// Relying Party using a hint to also set the authenticator attachment the hint implies so user agents which predate
-// hints behave consistently. A user agent which does implement hints gives them precedence over the attachment, so
-// this cannot narrow a ceremony such a client would otherwise honour.
 func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -941,9 +937,6 @@ func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
 			expected: "",
 		},
 		{
-			// A Relying Party is expected to send a more specific hint before less specific ones so a user agent
-			// which does not recognise the former can act on the latter, so an unrecognised leading hint must not
-			// stop a recognised one behind it from supplying the attachment.
 			name:     "ShouldUseTheFirstRecognisedHint",
 			hints:    []protocol.PublicKeyCredentialHints{"future-hint", protocol.PublicKeyCredentialHintSecurityKey},
 			expected: protocol.CrossPlatform,
@@ -978,11 +971,6 @@ func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
 	}
 }
 
-// TestBeginRegistrationUserHandleAfterOptions covers the user handle bounds being enforced against the handle which
-// is actually sent to the client. A [RegistrationOption] receives the whole creation options, so one supplied by the
-// caller can replace the user entity id after it has been derived from the [User]; the bounds must hold for that
-// final value, while the session must still record the id of the [User], which is what
-// [WebAuthn.CreateCredential] compares it against.
 func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
 	withUserHandle := func(id any) RegistrationOption {
 		return func(cco *protocol.PublicKeyCredentialCreationOptions) error {
