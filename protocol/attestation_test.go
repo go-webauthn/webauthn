@@ -112,6 +112,20 @@ func TestAttestationResponseParse_Errors(t *testing.T) {
 	}
 }
 
+func TestAttestationResponseParseRejectsTrailingCBOR(t *testing.T) {
+	ccr := CredentialCreationResponse{}
+
+	require.NoError(t, json.Unmarshal([]byte(testAttestationResponses[0]), &ccr))
+
+	_, err := ccr.AttestationResponse.Parse()
+	require.NoError(t, err)
+
+	ccr.AttestationResponse.AttestationObject = append(ccr.AttestationResponse.AttestationObject, 0x01)
+
+	_, err = ccr.AttestationResponse.Parse()
+	require.EqualError(t, err, "Error parsing the authenticator response")
+}
+
 func TestAttestationObject_VerifyAttestation_Errors(t *testing.T) {
 	testCases := []struct {
 		name string
