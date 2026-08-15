@@ -1,9 +1,9 @@
 package webauthncose
 
 import (
-	"strconv"
 	"crypto"
 	"crypto/x509"
+	"strconv"
 )
 
 // COSEAlgorithmIdentifier is a number identifying a cryptographic algorithm. The algorithm identifiers SHOULD be values

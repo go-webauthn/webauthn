@@ -1081,6 +1081,109 @@ func testRegistrationSpecVectorNoneES256Flags(t *testing.T, flags protocol.Authe
 	return body, challenge, credentialID
 }
 
+// testRegistrationSpecVectorNoneES256Origin returns the spec test vector data for NoneES256 registration with the
+// origin of the client data replaced by origin. The none attestation statement format conveys no signature over the
+// client data, so the origin can be varied without invalidating the vector.
+func testRegistrationSpecVectorNoneES256Origin(t *testing.T, origin string) (body []byte, challenge string, credentialID []byte) {
+	t.Helper()
+
+	body, challenge, credentialID = testRegistrationSpecVectorNoneES256(t)
+
+	var response map[string]any
+
+	require.NoError(t, json.Unmarshal(body, &response))
+
+	inner, ok := response["response"].(map[string]any)
+	require.True(t, ok)
+
+	encoded, ok := inner["clientDataJSON"].(string)
+	require.True(t, ok)
+
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	require.NoError(t, err)
+
+	var clientData map[string]any
+
+	require.NoError(t, json.Unmarshal(raw, &clientData))
+
+	clientData["origin"] = origin
+
+	if raw, err = json.Marshal(clientData); err != nil {
+		require.NoError(t, err)
+	}
+
+	inner["clientDataJSON"] = base64.RawURLEncoding.EncodeToString(raw)
+
+	body, err = json.Marshal(response)
+	require.NoError(t, err)
+
+	return body, challenge, credentialID
+}
+
+// TestCreateCredentialOpaqueOrigin covers [Config.RPOpaqueOrigins] widening the set of origins a ceremony may be
+// performed from, which is the only place an origin that is not an http or https tuple origin can be declared.
+func TestCreateCredentialOpaqueOrigin(t *testing.T) {
+	const origin = "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"
+
+	testCases := []struct {
+		name            string
+		rpOpaqueOrigins []string
+		err             string
+	}{
+		{
+			name:            "ShouldAcceptAConfiguredOpaqueOrigin",
+			rpOpaqueOrigins: []string{origin},
+		},
+		{
+			name: "ShouldRejectAnOpaqueOriginWhichIsNotConfigured",
+			err:  "Error validating origin",
+		},
+		{
+			name:            "ShouldRejectAnOpaqueOriginWhichDoesNotMatch",
+			rpOpaqueOrigins: []string{"android:apk-key-hash:9C4B4AEEF05536E730EC4B802E767F67"},
+			err:             "Error validating origin",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			body, challenge, credentialID := testRegistrationSpecVectorNoneES256Origin(t, origin)
+
+			parsedResponse, err := protocol.ParseCredentialCreationResponseBytes(body)
+			require.NoError(t, err)
+
+			userID := []byte(testUserID)
+
+			w := &WebAuthn{
+				Config: &Config{
+					RPID:            "example.org",
+					RPOrigins:       []string{"https://example.org"},
+					RPOpaqueOrigins: tc.rpOpaqueOrigins,
+				},
+			}
+
+			session := SessionData{
+				Challenge:  challenge,
+				UserID:     userID,
+				CredParams: []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
+			}
+
+			credential, err := w.CreateCredential(&defaultUser{id: userID}, session, parsedResponse)
+
+			if tc.err != "" {
+				assert.Nil(t, credential)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, credential)
+			assert.Equal(t, credentialID, credential.ID)
+		})
+	}
+}
+
 // testRegistrationSpecVectorPackedSelfES256 returns the spec test vector data for Packed Self ES256 registration.
 // See: https://www.w3.org/TR/webauthn-3/#sctn-test-vectors-packed-self-es256
 func testRegistrationSpecVectorPackedSelfES256(t *testing.T) (body []byte, challenge string, credentialID []byte) {

@@ -1671,6 +1671,100 @@ func testLoginSpecVectorNoneES256(t *testing.T) (parsedResponse *protocol.Parsed
 	return parsedResponse, credPubKey, challenge, credentialID
 }
 
+// TestValidateLoginOpaqueOrigin covers [Config.RPOpaqueOrigins] reaching the assertion verifier. The client data of
+// the vector is signed over, so replacing its origin invalidates the assertion signature; the origin is verified well
+// before the signature is, which is what lets the signature failure stand as proof the origin was accepted.
+func TestValidateLoginOpaqueOrigin(t *testing.T) {
+	const origin = "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"
+
+	testCases := []struct {
+		name            string
+		rpOpaqueOrigins []string
+		err             string
+	}{
+		{
+			name:            "ShouldAcceptAConfiguredOpaqueOrigin",
+			rpOpaqueOrigins: []string{origin},
+			err:             "Error validating the assertion signature: <nil>",
+		},
+		{
+			name: "ShouldRejectAnOpaqueOriginWhichIsNotConfigured",
+			err:  "Error validating origin",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256Origin(t, origin)
+
+			userID := []byte(testUserID)
+
+			w := &WebAuthn{
+				Config: &Config{
+					RPID:            "example.org",
+					RPOrigins:       []string{"https://example.org"},
+					RPOpaqueOrigins: tc.rpOpaqueOrigins,
+				},
+			}
+
+			user := &defaultUser{
+				id: userID,
+				credentials: []Credential{
+					{
+						ID:        credentialID,
+						PublicKey: credPubKey,
+						Flags: CredentialFlags{
+							UserPresent:    true,
+							BackupEligible: true,
+						},
+					},
+				},
+			}
+
+			credential, err := w.ValidateLogin(user, SessionData{Challenge: challenge, UserID: userID}, parsedResponse)
+
+			assert.Nil(t, credential)
+			assert.EqualError(t, err, tc.err)
+		})
+	}
+}
+
+// testLoginSpecVectorNoneES256Origin returns the spec test vector data for NoneES256 authentication with the origin
+// of the client data replaced by origin, which invalidates the assertion signature over it.
+func testLoginSpecVectorNoneES256Origin(t *testing.T, origin string) (parsedResponse *protocol.ParsedCredentialAssertionData, credPubKey []byte, challenge string, credentialID []byte) {
+	t.Helper()
+
+	parsedResponse, credPubKey, challenge, credentialID = testLoginSpecVectorNoneES256(t)
+
+	var clientData map[string]any
+
+	require.NoError(t, json.Unmarshal(parsedResponse.Raw.AssertionResponse.ClientDataJSON, &clientData))
+
+	clientData["origin"] = origin
+
+	raw, err := json.Marshal(clientData)
+	require.NoError(t, err)
+
+	body := map[string]any{
+		"id":    base64.RawURLEncoding.EncodeToString(credentialID),
+		"rawId": base64.RawURLEncoding.EncodeToString(credentialID),
+		"type":  "public-key",
+		"response": map[string]any{
+			"authenticatorData": base64.RawURLEncoding.EncodeToString(parsedResponse.Raw.AssertionResponse.AuthenticatorData),
+			"clientDataJSON":    base64.RawURLEncoding.EncodeToString(raw),
+			"signature":         base64.RawURLEncoding.EncodeToString(parsedResponse.Response.Signature),
+		},
+	}
+
+	data, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	parsedResponse, err = protocol.ParseCredentialRequestResponseBytes(data)
+	require.NoError(t, err)
+
+	return parsedResponse, credPubKey, challenge, credentialID
+}
+
 func TestBeginLoginOptionError(t *testing.T) {
 	w, err := New(&Config{RPID: "example.com", RPDisplayName: "Test", RPOrigins: []string{"https://example.com"}})
 	require.NoError(t, err)

@@ -366,6 +366,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 
 	rpID := session.GetRelyingPartyID(webauthn.Config.RPID)
 	rpOrigins := webauthn.Config.RPOrigins
+	rpOpaqueOrigins := webauthn.Config.RPOpaqueOrigins
 	rpTopOrigins := webauthn.Config.RPTopOrigins
 
 	if appID, err = parsedResponse.GetAppID(session.Extensions, credential.AttestationFormat); err != nil {
@@ -373,7 +374,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	// Handle steps 4 through 16.
-	if err = parsedResponse.Verify(session.Challenge, rpID, appID, rpOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, credential.PublicKey, webauthn.Config.Signature); err != nil {
+	if err = parsedResponse.Verify(session.Challenge, rpID, appID, rpOrigins, rpOpaqueOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, credential.PublicKey, webauthn.Config.Signature); err != nil {
 		return nil, err
 	}
 

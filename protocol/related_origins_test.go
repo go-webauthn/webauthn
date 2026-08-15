@@ -401,6 +401,31 @@ func TestRelatedOriginsServeHTTP(t *testing.T) {
 	})
 }
 
+func TestIsOpaqueOrigin(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     string
+		expected bool
+	}{
+		{name: "ShouldNotConsiderAnHTTPSOriginOpaque", have: "https://example.com", expected: false},
+		{name: "ShouldNotConsiderAnHTTPOriginOpaque", have: "http://localhost:8080", expected: false},
+		{name: "ShouldNotConsiderAnUppercaseSchemeOpaque", have: "HTTPS://example.com", expected: false},
+		{name: "ShouldNotConsiderAnIPv6LiteralOpaque", have: "https://[::1]:8443", expected: false},
+		{name: "ShouldConsiderAnAndroidKeyHashOpaque", have: "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: true},
+		{name: "ShouldConsiderAnUnknownSchemeOpaque", have: "ios:bundle-id:com.example.app", expected: true},
+		{name: "ShouldConsiderASchemelessValueOpaque", have: "example.com", expected: true},
+		{name: "ShouldConsiderAnHTTPSURLWithoutAHostOpaque", have: "https:///path", expected: true},
+		{name: "ShouldConsiderAnUnparseableValueOpaque", have: "https://exa mple.com", expected: true},
+		{name: "ShouldConsiderAnEmptyValueOpaque", have: "", expected: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsOpaqueOrigin(tc.have))
+		})
+	}
+}
+
 // testErrorWriter is an [io.Writer] which always fails, used to cover the error paths of the writers.
 type testErrorWriter struct {
 	err error

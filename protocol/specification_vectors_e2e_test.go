@@ -276,7 +276,7 @@ func TestSpecVectors_Registration_E2E(t *testing.T) {
 
 			challenge := base64.RawURLEncoding.EncodeToString(specTestDecodeHex(t, tc.challenge))
 
-			_, err = pcc.Verify(challenge, specTestRPID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, tc.mds, tc.credParams, AttestationPolicy{}, SignaturePolicy{})
+			_, err = pcc.Verify(challenge, specTestRPID, []string{specTestOrigin}, nil, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, tc.mds, tc.credParams, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err == "" {
 				assert.NoError(t, err)
@@ -533,7 +533,7 @@ func TestSpecVectors_Authentication_E2E(t *testing.T) {
 			challenge := base64.RawURLEncoding.EncodeToString(specTestDecodeHex(t, tc.challenge))
 			credPubKey := specTestDecodeHex(t, tc.credentialPubKey)
 
-			err = par.Verify(challenge, specTestRPID, tc.appID, []string{specTestOrigin}, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, credPubKey, SignaturePolicy{})
+			err = par.Verify(challenge, specTestRPID, tc.appID, []string{specTestOrigin}, nil, tc.rpTopOrigins, tc.rpTopOriginVerificationMode, tc.allowCrossOrigin, false, true, credPubKey, SignaturePolicy{})
 
 			if tc.err == "" {
 				assert.NoError(t, err)

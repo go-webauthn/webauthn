@@ -41,16 +41,32 @@ type Config struct {
 
 	// RPOrigins configures the list of Relying Party Server Origins that are permitted. The provided origins can either
 	// be fully qualified origins or strings for simple string comparison. The strings are matched using canonical
-	// origin matching semantics specifically if they start with 'http://' or 'https://' if the provided origin has a
-	// case-insensitive equal scheme and host component they are equal, otherwise simple string comparison is utilized
+	// origin matching semantics, specifically if they start with 'http://' or 'https://' if the provided origin has a
+	// case-insensitive equal scheme and host component, they are equal, otherwise simple string comparison is utilized
 	// to determine equality.
+	//
+	// See Also: [RPOpaqueOrigins].
 	RPOrigins []string
+
+	// RPOpaqueOrigins configures the list of opaque Relying Party Server Origins that are permitted, i.e. those for
+	// which [protocol.IsOpaqueOrigin] returns true because they are not an absolute http or https URL with a host
+	// (i.e. "android:apk-key-hash:..."). These are matched by simple string comparison, they are never matched
+	// against the Top Origin of a cross-origin ceremony, and they are never declared in the Related Origin Requests
+	// document returned by [WebAuthn.RelatedOrigins].
+	//
+	// Configuring this field constrains the other origin fields to what a Related Origin Requests document can
+	// express, so that the origins a client resolves and the origins this Relying Party accepts cannot drift apart:
+	// [Config.RPOrigins] and [Config.RPTopOrigins] must then hold only non-opaque origins, and [Config.RPOrigins]
+	// must carry no more than [protocol.MaximumRelatedOriginLabels] distinct registrable domain labels.
+	RPOpaqueOrigins []string
 
 	// RPTopOrigins configures the list of Relying Party Server Top Origins that are permitted. The provided origins can
 	// either be fully qualified origins or strings for simple string comparison. The strings are matched using
 	// canonical origin matching semantics specifically if they start with 'http://' or 'https://' if the provided
 	// origin has a case-insensitive equal scheme and host component they are equal, otherwise simple string comparison
 	// is utilized to determine equality.
+	//
+	// See Also: [RPOpaqueOrigins].
 	RPTopOrigins []string
 
 	// RPTopOriginVerificationMode determines the verification mode for the Top Origin value used in cross-origin
@@ -188,6 +204,10 @@ func (config *Config) validate() (err error) {
 		return fmt.Errorf("must provide at least one value to the 'RPOrigins' field")
 	}
 
+	if err = config.validateOpaqueOrigins(); err != nil {
+		return err
+	}
+
 	if config.RPTopOriginVerificationMode == protocol.TopOriginDefaultVerificationMode {
 		config.RPTopOriginVerificationMode = protocol.TopOriginExplicitVerificationMode
 	}
@@ -201,6 +221,37 @@ func (config *Config) validate() (err error) {
 	}
 
 	config.validated = true
+
+	return nil
+}
+
+// validateOpaqueOrigins enforces the separation [Config.RPOpaqueOrigins] draws between the origins a client resolves
+// through a Related Origin Requests document and the origins which can only ever be matched by simple string
+// comparison. It is a no op unless that field is populated, so a Relying Party which lists an opaque origin in
+// [Config.RPOrigins] keeps the behavior it has always had.
+//
+// The Top Origins are held to the same standard as the Origins minus the label budget, which applies to the origins
+// declared in the document rather than to the origin of a top level browsing context.
+func (config *Config) validateOpaqueOrigins() (err error) {
+	if len(config.RPOpaqueOrigins) == 0 {
+		return nil
+	}
+
+	for _, origin := range config.RPOpaqueOrigins {
+		if !protocol.IsOpaqueOrigin(origin) {
+			return fmt.Errorf(errFmtOriginsNotOpaqueValue, origin)
+		}
+	}
+
+	if _, err = protocol.NewRelatedOrigins(config.RPOrigins...); err != nil {
+		return fmt.Errorf(errFmtOriginsNotRelated, "RPOrigins", err)
+	}
+
+	for _, origin := range config.RPTopOrigins {
+		if protocol.IsOpaqueOrigin(origin) {
+			return fmt.Errorf(errFmtOriginsNotRelatedValue, "RPTopOrigins", origin)
+		}
+	}
 
 	return nil
 }
@@ -233,6 +284,11 @@ func (c *Config) GetOrigins() []string {
 	return c.RPOrigins
 }
 
+// GetOpaqueOrigins returns the configured opaque Relying Party Origins.
+func (c *Config) GetOpaqueOrigins() []string {
+	return c.RPOpaqueOrigins
+}
+
 // GetTopOrigins returns the configured Relying Party Top Origins.
 func (c *Config) GetTopOrigins() []string {
 	return c.RPTopOrigins
@@ -263,6 +319,7 @@ func (c *Config) GetSignaturePolicy() protocol.SignaturePolicy {
 type ConfigProvider interface {
 	GetRPID() string
 	GetOrigins() []string
+	GetOpaqueOrigins() []string
 	GetTopOrigins() []string
 	GetTopOriginVerificationMode() protocol.TopOriginVerificationMode
 	GetMetaDataProvider() metadata.Provider

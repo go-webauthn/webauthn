@@ -281,6 +281,19 @@ func DefaultRelatedOriginLabeler(origin string) (label string, err error) {
 	return labels[len(labels)-2], nil
 }
 
+// IsOpaqueOrigin returns true when the origin is not one a [RelatedOrigins] document can express, i.e. anything which
+// is not an absolute http or https URL with a host component. An opaque origin is matched by simple string comparison
+// rather than by the origin equality semantics of [IsOriginInHaystack], and a client never resolves one through the
+// well-known resource, so a Relying Party which accepts an opaque origin such as 'android:apk-key-hash:...' declares
+// it separately from the origins it serves at [WellKnownPathWebAuthn].
+//
+// Specification: §5.11. Related Origin Requests (https://www.w3.org/TR/webauthn-3/#sctn-related-origins)
+func IsOpaqueOrigin(origin string) bool {
+	_, err := relatedOriginNormalize(origin)
+
+	return err != nil
+}
+
 // relatedOriginNormalize reduces an origin to the scheme and host which identify it, rejecting values which are not
 // an origin a client could match a ceremony against.
 func relatedOriginNormalize(origin string) (normalized string, err error) {
