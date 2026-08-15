@@ -16,6 +16,7 @@ func TestConfig_Getters(t *testing.T) {
 		config                        *Config
 		expectedRPID                  string
 		expectedOrigins               []string
+		expectedOpaqueOrigins         []string
 		expectedTopOrigins            []string
 		expectedTopOriginVerification protocol.TopOriginVerificationMode
 		expectedMetaDataProviderIsNil bool
@@ -26,6 +27,7 @@ func TestConfig_Getters(t *testing.T) {
 			config: &Config{
 				RPID:                        "example.com",
 				RPOrigins:                   []string{"https://example.com"},
+				RPOpaqueOrigins:             []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
 				RPTopOrigins:                []string{"https://top.example.com"},
 				RPTopOriginVerificationMode: protocol.TopOriginExplicitVerificationMode,
 				Attestation: protocol.AttestationPolicy{
@@ -34,6 +36,7 @@ func TestConfig_Getters(t *testing.T) {
 			},
 			expectedRPID:                  "example.com",
 			expectedOrigins:               []string{"https://example.com"},
+			expectedOpaqueOrigins:         []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
 			expectedTopOrigins:            []string{"https://top.example.com"},
 			expectedTopOriginVerification: protocol.TopOriginExplicitVerificationMode,
 			expectedMetaDataProviderIsNil: true,
@@ -59,6 +62,7 @@ func TestConfig_Getters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.expectedRPID, tc.config.GetRPID())
 			assert.Equal(t, tc.expectedOrigins, tc.config.GetOrigins())
+			assert.Equal(t, tc.expectedOpaqueOrigins, tc.config.GetOpaqueOrigins())
 			assert.Equal(t, tc.expectedTopOrigins, tc.config.GetTopOrigins())
 			assert.Equal(t, tc.expectedTopOriginVerification, tc.config.GetTopOriginVerificationMode())
 			assert.Equal(t, tc.expectedAttestationPolicy, tc.config.GetAttestationPolicy())
@@ -123,6 +127,99 @@ func TestNew(t *testing.T) {
 				assert.EqualError(t, err, tc.err)
 				assert.Error(t, tc.config.validate())
 			}
+		})
+	}
+}
+
+func TestConfig_Validate_OpaqueOrigins(t *testing.T) {
+	testCases := []struct {
+		name   string
+		config *Config
+		err    string
+	}{
+		{
+			name: "ShouldPassOpaqueOriginsAlongsideNonOpaqueOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com", "https://example.com.au"},
+				RPTopOrigins:    []string{"https://top.example.com"},
+				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
+		},
+		{
+			name: "ShouldPassAnOpaqueOriginInRPOriginsWhenNoOpaqueOriginsAreConfigured",
+			config: &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com", "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
+		},
+		{
+			name: "ShouldPassMoreThanTheRelatedOriginLabelBudgetWhenNoOpaqueOriginsAreConfigured",
+			config: &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com", "https://f.com"},
+			},
+		},
+		{
+			name: "ShouldFailAnOpaqueOriginInRPOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com", "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
+			err: "error occurred validating the configuration: when the 'RPOpaqueOrigins' field is configured the 'RPOrigins' field must only contain origins a Related Origin Requests document can declare: error validating related origin 'android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk': the scheme must be either http or https but it is 'android'",
+		},
+		{
+			name: "ShouldFailMoreThanTheRelatedOriginLabelBudgetInRPOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com", "https://f.com"},
+				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
+			err: "error occurred validating the configuration: when the 'RPOpaqueOrigins' field is configured the 'RPOrigins' field must only contain origins a Related Origin Requests document can declare: error validating related origins: the origins have 6 distinct registrable domain labels but clients only process 5 of them, so origins beyond that limit are ignored",
+		},
+		{
+			name: "ShouldPassTheRelatedOriginLabelBudgetInRPOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com", "https://www.a.com"},
+				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
+		},
+		{
+			name: "ShouldFailAnOpaqueOriginInRPTopOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com"},
+				RPTopOrigins:    []string{"https://top.example.com", "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
+			err: "error occurred validating the configuration: when the 'RPOpaqueOrigins' field is configured the 'RPTopOrigins' field must only contain origins a Related Origin Requests document can declare but the value 'android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk' is opaque",
+		},
+		{
+			name: "ShouldFailANonOpaqueOriginInRPOpaqueOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com"},
+				RPOpaqueOrigins: []string{"https://app.example.com"},
+			},
+			err: "error occurred validating the configuration: the 'RPOpaqueOrigins' field must only contain opaque origins but the value 'https://app.example.com' is not opaque; it belongs in the 'RPOrigins' field",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(tc.config)
+
+			if tc.err == "" {
+				require.NoError(t, err)
+				assert.NotNil(t, w)
+
+				return
+			}
+
+			assert.Nil(t, w)
+			assert.EqualError(t, err, tc.err)
 		})
 	}
 }

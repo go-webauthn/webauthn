@@ -351,7 +351,7 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := par.Verify(tc.challenge, tc.relyingPartyID, tc.appID, tc.rpOrigins, nil, TopOriginExplicitVerificationMode, false, false, true, tc.credentialBytes, SignaturePolicy{})
+			err := par.Verify(tc.challenge, tc.relyingPartyID, tc.appID, tc.rpOrigins, nil, nil, TopOriginExplicitVerificationMode, false, false, true, tc.credentialBytes, SignaturePolicy{})
 
 			if tc.err == "" {
 				assert.NoError(t, err)

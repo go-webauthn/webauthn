@@ -15,6 +15,7 @@ func TestVerifyCollectedClientData(t *testing.T) {
 		topOrigin       string
 		crossOrigin     bool
 		rpOrigins       []string
+		rpOpaqueOrigins []string
 		rpTopOrigins    []string
 		topOriginMode   TopOriginVerificationMode
 		allowCrossOrign bool
@@ -139,6 +140,61 @@ func TestVerifyCollectedClientData(t *testing.T) {
 			err:             "Error validating top origin",
 		},
 		{
+			name:            "ShouldSucceedOpaqueOrigin",
+			origin:          "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			rpOrigins:       []string{"https://example.com"},
+			rpOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+		},
+		{
+			name:            "ShouldFailOpaqueOriginNotConfigured",
+			origin:          "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			rpOrigins:       []string{"https://example.com"},
+			rpOpaqueOrigins: []string{"android:apk-key-hash:9C4B4AEEF05536E730EC4B802E767F67"},
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			errType:         "verification_error",
+			errDetails:      "Error validating origin",
+			errInfo:         "Expected Values: [https://example.com android:apk-key-hash:9C4B4AEEF05536E730EC4B802E767F67], Received: android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+		},
+		{
+			name:            "ShouldFailOpaqueTopOriginImplicit",
+			origin:          "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			topOrigin:       "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpOrigins:       []string{"https://example.com"},
+			rpOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginImplicitVerificationMode,
+			err:             "Error validating top origin",
+		},
+		{
+			name:            "ShouldFailOpaqueTopOriginAuto",
+			origin:          "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			topOrigin:       "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpOrigins:       []string{"https://example.com"},
+			rpOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginAutoVerificationMode,
+			err:             "Error validating top origin",
+		},
+		{
+			name:            "ShouldFailOpaqueTopOriginExplicit",
+			origin:          "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			topOrigin:       "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+			crossOrigin:     true,
+			allowCrossOrign: true,
+			rpOrigins:       []string{"https://example.com"},
+			rpOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			rpTopOrigins:    []string{"https://example.com"},
+			topOriginMode:   TopOriginExplicitVerificationMode,
+			err:             "Error validating top origin",
+		},
+		{
 			name:          "ShouldFailCeremonyMismatch",
 			origin:        "http://example.com",
 			crossOrigin:   false,
@@ -172,7 +228,7 @@ func TestVerifyCollectedClientData(t *testing.T) {
 				ceremony = ccd.Type
 			}
 
-			err = ccd.Verify(challenge.String(), ceremony, rpOrigins, rpTopOrigins, tc.topOriginMode, tc.allowCrossOrign)
+			err = ccd.Verify(challenge.String(), ceremony, rpOrigins, tc.rpOpaqueOrigins, rpTopOrigins, tc.topOriginMode, tc.allowCrossOrign)
 
 			switch {
 			case tc.err != "":
@@ -195,7 +251,7 @@ func TestVerifyCollectedClientData_IncorrectChallenge(t *testing.T) {
 	bogusChallenge, err := CreateChallenge()
 	require.NoError(t, err)
 
-	AssertIsProtocolError(t, ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode, true), "verification_error", "Error validating challenge", fmt.Sprintf("Expected b Value: \"%s\"\nReceived b: \"%s\"\n", bogusChallenge.String(), challenge.String()))
+	AssertIsProtocolError(t, ccd.Verify(bogusChallenge.String(), ccd.Type, []string{ccd.Origin}, nil, []string{ccd.TopOrigin}, TopOriginExplicitVerificationMode, true), "verification_error", "Error validating challenge", fmt.Sprintf("Expected b Value: \"%s\"\nReceived b: \"%s\"\n", bogusChallenge.String(), challenge.String()))
 }
 
 func TestVerifyCollectedClientData_TokenBinding(t *testing.T) {
@@ -240,7 +296,7 @@ func TestVerifyCollectedClientData_TokenBinding(t *testing.T) {
 			ccd := setupCollectedClientData(newChallenge, "http://example.com", "", false)
 			ccd.TokenBinding = tc.tokenBinding
 
-			err = ccd.Verify(newChallenge.String(), CreateCeremony, []string{ccd.Origin}, nil, TopOriginExplicitVerificationMode, false)
+			err = ccd.Verify(newChallenge.String(), CreateCeremony, []string{ccd.Origin}, nil, nil, TopOriginExplicitVerificationMode, false)
 			if tc.err != "" {
 				assert.EqualError(t, err, tc.err)
 			} else {

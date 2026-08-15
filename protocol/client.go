@@ -111,8 +111,13 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 // Note: the rpTopOriginsVerify parameter does not accept the TopOriginVerificationMode value of
 // TopOriginDefaultVerificationMode as it's expected this value is updated by the config validation process.
 //
+// The rpOpaqueOrigins parameter carries the origins which are not http or https tuple origins, i.e. those for which
+// [IsOpaqueOrigin] returns true. They widen the set the ceremony origin is matched against, and only that set; the
+// Top Origin is deliberately never matched against them as a Top Origin is by definition the origin of a top-level
+// browsing context.
+//
 //nolint:gocyclo
-func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, rpOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, allowCrossOrigin bool) (err error) {
+func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyType, rpOrigins, rpOpaqueOrigins, rpTopOrigins []string, rpTopOriginsVerify TopOriginVerificationMode, allowCrossOrigin bool) (err error) {
 	// Registration Step 3. Verify that the value of C.type is webauthn.create.
 
 	// Assertion Step 7. Verify that the value of C.type is the string webauthn.get.
@@ -137,10 +142,18 @@ func (c *CollectedClientData) Verify(storedChallenge string, ceremony CeremonyTy
 	// Registration Step 5 & Assertion Step 9. Verify that the value of C.origin matches
 	// the Relying Party's origin.
 
-	if !IsOriginInHaystack(c.Origin, rpOrigins) {
+	if !IsOriginInHaystack(c.Origin, rpOrigins) && !IsOriginInHaystack(c.Origin, rpOpaqueOrigins) {
+		possibleOrigins := rpOrigins
+
+		if len(rpOpaqueOrigins) != 0 {
+			possibleOrigins = make([]string, 0, len(rpOrigins)+len(rpOpaqueOrigins))
+			possibleOrigins = append(possibleOrigins, rpOrigins...)
+			possibleOrigins = append(possibleOrigins, rpOpaqueOrigins...)
+		}
+
 		return ErrVerification.
 			WithDetails("Error validating origin").
-			WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", rpOrigins, c.Origin))
+			WithInfo(fmt.Sprintf("Expected Values: %s, Received: %s", possibleOrigins, c.Origin))
 	}
 
 	if !allowCrossOrigin && c.CrossOrigin {
