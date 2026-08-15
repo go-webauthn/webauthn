@@ -43,7 +43,8 @@ type AuthenticationExtensionsClientOutputs struct {
 	LargeBlob *LargeBlobOutputs `json:"largeBlob,omitempty"`
 
 	// RemoteClientDataJSON indicates the Remote Client Data JSON Extension was acted upon, which means the local
-	// client delegated every Relying Party ID and origin check to a remote host.
+	// client delegated every Relying Party ID and origin check to a remote host. See
+	// [ExtensionRemoteClientDataJSON], which records that this extension is not yet ratified.
 	RemoteClientDataJSON *bool `json:"remoteClientDataJSON,omitempty"`
 
 	// HMACCreateSecret indicates the CTAP hmac-secret was provisioned at registration.
