@@ -386,12 +386,19 @@ func IsKnownOpaqueOrigin(origin string) bool {
 
 // hasOpaqueOriginPrefix reports whether the origin begins with one of [opaqueOriginPrefixes] and carries a value after
 // it, or is one of [opaqueOriginsComplete].
+//
+// A complete opaque origin is matched only as itself and never as a prefix, as the value a client conveys for it ends
+// where the prefix does; appending to it, i.e. 'file://localhost', produces a value no client conveys.
 func hasOpaqueOriginPrefix(origin string) bool {
 	if isOpaqueOriginComplete(origin) {
 		return true
 	}
 
 	for _, prefix := range opaqueOriginPrefixes {
+		if isOpaqueOriginComplete(prefix) {
+			continue
+		}
+
 		if len(origin) > len(prefix) && strings.HasPrefix(origin, prefix) {
 			return true
 		}

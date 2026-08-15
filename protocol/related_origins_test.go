@@ -444,6 +444,8 @@ func TestIsKnownOpaqueOrigin(t *testing.T) {
 		{name: "ShouldNotKnowAnAndroidKeyHashWithoutAValue", have: "android:apk-key-hash:", expected: false},
 		{name: "ShouldNotKnowAnIOSBundleIDWithoutAValue", have: "ios:bundle-id:", expected: false},
 		{name: "ShouldNotKnowAChromeExtensionWithoutAnID", have: "chrome-extension://", expected: false},
+		{name: "ShouldNotKnowAFileOriginWithAHost", have: "file://localhost", expected: false},
+		{name: "ShouldNotKnowAFileOriginWithAPath", have: "file:///etc/passwd", expected: false},
 		{name: "ShouldNotKnowAnUppercasePrefix", have: "ANDROID:APK-KEY-HASH:2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: false},
 		{name: "ShouldNotKnowAnUppercaseFileOrigin", have: "FILE://", expected: false},
 		{name: "ShouldNotKnowAnAndroidKeyHashWithASingleColon", have: "android:apk-key-hash2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: false},
