@@ -440,6 +440,17 @@ func validateKeyCurve(keyType string, algorithm, curve int64) error {
 }
 
 func validateOKPPublicKey(k *OKPPublicKeyData) error {
+	// The algorithm is gated before anything else, as [validateEC2PublicKey] gates its own. Without this an OKP key
+	// naming any algorithm at all is accepted and then verified with Ed25519 regardless of what it named, since
+	// Ed25519 is the only OKP curve implemented. It also keeps an OKP key out of the case [validateKeyCurve] passes
+	// over, because every algorithm accepted here is one that map covers.
+	switch alg := COSEAlgorithmIdentifier(k.Algorithm); alg {
+	case AlgEdDSA, AlgEd25519:
+		// Both name the Ed25519 curve, the generic identifier by way of the crv parameter the next check enforces.
+	default:
+		return ErrUnsupportedAlgorithm.WithDetails(fmt.Sprintf("OKP key has unsupported algorithm %s", alg))
+	}
+
 	// The curve is checked before the key material so that both key structures report what the key declares about
 	// itself before what it carries.
 	if err := validateKeyCurve("OKP", k.Algorithm, k.Curve); err != nil {
