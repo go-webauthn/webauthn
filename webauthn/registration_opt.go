@@ -118,6 +118,30 @@ func WithRegistrationRelyingPartyID(id string) RegistrationOption {
 	}
 }
 
+// WithRegistrationOrigin binds this registration ceremony to a single origin, which [WebAuthn.CreateCredential]
+// verifies the collected client data against in place of every origin in [Config.RPOrigins]. A Relying Party which
+// serves several origins can therefore hold a ceremony to the origin it was begun at, so a response collected at one
+// of its other origins does not complete it.
+//
+// The origin must be one of those configured in [Config.RPOrigins]; the option narrows that set and can't widen it,
+// so a value which is not configured fails at [WebAuthn.BeginRegistration] rather than at the Finish step. It must
+// also be a http or https origin. An opaque origin such as 'android:apk-key-hash:...' is only ever conveyed in the
+// response and so can't be known when the ceremony begins; those configured in [Config.RPOpaqueOrigins] remain
+// acceptable while a ceremony is bound, as a Relying Party which accepts native clients cannot tell them apart from
+// browser clients in advance.
+//
+// The binding covers the ceremony origin only. A topOrigin is verified against [Config.RPTopOrigins] under the
+// configured [protocol.TopOriginVerificationMode] as usual.
+//
+// Specification: §7.1. Registering a New Credential, step 9 (https://www.w3.org/TR/webauthn-3/#sctn-registering-a-new-credential)
+func WithRegistrationOrigin(origin string) RegistrationOption {
+	return func(cco *protocol.PublicKeyCredentialCreationOptions) error {
+		cco.Origin = origin
+
+		return nil
+	}
+}
+
 // WithRegistrationRelyingPartyName sets the relying party name for the registration.
 func WithRegistrationRelyingPartyName(name string) RegistrationOption {
 	return func(cco *protocol.PublicKeyCredentialCreationOptions) error {

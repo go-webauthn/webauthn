@@ -92,6 +92,12 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf("error generating credential creation: the relying party display name must be provided via the configuration or a functional option for a creation")
 	}
 
+	if len(creation.Response.Origin) != 0 {
+		if err = validateCeremonyOrigin(creation.Response.Origin, webauthn.Config.RPOrigins); err != nil {
+			return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
+		}
+	}
+
 	if len(creation.Response.Challenge) < protocol.MinimumChallengeLength {
 		return nil, nil, fmt.Errorf("error generating credential creation: the challenge must be at least 16 bytes")
 	}
@@ -118,6 +124,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	session = &SessionData{
 		Challenge:        creation.Response.Challenge.String(),
 		RelyingPartyID:   creation.Response.RelyingParty.ID,
+		Origin:           creation.Response.Origin,
 		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
 		Extensions:       creation.Response.Extensions.Session(),
@@ -194,7 +201,7 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 
 	var clientDataHash []byte
 
-	if clientDataHash, err = parsedResponse.Verify(session.Challenge, session.GetRelyingPartyID(webauthn.Config.RPID), webauthn.Config.RPOrigins, webauthn.Config.RPOpaqueOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, webauthn.Config.MDS, session.CredParams, webauthn.Config.Attestation, webauthn.Config.Signature); err != nil {
+	if clientDataHash, err = parsedResponse.Verify(session.Challenge, session.GetRelyingPartyID(webauthn.Config.RPID), session.GetOrigins(webauthn.Config.RPOrigins), webauthn.Config.RPOpaqueOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, webauthn.Config.MDS, session.CredParams, webauthn.Config.Attestation, webauthn.Config.Signature); err != nil {
 		return nil, err
 	}
 

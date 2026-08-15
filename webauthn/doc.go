@@ -57,6 +57,14 @@
 //  1. Using a client side library like [@simplewebauthn/browser].
 //  2. Some browsers support the [parseCreationOptionsFromJSON] static method on the WebAuthn object.
 //
+// # Origin Binding
+//
+// The origin of a ceremony response is verified against every origin in [Config.RPOrigins], which is what allows one
+// relying party to serve several of them. A relying party which knows the origin a particular ceremony was begun at can
+// narrow that to the one origin with [WithRegistrationOrigin] or [WithLoginOrigin], so a response collected at another
+// of its origins does not complete the ceremony. The bound value is recorded in [SessionData.Origin] and must be one of
+// the configured origins.
+//
 // # Extensions
 //
 // Extension inputs are requested with [WithExtensions] for a registration ceremony and [WithAssertionExtensions]

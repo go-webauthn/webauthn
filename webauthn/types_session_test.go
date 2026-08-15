@@ -47,6 +47,39 @@ func TestSessionData_GetRelyingPartyID(t *testing.T) {
 	}
 }
 
+func TestSessionData_GetOrigins(t *testing.T) {
+	testCases := []struct {
+		name     string
+		session  SessionData
+		fallback []string
+		expected []string
+	}{
+		{
+			name:     "ShouldNarrowToTheSessionValue",
+			session:  SessionData{Origin: "https://a.example.com"},
+			fallback: []string{"https://a.example.com", "https://b.example.com"},
+			expected: []string{"https://a.example.com"},
+		},
+		{
+			name:     "ShouldFallBackWhenSessionValueIsEmpty",
+			session:  SessionData{},
+			fallback: []string{"https://a.example.com", "https://b.example.com"},
+			expected: []string{"https://a.example.com", "https://b.example.com"},
+		},
+		{
+			name:     "ShouldFallBackToNilWhenNeitherIsSet",
+			session:  SessionData{},
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.session.GetOrigins(tc.fallback))
+		})
+	}
+}
+
 func TestSessionData_MsgpRoundTrip(t *testing.T) {
 	original := newPopulatedSessionData()
 
@@ -62,6 +95,7 @@ func TestSessionData_MsgpRoundTrip(t *testing.T) {
 
 		assert.Equal(t, original.Challenge, decoded.Challenge)
 		assert.Equal(t, original.RelyingPartyID, decoded.RelyingPartyID)
+		assert.Equal(t, original.Origin, decoded.Origin)
 		assert.Equal(t, original.UserID, decoded.UserID)
 		assert.Equal(t, original.AllowedCredentialIDs, decoded.AllowedCredentialIDs)
 		assert.True(t, original.Expires.Equal(decoded.Expires))
@@ -82,6 +116,7 @@ func TestSessionData_MsgpRoundTrip(t *testing.T) {
 		require.NoError(t, msgp.Decode(&buf, &decoded))
 		assert.Equal(t, original.Challenge, decoded.Challenge)
 		assert.Equal(t, original.RelyingPartyID, decoded.RelyingPartyID)
+		assert.Equal(t, original.Origin, decoded.Origin)
 		assert.Equal(t, original.UserID, decoded.UserID)
 		assert.Equal(t, original.AllowedCredentialIDs, decoded.AllowedCredentialIDs)
 		assert.True(t, original.Expires.Equal(decoded.Expires))
@@ -316,6 +351,7 @@ func newPopulatedSessionData() SessionData {
 	return SessionData{
 		Challenge:      "challenge-bytes-b64url",
 		RelyingPartyID: "example.com",
+		Origin:         "https://a.example.com",
 		UserID:         []byte{0x01, 0x02, 0x03, 0x04, 0x05},
 		AllowedCredentialIDs: [][]byte{
 			{0xAA, 0xBB, 0xCC},

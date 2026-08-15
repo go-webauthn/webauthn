@@ -1729,6 +1729,172 @@ func TestValidateLoginOpaqueOrigin(t *testing.T) {
 	}
 }
 
+// TestBeginLoginOrigin covers [WithLoginOrigin] recording the bound origin in the session, and the narrowing rule
+// which requires the bound value to be one of the configured [Config.RPOrigins].
+func TestBeginLoginOrigin(t *testing.T) {
+	const opaque = "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"
+
+	testCases := []struct {
+		name            string
+		origin          string
+		rpOpaqueOrigins []string
+		expected        string
+		err             string
+	}{
+		{
+			name:     "ShouldNotBindAnOriginWhenTheOptionIsNotSupplied",
+			expected: "",
+		},
+		{
+			name:     "ShouldBindAConfiguredOrigin",
+			origin:   "https://b.example.com",
+			expected: "https://b.example.com",
+		},
+		{
+			name:   "ShouldRejectAnOriginWhichIsNotConfigured",
+			origin: "https://c.example.com",
+			err:    "error generating assertion: the ceremony origin 'https://c.example.com' must be one of the origins in the 'RPOrigins' configuration",
+		},
+		{
+			name:            "ShouldRejectAnOpaqueOriginEvenWhenItIsConfigured",
+			origin:          opaque,
+			rpOpaqueOrigins: []string{opaque},
+			err:             "error generating assertion: the ceremony origin 'android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk' can't be bound as it's opaque and an opaque origin is only conveyed in the ceremony response",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:            "example.com",
+				RPDisplayName:   "Test",
+				RPOrigins:       []string{"https://a.example.com", "https://b.example.com"},
+				RPOpaqueOrigins: tc.rpOpaqueOrigins,
+			})
+			require.NoError(t, err)
+
+			var opts []LoginOption
+
+			if tc.origin != "" {
+				opts = append(opts, WithLoginOrigin(tc.origin))
+			}
+
+			assertion, session, err := w.BeginDiscoverableLogin(opts...)
+
+			if tc.err != "" {
+				assert.Nil(t, assertion)
+				assert.Nil(t, session)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, session)
+			assert.Equal(t, tc.expected, session.Origin)
+		})
+	}
+}
+
+// TestValidateLoginBoundOrigin covers [SessionData.Origin] narrowing the origins the assertion is verified against to
+// the single origin the ceremony was begun with. The opaque case relies on the origin being verified before the
+// signature, so the signature failure the modified client data causes stands as proof the origin was accepted.
+func TestValidateLoginBoundOrigin(t *testing.T) {
+	const (
+		originVector = "https://example.org"
+		originOther  = "https://other.example.org"
+		originOpaque = "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"
+	)
+
+	testCases := []struct {
+		name            string
+		responseOrigin  string
+		sessionOrigin   string
+		rpOpaqueOrigins []string
+		err             string
+	}{
+		{
+			name:          "ShouldAcceptTheBoundOrigin",
+			sessionOrigin: originVector,
+		},
+		{
+			name: "ShouldAcceptAnyConfiguredOriginWhenTheSessionIsNotBound",
+		},
+		{
+			name:          "ShouldRejectAnotherConfiguredOriginWhenTheSessionIsBound",
+			sessionOrigin: originOther,
+			err:           "Error validating origin",
+		},
+		{
+			name:            "ShouldAcceptAConfiguredOpaqueOriginWhileTheSessionIsBound",
+			responseOrigin:  originOpaque,
+			sessionOrigin:   originVector,
+			rpOpaqueOrigins: []string{originOpaque},
+			err:             "Error validating the assertion signature: <nil>",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				parsedResponse *protocol.ParsedCredentialAssertionData
+				credPubKey     []byte
+				challenge      string
+				credentialID   []byte
+			)
+
+			if tc.responseOrigin == "" {
+				parsedResponse, credPubKey, challenge, credentialID = testLoginSpecVectorNoneES256(t)
+			} else {
+				parsedResponse, credPubKey, challenge, credentialID = testLoginSpecVectorNoneES256Origin(t, tc.responseOrigin)
+			}
+
+			userID := []byte(testUserID)
+
+			w := &WebAuthn{
+				Config: &Config{
+					RPID:            "example.org",
+					RPOrigins:       []string{originVector, originOther},
+					RPOpaqueOrigins: tc.rpOpaqueOrigins,
+				},
+			}
+
+			user := &defaultUser{
+				id: userID,
+				credentials: []Credential{
+					{
+						ID:        credentialID,
+						PublicKey: credPubKey,
+						Flags: CredentialFlags{
+							UserPresent:    true,
+							BackupEligible: true,
+						},
+					},
+				},
+			}
+
+			session := SessionData{
+				Challenge: challenge,
+				Origin:    tc.sessionOrigin,
+				UserID:    userID,
+			}
+
+			credential, err := w.ValidateLogin(user, session, parsedResponse)
+
+			if tc.err != "" {
+				assert.Nil(t, credential)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, credential)
+			assert.Equal(t, credentialID, credential.ID)
+		})
+	}
+}
+
 // testLoginSpecVectorNoneES256Origin returns the spec test vector data for NoneES256 authentication with the origin
 // of the client data replaced by origin, which invalidates the assertion signature over it.
 func testLoginSpecVectorNoneES256Origin(t *testing.T, origin string) (parsedResponse *protocol.ParsedCredentialAssertionData, credPubKey []byte, challenge string, credentialID []byte) {

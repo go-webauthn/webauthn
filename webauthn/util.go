@@ -81,6 +81,20 @@ func validateUserHandle(id any) (err error) {
 	return nil
 }
 
+// validateCeremonyOrigin checks the origin a ceremony is being bound to by [WithRegistrationOrigin] or
+// [WithLoginOrigin] against the origins the Relying Party is configured with.
+func validateCeremonyOrigin(origin string, rpOrigins []string) (err error) {
+	if protocol.IsOpaqueOrigin(origin) {
+		return fmt.Errorf(errFmtOriginBindOpaque, origin)
+	}
+
+	if !protocol.IsOriginInHaystack(origin, rpOrigins) {
+		return fmt.Errorf(errFmtOriginBindUnconfigured, origin)
+	}
+
+	return nil
+}
+
 // hasU2FCredential reports whether any of the given descriptors originated from the legacy FIDO U2F JavaScript
 // API, which is the condition under which the FIDO AppID and AppID Exclusion extensions are meaningful.
 func hasU2FCredential(credentials []protocol.CredentialDescriptor) bool {
