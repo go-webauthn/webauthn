@@ -29,6 +29,25 @@ type SignalAllAcceptedCredentials struct {
 	UserID                   URLEncodedBase64   `json:"userId"`
 }
 
+// NewSignalCurrentUserDetails creates a new SignalCurrentUserDetails struct that can simply be encoded with
+// json.Marshal. It is the counterpart of [NewSignalAllAcceptedCredentials] for the signal a Relying Party sends
+// after the name or display name of a user account changes.
+//
+// A [github.com/go-webauthn/webauthn/webauthn.User] satisfies [CurrentUserDetailsUser] as it stands, so the user
+// value the ceremony methods already take can be passed straight through.
+func NewSignalCurrentUserDetails(rpid string, user CurrentUserDetailsUser) *SignalCurrentUserDetails {
+	if user == nil {
+		return nil
+	}
+
+	return &SignalCurrentUserDetails{
+		DisplayName: user.WebAuthnDisplayName(),
+		Name:        user.WebAuthnName(),
+		RPID:        rpid,
+		UserID:      user.WebAuthnID(),
+	}
+}
+
 // SignalCurrentUserDetails is a struct which represents the CDDL of the same name.
 type SignalCurrentUserDetails struct {
 	DisplayName string           `json:"displayName"`
@@ -48,4 +67,13 @@ type SignalUnknownCredential struct {
 type AllAcceptedCredentialsUser interface {
 	WebAuthnID() []byte
 	WebAuthnCredentialIDs() [][]byte
+}
+
+// CurrentUserDetailsUser is an interface that can be implemented by a user to provide the details a Relying Party
+// signals after they change. It is a subset of [github.com/go-webauthn/webauthn/webauthn.User], which therefore
+// satisfies it without any additional method.
+type CurrentUserDetailsUser interface {
+	WebAuthnID() []byte
+	WebAuthnName() string
+	WebAuthnDisplayName() string
 }
