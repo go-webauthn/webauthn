@@ -30,6 +30,11 @@ func TestOKPSignatureVerification(t *testing.T) {
 	invalidSig := []byte("invalid")
 
 	key := OKPPublicKeyData{
+		PublicKeyData: PublicKeyData{
+			KeyType:   int64(OctetKey),
+			Algorithm: int64(AlgEdDSA),
+		},
+		Curve:  int64(Ed25519),
 		XCoord: pub,
 	}
 
@@ -41,6 +46,27 @@ func TestOKPSignatureVerification(t *testing.T) {
 	ok, err = key.Verify(data, invalidSig)
 	assert.NoError(t, err)
 	assert.False(t, ok)
+}
+
+func TestOKPVerifyRejectsUnsupportedAlgorithm(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	data := []byte("Sample data to sign")
+	validSig := ed25519.Sign(priv, data)
+
+	key := OKPPublicKeyData{
+		PublicKeyData: PublicKeyData{
+			KeyType:   int64(OctetKey),
+			Algorithm: int64(AlgRS256),
+		},
+		Curve:  int64(Ed25519),
+		XCoord: pub,
+	}
+
+	ok, err := key.Verify(data, validSig)
+	assert.False(t, ok, "a key declaring an algorithm this library does not verify OKP keys with must not verify")
+	assert.EqualError(t, err, "OKP key has unsupported algorithm RS256")
 }
 
 func TestP256SignatureVerification(t *testing.T) {
@@ -105,8 +131,10 @@ MCowBQYDK2VwAyEAe4gQJK3JgtOAuHceO5v45LOZi8fQWDBmAs5NDy/kt4E=
 	key := OKPPublicKeyData{
 		XCoord: pub,
 		PublicKeyData: PublicKeyData{
-			KeyType: int64(OctetKey),
+			KeyType:   int64(OctetKey),
+			Algorithm: int64(AlgEdDSA),
 		},
+		Curve: int64(Ed25519),
 	}
 
 	// Get the CBOR-encoded representation of the OKPPublicKeyData.
@@ -477,6 +505,13 @@ func TestParsePublicKeyValidation(t *testing.T) {
 			"",
 		},
 		{
+			// The fully specified identifier names its curve, so §5.8.5 states no crv requirement for it; the
+			// parameter is supplied here because COSE requires it of an OKP key regardless.
+			"ShouldAcceptValidOKPKeyWithFullySpecifiedAlgorithm",
+			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEd25519), map[int64]any{-1: int64(Ed25519), -2: []byte(okpPub)}),
+			"",
+		},
+		{
 			"ShouldAcceptValidEC2Key",
 			mustMarshalCOSEKey(t, int64(EllipticKey), int64(AlgES256), map[int64]any{-1: int64(P256), -2: ec2X, -3: ec2Y}),
 			"",
@@ -490,6 +525,17 @@ func TestParsePublicKeyValidation(t *testing.T) {
 			"ShouldRejectOKPWithInvalidXCoordLength",
 			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgEdDSA), map[int64]any{-1: int64(Ed25519), -2: make([]byte, 16)}),
 			"OKP key x coordinate has invalid length 16, expected 32",
+		},
+		{
+			// The key material is a genuine Ed25519 public key, so only the declared algorithm can reject it.
+			"ShouldRejectOKPWithUnsupportedAlgorithm",
+			mustMarshalCOSEKey(t, int64(OctetKey), int64(AlgRS256), map[int64]any{-1: int64(Ed25519), -2: []byte(okpPub)}),
+			"OKP key has unsupported algorithm RS256",
+		},
+		{
+			"ShouldRejectOKPWithUnregisteredAlgorithm",
+			mustMarshalCOSEKey(t, int64(OctetKey), int64(999), map[int64]any{-1: int64(Ed25519), -2: []byte(okpPub)}),
+			"OKP key has unsupported algorithm 999",
 		},
 		{
 			"ShouldRejectEC2WithUnsupportedAlgorithm",
