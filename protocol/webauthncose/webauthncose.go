@@ -2,7 +2,6 @@ package webauthncose
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
@@ -93,7 +92,14 @@ func (k *EC2PublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 		return false, err
 	}
 
-	h := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.Algorithm))
+	// validateEC2PublicKey has already rejected an algorithm with no curve, and every algorithm which survives that
+	// has a hash registered, so this cannot fail as the two are written today. It is checked rather than discarded
+	// so that widening one of the two without the other is an error instead of a silent substitution.
+	h, ok := HasherFromCOSEAlg(COSEAlgorithmIdentifier(k.Algorithm))
+	if !ok {
+		return false, ErrUnsupportedAlgorithm.WithDetails(fmt.Sprintf("EC2 key algorithm %s has no registered hash", COSEAlgorithmIdentifier(k.Algorithm)))
+	}
+
 	h.Write(data)
 
 	e := &ECDSASignature{}
@@ -384,15 +390,17 @@ func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) x509.SignatureAlgorithm 
 	return d.sigAlg
 }
 
-// HasherFromCOSEAlg returns the Hashing interface to be used for a given COSE Algorithm.
-func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) hash.Hash {
+// HasherFromCOSEAlg returns the hashing interface to be used for a given COSE algorithm, and whether this library
+// has one registered for it. An unregistered algorithm yields no hash rather than a substituted one, so a caller
+// which reaches this with an algorithm it has not itself constrained cannot hash with an algorithm the credential
+// never named.
+func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) (hash.Hash, bool) {
 	d, ok := COSESignatureAlgorithmDetails[coseAlg]
 	if !ok {
-		// default to SHA256?  Why not.
-		return crypto.SHA256.New()
+		return nil, false
 	}
 
-	return d.hash.New()
+	return d.hash.New(), true
 }
 
 // coseAlgorithmCurve describes the elliptic curve a credential public key using a particular algorithm names.

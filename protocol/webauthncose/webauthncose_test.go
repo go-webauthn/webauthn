@@ -1,6 +1,7 @@
 package webauthncose
 
 import (
+	"crypto"
 	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -143,6 +144,38 @@ MCowBQYDK2VwAyEAe4gQJK3JgtOAuHceO5v45LOZi8fQWDBmAs5NDy/kt4E=
 	actual := DisplayPublicKey(buf)
 
 	assert.Equal(t, expected, actual)
+}
+
+func TestHasherFromCOSEAlg(t *testing.T) {
+	testCases := []struct {
+		name string
+		alg  COSEAlgorithmIdentifier
+		size int
+	}{
+		{"ShouldReturnSHA256ForRS256", AlgRS256, crypto.SHA256.Size()},
+		{"ShouldReturnSHA384ForES384", AlgES384, crypto.SHA384.Size()},
+		{"ShouldReturnSHA512ForES512", AlgES512, crypto.SHA512.Size()},
+		{"ShouldReturnSHA512ForEdDSA", AlgEdDSA, crypto.SHA512.Size()},
+		{"ShouldRejectUnregisteredAlgorithm", COSEAlgorithmIdentifier(9999), 0},
+		{"ShouldRejectZeroAlgorithm", COSEAlgorithmIdentifier(0), 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, ok := HasherFromCOSEAlg(tc.alg)
+
+			if tc.size == 0 {
+				assert.False(t, ok)
+				assert.Nil(t, h, "an unusable algorithm must not yield a hash to write into")
+
+				return
+			}
+
+			require.True(t, ok)
+			require.NotNil(t, h)
+			assert.Equal(t, tc.size, h.Size())
+		})
+	}
 }
 
 func TestRSAExponent(t *testing.T) {

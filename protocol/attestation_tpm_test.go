@@ -570,6 +570,17 @@ func TestTPMAttestationVerificationAAGUID(t *testing.T) {
 	}
 }
 
+func TestTPMAttestationRejectsUnsupportedAlgorithmBeforeHashing(t *testing.T) {
+	att := makeTPMAttestation(t, tpmAttestationOptions{basicConstraintsValid: true})
+
+	att.AttStatement[stmtAlgorithm] = int64(9999)
+	att.RawAuthData = []byte{0x01}
+
+	_, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
+
+	assert.EqualError(t, err, "Unsupported COSE alg: 9999")
+}
+
 func TestTpm2Exponent(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -930,7 +941,9 @@ func TestTPMAttestationVerificationRSAExponent(t *testing.T) {
 }
 
 func TestTPMAttestationVerificationFailCertInfo(t *testing.T) {
-	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+	h, ok := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+	require.True(t, ok)
+
 	extraData := h.Sum(nil)
 
 	testCases := []struct {
@@ -1052,7 +1065,8 @@ func TestTPMAttestationVerificationFailX5c(t *testing.T) {
 		},
 	}
 
-	h := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+	h, ok := webauthncose.HasherFromCOSEAlg(webauthncose.AlgRS256)
+	require.True(t, ok)
 
 	h.Write(att.RawAuthData)
 	extraData := h.Sum(nil)
