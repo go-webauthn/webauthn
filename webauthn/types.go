@@ -50,9 +50,20 @@ type Config struct {
 
 	// RPOpaqueOrigins configures the list of opaque Relying Party Server Origins that are permitted, i.e. those for
 	// which [protocol.IsOpaqueOrigin] returns true because they are not an absolute http or https URL with a host
-	// (i.e. "android:apk-key-hash:..."). These are matched by simple string comparison, they are never matched
-	// against the Top Origin of a cross-origin ceremony, and they are never declared in the Related Origin Requests
-	// document returned by [WebAuthn.RelatedOrigins].
+	// (i.e. "android:apk-key-hash:..."). These are matched by simple string comparison, i.e. as an exact
+	// case-sensitive match and never with the scheme and host semantics [Config.RPOrigins] is matched with, they are
+	// never matched against the Top Origin of a cross-origin ceremony, and they are never declared in the Related
+	// Origin Requests document returned by [WebAuthn.RelatedOrigins].
+	//
+	// Each value must be one of the forms a client conveys for a native application, a browser extension, or a
+	// document loaded from the local file system, i.e. it must carry one of the prefixes of
+	// [protocol.OpaqueOriginPrefixes] and a value after it, or be one of those prefixes which is a complete origin in
+	// itself such as 'file://'; see [protocol.IsKnownOpaqueOrigin]. Any other value is rejected by validation as it
+	// could never match a ceremony.
+	//
+	// An opaque origin is only conveyed in the response of a ceremony, so it is never a value a ceremony can be bound
+	// to with [WithRegistrationOrigin] or [WithLoginOrigin]; the origins configured here stay acceptable while a
+	// ceremony is bound to one of [Config.RPOrigins].
 	//
 	// Configuring this field constrains the other origin fields to what a Related Origin Requests document can
 	// express, so that the origins a client resolves and the origins this Relying Party accepts cannot drift apart:
@@ -232,6 +243,11 @@ func (config *Config) validate() (err error) {
 //
 // The Top Origins are held to the same standard as the Origins minus the label budget, which applies to the origins
 // declared in the document rather than to the origin of a top level browsing context.
+//
+// Each value is additionally held to the forms a client is known to convey, i.e. [protocol.IsKnownOpaqueOrigin]. An
+// opaque origin is only ever matched by simple string comparison against a value configured here, so one no client
+// produces could never match a ceremony, and rejecting it names the mistake rather than leaving a ceremony to fail
+// with an origin error later.
 func (config *Config) validateOpaqueOrigins() (err error) {
 	if len(config.RPOpaqueOrigins) == 0 {
 		return nil
@@ -240,6 +256,10 @@ func (config *Config) validateOpaqueOrigins() (err error) {
 	for _, origin := range config.RPOpaqueOrigins {
 		if !protocol.IsOpaqueOrigin(origin) {
 			return fmt.Errorf(errFmtOriginsNotOpaqueValue, origin)
+		}
+
+		if !protocol.IsKnownOpaqueOrigin(origin) {
+			return fmt.Errorf(errFmtOriginsOpaqueUnknown, joinOpaqueOriginPrefixes(), origin)
 		}
 	}
 

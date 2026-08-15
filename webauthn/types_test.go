@@ -205,6 +205,60 @@ func TestConfig_Validate_OpaqueOrigins(t *testing.T) {
 			},
 			err: "error occurred validating the configuration: the 'RPOpaqueOrigins' field must only contain opaque origins but the value 'https://app.example.com' is not opaque; it belongs in the 'RPOrigins' field",
 		},
+		{
+			name: "ShouldPassEveryKnownOpaqueOriginPrefixInRPOpaqueOrigins",
+			config: &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+				RPOpaqueOrigins: []string{
+					"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+					"android:apk-key-hash-sha256:47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU",
+					"android:apk-key-id:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+					"ios:bundle-id:com.example.app",
+					"ios:bundle-key:2jmj7l5rSw0yVb-vlWAYkK-YBwk",
+					"chrome-extension://mbniclmhobmnbdlbpiphghaielnnpgdp",
+					"moz-extension://d56a5b99-51b6-4e83-ab23-796216191c9d",
+					"file://",
+					"ms-appx://microsoft.windowscalculator_8wekyb3d8bbwe",
+				},
+			},
+		},
+		{
+			name: "ShouldFailAnUnknownOpaqueOriginPrefixInRPOpaqueOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com"},
+				RPOpaqueOrigins: []string{"safari-web-extension://d56a5b99-51b6-4e83-ab23-796216191c9d"},
+			},
+			err: "error occurred validating the configuration: " + errOpaqueOriginsUnknownPrefix + "'safari-web-extension://d56a5b99-51b6-4e83-ab23-796216191c9d' is not one of them",
+		},
+		{
+			name: "ShouldFailAKnownOpaqueOriginPrefixWithoutAValueInRPOpaqueOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com"},
+				RPOpaqueOrigins: []string{"android:apk-key-hash:"},
+			},
+			err: "error occurred validating the configuration: " + errOpaqueOriginsUnknownPrefix + "'android:apk-key-hash:' is not one of them",
+		},
+		{
+			name: "ShouldFailAKnownOpaqueOriginPrefixInTheWrongCaseInRPOpaqueOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com"},
+				RPOpaqueOrigins: []string{"ANDROID:APK-KEY-HASH:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
+			err: "error occurred validating the configuration: " + errOpaqueOriginsUnknownPrefix + "'ANDROID:APK-KEY-HASH:2jmj7l5rSw0yVb-vlWAYkK-YBwk' is not one of them",
+		},
+		{
+			name: "ShouldFailAnOpaqueOriginResemblingAURLInRPOpaqueOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com"},
+				RPOpaqueOrigins: []string{"https://example.com:99999"},
+			},
+			err: "error occurred validating the configuration: " + errOpaqueOriginsUnknownPrefix + "'https://example.com:99999' is not one of them",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -499,7 +553,7 @@ func TestConfig_Validate_FilteringMutuallyExclusive(t *testing.T) {
 	})
 }
 
-// Supporting test types and functions.
+const errOpaqueOriginsUnknownPrefix = "the 'RPOpaqueOrigins' field must only contain opaque origins a client conveys, i.e. one prefixed with 'android:apk-key-hash:', 'android:apk-key-hash-sha256:', 'android:apk-key-id:', 'ios:bundle-id:', 'ios:bundle-key:', 'chrome-extension://', 'moz-extension://', 'file://', or 'ms-appx://', but the value "
 
 type defaultUser struct {
 	id          []byte

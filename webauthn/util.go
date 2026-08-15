@@ -3,6 +3,7 @@ package webauthn
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -79,6 +80,25 @@ func validateUserHandle(id any) (err error) {
 	}
 
 	return nil
+}
+
+// joinOpaqueOriginPrefixes renders the prefixes of [protocol.OpaqueOriginPrefixes] for an error message, i.e. as
+// "'a', 'b', or 'c'".
+func joinOpaqueOriginPrefixes() string {
+	prefixes := protocol.OpaqueOriginPrefixes()
+
+	for i, prefix := range prefixes {
+		prefixes[i] = "'" + prefix + "'"
+	}
+
+	switch n := len(prefixes); n {
+	case 0:
+		return ""
+	case 1:
+		return prefixes[0]
+	default:
+		return strings.Join(prefixes[:n-1], ", ") + ", or " + prefixes[n-1]
+	}
 }
 
 // validateCeremonyOrigin checks the origin a ceremony is being bound to by [WithRegistrationOrigin] or

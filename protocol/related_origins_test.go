@@ -426,7 +426,66 @@ func TestIsOpaqueOrigin(t *testing.T) {
 	}
 }
 
-// testErrorWriter is an [io.Writer] which always fails, used to cover the error paths of the writers.
+func TestIsKnownOpaqueOrigin(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     string
+		expected bool
+	}{
+		{name: "ShouldKnowAnAndroidKeyHash", have: "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: true},
+		{name: "ShouldKnowAnAndroidKeyHashSHA256", have: "android:apk-key-hash-sha256:47DEQpj8HBSa-_TImW-5JCeuQeRkm5NMpJWZG3hSuFU", expected: true},
+		{name: "ShouldKnowAnAndroidKeyID", have: "android:apk-key-id:2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: true},
+		{name: "ShouldKnowAnIOSBundleID", have: "ios:bundle-id:com.example.app", expected: true},
+		{name: "ShouldKnowAnIOSBundleKey", have: "ios:bundle-key:2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: true},
+		{name: "ShouldKnowAChromeExtension", have: "chrome-extension://mbniclmhobmnbdlbpiphghaielnnpgdp", expected: true},
+		{name: "ShouldKnowAMozExtension", have: "moz-extension://d56a5b99-51b6-4e83-ab23-796216191c9d", expected: true},
+		{name: "ShouldKnowAFileOrigin", have: "file://", expected: true},
+		{name: "ShouldKnowAMSAppXOrigin", have: "ms-appx://microsoft.windowscalculator_8wekyb3d8bbwe", expected: true},
+		{name: "ShouldNotKnowAnAndroidKeyHashWithoutAValue", have: "android:apk-key-hash:", expected: false},
+		{name: "ShouldNotKnowAnIOSBundleIDWithoutAValue", have: "ios:bundle-id:", expected: false},
+		{name: "ShouldNotKnowAChromeExtensionWithoutAnID", have: "chrome-extension://", expected: false},
+		{name: "ShouldNotKnowAnUppercasePrefix", have: "ANDROID:APK-KEY-HASH:2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: false},
+		{name: "ShouldNotKnowAnUppercaseFileOrigin", have: "FILE://", expected: false},
+		{name: "ShouldNotKnowAnAndroidKeyHashWithASingleColon", have: "android:apk-key-hash2jmj7l5rSw0yVb-vlWAYkK-YBwk", expected: false},
+		{name: "ShouldNotKnowAnotherNativeScheme", have: "ios:team-id:ABCDE12345", expected: false},
+		{name: "ShouldNotKnowAnotherExtensionScheme", have: "safari-web-extension://d56a5b99-51b6-4e83-ab23-796216191c9d", expected: false},
+		{name: "ShouldNotKnowAnHTTPSOrigin", have: "https://example.com", expected: false},
+		{name: "ShouldNotKnowAnHTTPSOriginWithoutAHost", have: "https:///path", expected: false},
+		{name: "ShouldNotKnowAnHTTPSOriginWithAnOutOfRangePort", have: "https://example.com:99999", expected: false},
+		{name: "ShouldNotKnowASchemelessValue", have: "example.com", expected: false},
+		{name: "ShouldNotKnowAnEmptyValue", have: "", expected: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, IsKnownOpaqueOrigin(tc.have))
+		})
+	}
+}
+
+func TestOpaqueOriginPrefixes(t *testing.T) {
+	expected := []string{
+		OpaqueOriginPrefixAndroidAPKKeyHash,
+		OpaqueOriginPrefixAndroidAPKKeyHashSHA256,
+		OpaqueOriginPrefixAndroidAPKKeyID,
+		OpaqueOriginPrefixIOSBundleID,
+		OpaqueOriginPrefixIOSBundleKey,
+		OpaqueOriginPrefixChromeExtension,
+		OpaqueOriginPrefixMozExtension,
+		OpaqueOriginPrefixFile,
+		OpaqueOriginPrefixMSAppX,
+	}
+
+	prefixes := OpaqueOriginPrefixes()
+
+	assert.Equal(t, expected, prefixes)
+
+	prefixes[0] = "example:"
+
+	assert.Equal(t, expected, OpaqueOriginPrefixes())
+	assert.True(t, IsKnownOpaqueOrigin("android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"))
+}
+
 type testErrorWriter struct {
 	err error
 }
