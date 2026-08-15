@@ -1,0 +1,157 @@
+package webauthncose
+
+import (
+	"strconv"
+	"crypto"
+	"crypto/x509"
+)
+
+// COSEAlgorithmIdentifier is a number identifying a cryptographic algorithm. The algorithm identifiers SHOULD be values
+// registered in the IANA COSE Algorithms registry [https://www.w3.org/TR/webauthn/#biblio-iana-cose-algs-reg], for
+// instance, -7 for "ES256" and -257 for "RS256".
+//
+// Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn/#sctn-alg-identifier)
+type COSEAlgorithmIdentifier int
+
+const (
+	// AlgES256 ECDSA with SHA-256.
+	AlgES256 COSEAlgorithmIdentifier = -7
+
+	// AlgEdDSA EdDSA.
+	AlgEdDSA COSEAlgorithmIdentifier = -8
+
+	// AlgESP256 is ECDSA using P-256 curve with pre-hashed SHA-256 input.
+	AlgESP256 COSEAlgorithmIdentifier = -9
+
+	// AlgEd25519 is EdDSA using the Ed25519 curve specifically. Unlike [AlgEdDSA] which is the generic EdDSA
+	// identifier, this explicitly specifies the Ed25519 curve.
+	AlgEd25519 COSEAlgorithmIdentifier = -19
+
+	// AlgES384 ECDSA with SHA-384.
+	AlgES384 COSEAlgorithmIdentifier = -35
+
+	// AlgES512 ECDSA with SHA-512.
+	AlgES512 COSEAlgorithmIdentifier = -36
+
+	// AlgPS256 RSASSA-PSS with SHA-256.
+	AlgPS256 COSEAlgorithmIdentifier = -37
+
+	// AlgPS384 RSASSA-PSS with SHA-384.
+	AlgPS384 COSEAlgorithmIdentifier = -38
+
+	// AlgPS512 RSASSA-PSS with SHA-512.
+	AlgPS512 COSEAlgorithmIdentifier = -39
+
+	// AlgES256K is ECDSA using secp256k1 curve and SHA-256.
+	AlgES256K COSEAlgorithmIdentifier = -47
+
+	// AlgMLDSA44 is ML-DSA with parameter set ML-DSA-44 (FIPS 204).
+	AlgMLDSA44 COSEAlgorithmIdentifier = -48
+
+	// AlgMLDSA65 is ML-DSA with parameter set ML-DSA-65 (FIPS 204).
+	AlgMLDSA65 COSEAlgorithmIdentifier = -49
+
+	// AlgMLDSA87 is ML-DSA with parameter set ML-DSA-87 (FIPS 204).
+	AlgMLDSA87 COSEAlgorithmIdentifier = -50
+
+	// AlgESP384 is ECDSA using P-384 curve with pre-hashed SHA-384 input.
+	AlgESP384 COSEAlgorithmIdentifier = -51
+
+	// AlgESP512 is ECDSA using P-521 curve with pre-hashed SHA-512 input.
+	AlgESP512 COSEAlgorithmIdentifier = -52
+
+	// AlgRS256 RSASSA-PKCS1-v1_5 with SHA-256.
+	AlgRS256 COSEAlgorithmIdentifier = -257
+
+	// AlgRS384 RSASSA-PKCS1-v1_5 with SHA-384.
+	AlgRS384 COSEAlgorithmIdentifier = -258
+
+	// AlgRS512 RSASSA-PKCS1-v1_5 with SHA-512.
+	AlgRS512 COSEAlgorithmIdentifier = -259
+
+	// AlgRS1 RSASSA-PKCS1-v1_5 with SHA-1.
+	AlgRS1 COSEAlgorithmIdentifier = -65535
+)
+
+// String returns the short name under which the algorithm is registered, falling back to its numeric identifier for
+// an algorithm this library does not model.
+//
+// This is deliberately distinct from the name member of [COSESignatureAlgorithmDetails], which describes the
+// primitives the algorithm composes (i.e. "ECDSA-SHA256") rather than naming the algorithm itself.
+//
+// Registry: https://www.iana.org/assignments/cose/cose.xhtml#algorithms
+func (a COSEAlgorithmIdentifier) String() string {
+	if name, ok := coseAlgorithmNames[a]; ok {
+		return name
+	}
+
+	return strconv.Itoa(int(a))
+}
+
+// coseAlgorithmNames maps each algorithm identifier this library models to the short name under which it is
+// registered, backing [COSEAlgorithmIdentifier.String].
+//
+// Registry: https://www.iana.org/assignments/cose/cose.xhtml#algorithms
+var coseAlgorithmNames = map[COSEAlgorithmIdentifier]string{
+	AlgES256:   "ES256",
+	AlgEdDSA:   "EdDSA",
+	AlgESP256:  "ESP256",
+	AlgEd25519: "Ed25519",
+	AlgES384:   "ES384",
+	AlgES512:   "ES512",
+	AlgPS256:   "PS256",
+	AlgPS384:   "PS384",
+	AlgPS512:   "PS512",
+	AlgES256K:  "ES256K",
+	AlgMLDSA44: "ML-DSA-44",
+	AlgMLDSA65: "ML-DSA-65",
+	AlgMLDSA87: "ML-DSA-87",
+	AlgESP384:  "ESP384",
+	AlgESP512:  "ESP512",
+	AlgRS256:   "RS256",
+	AlgRS384:   "RS384",
+	AlgRS512:   "RS512",
+	AlgRS1:     "RS1",
+}
+
+var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
+	name   string
+	hash   crypto.Hash
+	sigAlg x509.SignatureAlgorithm
+}{
+	AlgRS1:     {"SHA1-RSA", crypto.SHA1, x509.SHA1WithRSA},
+	AlgRS256:   {"SHA256-RSA", crypto.SHA256, x509.SHA256WithRSA},
+	AlgRS384:   {"SHA384-RSA", crypto.SHA384, x509.SHA384WithRSA},
+	AlgRS512:   {"SHA512-RSA", crypto.SHA512, x509.SHA512WithRSA},
+	AlgPS256:   {"SHA256-RSAPSS", crypto.SHA256, x509.SHA256WithRSAPSS},
+	AlgPS384:   {"SHA384-RSAPSS", crypto.SHA384, x509.SHA384WithRSAPSS},
+	AlgPS512:   {"SHA512-RSAPSS", crypto.SHA512, x509.SHA512WithRSAPSS},
+	AlgES256:   {"ECDSA-SHA256", crypto.SHA256, x509.ECDSAWithSHA256},
+	AlgESP256:  {"ECDSA-SHA256-Prehashed", crypto.SHA256, x509.ECDSAWithSHA256},
+	AlgES384:   {"ECDSA-SHA384", crypto.SHA384, x509.ECDSAWithSHA384},
+	AlgESP384:  {"ECDSA-SHA384-Prehashed", crypto.SHA384, x509.ECDSAWithSHA384},
+	AlgES512:   {"ECDSA-SHA512", crypto.SHA512, x509.ECDSAWithSHA512},
+	AlgESP512:  {"ECDSA-SHA512-Prehashed", crypto.SHA512, x509.ECDSAWithSHA512},
+	AlgEdDSA:   {"EdDSA", crypto.SHA512, x509.PureEd25519},
+	AlgEd25519: {"Ed25519", crypto.SHA512, x509.PureEd25519},
+}
+
+// coseAlgorithmCurves binds each elliptic curve algorithm this library verifies with to the curve §5.8.5 requires a
+// key using that algorithm to specify.
+//
+// The specification requires the crv parameter for ES256, ES384, ES512 and EdDSA. It states no requirement for the
+// fully specified algorithms ESP256, ESP384, ESP512 and Ed25519, because those identifiers name their curve
+// themselves and leave nothing for the parameter to settle. A crv such a key does carry is still held to the curve
+// its algorithm names, as a key which contradicts itself is malformed however the requirement is written.
+//
+// Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn-3/#sctn-alg-identifier)
+var coseAlgorithmCurves = map[COSEAlgorithmIdentifier]coseAlgorithmCurve{
+	AlgES256:   {curve: P256, required: true},
+	AlgES384:   {curve: P384, required: true},
+	AlgES512:   {curve: P521, required: true},
+	AlgEdDSA:   {curve: Ed25519, required: true},
+	AlgESP256:  {curve: P256},
+	AlgESP384:  {curve: P384},
+	AlgESP512:  {curve: P521},
+	AlgEd25519: {curve: Ed25519},
+}
