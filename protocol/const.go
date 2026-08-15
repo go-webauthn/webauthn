@@ -24,6 +24,12 @@ const (
 )
 
 const (
+	maxDomainLength           = 253
+	maxDomainLabelLength      = 63
+	forbiddenDomainCodePoints = " #/:<>?@[\\]^|%"
+)
+
+const (
 	attStatementAndroidSafetyNetHostname = "attest.android.com"
 )
 

@@ -1,5 +1,7 @@
 package protocol
 
+import "errors"
+
 // Error is a struct that describes specific error conditions in a structured format.
 type Error struct {
 	// Short name for the type of error that has occurred.
@@ -151,4 +153,16 @@ var (
 		Type:    "not_implemented",
 		Details: "This field is not yet supported by this library",
 	}
+)
+
+var (
+	errDomainIsIPAddress        = errors.New("the value must be a domain and not an IP address")
+	errDomainNotADomain         = errors.New("the domain component must actually be a domain")
+	errDomainEmptyLabel         = errors.New("the domain must not contain an empty label")
+	errDomainLabelHyphen        = errors.New("the domain labels must not begin or end with a hyphen")
+	errDomainLabelTooLong       = errors.New("the domain labels must not exceed 63 characters")
+	errDomainTooLong            = errors.New("the domain must not exceed 253 characters")
+	errDomainForbiddenCharacter = errors.New("the domain must not contain a forbidden character")
+	errDomainFinalLabelNumeric  = errors.New("the final domain label must not be a number")
+	errDomainNotASCII           = errors.New("the domain must not contain non-ascii characters, apply IDNA normalization to it first")
 )
