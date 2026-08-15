@@ -96,12 +96,11 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf("error generating credential creation: the challenge must be at least 16 bytes")
 	}
 
-	// The user handle is validated after the options have been applied, and the validated value is what the session
-	// records, because a [RegistrationOption] receives the whole creation options and may therefore replace the user
-	// entity id derived from the [User] above.
-	var handle []byte
-
-	if handle, err = userHandle(creation.Response.User.ID); err != nil {
+	// The user handle is validated after the options have been applied because a [RegistrationOption] receives the
+	// whole creation options and may therefore replace the user entity id derived from the [User] above, and it is
+	// the id which is actually sent to the client that has to satisfy the bounds. The session records the id of the
+	// [User] itself rather than this one, as that is what [WebAuthn.CreateCredential] is given to compare it against.
+	if err = validateUserHandle(creation.Response.User.ID); err != nil {
 		return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
 	}
 
@@ -119,7 +118,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	session = &SessionData{
 		Challenge:        creation.Response.Challenge.String(),
 		RelyingPartyID:   creation.Response.RelyingParty.ID,
-		UserID:           handle,
+		UserID:           user.WebAuthnID(),
 		UserVerification: creation.Response.AuthenticatorSelection.UserVerification,
 		Extensions:       creation.Response.Extensions.Session(),
 		CredParams:       creation.Response.Parameters,

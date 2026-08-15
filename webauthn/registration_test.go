@@ -981,7 +981,8 @@ func TestBeginRegistrationHintsSetAuthenticatorAttachment(t *testing.T) {
 // TestBeginRegistrationUserHandleAfterOptions covers the user handle bounds being enforced against the handle which
 // is actually sent to the client. A [RegistrationOption] receives the whole creation options, so one supplied by the
 // caller can replace the user entity id after it has been derived from the [User]; the bounds must hold for that
-// final value, and the session must record it rather than the handle the ceremony started from.
+// final value, while the session must still record the id of the [User], which is what
+// [WebAuthn.CreateCredential] compares it against.
 func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
 	withUserHandle := func(id any) RegistrationOption {
 		return func(cco *protocol.PublicKeyCredentialCreationOptions) error {
@@ -995,6 +996,7 @@ func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
 		name           string
 		encodeAsString bool
 		opts           []RegistrationOption
+		entity         any
 		expected       []byte
 		err            string
 	}{
@@ -1009,15 +1011,17 @@ func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
 			err:  "error generating credential creation: the user id must be between 1 and 64 bytes but it has a length of 65",
 		},
 		{
-			name:     "ShouldRecordAHandleSetByAnOptionInTheSession",
+			name:     "ShouldSendAHandleSetByAnOptionButRecordTheUsersInTheSession",
 			opts:     []RegistrationOption{withUserHandle(protocol.URLEncodedBase64("replacement"))},
-			expected: []byte("replacement"),
+			entity:   protocol.URLEncodedBase64("replacement"),
+			expected: []byte(testUserID),
 		},
 		{
-			name:           "ShouldRecordAStringHandleInTheSession",
+			name:           "ShouldSendAStringHandleSetByAnOptionButRecordTheUsersInTheSession",
 			encodeAsString: true,
 			opts:           []RegistrationOption{withUserHandle("replacement")},
-			expected:       []byte("replacement"),
+			entity:         "replacement",
+			expected:       []byte(testUserID),
 		},
 		{
 			name: "ShouldRejectAHandleOfAnUnusableType",
@@ -1026,6 +1030,7 @@ func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
 		},
 		{
 			name:     "ShouldRecordTheUsersHandleWithoutAnOption",
+			entity:   protocol.URLEncodedBase64(testUserID),
 			expected: []byte(testUserID),
 		},
 	}
@@ -1051,7 +1056,9 @@ func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			require.NotNil(t, creation)
 			require.NotNil(t, session)
+			assert.Equal(t, tc.entity, creation.Response.User.ID)
 			assert.Equal(t, tc.expected, session.UserID)
 		})
 	}
