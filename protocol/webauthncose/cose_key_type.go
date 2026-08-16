@@ -25,6 +25,9 @@ const (
 	// WalnutDSA is the public key for Walnut Digital Signature Algorithm.
 	WalnutDSA
 
-	// AKP is the key type for algorithm key pairs (i.e. ML-DSA).
+	// AKP is the key type for algorithm key pairs, which carry their key material as an opaque byte string whose
+	// interpretation is left to the algorithm the key names. This library uses it for the ML-DSA parameter sets.
+	//
+	// Specification: §6. COSE Key Type AKP (https://www.rfc-editor.org/rfc/rfc9964#section-6)
 	AKP
 )

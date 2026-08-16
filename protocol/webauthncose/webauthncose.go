@@ -238,6 +238,20 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 		}
 
 		return r, nil
+	case AKP:
+		var a AKPPublicKeyData
+
+		if err = webauthncbor.Unmarshal(keyBytes, &a); err != nil {
+			return nil, err
+		}
+
+		a.PublicKeyData = pk
+
+		if err = validateAKPPublicKey(&a); err != nil {
+			return nil, err
+		}
+
+		return a, nil
 	default:
 		return nil, ErrUnsupportedKey
 	}
@@ -271,6 +285,8 @@ func VerifySignature(key any, data []byte, sig []byte) (bool, error) {
 	case EC2PublicKeyData:
 		return k.Verify(data, sig)
 	case RSAPublicKeyData:
+		return k.Verify(data, sig)
+	case AKPPublicKeyData:
 		return k.Verify(data, sig)
 	default:
 		return false, ErrUnsupportedKey
@@ -337,6 +353,10 @@ func DisplayPublicKey(cpk []byte) string {
 		if data, err = marshalEd25519PublicKey(oKey); err != nil {
 			return keyCannotDisplay
 		}
+	case AKPPublicKeyData:
+		if data, err = mldsaMarshalPublicKey(COSEAlgorithmIdentifier(k.Algorithm), k.PublicKey); err != nil {
+			return keyCannotDisplay
+		}
 	default:
 		return "Cannot display key of this type"
 	}
@@ -394,9 +414,13 @@ func SigAlgFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) x509.SignatureAlgorithm 
 // has one registered for it. An unregistered algorithm yields no hash rather than a substituted one, so a caller
 // which reaches this with an algorithm it has not itself constrained cannot hash with an algorithm the credential
 // never named.
+//
+// An algorithm which signs the message itself rather than a digest of it, such as ML-DSA, registers no hash and is
+// reported the same way. The availability of the registered hash is what decides this rather than its presence, as
+// constructing an unavailable hash panics.
 func HasherFromCOSEAlg(coseAlg COSEAlgorithmIdentifier) (hash.Hash, bool) {
 	d, ok := COSESignatureAlgorithmDetails[coseAlg]
-	if !ok {
+	if !ok || !d.hash.Available() {
 		return nil, false
 	}
 
