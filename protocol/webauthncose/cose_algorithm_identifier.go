@@ -48,20 +48,8 @@ const (
 	// be parsed.
 	AlgES256K COSEAlgorithmIdentifier = -47
 
-	// AlgMLDSA44 is ML-DSA with parameter set ML-DSA-44 (FIPS 204). A credential using it carries an [AKP] key,
-	// and can only be verified when this library is built with Go 1.27 or newer, as the ML-DSA implementation it
-	// verifies with is the standard library one. It is not requested by any of the credential parameter lists
-	// this library provides, so a Relying Party that wants it must ask for it explicitly, and should only do so
-	// when it can guarantee the toolchain every build uses.
-	AlgMLDSA44 COSEAlgorithmIdentifier = -48
-
-	// AlgMLDSA65 is ML-DSA with parameter set ML-DSA-65 (FIPS 204). See [AlgMLDSA44] for the conditions under
-	// which this library verifies with it.
-	AlgMLDSA65 COSEAlgorithmIdentifier = -49
-
-	// AlgMLDSA87 is ML-DSA with parameter set ML-DSA-87 (FIPS 204). See [AlgMLDSA44] for the conditions under
-	// which this library verifies with it.
-	AlgMLDSA87 COSEAlgorithmIdentifier = -50
+	// The ML-DSA parameter sets occupy -48, -49 and -50. They are declared in the file which implements them, as
+	// they are only usable when this library is built with Go 1.27 or newer.
 
 	// AlgESP384 is ECDSA using P-384 curve with pre-hashed SHA-384 input.
 	AlgESP384 COSEAlgorithmIdentifier = -51
@@ -112,9 +100,6 @@ var coseAlgorithmNames = map[COSEAlgorithmIdentifier]string{
 	AlgPS384:   "PS384",
 	AlgPS512:   "PS512",
 	AlgES256K:  "ES256K",
-	AlgMLDSA44: "ML-DSA-44",
-	AlgMLDSA65: "ML-DSA-65",
-	AlgMLDSA87: "ML-DSA-87",
 	AlgESP384:  "ESP384",
 	AlgESP512:  "ESP512",
 	AlgRS256:   "RS256",

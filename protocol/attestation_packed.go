@@ -214,10 +214,13 @@ func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, sig []by
 		err = verifyKeyAlgorithm(k.Algorithm, alg)
 	case webauthncose.RSAPublicKeyData:
 		err = verifyKeyAlgorithm(k.Algorithm, alg)
-	case webauthncose.AKPPublicKeyData:
-		err = verifyKeyAlgorithm(k.Algorithm, alg)
 	default:
-		return "", nil, ErrInvalidAttestation.WithDetails("Error verifying the public key data")
+		keyAlgorithm, ok := akpKeyAlgorithm(key)
+		if !ok {
+			return "", nil, ErrInvalidAttestation.WithDetails("Error verifying the public key data")
+		}
+
+		err = verifyKeyAlgorithm(keyAlgorithm, alg)
 	}
 
 	if err != nil {

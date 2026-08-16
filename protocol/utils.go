@@ -246,9 +246,11 @@ func attestationCredentialPublicKey(credentialPublicKey any) (public crypto.Publ
 		// The coordinate is of the length ed25519 requires as webauthncose.ParsePublicKey rejects any other, so no
 		// length is asserted here.
 		return ed25519.PublicKey(k.XCoord), nil
-	case webauthncose.AKPPublicKeyData:
-		return k.ToPublicKey()
 	default:
+		if public, ok, err := akpPublicKey(credentialPublicKey); ok {
+			return public, err
+		}
+
 		return nil, fmt.Errorf("unsupported public key type %T", credentialPublicKey)
 	}
 }

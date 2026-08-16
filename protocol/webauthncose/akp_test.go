@@ -447,6 +447,22 @@ func TestMLDSAFailsClosed(t *testing.T) {
 		require.EqualError(t, err, "AKP key is not a valid ML-DSA public key")
 	})
 
+	t.Run("DispatchOfOtherKeyTypes", func(t *testing.T) {
+		// Each dispatch arm is reached only from the default of a switch which has handled every other key
+		// type, so claiming one would divert it from the branch which knows how to handle it.
+		for _, other := range []any{struct{}{}, EC2PublicKeyData{}, RSAPublicKeyData{}, OKPPublicKeyData{}} {
+			der, err := displayAKPPublicKey(other)
+
+			assert.Nil(t, der)
+			require.NoError(t, err)
+
+			valid, err := verifyAKPSignature(other, data, sig)
+
+			assert.False(t, valid)
+			require.EqualError(t, err, "Unsupported Public Key Type")
+		}
+	})
+
 	t.Run("MarshalPublicKey", func(t *testing.T) {
 		der, err := mldsaMarshalPublicKey(AlgES256, key.PublicKey)
 
