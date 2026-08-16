@@ -109,6 +109,22 @@ func TestNewSignalCurrentUserDetails(t *testing.T) {
 	}
 }
 
+func TestNewSignalTypedNilUser(t *testing.T) {
+	var user *signalUser
+
+	t.Run("ShouldHandleAllAcceptedCredentials", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			assert.Nil(t, NewSignalAllAcceptedCredentials("example.com", user))
+		})
+	})
+
+	t.Run("ShouldHandleCurrentUserDetails", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			assert.Nil(t, NewSignalCurrentUserDetails("example.com", user))
+		})
+	})
+}
+
 type signalUser struct {
 	id          []byte
 	credentials [][]byte

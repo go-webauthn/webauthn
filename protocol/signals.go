@@ -1,9 +1,28 @@
 package protocol
 
+import (
+	"reflect"
+)
+
+func signalUserIsNil(user any) bool {
+	if user == nil {
+		return true
+	}
+
+	switch value := reflect.ValueOf(user); value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
 // NewSignalAllAcceptedCredentials creates a new SignalAllAcceptedCredentials struct that can simply be encoded with
 // json.Marshal.
+//
+// A nil user, including a nil pointer carried in a non-nil interface, yields a nil result.
 func NewSignalAllAcceptedCredentials(rpid string, user AllAcceptedCredentialsUser) *SignalAllAcceptedCredentials {
-	if user == nil {
+	if signalUserIsNil(user) {
 		return nil
 	}
 
@@ -35,8 +54,10 @@ type SignalAllAcceptedCredentials struct {
 //
 // A [github.com/go-webauthn/webauthn/webauthn.User] satisfies [CurrentUserDetailsUser] as it stands, so the user
 // value the ceremony methods already take can be passed straight through.
+//
+// A nil user, including a nil pointer carried in a non-nil interface, yields a nil result.
 func NewSignalCurrentUserDetails(rpid string, user CurrentUserDetailsUser) *SignalCurrentUserDetails {
-	if user == nil {
+	if signalUserIsNil(user) {
 		return nil
 	}
 

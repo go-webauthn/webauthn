@@ -106,8 +106,16 @@ type Config struct {
 	// decode the URL Safe Base64 data.
 	//
 	// The resulting options are not the PublicKeyCredentialCreationOptionsJSON form, which requires user.id to be a
-	// Base64URLString, so a client which passes them to PublicKeyCredential.parseCreationOptionsFromJSON() rejects
-	// them. Enable this only for a client which does its own decoding, which is the situation it exists for.
+	// Base64URLString, so a client which passes them to PublicKeyCredential.parseCreationOptionsFromJSON() does one
+	// of two things with them, neither of them what the Relying Party intended:
+	//
+	//   - A value outside the base64url alphabet, such as "alice@example.com", fails to decode and the call throws.
+	//   - A value which happens to be valid base64url, which every id drawn from letters and digits alone is, is
+	//     accepted and decoded into unrelated bytes. "user123" arrives at the authenticator as the five bytes
+	//     ba c7 ab d7 6d, and the user handle stored against the credential is not the one that was sent.
+	//
+	// The second outcome is the dangerous one, since nothing reports it. Enable this only for a client which does
+	// its own decoding, which is the situation it exists for.
 	//
 	// Specification: §5.1.8. Deserialize Registration Ceremony Options (https://www.w3.org/TR/webauthn-3/#sctn-parseCreationOptionsFromJSON)
 	EncodeUserIDAsString bool
