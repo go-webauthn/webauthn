@@ -7,14 +7,6 @@ import (
 	"crypto/x509"
 )
 
-// init registers the ML-DSA parameter sets in [COSESignatureAlgorithmDetails], so that the attestation formats
-// which verify an x5c chain recognize a certificate signed with one.
-func init() {
-	COSESignatureAlgorithmDetails[AlgMLDSA44] = COSESignatureAlgorithmDetail{name: "ML-DSA-44", sigAlg: x509.MLDSA44}
-	COSESignatureAlgorithmDetails[AlgMLDSA65] = COSESignatureAlgorithmDetail{name: "ML-DSA-65", sigAlg: x509.MLDSA65}
-	COSESignatureAlgorithmDetails[AlgMLDSA87] = COSESignatureAlgorithmDetail{name: "ML-DSA-87", sigAlg: x509.MLDSA87}
-}
-
 // mldsaVerify verifies a pure ML-DSA signature made by the key material an AKP credential public key carries.
 //
 // Specification: §5. ML-DSA (https://www.rfc-editor.org/rfc/rfc9964#section-5)

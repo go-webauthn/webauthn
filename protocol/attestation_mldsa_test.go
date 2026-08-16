@@ -60,6 +60,50 @@ func TestVerifyAttestationPublicKeyMatchMLDSA(t *testing.T) {
 	})
 }
 
+// TestAKPHelpersRejectOtherKeyTypes asserts that neither helper claims a key which is not of the AKP key type. Each
+// is reached only from the default arm of a switch which has already handled every other key type, so a helper
+// which claimed one of them would divert a key away from the branch that knows how to handle it.
+func TestAKPHelpersRejectOtherKeyTypes(t *testing.T) {
+	keys := []any{
+		struct{}{},
+		webauthncose.EC2PublicKeyData{},
+		webauthncose.RSAPublicKeyData{},
+		webauthncose.OKPPublicKeyData{},
+	}
+
+	for _, key := range keys {
+		algorithm, ok := akpKeyAlgorithm(key)
+
+		assert.False(t, ok)
+		assert.Zero(t, algorithm)
+
+		public, ok, err := akpPublicKey(key)
+
+		assert.False(t, ok)
+		assert.Nil(t, public)
+		require.NoError(t, err)
+	}
+
+	t.Run("ShouldClaimAKPKey", func(t *testing.T) {
+		_, pub := mldsaTestCredentialPublicKey(t, webauthncose.AlgMLDSA44, mldsa.MLDSA44())
+
+		parsed, err := webauthncose.ParsePublicKey(pub)
+
+		require.NoError(t, err)
+
+		algorithm, ok := akpKeyAlgorithm(parsed)
+
+		assert.True(t, ok)
+		assert.Equal(t, int64(webauthncose.AlgMLDSA44), algorithm)
+
+		public, ok, err := akpPublicKey(parsed)
+
+		assert.True(t, ok)
+		require.NoError(t, err)
+		assert.NotNil(t, public)
+	})
+}
+
 // TestPackedFormat_SelfAttestationMLDSA asserts that a packed self attestation made with an ML-DSA credential key
 // verifies, and that a statement whose alg contradicts the credential public key does not.
 //

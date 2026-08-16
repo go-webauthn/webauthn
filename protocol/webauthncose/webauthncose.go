@@ -239,19 +239,7 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 
 		return r, nil
 	case AKP:
-		var a AKPPublicKeyData
-
-		if err = webauthncbor.Unmarshal(keyBytes, &a); err != nil {
-			return nil, err
-		}
-
-		a.PublicKeyData = pk
-
-		if err = validateAKPPublicKey(&a); err != nil {
-			return nil, err
-		}
-
-		return a, nil
+		return parseAKPPublicKey(pk, keyBytes)
 	default:
 		return nil, ErrUnsupportedKey
 	}
@@ -286,10 +274,8 @@ func VerifySignature(key any, data []byte, sig []byte) (bool, error) {
 		return k.Verify(data, sig)
 	case RSAPublicKeyData:
 		return k.Verify(data, sig)
-	case AKPPublicKeyData:
-		return k.Verify(data, sig)
 	default:
-		return false, ErrUnsupportedKey
+		return verifyAKPSignature(key, data, sig)
 	}
 }
 
@@ -353,12 +339,16 @@ func DisplayPublicKey(cpk []byte) string {
 		if data, err = marshalEd25519PublicKey(oKey); err != nil {
 			return keyCannotDisplay
 		}
-	case AKPPublicKeyData:
-		if data, err = mldsaMarshalPublicKey(COSEAlgorithmIdentifier(k.Algorithm), k.PublicKey); err != nil {
+	default:
+		if data, err = displayAKPPublicKey(parsedKey); err != nil {
 			return keyCannotDisplay
 		}
-	default:
-		return "Cannot display key of this type"
+
+		// A nil encoding without an error is a key type which is not rendered here at all, as distinct from an
+		// AKP key whose material could not be encoded.
+		if data == nil {
+			return "Cannot display key of this type"
+		}
 	}
 
 	pemBytes := pem.EncodeToMemory(&pem.Block{

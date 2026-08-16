@@ -1,8 +1,12 @@
+//go:build go1.27
+
 package webauthncose
 
 import (
 	"crypto"
 	"fmt"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 // AKPPublicKeyData is a credential public key of the AKP (Algorithm Key Pair) key type, which carries its key
@@ -29,15 +33,54 @@ func (k *AKPPublicKeyData) Verify(data []byte, sig []byte) (bool, error) {
 
 // ToPublicKey converts the AKPPublicKeyData to the standard library key of the algorithm it names, which for the
 // ML-DSA parameter sets is a *[crypto/mldsa.PublicKey].
-//
-// The concrete type is not named in the signature because the package which declares it is only present from Go
-// 1.27, which is also the point from which this returns a key at all.
 func (k *AKPPublicKeyData) ToPublicKey() (key crypto.PublicKey, err error) {
 	if err = validateAKPPublicKey(k); err != nil {
 		return nil, err
 	}
 
 	return mldsaPublicKey(COSEAlgorithmIdentifier(k.Algorithm), k.PublicKey)
+}
+
+// parseAKPPublicKey decodes a credential public key of the AKP key type. It is the arm [ParsePublicKey] delegates
+// that key type to, so that the parser itself does not name a type which only exists on a build that can verify
+// with it.
+func parseAKPPublicKey(pk PublicKeyData, keyBytes []byte) (key any, err error) {
+	var a AKPPublicKeyData
+
+	if err = webauthncbor.Unmarshal(keyBytes, &a); err != nil {
+		return nil, err
+	}
+
+	a.PublicKeyData = pk
+
+	if err = validateAKPPublicKey(&a); err != nil {
+		return nil, err
+	}
+
+	return a, nil
+}
+
+// verifyAKPSignature is the arm [VerifySignature] delegates a key of the AKP key type to. A key of any other type
+// has already been handled by its caller, so anything reaching here that is not one is a key this library does not
+// verify with.
+func verifyAKPSignature(key any, data []byte, sig []byte) (bool, error) {
+	k, ok := key.(AKPPublicKeyData)
+	if !ok {
+		return false, ErrUnsupportedKey
+	}
+
+	return k.Verify(data, sig)
+}
+
+// displayAKPPublicKey is the arm [DisplayPublicKey] delegates a key of the AKP key type to. A nil encoding and a
+// nil error report that the key is not an AKP key at all, which the caller renders as a key type it cannot display.
+func displayAKPPublicKey(key any) (der []byte, err error) {
+	k, ok := key.(AKPPublicKeyData)
+	if !ok {
+		return nil, nil
+	}
+
+	return mldsaMarshalPublicKey(COSEAlgorithmIdentifier(k.Algorithm), k.PublicKey)
 }
 
 // validateAKPPublicKey checks that a credential public key of type AKP names an algorithm this library verifies

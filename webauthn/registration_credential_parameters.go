@@ -78,8 +78,7 @@ func CredentialParametersRecommendedL3() []protocol.CredentialParameter {
 //
 // This library can also verify ES256K and the ML-DSA parameter sets, which no list here requests: they are neither
 // recommended by the specification nor offered by any authenticator in general use, so a Relying Party that wants
-// one names it explicitly. ML-DSA additionally requires the library to be built with Go 1.27 or newer, so a list
-// which offered it would have authenticators return credentials that some builds could not verify.
+// one names it explicitly.
 func CredentialParametersExtendedL3() []protocol.CredentialParameter {
 	return []protocol.CredentialParameter{
 		{

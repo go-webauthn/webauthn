@@ -4,6 +4,7 @@ package webauthncose
 
 import (
 	"crypto/x509"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,37 +13,38 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
+// akpTestAlgorithms is every ML-DSA parameter set, named by its raw identifier because a build which cannot verify
+// with them does not declare a constant for any of them.
+var akpTestAlgorithms = []struct {
+	alg           COSEAlgorithmIdentifier
+	publicKeySize int
+}{
+	{-48, 1312},
+	{-49, 1952},
+	{-50, 2592},
+}
+
+// TestParsePublicKeyAKPUnsupported asserts that a build which cannot verify an ML-DSA signature rejects a
+// credential public key of the AKP key type when it is parsed.
+//
+// The rejection has to happen here rather than at verification time. A Relying Party which accepted the credential
+// at registration would have stored one it can never authenticate with, and would have no way to tell the user why
+// their authenticator stopped working.
 func TestParsePublicKeyAKPUnsupported(t *testing.T) {
 	for _, tc := range akpTestAlgorithms {
 		t.Run(tc.alg.String(), func(t *testing.T) {
 			parsed, err := ParsePublicKey(akpTestKey(t, tc.alg, tc.publicKeySize))
 
 			assert.Nil(t, parsed)
-			require.EqualError(t, err, "AKP key with algorithm "+tc.alg.String()+" requires this library to be built with Go 1.27 or newer")
+			require.EqualError(t, err, "AKP key type requires this library to be built with Go 1.27 or newer")
 		})
 	}
 }
 
-func TestAKPPublicKeyDataVerifyUnsupported(t *testing.T) {
-	for _, tc := range akpTestAlgorithms {
-		t.Run(tc.alg.String(), func(t *testing.T) {
-			key := AKPPublicKeyData{
-				PublicKeyData: PublicKeyData{
-					KeyType:   int64(AKP),
-					Algorithm: int64(tc.alg),
-				},
-				PublicKey: make([]byte, tc.publicKeySize),
-			}
-
-			valid, err := key.Verify([]byte("data to sign"), []byte("signature"))
-
-			assert.False(t, valid)
-			require.EqualError(t, err, "AKP key with algorithm "+tc.alg.String()+" requires this library to be built with Go 1.27 or newer")
-		})
-	}
-}
-
-func TestMLDSAAlgorithmDetailsUnsupported(t *testing.T) {
+// TestAKPAlgorithmsUnregisteredUnsupported asserts that the ML-DSA identifiers name nothing on this build, so an
+// attestation statement which declares one is refused for want of a signature algorithm rather than verified some
+// other way, and no caller is handed a hash for an algorithm which does not pre-hash.
+func TestAKPAlgorithmsUnregisteredUnsupported(t *testing.T) {
 	for _, tc := range akpTestAlgorithms {
 		t.Run(tc.alg.String(), func(t *testing.T) {
 			assert.Equal(t, x509.UnknownSignatureAlgorithm, SigAlgFromCOSEAlg(tc.alg))
@@ -51,79 +53,36 @@ func TestMLDSAAlgorithmDetailsUnsupported(t *testing.T) {
 
 			assert.Nil(t, h)
 			assert.False(t, ok)
+
+			// The identifier is not modelled at all, so it renders as its number rather than a name.
+			assert.Equal(t, strconv.Itoa(int(tc.alg)), tc.alg.String())
 		})
 	}
 }
 
+// TestVerifySignatureAKPUnsupported asserts that the arm which handles the AKP key type refuses anything reaching
+// it, which is the guarantee that a build unable to verify an ML-DSA signature cannot be made to accept one.
+func TestVerifySignatureAKPUnsupported(t *testing.T) {
+	valid, err := VerifySignature(struct{}{}, []byte("data to sign"), []byte("signature"))
+
+	assert.False(t, valid)
+	require.EqualError(t, err, "Unsupported Public Key Type")
+
+	valid, err = verifyAKPSignature(struct{}{}, []byte("data to sign"), []byte("signature"))
+
+	assert.False(t, valid)
+	require.EqualError(t, err, "Unsupported Public Key Type")
+}
+
+// TestDisplayPublicKeyAKPUnsupported asserts that an AKP key is reported as one which cannot be displayed rather
+// than rendered from key material this build cannot interpret.
 func TestDisplayPublicKeyAKPUnsupported(t *testing.T) {
-	assert.Equal(t, keyCannotDisplay, DisplayPublicKey(akpTestKey(t, AlgMLDSA44, 1312)))
-}
+	assert.Equal(t, keyCannotDisplay, DisplayPublicKey(akpTestKey(t, -48, 1312)))
 
-func TestAKPPublicKeyDataToPublicKeyUnsupported(t *testing.T) {
-	for _, tc := range akpTestAlgorithms {
-		t.Run(tc.alg.String(), func(t *testing.T) {
-			key := AKPPublicKeyData{
-				PublicKeyData: PublicKeyData{
-					KeyType:   int64(AKP),
-					Algorithm: int64(tc.alg),
-				},
-				PublicKey: make([]byte, tc.publicKeySize),
-			}
+	der, err := displayAKPPublicKey(struct{}{})
 
-			public, err := key.ToPublicKey()
-
-			assert.Nil(t, public)
-			require.EqualError(t, err, "AKP key with algorithm "+tc.alg.String()+" requires this library to be built with Go 1.27 or newer")
-		})
-	}
-}
-
-func TestParsePublicKeyAKPRejectsAlgorithmWhichIsNotMLDSA(t *testing.T) {
-	parsed, err := ParsePublicKey(akpTestKey(t, AlgES256, 1312))
-
-	assert.Nil(t, parsed)
-	require.EqualError(t, err, "AKP key has unsupported algorithm ES256")
-}
-
-func TestMLDSAFailsClosedUnsupported(t *testing.T) {
-	pub, data, sig := make([]byte, 1312), []byte("data to sign"), make([]byte, 2420)
-
-	t.Run("PublicKeySize", func(t *testing.T) {
-		size, ok := mldsaPublicKeySize(AlgMLDSA44)
-
-		assert.False(t, ok)
-		assert.Zero(t, size)
-	})
-
-	t.Run("Verify", func(t *testing.T) {
-		valid, err := mldsaVerify(AlgMLDSA44, pub, data, sig)
-
-		assert.False(t, valid)
-		require.EqualError(t, err, "Unsupported public key algorithm")
-	})
-
-	t.Run("PublicKey", func(t *testing.T) {
-		public, err := mldsaPublicKey(AlgMLDSA44, pub)
-
-		assert.Nil(t, public)
-		require.EqualError(t, err, "Unsupported public key algorithm")
-	})
-
-	t.Run("MarshalPublicKey", func(t *testing.T) {
-		der, err := mldsaMarshalPublicKey(AlgMLDSA44, pub)
-
-		assert.Nil(t, der)
-		require.EqualError(t, err, "Unsupported public key algorithm")
-	})
-}
-
-var akpTestAlgorithms = []struct {
-	alg           COSEAlgorithmIdentifier
-	publicKeySize int
-}{
-	{AlgMLDSA44, 1312},
-	{AlgMLDSA65, 1952},
-	{AlgMLDSA87, 2592},
+	assert.Nil(t, der)
+	require.NoError(t, err)
 }
 
 type akpTestCOSEKey struct {
