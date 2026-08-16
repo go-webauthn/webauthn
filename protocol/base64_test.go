@@ -54,6 +54,31 @@ func TestURLEncodedBase64_UnmarshalJSON_Error(t *testing.T) {
 			data: `"not valid base64!!!"`,
 			err:  "illegal base64 data at input byte 3",
 		},
+		{
+			name: "ShouldFailJSONNumber",
+			data: `123456`,
+			err:  errBase64NotJSONString.Error(),
+		},
+		{
+			name: "ShouldFailJSONBoolean",
+			data: `true`,
+			err:  errBase64NotJSONString.Error(),
+		},
+		{
+			name: "ShouldFailJSONObject",
+			data: `{"a":"b"}`,
+			err:  errBase64NotJSONString.Error(),
+		},
+		{
+			name: "ShouldFailJSONArray",
+			data: `["YWJj"]`,
+			err:  errBase64NotJSONString.Error(),
+		},
+		{
+			name: "ShouldFailUnterminatedJSONString",
+			data: `"YWJj`,
+			err:  errBase64NotJSONString.Error(),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -92,6 +117,42 @@ func TestBase64UnmarshalJSON(t *testing.T) {
 			expected: testData{
 				StringData:  "test string",
 				EncodedData: nil,
+			},
+			err: "",
+		},
+		{
+			name:    "ShouldHandlePaddedBase64Data",
+			message: `"YWJjZA=="`,
+			expected: testData{
+				StringData:  "test string",
+				EncodedData: URLEncodedBase64("abcd"),
+			},
+			err: "",
+		},
+		{
+			name:    "ShouldHandleEscapedBase64Data",
+			message: `"\u0059\u0057\u004a\u006a"`,
+			expected: testData{
+				StringData:  "test string",
+				EncodedData: URLEncodedBase64("abc"),
+			},
+			err: "",
+		},
+		{
+			name:    "ShouldHandlePartiallyEscapedBase64Data",
+			message: `"YW\u004aj"`,
+			expected: testData{
+				StringData:  "test string",
+				EncodedData: URLEncodedBase64("abc"),
+			},
+			err: "",
+		},
+		{
+			name:    "ShouldHandleEmptyString",
+			message: `""`,
+			expected: testData{
+				StringData:  "test string",
+				EncodedData: URLEncodedBase64{},
 			},
 			err: "",
 		},

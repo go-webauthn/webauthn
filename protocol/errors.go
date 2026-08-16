@@ -156,6 +156,10 @@ var (
 )
 
 var (
+	errBase64NotJSONString = errors.New("error unmarshalling url encoded base64: expected a JSON string")
+)
+
+var (
 	errDomainIsIPAddress        = errors.New("the value must be a domain and not an IP address")
 	errDomainNotADomain         = errors.New("the domain component must actually be a domain")
 	errDomainEmptyLabel         = errors.New("the domain must not contain an empty label")

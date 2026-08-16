@@ -129,6 +129,62 @@ func TestCredentialDescriptor_SignalUnknownCredential(t *testing.T) {
 	}
 }
 
+func TestAuthenticatorSelection_IsZero(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     AuthenticatorSelection
+		expected bool
+	}{
+		{"ShouldBeZeroWhenUnset", AuthenticatorSelection{}, true},
+		{"ShouldNotBeZeroWithAttachment", AuthenticatorSelection{AuthenticatorAttachment: Platform}, false},
+		{"ShouldNotBeZeroWithResidentKey", AuthenticatorSelection{ResidentKey: ResidentKeyRequirementRequired}, false},
+		{"ShouldNotBeZeroWithUserVerification", AuthenticatorSelection{UserVerification: VerificationPreferred}, false},
+		{"ShouldNotBeZeroWithRequireResidentKeyTrue", AuthenticatorSelection{RequireResidentKey: ResidentKeyRequired()}, false},
+		{"ShouldNotBeZeroWithRequireResidentKeyFalse", AuthenticatorSelection{RequireResidentKey: ResidentKeyNotRequired()}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.have.IsZero())
+		})
+	}
+}
+
+func TestPublicKeyCredentialCreationOptions_MarshalAuthenticatorSelection(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     AuthenticatorSelection
+		expected string
+	}{
+		{
+			// Without the omitzero tag option this emits "authenticatorSelection":{} on every creation options
+			// payload, because omitempty has no effect on a struct value.
+			name:     "ShouldOmitWhenUnset",
+			have:     AuthenticatorSelection{},
+			expected: `{"rp":{"name":"","id":""},"user":{"name":"","displayName":"","id":null},"challenge":null}`,
+		},
+		{
+			name:     "ShouldEmitWhenSet",
+			have:     AuthenticatorSelection{UserVerification: VerificationPreferred},
+			expected: `{"rp":{"name":"","id":""},"user":{"name":"","displayName":"","id":null},"challenge":null,"authenticatorSelection":{"userVerification":"preferred"}}`,
+		},
+		{
+			name:     "ShouldEmitWhenOnlyRequireResidentKeyFalse",
+			have:     AuthenticatorSelection{RequireResidentKey: ResidentKeyNotRequired()},
+			expected: `{"rp":{"name":"","id":""},"user":{"name":"","displayName":"","id":null},"challenge":null,"authenticatorSelection":{"requireResidentKey":false}}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(PublicKeyCredentialCreationOptions{AuthenticatorSelection: tc.have})
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, string(data))
+		})
+	}
+}
+
 func TestCredentialParameter_MsgpRoundTrip(t *testing.T) {
 	testCases := []struct {
 		name     string

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -79,7 +80,7 @@ func attestationFormatValidationHandlerAndroidKey(att AttestationObject, clientD
 		return "", nil, ErrInvalidAttestation.WithDetails("Error validating x5c cert chain").WithError(err)
 	}
 
-	signatureData := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
+	signatureData := slices.Concat(att.RawAuthData, clientDataHash)
 
 	if sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.COSEAlgorithmIdentifier(alg)); sigAlg == x509.UnknownSignatureAlgorithm {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", alg))

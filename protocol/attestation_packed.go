@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -109,7 +110,7 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 		return "", x5c, ErrAttestation.WithDetails("Error getting certificate from x5c cert chain")
 	}
 
-	signatureData := append(authData, clientDataHash...) //nolint:gocritic // This is intentional.
+	signatureData := slices.Concat(authData, clientDataHash)
 
 	if sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.COSEAlgorithmIdentifier(alg)); sigAlg == x509.UnknownSignatureAlgorithm {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", alg))
@@ -195,7 +196,7 @@ func handleECDAAAttestation(sig, clientDataHash, ecdaaKeyID []byte, _ metadata.P
 }
 
 func handleSelfAttestation(alg int64, pubKey, authData, clientDataHash, sig []byte, _ metadata.Provider, policy SignaturePolicy) (attestationType string, x5cs []any, err error) {
-	verificationData := append(authData, clientDataHash...) //nolint:gocritic // This is intentional.
+	verificationData := slices.Concat(authData, clientDataHash)
 
 	var (
 		key   any

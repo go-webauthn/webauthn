@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/google/go-tpm/tpm2"
@@ -133,7 +134,7 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 	}
 
 	// Concatenate authenticatorData and clientDataHash to form attToBeSigned.
-	attToBeSigned := append(att.RawAuthData, clientDataHash...) //nolint:gocritic // This is intentional.
+	attToBeSigned := slices.Concat(att.RawAuthData, clientDataHash)
 
 	var certInfo *tpm2.TPMSAttest
 

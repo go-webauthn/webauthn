@@ -3,7 +3,9 @@ package protocol
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"reflect"
+	"strings"
 )
 
 // URLEncodedBase64 represents a byte slice holding URL-encoded base64 data.
@@ -22,21 +24,31 @@ func (e *URLEncodedBase64) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// Trim the leading and trailing quotes from raw JSON data (the whole value part).
-	data = bytes.Trim(data, `"`)
+	// A JSON value which is not a string is not base64 at all. Without this check the quote trimming below is a no-op
+	// and the value itself is decoded, so a number or a boolean produces silent garbage bytes rather than an error.
+	if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
+		return errBase64NotJSONString
+	}
+
+	// Decode the JSON string itself rather than reading the raw text between the quotes, so a value spelled with
+	// JSON escapes decodes to the same bytes as the plain spelling. The base64url alphabet contains nothing which
+	// has to be escaped, so such a value is unusual, but it is a legal encoding of one and the raw text is not.
+	var value string
+
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
 
 	// Trim the trailing equal characters.
-	data = bytes.TrimRight(data, "=")
+	value = strings.TrimRight(value, "=")
 
-	out := make([]byte, base64.RawURLEncoding.DecodedLen(len(data)))
-
-	n, err := base64.RawURLEncoding.Decode(out, data)
+	out, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
 		return err
 	}
 
 	v := reflect.ValueOf(e).Elem()
-	v.SetBytes(out[:n])
+	v.SetBytes(out)
 
 	return nil
 }

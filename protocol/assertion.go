@@ -1,12 +1,14 @@
 package protocol
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
@@ -102,12 +104,26 @@ func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionDa
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID missing")
 	}
 
-	if _, err = base64.RawURLEncoding.DecodeString(car.ID); err != nil {
+	var rawID []byte
+
+	if rawID, err = base64.RawURLEncoding.DecodeString(car.ID); err != nil {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID not base64url encoded").WithError(err)
+	}
+
+	// The decoder skips CR and LF, so an id composed only of them decodes to no bytes rather than failing above. A
+	// credential id is at least one byte, and the registration path already rejects a zero length decode here.
+	if len(rawID) == 0 {
+		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID that decodes to no bytes")
 	}
 
 	if car.Type != string(PublicKeyCredentialType) {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with bad type")
+	}
+
+	// The id member is defined as the base64url encoding of rawId. Every step below this one uses rawId, so a
+	// disagreement between the two would otherwise be silently resolved in favour of rawId.
+	if !bytes.Equal(rawID, car.RawID) {
+		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID that does not match the rawId")
 	}
 
 	var attachment AuthenticatorAttachment
@@ -183,7 +199,7 @@ func (p *ParsedCredentialAssertionData) Verify(storedChallenge string, relyingPa
 	// Step 16. Using the credential public key looked up in step 3, verify that sig is
 	// a valid signature over the binary concatenation of authData and hash.
 
-	sigData := append(p.Raw.AssertionResponse.AuthenticatorData, clientDataHash[:]...) //nolint:gocritic // This is intentional.
+	sigData := slices.Concat(p.Raw.AssertionResponse.AuthenticatorData, clientDataHash[:])
 
 	var (
 		key any

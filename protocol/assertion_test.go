@@ -258,6 +258,44 @@ func TestCredentialAssertionResponse_Parse_Errors(t *testing.T) {
 			},
 			err: "CredentialAssertionResponse with bad type",
 		},
+		{
+			name: "ShouldFailRawIDMismatch",
+			car: CredentialAssertionResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "dGVzdA",
+						Type: string(PublicKeyCredentialType),
+					},
+					RawID: URLEncodedBase64("not test"),
+				},
+			},
+			err: "CredentialAssertionResponse with ID that does not match the rawId",
+		},
+		{
+			name: "ShouldFailIDDecodingToNoBytes",
+			car: CredentialAssertionResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "\r\n",
+						Type: string(PublicKeyCredentialType),
+					},
+					RawID: URLEncodedBase64{},
+				},
+			},
+			err: "CredentialAssertionResponse with ID that decodes to no bytes",
+		},
+		{
+			name: "ShouldFailRawIDMissing",
+			car: CredentialAssertionResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "dGVzdA",
+						Type: string(PublicKeyCredentialType),
+					},
+				},
+			},
+			err: "CredentialAssertionResponse with ID that does not match the rawId",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -362,6 +400,30 @@ func TestParsedCredentialAssertionData_Verify(t *testing.T) {
 	}
 }
 
+func TestParsedCredentialAssertionData_VerifyDoesNotWriteBeyondAuthenticatorData(t *testing.T) {
+	par, credPubKey, challenge := testAssertionSpecVectorNoneES256(t)
+
+	raw := par.Raw.AssertionResponse.AuthenticatorData
+
+	// Model the spare capacity URLEncodedBase64.UnmarshalJSON leaves behind when the encoded value carried padding,
+	// so an append which writes the client data hash into the caller's backing array is observable.
+	const spare = 32
+
+	buf := make([]byte, len(raw), len(raw)+spare)
+	copy(buf, raw)
+
+	tail := buf[len(raw) : len(raw)+spare]
+	for i := range tail {
+		tail[i] = 0xAA
+	}
+
+	par.Raw.AssertionResponse.AuthenticatorData = buf
+
+	require.NoError(t, par.Verify(challenge, "example.org", "", []string{"https://example.org"}, nil, nil, TopOriginExplicitVerificationMode, false, false, true, credPubKey, SignaturePolicy{}))
+
+	assert.Equal(t, bytes.Repeat([]byte{0xAA}, spare), tail, "verification wrote into the spare capacity of the authenticator data the caller still holds")
+}
+
 func TestParseCredentialRequestResponse_Success(t *testing.T) {
 	body := io.NopCloser(bytes.NewReader([]byte(testAssertionResponses["success"])))
 
@@ -425,6 +487,7 @@ func TestCredentialAssertionResponse_Parse_ClientDataJSONError(t *testing.T) {
 				ID:   "dGVzdA",
 				Type: string(PublicKeyCredentialType),
 			},
+			RawID: URLEncodedBase64("test"),
 		},
 		AssertionResponse: AuthenticatorAssertionResponse{
 			AuthenticatorResponse: AuthenticatorResponse{
@@ -452,6 +515,7 @@ func TestCredentialAssertionResponse_Parse_AuthDataError(t *testing.T) {
 				ID:   "dGVzdA",
 				Type: string(PublicKeyCredentialType),
 			},
+			RawID: URLEncodedBase64("test"),
 		},
 		AssertionResponse: AuthenticatorAssertionResponse{
 			AuthenticatorResponse: AuthenticatorResponse{
