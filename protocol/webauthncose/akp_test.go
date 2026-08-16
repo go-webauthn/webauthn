@@ -352,6 +352,114 @@ func TestHasherFromCOSEAlgMLDSA(t *testing.T) {
 	}
 }
 
+func TestAKPPublicKeyDataToPublicKey(t *testing.T) {
+	for _, tc := range akpTestAlgorithms {
+		t.Run(tc.alg.String(), func(t *testing.T) {
+			private, encoded := akpTestKey(t, tc.alg)
+
+			parsed, err := ParsePublicKey(encoded)
+
+			require.NoError(t, err)
+
+			key, _ := parsed.(AKPPublicKeyData)
+
+			public, err := key.ToPublicKey()
+
+			require.NoError(t, err)
+			require.IsType(t, &mldsa.PublicKey{}, public)
+			assert.True(t, private.PublicKey().Equal(public))
+		})
+	}
+
+	t.Run("ShouldRejectKeyWhichWouldNotParse", func(t *testing.T) {
+		key := AKPPublicKeyData{
+			PublicKeyData: PublicKeyData{
+				KeyType:   int64(AKP),
+				Algorithm: int64(AlgMLDSA44),
+			},
+			PublicKey: []byte{0x01, 0x02, 0x03},
+		}
+
+		public, err := key.ToPublicKey()
+
+		assert.Nil(t, public)
+		require.EqualError(t, err, "AKP key with algorithm ML-DSA-44 has invalid public key length 3, expected 1312")
+	})
+
+	t.Run("ShouldRejectAlgorithmWhichIsNotMLDSA", func(t *testing.T) {
+		key := AKPPublicKeyData{
+			PublicKeyData: PublicKeyData{
+				KeyType:   int64(AKP),
+				Algorithm: int64(AlgES256),
+			},
+		}
+
+		public, err := key.ToPublicKey()
+
+		assert.Nil(t, public)
+		require.EqualError(t, err, "AKP key has unsupported algorithm ES256")
+	})
+}
+
+func TestMLDSAFailsClosed(t *testing.T) {
+	_, encoded := akpTestKey(t, AlgMLDSA44)
+
+	var key AKPPublicKeyData
+
+	require.NoError(t, webauthncbor.Unmarshal(encoded, &key))
+
+	data, sig, short := []byte("data to sign"), make([]byte, 2420), []byte{0x01, 0x02, 0x03}
+
+	t.Run("Parameters", func(t *testing.T) {
+		_, ok := mldsaParameters(AlgES256)
+
+		assert.False(t, ok)
+	})
+
+	t.Run("PublicKeySize", func(t *testing.T) {
+		size, ok := mldsaPublicKeySize(AlgES256)
+
+		assert.False(t, ok)
+		assert.Zero(t, size)
+	})
+
+	t.Run("Verify", func(t *testing.T) {
+		valid, err := mldsaVerify(AlgES256, key.PublicKey, data, sig)
+
+		assert.False(t, valid)
+		require.EqualError(t, err, "Unsupported public key algorithm")
+
+		valid, err = mldsaVerify(AlgMLDSA44, short, data, sig)
+
+		assert.False(t, valid)
+		require.EqualError(t, err, "AKP key is not a valid ML-DSA public key")
+	})
+
+	t.Run("PublicKey", func(t *testing.T) {
+		public, err := mldsaPublicKey(AlgES256, key.PublicKey)
+
+		assert.Nil(t, public)
+		require.EqualError(t, err, "Unsupported public key algorithm")
+
+		public, err = mldsaPublicKey(AlgMLDSA44, short)
+
+		assert.Nil(t, public)
+		require.EqualError(t, err, "AKP key is not a valid ML-DSA public key")
+	})
+
+	t.Run("MarshalPublicKey", func(t *testing.T) {
+		der, err := mldsaMarshalPublicKey(AlgES256, key.PublicKey)
+
+		assert.Nil(t, der)
+		require.EqualError(t, err, "Unsupported public key algorithm")
+
+		der, err = mldsaMarshalPublicKey(AlgMLDSA44, short)
+
+		assert.Nil(t, der)
+		require.EqualError(t, err, "AKP key is not a valid ML-DSA public key")
+	})
+}
+
 type akpTestCOSEKey struct {
 	_struct   bool   `cbor:",keyasint"` //nolint:govet,staticcheck,unused
 	KeyType   int64  `cbor:"1,keyasint"`
