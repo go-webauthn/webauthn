@@ -128,8 +128,8 @@ var coseAlgorithmNames = map[COSEAlgorithmIdentifier]string{
 // The type is named rather than declared inline on [COSESignatureAlgorithmDetails] so that an algorithm whose
 // support depends on the toolchain the library is built with can be registered from the file which implements it.
 type COSESignatureAlgorithmDetail struct {
-	name string
-	hash crypto.Hash
+	name   string
+	hash   crypto.Hash
 	sigAlg x509.SignatureAlgorithm
 }
 

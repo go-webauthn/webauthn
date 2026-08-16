@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 func TestParsePublicKeyAKPUnsupported(t *testing.T) {
