@@ -48,13 +48,19 @@ const (
 	// be parsed.
 	AlgES256K COSEAlgorithmIdentifier = -47
 
-	// AlgMLDSA44 is ML-DSA with parameter set ML-DSA-44 (FIPS 204).
+	// AlgMLDSA44 is ML-DSA with parameter set ML-DSA-44 (FIPS 204). A credential using it carries an [AKP] key,
+	// and can only be verified when this library is built with Go 1.27 or newer, as the ML-DSA implementation it
+	// verifies with is the standard library one. It is not requested by any of the credential parameter lists
+	// this library provides, so a Relying Party that wants it must ask for it explicitly, and should only do so
+	// when it can guarantee the toolchain every build uses.
 	AlgMLDSA44 COSEAlgorithmIdentifier = -48
 
-	// AlgMLDSA65 is ML-DSA with parameter set ML-DSA-65 (FIPS 204).
+	// AlgMLDSA65 is ML-DSA with parameter set ML-DSA-65 (FIPS 204). See [AlgMLDSA44] for the conditions under
+	// which this library verifies with it.
 	AlgMLDSA65 COSEAlgorithmIdentifier = -49
 
-	// AlgMLDSA87 is ML-DSA with parameter set ML-DSA-87 (FIPS 204).
+	// AlgMLDSA87 is ML-DSA with parameter set ML-DSA-87 (FIPS 204). See [AlgMLDSA44] for the conditions under
+	// which this library verifies with it.
 	AlgMLDSA87 COSEAlgorithmIdentifier = -50
 
 	// AlgESP384 is ECDSA using P-384 curve with pre-hashed SHA-384 input.
@@ -117,11 +123,17 @@ var coseAlgorithmNames = map[COSEAlgorithmIdentifier]string{
 	AlgRS1:     "RS1",
 }
 
-var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]struct {
+// COSESignatureAlgorithmDetail describes the primitives a COSE signature algorithm composes.
+//
+// The type is named rather than declared inline on [COSESignatureAlgorithmDetails] so that an algorithm whose
+// support depends on the toolchain the library is built with can be registered from the file which implements it.
+type COSESignatureAlgorithmDetail struct {
 	name   string
 	hash   crypto.Hash
 	sigAlg x509.SignatureAlgorithm
-}{
+}
+
+var COSESignatureAlgorithmDetails = map[COSEAlgorithmIdentifier]COSESignatureAlgorithmDetail{
 	AlgRS1:     {"SHA1-RSA", crypto.SHA1, x509.SHA1WithRSA},
 	AlgRS256:   {"SHA256-RSA", crypto.SHA256, x509.SHA256WithRSA},
 	AlgRS384:   {"SHA384-RSA", crypto.SHA384, x509.SHA384WithRSA},

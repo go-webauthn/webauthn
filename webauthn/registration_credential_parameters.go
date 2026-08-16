@@ -76,8 +76,10 @@ func CredentialParametersRecommendedL3() []protocol.CredentialParameter {
 // RS256) extended with ES384, ES512, RS384, RS512, PS256, PS384, and PS512. The Level 3 recommended algorithms
 // appear first to indicate preference.
 //
-// This library can also verify ES256K, which no list here requests: it is neither recommended by the specification
-// nor offered by any authenticator in general use, so a Relying Party that wants it names it explicitly.
+// This library can also verify ES256K and the ML-DSA parameter sets, which no list here requests: they are neither
+// recommended by the specification nor offered by any authenticator in general use, so a Relying Party that wants
+// one names it explicitly. ML-DSA additionally requires the library to be built with Go 1.27 or newer, so a list
+// which offered it would have authenticators return credentials that some builds could not verify.
 func CredentialParametersExtendedL3() []protocol.CredentialParameter {
 	return []protocol.CredentialParameter{
 		{
