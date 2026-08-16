@@ -562,6 +562,8 @@ type defaultUser struct {
 
 var _ User = (*defaultUser)(nil)
 
+var _ protocol.CurrentUserDetailsUser = (User)(nil)
+
 func (user *defaultUser) WebAuthnID() []byte {
 	return user.id
 }

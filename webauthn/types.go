@@ -104,6 +104,22 @@ type Config struct {
 	// EncodeUserIDAsString ensures the user.id value during registrations is encoded as a raw UTF8 string. This is
 	// useful when you only use printable ASCII characters for the random user.id but the browser library does not
 	// decode the URL Safe Base64 data.
+	//
+	// The resulting options are not the PublicKeyCredentialCreationOptionsJSON form, which requires user.id to be a
+	// Base64URLString, so a client which passes them to PublicKeyCredential.parseCreationOptionsFromJSON() does one
+	// of two things with them, neither of them what the Relying Party intended:
+	//
+	//   - A value outside the base64url alphabet, such as "alice@example.com", fails to decode and the call throws.
+	//     So does one whose length is one more than a multiple of four, such as "a" or "alice", since that is not a
+	//     length any base64 encoding produces.
+	//   - A value which happens to be valid base64url is accepted and decoded into unrelated bytes. "user123" is
+	//     one such value, and arrives at the authenticator as the five bytes ba c7 ab d7 6d, so the user handle
+	//     stored against the credential is not the one that was sent.
+	//
+	// The second outcome is the dangerous one, since nothing reports it. Enable this only for a client which does
+	// its own decoding, which is the situation it exists for.
+	//
+	// Specification: §5.1.8. Deserialize Registration Ceremony Options (https://www.w3.org/TR/webauthn-3/#sctn-parseCreationOptionsFromJSON)
 	EncodeUserIDAsString bool
 
 	// Timeouts configures various timeouts.
