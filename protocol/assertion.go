@@ -110,6 +110,12 @@ func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionDa
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID not base64url encoded").WithError(err)
 	}
 
+	// The decoder skips CR and LF, so an id composed only of them decodes to no bytes rather than failing above. A
+	// credential id is at least one byte, and the registration path already rejects a zero length decode here.
+	if len(rawID) == 0 {
+		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with ID that decodes to no bytes")
+	}
+
 	if car.Type != string(PublicKeyCredentialType) {
 		return nil, ErrBadRequest.WithDetails("CredentialAssertionResponse with bad type")
 	}

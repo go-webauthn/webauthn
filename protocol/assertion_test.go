@@ -272,6 +272,19 @@ func TestCredentialAssertionResponse_Parse_Errors(t *testing.T) {
 			err: "CredentialAssertionResponse with ID that does not match the rawId",
 		},
 		{
+			name: "ShouldFailIDDecodingToNoBytes",
+			car: CredentialAssertionResponse{
+				PublicKeyCredential: PublicKeyCredential{
+					Credential: Credential{
+						ID:   "\r\n",
+						Type: string(PublicKeyCredentialType),
+					},
+					RawID: URLEncodedBase64{},
+				},
+			},
+			err: "CredentialAssertionResponse with ID that decodes to no bytes",
+		},
+		{
 			name: "ShouldFailRawIDMissing",
 			car: CredentialAssertionResponse{
 				PublicKeyCredential: PublicKeyCredential{

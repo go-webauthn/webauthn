@@ -130,6 +130,24 @@ func TestBase64UnmarshalJSON(t *testing.T) {
 			err: "",
 		},
 		{
+			name:    "ShouldHandleEscapedBase64Data",
+			message: `"\u0059\u0057\u004a\u006a"`,
+			expected: testData{
+				StringData:  "test string",
+				EncodedData: URLEncodedBase64("abc"),
+			},
+			err: "",
+		},
+		{
+			name:    "ShouldHandlePartiallyEscapedBase64Data",
+			message: `"YW\u004aj"`,
+			expected: testData{
+				StringData:  "test string",
+				EncodedData: URLEncodedBase64("abc"),
+			},
+			err: "",
+		},
+		{
 			name:    "ShouldHandleEmptyString",
 			message: `""`,
 			expected: testData{
