@@ -110,9 +110,11 @@ type Config struct {
 	// of two things with them, neither of them what the Relying Party intended:
 	//
 	//   - A value outside the base64url alphabet, such as "alice@example.com", fails to decode and the call throws.
-	//   - A value which happens to be valid base64url, which every id drawn from letters and digits alone is, is
-	//     accepted and decoded into unrelated bytes. "user123" arrives at the authenticator as the five bytes
-	//     ba c7 ab d7 6d, and the user handle stored against the credential is not the one that was sent.
+	//     So does one whose length is one more than a multiple of four, such as "a" or "alice", since that is not a
+	//     length any base64 encoding produces.
+	//   - A value which happens to be valid base64url is accepted and decoded into unrelated bytes. "user123" is
+	//     one such value, and arrives at the authenticator as the five bytes ba c7 ab d7 6d, so the user handle
+	//     stored against the credential is not the one that was sent.
 	//
 	// The second outcome is the dangerous one, since nothing reports it. Enable this only for a client which does
 	// its own decoding, which is the situation it exists for.
