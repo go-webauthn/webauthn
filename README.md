@@ -30,6 +30,7 @@ go where their backwards compatibility when upgrading the compile tools is usual
 This policy means that users who wish to build this with older versions of go may find there are features being used
 which are not available in that version. The current intentionally supported versions of go are as follows:
 
+- go 1.27
 - go 1.26
 - go 1.25
 
