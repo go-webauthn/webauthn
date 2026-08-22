@@ -1,12 +1,14 @@
-.PHONY: docs install-pkgsite help
+.PHONY: docs fuzz help install-pkgsite
 
-PORT ?= 3030
+PORT     ?= 3030
+FUZZTIME ?= 30s
 URL  := http://127.0.0.1:$(PORT)
 PKGSITE_BIN ?= $(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)/pkgsite
 
 help:
 	@echo "Targets:"
 	@echo "  docs             Launch pkgsite on port $(PORT)"
+	@echo "  fuzz             Run every fuzz target for FUZZTIME each (currently $(FUZZTIME))"
 	@echo "  install-pkgsite  Install pkgsite"
 
 docs:
@@ -23,3 +25,16 @@ docs:
 
 install-pkgsite:
 	go install golang.org/x/pkgsite/cmd/pkgsite@latest
+
+# The targets are discovered from the test binaries rather than listed, so a fuzz target added to any package is run
+# without this having to be edited. The test binary timeout is disabled because it would otherwise expire before a
+# FUZZTIME longer than its default, reporting a panic in place of the result.
+#
+# The seed corpus of every target already runs as part of `go test ./...`; this is the search.
+fuzz:
+	@for pkg in $$(go list ./...); do \
+		for target in $$(go test -list '^Fuzz' "$$pkg" | grep '^Fuzz' || true); do \
+			echo "==> $$target ($$pkg)"; \
+			go test -run '^$$' -fuzz "^$$target$$" -fuzztime '$(FUZZTIME)' -timeout 0 "$$pkg" || exit 1; \
+		done; \
+	done

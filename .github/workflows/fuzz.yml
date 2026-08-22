@@ -1,0 +1,132 @@
+name: 'Fuzz'
+on:
+  pull_request:
+    branches:
+      - 'master'
+  push:
+    branches:
+      - 'master'
+  merge_group:
+    branches:
+      - 'master'
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: 'How long to run each fuzz target for, as a Go duration'
+        required: false
+        default: '10m'
+        type: 'string'
+permissions:
+  contents: 'read'
+jobs:
+  discover:
+    name: 'Discover'
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - name: 'Harden Runner'
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: 'audit'
+      - name: 'Set up Go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.0'
+      - name: 'Checkout'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 'Get Dependencies'
+        run: |
+          go get -v -t ./...
+      # The matrix is derived from the test binaries rather than listed here so that a fuzz target added to any
+      # package is fuzzed without this workflow having to be edited to mention it.
+      - name: 'Targets'
+        id: 'targets'
+        run: |
+          targets='[]'
+
+          for pkg in $(go list ./...); do
+            for target in $(go test -list '^Fuzz' "$pkg" | grep '^Fuzz' || true); do
+              targets=$(printf '%s' "$targets" | jq -c --arg package "$pkg" --arg target "$target" '. + [{package: $package, target: $target}]')
+            done
+          done
+
+          printf '%s\n' "$targets" | jq -c '.'
+          printf 'matrix=%s\n' "$(printf '%s' "$targets" | jq -c '{include: .}')" >> "$GITHUB_OUTPUT"
+  fuzz:
+    name: 'Fuzz ${{ matrix.target }}'
+    needs: 'discover'
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - name: 'Harden Runner'
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: 'audit'
+      - name: 'Set up Go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.0'
+      - name: 'Checkout'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 'Get Dependencies'
+        run: |
+          go get -v -t ./...
+      # A pull request gets a short run, which is a smoke test of the targets themselves rather than a search. The
+      # search is the nightly schedule, which starts from the corpus every previous nightly run left behind.
+      - name: 'Duration'
+        id: 'duration'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_FUZZTIME: ${{ inputs.fuzztime }}
+        run: |
+          if [ -n "${INPUT_FUZZTIME}" ]; then
+            printf 'fuzztime=%s\n' "${INPUT_FUZZTIME}" >> "$GITHUB_OUTPUT"
+          elif [ "${EVENT_NAME}" = 'schedule' ]; then
+            printf 'fuzztime=10m\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'fuzztime=60s\n' >> "$GITHUB_OUTPUT"
+          fi
+      # The generated corpus lives in the build cache rather than the repository, so without this every run starts
+      # from the checked in seeds alone and re-discovers the same inputs before it can find anything new. The key is
+      # unique per run so that each run saves what it found, and the prefix restores the most recent previous entry.
+      - name: 'Corpus Directory'
+        id: 'corpus'
+        run: |
+          printf 'path=%s\n' "$(go env GOCACHE)/fuzz" >> "$GITHUB_OUTPUT"
+      - name: 'Corpus'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.corpus.outputs.path }}
+          key: 'fuzz-${{ matrix.target }}-${{ github.run_id }}'
+          restore-keys: |
+            fuzz-${{ matrix.target }}-
+      # The test binary timeout is disabled as it would otherwise expire before a fuzztime longer than its default,
+      # reporting a panic in place of the result. The run is bounded by fuzztime and by the job timeout instead.
+      - name: 'Fuzz'
+        env:
+          PACKAGE: ${{ matrix.package }}
+          TARGET: ${{ matrix.target }}
+          FUZZTIME: ${{ steps.duration.outputs.fuzztime }}
+        run: |
+          go test -run '^$' -fuzz "^${TARGET}$" -fuzztime "${FUZZTIME}" -timeout 0 "${PACKAGE}"
+      # A failing input is written to the package's testdata directory, where it is the reproducer for the crash and
+      # belongs in the repository once the crash is fixed.
+      - name: 'Upload Failing Inputs'
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: 'fuzz-${{ matrix.target }}'
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: 'ignore'
+          retention-days: 30
