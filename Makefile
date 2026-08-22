@@ -27,13 +27,17 @@ install-pkgsite:
 	go install golang.org/x/pkgsite/cmd/pkgsite@latest
 
 # The targets are discovered from the test binaries rather than listed, so a fuzz target added to any package is run
-# without this having to be edited. The test binary timeout is disabled because it would otherwise expire before a
-# FUZZTIME longer than its default, reporting a panic in place of the result.
+# without this having to be edited. Discovery failing is fatal, as a package which does not build would otherwise be
+# reported as a package with no fuzz targets; a package which builds and has none is not an error. The test binary
+# timeout is disabled because it would otherwise expire before a FUZZTIME longer than its default, reporting a panic
+# in place of the result.
 #
 # The seed corpus of every target already runs as part of `go test ./...`; this is the search.
 fuzz:
-	@for pkg in $$(go list ./...); do \
-		for target in $$(go test -list '^Fuzz' "$$pkg" | grep '^Fuzz' || true); do \
+	@pkgs=$$(go list ./...) || exit 1; \
+	for pkg in $$pkgs; do \
+		listed=$$(go test -list '^Fuzz' "$$pkg") || exit 1; \
+		for target in $$(printf '%s\n' "$$listed" | grep '^Fuzz' || true); do \
 			echo "==> $$target ($$pkg)"; \
 			go test -run '^$$' -fuzz "^$$target$$" -fuzztime '$(FUZZTIME)' -timeout 0 "$$pkg" || exit 1; \
 		done; \

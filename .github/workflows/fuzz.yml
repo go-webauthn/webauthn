@@ -43,15 +43,16 @@ jobs:
       - name: 'Get Dependencies'
         run: |
           go get -v -t ./...
-      # The matrix is derived from the test binaries rather than listed here so that a fuzz target added to any
-      # package is fuzzed without this workflow having to be edited to mention it.
       - name: 'Targets'
         id: 'targets'
         run: |
           targets='[]'
+          pkgs=$(go list ./...)
 
-          for pkg in $(go list ./...); do
-            for target in $(go test -list '^Fuzz' "$pkg" | grep '^Fuzz' || true); do
+          for pkg in $pkgs; do
+            listed=$(go test -list '^Fuzz' "$pkg")
+
+            for target in $(printf '%s\n' "$listed" | grep '^Fuzz' || true); do
               targets=$(printf '%s' "$targets" | jq -c --arg package "$pkg" --arg target "$target" '. + [{package: $package, target: $target}]')
             done
           done
