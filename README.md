@@ -167,13 +167,13 @@ relevant `Extra` map rather than dropped.
 
 Standardized and Specification Listed Extensions:
 
-|                                                            Extension                                                            |   Identifier   |                 Registration                  |                       Authentication                        | Level |
-|:-------------------------------------------------------------------------------------------------------------------------------:|:--------------:|:---------------------------------------------:|:-----------------------------------------------------------:|:-----:|
-|                     [§10.1.1 FIDO AppID Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-extension)                      |    `appid`     |                    N/A[^2]                    |                    `WithExtensionAppID`                     | 3 (1) |
-|            [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-exclude-extension)             | `appidExclude` |          `WithExtensionAppIDExclude`          |                           N/A[^1]                           | 3 (1) |
-| [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension) |  `credProps`   |           `WithExtensionCredProps`            |                           N/A[^1]                           | 3 (2) |
-|                   [§10.1.4 Pseudo-Random Function Extension](https://www.w3.org/TR/webauthn-3/#prf-extension)                   |     `prf`      | `WithExtensionPRF`, `WithExtensionPRFSupport` |        `WithExtensionPRF`, `WithExtensionPRFSupport`        | 3 (2) |
-|               [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)               |  `largeBlob`   |        `WithExtensionLargeBlobSupport`        | `WithExtensionLargeBlobRead`, `WithExtensionLargeBlobWrite` | 3 (2) |
+|                                                            Extension                                                            |   Identifier   |                 Registration                  |                                Authentication                                 | Level |
+|:-------------------------------------------------------------------------------------------------------------------------------:|:--------------:|:---------------------------------------------:|:-----------------------------------------------------------------------------:|:-----:|
+|                     [§10.1.1 FIDO AppID Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-extension)                      |    `appid`     |                    N/A[^2]                    |                             `WithExtensionAppID`                              | 3 (1) |
+|            [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-exclude-extension)             | `appidExclude` |          `WithExtensionAppIDExclude`          |                                    N/A[^1]                                    | 3 (1) |
+| [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension) |  `credProps`   |           `WithExtensionCredProps`            |                                    N/A[^1]                                    | 3 (2) |
+|                   [§10.1.4 Pseudo-Random Function Extension](https://www.w3.org/TR/webauthn-3/#prf-extension)                   |     `prf`      | `WithExtensionPRF`, `WithExtensionPRFSupport` | `WithExtensionPRF`, `WithExtensionPRFSupport`, `WithExtensionPRFByCredential` | 3 (2) |
+|               [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)               |  `largeBlob`   |        `WithExtensionLargeBlobSupport`        |          `WithExtensionLargeBlobRead`, `WithExtensionLargeBlobWrite`          | 3 (2) |
 
 CTAP 2.1 / CTAP 2.2 / CTAP 2.3 Extensions registered in the IANA ["WebAuthn Extension Identifiers"](https://www.iana.org/assignments/webauthn/webauthn.xhtml)
 registry:

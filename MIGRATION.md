@@ -498,7 +498,10 @@ config := &webauthn.Config{
 }
 ```
 
-`protocol.IsOpaqueOrigin` reports whether a given value is one, which is the same test configuration validation applies.
+`protocol.IsOpaqueOrigin` reports whether a given value is opaque at all. Configuration validation is stricter than
+that: each entry must also begin with a prefix this library recognises, which is what `protocol.IsKnownOpaqueOrigin`
+reports, and the recognised prefixes are returned by `protocol.OpaqueOriginPrefixes()`. An opaque value carrying an
+unrecognised prefix fails `webauthn.New` with an error naming the accepted set.
 
 ### 2.3 Ceremonies can be bound to a single origin
 
