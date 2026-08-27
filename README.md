@@ -50,7 +50,8 @@ supporting the storage and retrieval of the [webauthn.Credential] struct which c
 
 ## Notable Changes
 
-The notable breaking changes made by this library are documented in the release notes.
+The notable breaking changes made by this library are documented in the release notes. If a substantial breaking change
+occurs that is expected to be difficult to adapt to it may also be noted in the [Migration Guide](MIGRATION.md).
 
 ## Examples
 
@@ -66,29 +67,37 @@ location.
 **_Important:_** It is considered critical that implementers carefully read the [webauthn.Credential] struct
 documentation as part of the implementation process.
 
-The WebAuthn Level 3 specification describes the Credential Record which includes several required and optional elements
-that you should store for. See [§ 4 Terminology](https://www.w3.org/TR/webauthn-3/#credential-record) for details.
+The WebAuthn Level 3 specification describes the Credential Record which includes several recommended and optional
+elements that you should store. See [§ 4 Terminology](https://www.w3.org/TR/webauthn-3/#credential-record) for details.
 
-This section describes this element.
+Most Credential Record members have a corresponding field in the [webauthn.Credential] struct. Two do not, and are
+noted as such in the table below: `type` is a constant for WebAuthn, and `rpId` is scoping information you must store
+yourself. The struct additionally carries several fields with no Credential Record counterpart. Mappings are given
+for both encodings the struct supports, so the values can be stored as JSON or as MessagePack rather than as columns.
+Nested fields are written with a dot (i.e. `attestation.object` is the `object` member of the `attestation` object).
 
-The fields listed in the specification have corresponding fields in the [webauthn.Credential] struct. See the below
-table for more information. We also include JSON mappings for those that wish to just store these values as JSON.
+|    Specification Field    |       Library Field        |         JSON Field         | MessagePack Field |                                                                                              Notes                                                                                               |
+|:-------------------------:|:--------------------------:|:--------------------------:|:-----------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+|           type            |            N/A             |            N/A             |        N/A        |                                                                                Always `public-key` for WebAuthn.                                                                                 |
+|            id             |             ID             |             id             |        id         |                                                                                                                                                                                                  |
+|         publicKey         |         PublicKey          |         publicKey          |        pk         |                                                                                                                                                                                                  |
+|         signCount         |  Authenticator.SignCount   |  authenticator.signCount   |       a.sc        |                                                                              Write back on every successful login.                                                                               |
+|        transports         |         Transport          |         transport          |         t         |                                                                                                                                                                                                  |
+|       uvInitialized       |     Flags.UserVerified     |     flags.userVerified     |        flg        |                                                 MessagePack packs every flag into the single `flg` octet. Write back on every successful login.                                                  |
+|      backupEligible       |    Flags.BackupEligible    |    flags.backupEligible    |        flg        |                                                                                   Packed into `flg` as above.                                                                                    |
+|        backupState        |     Flags.BackupState      |     flags.backupState      |        flg        |                                                 Packed into `flg` as above. Write back on every successful login when `backupEligible` is true.                                                  |
+|     attestationObject     |     Attestation.Object     |     attestation.object     |      att.obj      |                                                                 OPTIONAL in the specification; required by [Credential Verify].                                                                  |
+| attestationClientDataJSON | Attestation.ClientDataJSON | attestation.clientDataJSON |      att.cdj      |                                                                 OPTIONAL in the specification; required by [Credential Verify].                                                                  |
+|           rpId            |            N/A             |            N/A             |        N/A        |                         OPTIONAL in the specification. Not a field of the struct. Store it as a column of your own; credentials MUST be partitioned by Relying Party ID.                         |
+|            N/A            |      AttestationType       |      attestationType       |      atttype      | The attestation type conveyed by the authenticator (i.e. `basic_full`, `basic_surrogate`). Records that predate the split from the format are migrated by the custom `Credential.UnmarshalJSON`. |
+|            N/A            |     AttestationFormat      |     attestationFormat      |      attfmt       |                                          The attestation statement format identifier (i.e. `packed`, `tpm`). Not a Credential Record member at Level 3.                                          |
+|            N/A            |        Attestation         |        attestation         |        att        |                               A composite object holding the two OPTIONAL Credential Record members above plus additional values used to validate this Credential.                               |
+|            N/A            |         Extensions         |         extensions         |        ext        |                                      The durable extension results of the registration ceremony. Added in v0.18.0; see the [Migration Guide](MIGRATION.md).                                      |
+|            N/A            |       Authenticator        |       authenticator        |         a         |                                                        A composite object holding the AAGUID, sign count, clone warning, and attachment.                                                         |
 
-|    Specification Field    |       Library Field        |         JSON Field         |                                                                                       Notes                                                                                       |
-|:-------------------------:|:--------------------------:|:--------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
-|           type            |            N/A             |            N/A             |                                                                  This field is always `public-key` for WebAuthn.                                                                  |
-|            id             |             ID             |             id             |                                                                                                                                                                                   |
-|         publicKey         |         PublicKey          |         publicKey          |                                                                                                                                                                                   |
-|     attestationFormat     |     AttestationFormat      |     attestationFormat      |                                                                                                                                                                                   |
-|            N/A            |      AttestationType       |      attestationType       | The attestation type conveyed by the authenticator (i.e. `basic_full`, `basic_surrogate`). Records that predate this split are migrated by the custom `Credential.UnmarshalJSON`. |
-|         signCount         |  Authenticator.SignCount   |  authenticator.signCount   |                                                                                                                                                                                   |
-|        transports         |         Transport          |         transport          |                                                                                                                                                                                   |
-|       uvInitialized       |     Flags.UserVerified     |     flags.userVerified     |                                                                                                                                                                                   |
-|      backupEligible       |    Flags.BackupEligible    |    flags.backupEligible    |                                                                                                                                                                                   |
-|        backupState        |     Flags.BackupState      |     flags.backupState      |                                                                                                                                                                                   |
-|            N/A            |        Attestation         |        attestation         |                  This field is a composite object containing fields from the Credential Record and additional fields to assist in validation of this Credential.                  |
-|     attestationObject     |     Attestation.Object     |     attestation.object     |                                                                                                                                                                                   |
-| attestationClientDataJSON | Attestation.ClientDataJSON | attestation.clientDataJSON |                                                                                                                                                                                   |
+For the recommended schema shape, which fields must be written back on every successful `FinishLogin` /
+`ValidateLogin`, and how to store the Relying Party ID and User Handle, see the [Storage] section of the package
+documentation.
 
 #### Flags
 
@@ -113,9 +122,11 @@ validation in this scenario.
 
 #### Verification
 
-As long as the [webauthn.Credential] struct has exactly the same values when restored the [Credential Verify] function 
-can be leveraged to verify the credential against the [metadata.Provider]. This can be either done during registration,
-on every login, or with a audit schedule.
+As long as the [webauthn.Credential] struct has exactly the same values when restored the [Credential Verify] function
+can be used to verify the credential against the [metadata.Provider]. It also takes the `protocol.AttestationPolicy`
+and `protocol.SignaturePolicy` values the ceremony was performed under, which are carried by the
+[webauthn.Config](https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Config) `Attestation` and `Signature`
+fields. This can be either done during registration, on every login, or with an audit schedule.
 
 In addition to using the [Credential Verify] function the 
 [webauthn.Config](https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Config) can contain a provider which will
@@ -156,13 +167,13 @@ relevant `Extra` map rather than dropped.
 
 Standardized and Specification Listed Extensions:
 
-|                                                            Extension                                                            |   Identifier   |                 Registration                  |                       Authentication                        | Level |
-|:-------------------------------------------------------------------------------------------------------------------------------:|:--------------:|:---------------------------------------------:|:-----------------------------------------------------------:|:-----:|
-|                     [§10.1.1 FIDO AppID Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-extension)                      |    `appid`     |                    N/A[^2]                    |                    `WithExtensionAppID`                     | 3 (1) |
-|            [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-exclude-extension)             | `appidExclude` |          `WithExtensionAppIDExclude`          |                           N/A[^1]                           | 3 (1) |
-| [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension) |  `credProps`   |           `WithExtensionCredProps`            |                           N/A[^1]                           | 3 (2) |
-|                   [§10.1.4 Pseudo-Random Function Extension](https://www.w3.org/TR/webauthn-3/#prf-extension)                   |     `prf`      | `WithExtensionPRF`, `WithExtensionPRFSupport` |        `WithExtensionPRF`, `WithExtensionPRFSupport`        | 3 (2) |
-|               [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)               |  `largeBlob`   |        `WithExtensionLargeBlobSupport`        | `WithExtensionLargeBlobRead`, `WithExtensionLargeBlobWrite` | 3 (2) |
+|                                                            Extension                                                            |   Identifier   |                 Registration                  |                                Authentication                                 | Level |
+|:-------------------------------------------------------------------------------------------------------------------------------:|:--------------:|:---------------------------------------------:|:-----------------------------------------------------------------------------:|:-----:|
+|                     [§10.1.1 FIDO AppID Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-extension)                      |    `appid`     |                    N/A[^2]                    |                             `WithExtensionAppID`                              | 3 (1) |
+|            [§10.1.2 FIDO AppID Exclusion Extension](https://www.w3.org/TR/webauthn-3/#sctn-appid-exclude-extension)             | `appidExclude` |          `WithExtensionAppIDExclude`          |                                    N/A[^1]                                    | 3 (1) |
+| [§10.1.3 Credential Properties Extension](https://www.w3.org/TR/webauthn-3/#sctn-authenticator-credential-properties-extension) |  `credProps`   |           `WithExtensionCredProps`            |                                    N/A[^1]                                    | 3 (2) |
+|                   [§10.1.4 Pseudo-Random Function Extension](https://www.w3.org/TR/webauthn-3/#prf-extension)                   |     `prf`      | `WithExtensionPRF`, `WithExtensionPRFSupport` | `WithExtensionPRF`, `WithExtensionPRFSupport`, `WithExtensionPRFByCredential` | 3 (2) |
+|               [§10.1.5 Large Blob Storage Extension](https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)               |  `largeBlob`   |        `WithExtensionLargeBlobSupport`        |          `WithExtensionLargeBlobRead`, `WithExtensionLargeBlobWrite`          | 3 (2) |
 
 CTAP 2.1 / CTAP 2.2 / CTAP 2.3 Extensions registered in the IANA ["WebAuthn Extension Identifiers"](https://www.iana.org/assignments/webauthn/webauthn.xhtml)
 registry:
@@ -225,6 +236,7 @@ Without their amazing work this library could not exist.
 [webauthn.Credential]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential
 [metadata.Provider]: https://pkg.go.dev/github.com/go-webauthn/webauthn/metadata#Provider
 [Credential Verify]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#Credential.Verify
+[Storage]: https://pkg.go.dev/github.com/go-webauthn/webauthn/webauthn#hdr-Storage
 
 [go docs]: https://pkg.go.dev/github.com/go-webauthn/webauthn
 

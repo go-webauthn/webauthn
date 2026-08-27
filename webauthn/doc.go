@@ -170,8 +170,8 @@
 //     value emitted to authenticators, whereas the application user identifier is your schema's primary
 //     key for the user. Keeping the two as separate columns lets you resolve from either direction.
 //
-// A minimal PostgreSQL schema covering the above plus the remaining [Credential], [Authenticator], and
-// [CredentialAttestation] fields is shown below.
+// A minimal PostgreSQL schema covering the above plus the remaining [Credential], [Authenticator],
+// [CredentialAttestation], and [CredentialExtensions] fields is shown below.
 //
 // Example users table:
 //
@@ -197,8 +197,8 @@
 //	    kid                      BYTEA        NOT NULL, -- Credential.ID
 //	    aaguid                   BYTEA        NULL, -- Authenticator.AAGUID
 //	    public_key               BYTEA        NOT NULL, -- Credential.PublicKey (encrypt at rest)
-//	    attestation_type         VARCHAR(32)  NOT NULL, -- CredentialAttestation.AttestationType
-//	    attestation_format       VARCHAR(32)  NOT NULL, -- CredentialAttestation.AttestationFormat
+//	    attestation_type         VARCHAR(32)  NOT NULL, -- Credential.AttestationType
+//	    attestation_format       VARCHAR(32)  NOT NULL, -- Credential.AttestationFormat
 //	    attestation              BYTEA        NULL DEFAULT NULL, -- CredentialAttestation serialized as Message Pack or JSON (encrypt at rest)
 //	    transport                VARCHAR(64)  NOT NULL DEFAULT '', -- Credential.Transport serialized as a comma-separated value
 //	    sign_count               BIGINT       NOT NULL DEFAULT 0, -- Authenticator.SignCount
@@ -208,7 +208,8 @@
 //	    present                  BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserPresent, optionally stored so you can either display it to the user or for filtering credentials
 //	    verified                 BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.UserVerified, optionally stored so you can either display it to the user or for filtering credentials
 //	    backup_eligible          BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.BackupEligible, optionally stored so you can either display it to the user or for filtering credentials
-//	    backup_state             BOOLEAN      NOT NULL DEFAULT FALSE -- Flags.BackupState, optionally stored so you can either display it to the user or for filtering credentials
+//	    backup_state             BOOLEAN      NOT NULL DEFAULT FALSE, -- Flags.BackupState, optionally stored so you can either display it to the user or for filtering credentials
+//	    extensions               BYTEA        NULL DEFAULT NULL -- Credential.Extensions serialized as Message Pack or JSON; the durable extension results of the registration ceremony
 //	);
 //
 //	CREATE UNIQUE INDEX webauthn_credentials_kid_key ON webauthn_credentials (rpid, kid);
