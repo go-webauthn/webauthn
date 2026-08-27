@@ -11,6 +11,9 @@ help:
 	@echo "  fuzz             Run every fuzz target for FUZZTIME each (currently $(FUZZTIME))"
 	@echo "  install-pkgsite  Install pkgsite"
 
+release:
+	conventional-changelog -i CHANGELOG.md -o CHANGELOG.md -p angular -r 2
+
 docs:
 	@bin="$(PKGSITE_BIN)"; \
 	case "$$bin" in \

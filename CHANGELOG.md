@@ -1,3 +1,79 @@
+# [0.18.0](https://github.com/go-webauthn/webauthn/compare/v0.17.4...v0.18.0) (2026-08-27)
+
+This release is a fairly major milestone in the development of this library. It has quite a few breaking changes but has
+added support for most if not all of the extension requirements natively, and adds formal support for Post-Quantum
+Cryptography with support for ML-DSA-44, ML-DSA-65, and ML-DSA-87 when used with go 1.27.
+
+Details on the migration requirements for this version can be found int [MIGRATION.md] as they are substantial between
+ths version and prior versions.
+
+### Bug Fixes
+
+* **metadata:** align members with mds 3.1.1 and ctap 2.3 ([#739](https://github.com/go-webauthn/webauthn/issues/739)) ([397152c](https://github.com/go-webauthn/webauthn/commit/397152c84441776ec12d01bea4676d0576e38f1b))
+* **metadata:** consistent revocation policy and client timeouts ([#740](https://github.com/go-webauthn/webauthn/issues/740)) ([34d324b](https://github.com/go-webauthn/webauthn/commit/34d324bd9b8d6ce38c44282e57a83f63ef7d81c1))
+* **metadata:** handle certificate chains of any depth ([#737](https://github.com/go-webauthn/webauthn/issues/737)) ([309ea69](https://github.com/go-webauthn/webauthn/commit/309ea6972215b542ef43cb547cd6ba4377f90af6))
+* **metadata:** honour status report order and effective dates ([#736](https://github.com/go-webauthn/webauthn/issues/736)) ([8be5355](https://github.com/go-webauthn/webauthn/commit/8be53553930b423cd235b454caa75b9a5db01ab3))
+* **metadata:** mds3 parsing conformance and cache integrity ([#735](https://github.com/go-webauthn/webauthn/issues/735)) ([8115143](https://github.com/go-webauthn/webauthn/commit/8115143bf0c43c2fe46e8f4947f1e44e37e38e5f))
+* **metadata:** prevent panic corrupt blob ([#698](https://github.com/go-webauthn/webauthn/issues/698)) ([c5fd013](https://github.com/go-webauthn/webauthn/commit/c5fd0136b7b30ed6a5a699b20dc998e0b11ba76e))
+* **metadata:** report malformed status report urls ([#738](https://github.com/go-webauthn/webauthn/issues/738)) ([ed82f7c](https://github.com/go-webauthn/webauthn/commit/ed82f7c7d52824e73c345b5f7c1d1c434b18bfca))
+* **protocol:** allow any attestation eku ([#728](https://github.com/go-webauthn/webauthn/issues/728)) ([f4e33fc](https://github.com/go-webauthn/webauthn/commit/f4e33fc5c2a3570008e45403f7aa9b11fb599e16))
+* **protocol:** androidkey missing authorization list member ([#727](https://github.com/go-webauthn/webauthn/issues/727)) ([9b02b19](https://github.com/go-webauthn/webauthn/commit/9b02b19ac181efaca15611780beac2cbba4237ee))
+* **protocol:** androidkey union generated ([#729](https://github.com/go-webauthn/webauthn/issues/729)) ([3ed3e75](https://github.com/go-webauthn/webauthn/commit/3ed3e75a6f1198305381c8150f11fa1f621f4d74))
+* **protocol:** bind credential public key curve to its algorithm ([#752](https://github.com/go-webauthn/webauthn/issues/752)) ([314c2be](https://github.com/go-webauthn/webauthn/commit/314c2bec98ddb4020b474ac53c8c8e2177139b20))
+* **protocol:** compound attestation sub-statement unmarshalling ([#751](https://github.com/go-webauthn/webauthn/issues/751)) ([a582ecf](https://github.com/go-webauthn/webauthn/commit/a582ecfc0dc6c54ded053c7c14048eded538e1ef))
+* **protocol:** compound returns incorrect type ([#731](https://github.com/go-webauthn/webauthn/issues/731)) ([025d897](https://github.com/go-webauthn/webauthn/commit/025d8970b2f90ba68b06385482e6db456a0263d2))
+* **protocol:** credential public key match limited to ECDSA ([#732](https://github.com/go-webauthn/webauthn/issues/732)) ([b4df26e](https://github.com/go-webauthn/webauthn/commit/b4df26e9dc1d4c33d92f69b9d1e77c5d3f07d532))
+* **protocol:** harden credential response and options handling ([#763](https://github.com/go-webauthn/webauthn/issues/763)) ([de0ae6c](https://github.com/go-webauthn/webauthn/commit/de0ae6ce9f83b16d5e8384dbaefb601de6da282f))
+* **protocol:** missing tpm steps ([#725](https://github.com/go-webauthn/webauthn/issues/725)) ([f9a63f9](https://github.com/go-webauthn/webauthn/commit/f9a63f9688d2d099b66ea9c4c4cda378dd1d0049))
+* **protocol:** opaque origin matching and validation ([#758](https://github.com/go-webauthn/webauthn/issues/758)) ([37f065a](https://github.com/go-webauthn/webauthn/commit/37f065a8b4bc1b19da3ce46d2eda1889ce5fa41b))
+* **protocol:** possible panic conditions ([#719](https://github.com/go-webauthn/webauthn/issues/719)) ([0ea14e7](https://github.com/go-webauthn/webauthn/commit/0ea14e753dfcffd79c7abef80280c55f35284624))
+* **protocol:** safetynet validation steps ([#726](https://github.com/go-webauthn/webauthn/issues/726)) ([e12f6e8](https://github.com/go-webauthn/webauthn/commit/e12f6e8eb5e51e30754f8d6e4633672ba8a79f0b))
+* **protocol:** single signature encoding policy and canonical der ([#744](https://github.com/go-webauthn/webauthn/issues/744)) ([99bbbdb](https://github.com/go-webauthn/webauthn/commit/99bbbdbc06bd727a4c1fce1e5b3051a3ce0b263e))
+* **webauthncbor:** reject data trailing the first cbor item ([#762](https://github.com/go-webauthn/webauthn/issues/762)) ([0801b5d](https://github.com/go-webauthn/webauthn/commit/0801b5db2f630077afaa933d033a69164fa3944e))
+* **webauthncose:** validate okp key algorithm ([#759](https://github.com/go-webauthn/webauthn/issues/759)) ([98c528b](https://github.com/go-webauthn/webauthn/commit/98c528b4b349dbc1b00268c7425c879040a27814))
+* **webauthn:** deprecations and handle check ([#745](https://github.com/go-webauthn/webauthn/issues/745)) ([8619bb9](https://github.com/go-webauthn/webauthn/commit/8619bb9daf58891d1f2d2df3988c52c165713555))
+* **webauthn:** include backup flag check in registration ([#748](https://github.com/go-webauthn/webauthn/issues/748)) ([26a4868](https://github.com/go-webauthn/webauthn/commit/26a4868124d003f29ffe450d3043b3cce283e659))
+* **webauthn:** only update uv flag ([#746](https://github.com/go-webauthn/webauthn/issues/746)) ([b39c822](https://github.com/go-webauthn/webauthn/commit/b39c82273404990521cb947ea7a4f8ec82b2115f))
+* **webauthn:** use session relying party id ([#747](https://github.com/go-webauthn/webauthn/issues/747)) ([ebb45e2](https://github.com/go-webauthn/webauthn/commit/ebb45e2e4a8ba0f9c7177135c98fe2f779d7bd5c))
+
+
+### Features
+
+* **metadata:** update to r46 anchor ([#780](https://github.com/go-webauthn/webauthn/issues/780)) ([20f33e6](https://github.com/go-webauthn/webauthn/commit/20f33e6ea52e7d2cda8811f4c54a9ce79412d155))
+* ml-dsa preference list and gated availability ([#768](https://github.com/go-webauthn/webauthn/issues/768)) ([db1e068](https://github.com/go-webauthn/webauthn/commit/db1e068fcc443382ae6f14d668ab31e84adbec06))
+* **protocol:** client capability enumeration ([#765](https://github.com/go-webauthn/webauthn/issues/765)) ([62f4489](https://github.com/go-webauthn/webauthn/commit/62f448999462526e20f3a95376cf78ee65a7fbb2))
+* **protocol:** compound sub-statement scope ([#742](https://github.com/go-webauthn/webauthn/issues/742)) ([34271da](https://github.com/go-webauthn/webauthn/commit/34271da9bac919b43903668dec3ab332b159a131))
+* **protocol:** current user details signal constructor ([#766](https://github.com/go-webauthn/webauthn/issues/766)) ([b6db923](https://github.com/go-webauthn/webauthn/commit/b6db9237be75c3027cc917e21b594419320b1c36))
+* **protocol:** ecdsa attestation signature encoding policy ([#743](https://github.com/go-webauthn/webauthn/issues/743)) ([29404e9](https://github.com/go-webauthn/webauthn/commit/29404e9db78bbd8da12219005e2c63b55c41cb11)), closes [#710](https://github.com/go-webauthn/webauthn/issues/710)
+* **protocol:** related origins well-known document ([#753](https://github.com/go-webauthn/webauthn/issues/753)) ([05d54dc](https://github.com/go-webauthn/webauthn/commit/05d54dcc92ed332fb2bdbef37a5e56b4708ea2c8))
+* **protocol:** relying party attestation policy ([#741](https://github.com/go-webauthn/webauthn/issues/741)) ([3239ed0](https://github.com/go-webauthn/webauthn/commit/3239ed063c59e10821d9e88cf0001b46940a132e))
+* typed extension inputs and outputs ([#734](https://github.com/go-webauthn/webauthn/issues/734)) ([0661c81](https://github.com/go-webauthn/webauthn/commit/0661c81a3ddb168c9bebd2e073e34ac720fe7b7a))
+* **webauthn:** ceremony origin binding ([#756](https://github.com/go-webauthn/webauthn/issues/756)) ([45aabc3](https://github.com/go-webauthn/webauthn/commit/45aabc3a2d1b52f8c35cf0b367d7a429268228e5))
+* **webauthncose:** ml-dsa ([#767](https://github.com/go-webauthn/webauthn/issues/767)) ([5fb926e](https://github.com/go-webauthn/webauthn/commit/5fb926e02bbb517b15986d0b59f66aec5dd54515)), closes [#639](https://github.com/go-webauthn/webauthn/issues/639)
+* **webauthncose:** secp256k1 ([#755](https://github.com/go-webauthn/webauthn/issues/755)) ([d5d3910](https://github.com/go-webauthn/webauthn/commit/d5d391019b06f04e89882be2dc55a11452101164))
+
+
+### BREAKING CHANGES
+
+* **protocol:** A credential response whose id and rawId disagree, or which omits rawId, is rejected. Registration previously accepted both, since the credential record is built from the attested credential id and nothing read the client's value.
+* An IP address configured as a relying party id is
+rejected, so a Config carrying one now fails validation.
+* HasherFromCOSEAlg returns (hash.Hash, bool) and no
+longer substitutes SHA-256 for an unregistered algorithm. Callers must
+handle the second value.
+* **webauthncose:** A stored credential whose OKP key names an algorithm
+other than -8 or -19 no longer parses, failing the assertion rather than
+verifying with Ed25519.
+* The rpOpaqueOrigins parameter has been added to protocol.CollectedClientData.Verify, protocol.ParsedCredentialCreationData.Verify and protocol.ParsedCredentialAssertionData.Verify, immediately after the existing rpOrigins parameter; callers which accept no opaque origins should pass nil. The webauthn.ConfigProvider interface has also gained a GetOpaqueOrigins method which implementations outside this module must provide.
+* `RegistrationOption` and `LoginOption` now return an error, so any option implemented outside this module must be adjusted, and `WithExtensions` and `WithAssertionExtensions` accept extension options in place of a map. `protocol.AuthenticationExtensions` and `protocol.AuthenticationExtensionsClientOutputs` are structs rather than `map[string]any`, `protocol.Extensions` is removed, and `ParsedPublicKeyCredential.GetAppID` takes a `protocol.SessionExtensions`. `SessionData.Extensions` changes both its type and its encoded representation, so a session persisted by an earlier version cannot be decoded by this one, and a client extension output the Relying Party did not request now fails the ceremony unless `Config.ExtensionsUnsolicitedOutputPolicy` says otherwise.
+* **protocol:** ConfigProvider requires GetSignaturePolicy. AttestationObject.Verify, AttestationObject.VerifyAttestation, ParsedCredentialAssertionData.Verify, ParsedCredentialCreationData.Verify, Credential.Verify, Credential.VerifyAttestationType and the attestation format validation handler registered by RegisterAttestationFormat take a SignaturePolicy. AttestationPolicy no longer carries a Signature member and webauthncose.SetExperimentalInsecureAllowBERIntegers is removed.
+* **protocol:** AttestationObject.Verify and AttestationObject.VerifyAttestation take an AttestationPolicy, and ConfigProvider requires GetAttestationPolicy.
+* **metadata:** Statement.CredentialExportProtocolConfigURL and its JSON counterpart are now named CredentialExchangeConfigURL, matching the credential exchange terminology the specification uses.
+* **metadata:** the desired statuses given to ValidateStatusReports are now a
+set of acceptable current statuses rather than a set which must all appear
+somewhere in the report history.
+* **metadata:** StatusReport.EffectiveDate and BiometricStatusReport.EffectiveDate are now *time.Time so an absent date is distinguishable from a zero value.
+
 # [v0.17.4](https://github.com/go-webauthn/webauthn/compare/v0.17.3...v0.17.4) (2026-05-22)
 
 ### Dependency Updates
