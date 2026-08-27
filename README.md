@@ -70,9 +70,9 @@ documentation as part of the implementation process.
 The WebAuthn Level 3 specification describes the Credential Record which includes several recommended and optional
 elements that you should store. See [§ 4 Terminology](https://www.w3.org/TR/webauthn-3/#credential-record) for details.
 
-Most Credential Record members have a corresponding field in the [webauthn.Credential] struct. Three do not, and are
-noted as such in the table below: `type` is a constant for WebAuthn, `rpId` is scoping information you must store
-yourself, and the struct additionally carries several fields with no Credential Record counterpart. Mappings are given
+Most Credential Record members have a corresponding field in the [webauthn.Credential] struct. Two do not, and are
+noted as such in the table below: `type` is a constant for WebAuthn, and `rpId` is scoping information you must store
+yourself. The struct additionally carries several fields with no Credential Record counterpart. Mappings are given
 for both encodings the struct supports, so the values can be stored as JSON or as MessagePack rather than as columns.
 Nested fields are written with a dot (i.e. `attestation.object` is the `object` member of the `attestation` object).
 
