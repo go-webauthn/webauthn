@@ -6,8 +6,11 @@ import (
 	"crypto/mldsa"
 	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"math/big"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,6 +165,103 @@ func TestPackedFormat_SelfAttestationMLDSA(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestPackedFormat_BasicAttestationMLDSA asserts that a packed full attestation whose x5c is an ML-DSA chain
+// verifies, and that the parameter set the certificate holds is bound to the algorithm the statement declares.
+//
+// The chain is verified as well as the statement, as an ML-DSA attestation certificate is only usable as a trust
+// path if the certificates it is issued under can be built into one. The leaf and the root name different parameter
+// sets so that neither the signature check nor the chain check can pass by treating ML-DSA as a single algorithm.
+//
+// Specification: §8.2. Packed Attestation Statement Format (https://www.w3.org/TR/webauthn-3/#sctn-packed-attestation)
+func TestPackedFormat_BasicAttestationMLDSA(t *testing.T) {
+	rootKey, err := mldsa.GenerateKey(mldsa.MLDSA65())
+
+	require.NoError(t, err)
+
+	leafKey, err := mldsa.GenerateKey(mldsa.MLDSA44())
+
+	require.NoError(t, err)
+
+	root := mldsaTestCertificate(t, &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "ML-DSA Attestation Root"},
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}, nil, rootKey.PublicKey(), rootKey)
+
+	leaf := mldsaTestCertificate(t, &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject: pkix.Name{
+			Country:            []string{"US"},
+			Organization:       []string{"Test Vendor"},
+			OrganizationalUnit: []string{"Authenticator Attestation"},
+			CommonName:         "ML-DSA Attestation Leaf",
+		},
+	}, root, leafKey.PublicKey(), rootKey)
+
+	roots := x509.NewCertPool()
+
+	roots.AddCert(root)
+
+	_, err = leaf.Verify(x509.VerifyOptions{Roots: roots, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny}})
+
+	require.NoError(t, err)
+
+	authData, clientDataHash := []byte("authenticator data"), []byte("client data hash")
+
+	sig, err := leafKey.Sign(nil, slices.Concat(authData, clientDataHash), &mldsa.Options{})
+
+	require.NoError(t, err)
+
+	x5c := []any{leaf.Raw, root.Raw}
+	aaguid := make([]byte, 16)
+
+	attestationType, path, err := handleBasicAttestation(sig, clientDataHash, authData, aaguid, int64(webauthncose.AlgMLDSA44), x5c, nil, SignaturePolicy{})
+
+	require.NoError(t, err)
+	assert.Equal(t, string(metadata.BasicFull), attestationType)
+	assert.Equal(t, x5c, path)
+
+	t.Run("ShouldRejectAlgorithmNamingAnotherParameterSet", func(t *testing.T) {
+		_, _, err := handleBasicAttestation(sig, clientDataHash, authData, aaguid, int64(webauthncose.AlgMLDSA87), x5c, nil, SignaturePolicy{})
+
+		require.ErrorContains(t, err, "but have a public key with ML-DSA-44 parameters")
+	})
+
+	t.Run("ShouldRejectAlgorithmNamingAnotherKeyType", func(t *testing.T) {
+		_, _, err := handleBasicAttestation(sig, clientDataHash, authData, aaguid, int64(webauthncose.AlgES256), x5c, nil, SignaturePolicy{})
+
+		require.ErrorContains(t, err, "signature algorithm specifies an ECDSA public key")
+	})
+
+	t.Run("ShouldRejectSignatureOverDifferentData", func(t *testing.T) {
+		_, _, err := handleBasicAttestation(sig, clientDataHash, []byte("different data"), aaguid, int64(webauthncose.AlgMLDSA44), x5c, nil, SignaturePolicy{})
+
+		require.ErrorContains(t, err, "ML-DSA verification failure")
+	})
+}
+
+func mldsaTestCertificate(t *testing.T, template, parent *x509.Certificate, pub, signer any) *x509.Certificate {
+	t.Helper()
+
+	template.NotBefore, template.NotAfter = time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
+
+	if parent == nil {
+		parent = template
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, parent, pub, signer)
+
+	require.NoError(t, err)
+
+	cert, err := x509.ParseCertificate(der)
+
+	require.NoError(t, err)
+
+	return cert
 }
 
 func mldsaTestCredentialPublicKey(t *testing.T, alg webauthncose.COSEAlgorithmIdentifier, params mldsa.Parameters) (*mldsa.PrivateKey, []byte) {
