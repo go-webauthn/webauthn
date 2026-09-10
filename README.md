@@ -32,7 +32,7 @@ which are not available in that version. The current intentionally supported ver
 
 - go 1.27
 - go 1.26
-- go 1.25
+- ~~go 1.25~~
 
 ## Status
 
