@@ -32,7 +32,6 @@ body:
       options:
         - '1.27'
         - '1.26'
-        - '1.25'
         - 'Other'
     validations:
       required: true
