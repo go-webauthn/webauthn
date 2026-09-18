@@ -2,6 +2,7 @@ package webauthn
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -77,6 +78,28 @@ func validateUserHandle(id any) (err error) {
 
 	if n := len(handle); n < protocol.MinimumUserHandleLength || n > protocol.MaximumUserHandleLength {
 		return fmt.Errorf("the user id must be between %d and %d bytes but it has a length of %d", protocol.MinimumUserHandleLength, protocol.MaximumUserHandleLength, n)
+	}
+
+	return nil
+}
+
+// validateSessionChallenge validates the challenge recorded in the [SessionData] when a ceremony is finished. It must be
+// the unpadded base64url encoding of at least [protocol.MinimumChallengeLength] bytes, which is what beginning a
+// ceremony produces. This is a backstop for session data that was lost, zero-valued, or tampered with by the session
+// store, as an empty challenge would otherwise match an empty challenge in the client data.
+//
+// Specification: §7.1. Registering a New Credential, step 8 (https://www.w3.org/TR/webauthn-3/#sctn-registering-a-new-credential)
+//
+// Specification: §7.2. Verifying an Authentication Assertion, step 11 (https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion)
+func validateSessionChallenge(challenge string) (err error) {
+	var raw []byte
+
+	if raw, err = base64.RawURLEncoding.DecodeString(challenge); err != nil {
+		return protocol.ErrBadRequest.WithDetails("Session has an invalid challenge").WithInfo(fmt.Sprintf("The challenge could not be decoded: %+v", err)).WithError(err)
+	}
+
+	if n := len(raw); n < protocol.MinimumChallengeLength {
+		return protocol.ErrBadRequest.WithDetails("Session has an invalid challenge").WithInfo(fmt.Sprintf("The challenge must be at least %d bytes but it has a length of %d", protocol.MinimumChallengeLength, n))
 	}
 
 	return nil

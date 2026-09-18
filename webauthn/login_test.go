@@ -628,7 +628,7 @@ func TestValidatePasskeyLogin_Errors(t *testing.T) {
 		},
 		{
 			name:    "ShouldFailBlankUserHandle",
-			session: SessionData{},
+			session: SessionData{Challenge: "E4PTcIH_HfX1pC6Sigk1SC9NAlgeztN0439vi8z_c9k"},
 			parsed: &protocol.ParsedCredentialAssertionData{
 				ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
 					RawID: []byte("cred-id"),
@@ -642,7 +642,7 @@ func TestValidatePasskeyLogin_Errors(t *testing.T) {
 			handler: func(rawID, userHandle []byte) (User, error) {
 				return nil, fmt.Errorf("user not found")
 			},
-			session: SessionData{},
+			session: SessionData{Challenge: "E4PTcIH_HfX1pC6Sigk1SC9NAlgeztN0439vi8z_c9k"},
 			parsed: &protocol.ParsedCredentialAssertionData{
 				ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
 					RawID: []byte("cred-id"),
@@ -658,7 +658,7 @@ func TestValidatePasskeyLogin_Errors(t *testing.T) {
 			handler: func(rawID, userHandle []byte) (User, error) {
 				return nil, nil
 			},
-			session: SessionData{},
+			session: SessionData{Challenge: "E4PTcIH_HfX1pC6Sigk1SC9NAlgeztN0439vi8z_c9k"},
 			parsed: &protocol.ParsedCredentialAssertionData{
 				ParsedPublicKeyCredential: protocol.ParsedPublicKeyCredential{
 					RawID: []byte("cred-id"),
@@ -2040,4 +2040,62 @@ func TestBeginLoginRejectsInvalidConfig(t *testing.T) {
 	assert.Nil(t, assertion)
 	assert.Nil(t, session)
 	assert.ErrorContains(t, err, "error occurred validating the configuration")
+}
+
+func TestFinishLoginFailureSessionChallenge(t *testing.T) {
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPDisplayName: "test_rp",
+			RPOrigins:     []string{"https://webauthn.io"},
+			RPID:          "webauthn.io",
+		},
+	}
+
+	userHandle := []byte("0ToAAAAAAAAAAA")
+
+	parsed := &protocol.ParsedCredentialAssertionData{
+		Response: protocol.ParsedAssertionResponse{UserHandle: userHandle},
+	}
+
+	testCases := []struct {
+		name      string
+		challenge string
+		info      string
+	}{
+		{"ShouldFailEmpty", "", "The challenge must be at least 16 bytes but it has a length of 0"},
+		{"ShouldFailShort", "d3JvbmctY2hhbGxlbmdl", "The challenge must be at least 16 bytes but it has a length of 15"},
+		{"ShouldFailInvalid", "not base64url!", "The challenge could not be decoded: illegal base64 data at input byte 3"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("ValidateLogin", func(t *testing.T) {
+				user := &defaultUser{id: userHandle}
+
+				_, err := webauthn.ValidateLogin(user, SessionData{UserID: userHandle, Challenge: tc.challenge}, parsed)
+
+				var e *protocol.Error
+
+				require.ErrorAs(t, err, &e)
+				assert.Equal(t, "Session has an invalid challenge", e.Details)
+				assert.Equal(t, tc.info, e.DevInfo)
+			})
+
+			t.Run("ValidatePasskeyLogin", func(t *testing.T) {
+				handler := func(rawID, userHandle []byte) (User, error) {
+					t.Fatal("the handler must not be called for a session with an invalid challenge")
+
+					return nil, nil
+				}
+
+				_, _, err := webauthn.ValidatePasskeyLogin(handler, SessionData{Challenge: tc.challenge}, parsed)
+
+				var e *protocol.Error
+
+				require.ErrorAs(t, err, &e)
+				assert.Equal(t, "Session has an invalid challenge", e.Details)
+				assert.Equal(t, tc.info, e.DevInfo)
+			})
+		})
+	}
 }
