@@ -480,6 +480,61 @@ func TestValidateMetadataExtendedStatusCertificateScope(t *testing.T) {
 	}
 }
 
+func TestValidateMetadataExtendedStatusCertificateScopeEmpty(t *testing.T) {
+	aaguid := uuid.MustParse("0865c31d-05dc-4fb1-adce-3227bfb19967")
+
+	root, rootKey := metadataTestGenerateCertificate(t, "Metadata Root", nil, nil)
+	compromised, _ := metadataTestGenerateCertificate(t, "Compromised Batch", root, rootKey)
+	unaffected, _ := metadataTestGenerateCertificate(t, "Unaffected Batch", root, rootKey)
+
+	effective := time.Now().Add(-time.Hour)
+
+	entry := &metadata.Entry{
+		AaGUID:        aaguid,
+		StatusReports: []metadata.StatusReport{{Status: metadata.AttestationKeyCompromise, EffectiveDate: &effective, BatchCertificate: compromised}},
+	}
+
+	testCases := []struct {
+		name string
+		opts []memory.Option
+		err  string
+	}{
+		{
+			name: "ShouldFailWhenDesiredStatusesConfigured",
+			opts: []memory.Option{memory.WithStatusDesired([]metadata.AuthenticatorStatus{metadata.FidoCertified})},
+			err:  "Error occurred validating the authenticator status",
+		},
+		{
+			name: "ShouldPassWhenOnlyUndesiredStatusesConfigured",
+			opts: []memory.Option{memory.WithStatusUndesired(metadata.DefaultUndesiredAuthenticatorStatuses())},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Empty(t, metadataStatusReportsInScope(entry.StatusReports, []*x509.Certificate{unaffected}))
+
+			opts := append([]memory.Option{
+				memory.WithValidateStatus(true),
+				memory.WithValidateStatusCertificateScope(true),
+			}, tc.opts...)
+
+			mds := metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{aaguid: entry}, nil, opts...)
+
+			actual := ValidateMetadata(context.Background(), mds, aaguid, string(metadata.BasicFull), "packed", []any{unaffected.Raw})
+
+			if tc.err == "" {
+				assert.Nil(t, actual)
+
+				return
+			}
+
+			require.NotNil(t, actual)
+			assert.Contains(t, actual.DevInfo, tc.err)
+		})
+	}
+}
+
 func TestMetadataStatusReportsInScope(t *testing.T) {
 	root, rootKey := metadataTestGenerateCertificate(t, "Metadata Root", nil, nil)
 	cert, _ := metadataTestGenerateCertificate(t, "Attestation", root, rootKey)
