@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/metadata/providers/memory"
 )
 
 func TestSafetyNetFormat_AttStatementErrors(t *testing.T) {
@@ -297,14 +299,89 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 				},
 			}
 
-			attestationType, _, err := attestationFormatValidationHandlerAndroidSafetyNet(att, tc.clientDataHash, tc.mds, AttestationPolicy{}, SignaturePolicy{})
+			attestationType, x5cs, err := attestationFormatValidationHandlerAndroidSafetyNet(att, tc.clientDataHash, tc.mds, AttestationPolicy{}, SignaturePolicy{})
 
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)
+				assert.Nil(t, x5cs)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tc.attestationType, attestationType)
+				assert.Equal(t, []any{cert}, x5cs)
 			}
+		})
+	}
+}
+
+func TestSafetyNetFormat_TrustPathMetadata(t *testing.T) {
+	caKey, caCert := safetyNetTestInstallCA(t)
+	key, cert := safetyNetTestGenerateKeyCert(t, "attest.android.com", caKey, caCert)
+
+	_, otherCert := safetyNetTestGenerateCA(t)
+
+	aaguid := uuid.MustParse("b93fd961-f2e6-462f-b122-82002247de78")
+	nonceHash := sha256.Sum256(append([]byte("authdata"), []byte("clienthash")...))
+
+	att := AttestationObject{
+		Format:      "android-safetynet",
+		RawAuthData: []byte("authdata"),
+		AttStatement: map[string]any{
+			stmtVersion: "15180037",
+			"response": safetyNetTestBuildJWT(t, key, cert, SafetyNetResponse{
+				Nonce:           base64.StdEncoding.EncodeToString(nonceHash[:]),
+				TimestampMs:     time.Now().UnixMilli(),
+				CtsProfileMatch: true,
+			}),
+		},
+	}
+
+	attestationType, x5cs, err := attestationFormatValidationHandlerAndroidSafetyNet(att, []byte("clienthash"), nil, AttestationPolicy{}, SignaturePolicy{})
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name string
+		root *x509.Certificate
+		err  string
+	}{
+		{
+			name: "ShouldAcceptTrustPathIssuedByMetadataRoot",
+			root: caCert,
+		},
+		{
+			name: "ShouldRejectTrustPathNotIssuedByMetadataRoot",
+			root: otherCert,
+			err:  "Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID 'b93fd961-f2e6-462f-b122-82002247de78'. The attestation certificate could not be verified due to an error validating the trust chain against the Metadata Service.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mds, err := memory.New(
+				memory.WithMetadata(map[uuid.UUID]*metadata.Entry{
+					aaguid: {
+						MetadataStatement: metadata.Statement{
+							AttestationTypes:            metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+							AttestationRootCertificates: []*x509.Certificate{tc.root},
+						},
+					},
+				}),
+				memory.WithValidateEntry(true),
+				memory.WithValidateTrustAnchor(true),
+				memory.WithValidateStatus(false),
+				memory.WithValidateAttestationTypes(true),
+			)
+			require.NoError(t, err)
+
+			actual := ValidateMetadata(context.Background(), mds, aaguid, attestationType, string(AttestationFormatAndroidSafetyNet), x5cs)
+
+			if tc.err == "" {
+				assert.Nil(t, actual)
+
+				return
+			}
+
+			require.NotNil(t, actual)
+			assert.Equal(t, tc.err, actual.Details)
 		})
 	}
 }
@@ -446,6 +523,25 @@ func TestSafetyNetFormat_ParseExistingResponse(t *testing.T) {
 func safetyNetTestInstallCA(t *testing.T) (*rsa.PrivateKey, *x509.Certificate) {
 	t.Helper()
 
+	key, cert := safetyNetTestGenerateCA(t)
+
+	pool := x509.NewCertPool()
+	pool.AddCert(cert)
+
+	original := attStatementAndroidSafetyNetRootsCertPool
+	attStatementAndroidSafetyNetRootsCertPool = pool
+
+	t.Cleanup(func() {
+		attStatementAndroidSafetyNetRootsCertPool = original
+	})
+
+	return key, cert
+}
+
+// safetyNetTestGenerateCA creates a certificate authority for issuing SafetyNet response signing certificates.
+func safetyNetTestGenerateCA(t *testing.T) (*rsa.PrivateKey, *x509.Certificate) {
+	t.Helper()
+
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
 
@@ -465,22 +561,9 @@ func safetyNetTestInstallCA(t *testing.T) (*rsa.PrivateKey, *x509.Certificate) {
 	cert, err := x509.ParseCertificate(der)
 	require.NoError(t, err)
 
-	pool := x509.NewCertPool()
-	pool.AddCert(cert)
-
-	original := attStatementAndroidSafetyNetRootsCertPool
-	attStatementAndroidSafetyNetRootsCertPool = pool
-
-	t.Cleanup(func() {
-		attStatementAndroidSafetyNetRootsCertPool = original
-	})
-
 	return key, cert
 }
 
-// safetyNetTestGenerateKeyCert issues a SafetyNet response signing certificate for the given hostname from the given
-// certificate authority. A nil caKey produces a self-signed certificate, which is what a forged attestation looks
-// like.
 func safetyNetTestGenerateKeyCert(t *testing.T, hostname string, caKey *rsa.PrivateKey, caCert *x509.Certificate) (*rsa.PrivateKey, []byte) {
 	t.Helper()
 
