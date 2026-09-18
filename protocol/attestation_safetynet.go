@@ -2,12 +2,12 @@ package protocol
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -40,7 +40,13 @@ import (
 // Specification: §8.5. Android SafetyNet Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-android-safetynet-attestation
-func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy, _ SignaturePolicy) (attestationType string, x5cs []any, err error) {
+	return attestationFormatValidationAndroidSafetyNet(att, clientDataHash, time.Now())
+}
+
+// attestationFormatValidationAndroidSafetyNet is the Android SafetyNet attestation statement format verification
+// procedure, where the response signing chain and the response timestamp are evaluated at the given time.
+func attestationFormatValidationAndroidSafetyNet(att AttestationObject, clientDataHash []byte, now time.Time) (attestationType string, x5cs []any, err error) {
 	// The syntax of an Android Attestation statement is defined as follows:
 	//     $$attStmtType //= (
 	//                           fmt: "android-safetynet",
@@ -62,11 +68,11 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 		return "", nil, ErrAttestationFormat.WithDetails("Unable to find the version of SafetyNet")
 	}
 
-	if version == "" {
+	// The version is the version number of Google Play Services responsible for providing the SafetyNet API, so it
+	// must be a positive decimal integer.
+	if v, err := strconv.ParseUint(version, 10, 64); err != nil || v == 0 {
 		return "", nil, ErrAttestationFormat.WithDetails("Not a proper version for SafetyNet")
 	}
-
-	// TODO: provide user the ability to designate their supported versions.
 
 	response, present := att.AttStatement["response"].([]byte)
 	if !present {
@@ -79,7 +85,7 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 	// from the SafetyNet service, by following the steps indicated by the SafetyNet online documentation. Those steps
 	// require the certificate chain in the JWS header be validated and the leaf matched to the SafetyNet hostname
 	// before the signature is verified with it, which the verifier below performs as part of supplying the key.
-	verifier := &safetyNetJWTVerifier{}
+	verifier := &safetyNetJWTVerifier{now: now}
 
 	if token, err = jwt.Parse(string(response), verifier.keyFunc, jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()})); err != nil {
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Error verifying the SafetyNet response signature: %+v", err)).WithError(err)
@@ -109,14 +115,12 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 		return "", nil, ErrInvalidAttestation.WithDetails("ctsProfileMatch attribute of the JWT payload is false")
 	}
 
-	if t := time.Unix(safetyNetResponse.TimestampMs/1000, 0); t.After(time.Now()) {
+	if t := time.UnixMilli(safetyNetResponse.TimestampMs); t.After(now) {
 		// Zero tolerance for post-dated timestamps.
 		return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp after current time")
-	} else if t.Before(time.Now().Add(-time.Minute)) {
+	} else if t.Before(now.Add(-time.Minute)) {
 		// Small tolerance for pre-dated timestamps.
-		if mds != nil && mds.GetValidateEntry(context.Background()) {
-			return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp before one minute ago")
-		}
+		return "", nil, ErrInvalidAttestation.WithDetails("SafetyNet response with timestamp before one minute ago")
 	}
 
 	// §8.5.7 If successful, return implementation-specific values representing attestation type Basic and attestation
@@ -131,6 +135,7 @@ func attestationFormatValidationHandlerAndroidSafetyNet(att AttestationObject, c
 // the signature is verified with it. Releasing the leaf public key without doing so allows any self-signed
 // certificate bearing that hostname to sign an entirely forged response.
 type safetyNetJWTVerifier struct {
+	now   time.Time
 	x5c   []any
 	certs []*x509.Certificate
 }
@@ -189,6 +194,7 @@ func (v *safetyNetJWTVerifier) keyFunc(token *jwt.Token) (key any, err error) {
 	// verification, and ExtKeyUsageServerAuth is the applicable usage.
 	if _, err = certs[0].Verify(x509.VerifyOptions{
 		DNSName:       attStatementAndroidSafetyNetHostname,
+		CurrentTime:   v.now,
 		Roots:         roots,
 		Intermediates: intermediates,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},

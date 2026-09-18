@@ -41,18 +41,43 @@ func TestSafetyNetFormat_AttStatementErrors(t *testing.T) {
 			err:          "Not a proper version for SafetyNet",
 		},
 		{
-			name:         "ShouldFailMissingResponse",
+			name:         "ShouldFailDottedVersion",
 			attStatement: map[string]any{stmtVersion: "2.0"},
+			err:          "Not a proper version for SafetyNet",
+		},
+		{
+			name:         "ShouldFailZeroVersion",
+			attStatement: map[string]any{stmtVersion: "0"},
+			err:          "Not a proper version for SafetyNet",
+		},
+		{
+			name:         "ShouldFailNegativeVersion",
+			attStatement: map[string]any{stmtVersion: "-1"},
+			err:          "Not a proper version for SafetyNet",
+		},
+		{
+			name:         "ShouldFailSignedVersion",
+			attStatement: map[string]any{stmtVersion: "+15180037"},
+			err:          "Not a proper version for SafetyNet",
+		},
+		{
+			name:         "ShouldFailPaddedVersion",
+			attStatement: map[string]any{stmtVersion: " 15180037"},
+			err:          "Not a proper version for SafetyNet",
+		},
+		{
+			name:         "ShouldFailMissingResponse",
+			attStatement: map[string]any{stmtVersion: "15180037"},
 			err:          "Unable to find the SafetyNet response",
 		},
 		{
 			name:         "ShouldFailResponseWrongType",
-			attStatement: map[string]any{stmtVersion: "2.0", "response": "not-bytes"},
+			attStatement: map[string]any{stmtVersion: "15180037", "response": "not-bytes"},
 			err:          "Unable to find the SafetyNet response",
 		},
 		{
 			name:         "ShouldFailInvalidJWT",
-			attStatement: map[string]any{stmtVersion: "2.0", "response": []byte("!!!.a.jwt")},
+			attStatement: map[string]any{stmtVersion: "15180037", "response": []byte("!!!.a.jwt")},
 			err:          "Error verifying the SafetyNet response signature: token is malformed: could not base64 decode header: illegal base64 data at input byte 0",
 		},
 	}
@@ -191,7 +216,7 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 			err:            "SafetyNet response with timestamp before one minute ago",
 		},
 		{
-			name: "ShouldPassOldTimestampWithoutMDS",
+			name: "ShouldFailOldTimestampWithoutMDS",
 			buildJWT: func(t *testing.T) []byte {
 				t.Helper()
 
@@ -200,6 +225,23 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 				return safetyNetTestBuildJWT(t, key, cert, SafetyNetResponse{
 					Nonce:           base64.StdEncoding.EncodeToString(nonceHash[:]),
 					TimestampMs:     time.Now().Add(-5 * time.Minute).UnixMilli(),
+					CtsProfileMatch: true,
+				})
+			},
+			rawAuthData:    []byte("authdata"),
+			clientDataHash: []byte("clienthash"),
+			err:            "SafetyNet response with timestamp before one minute ago",
+		},
+		{
+			name: "ShouldPassTimestampWithinOneMinute",
+			buildJWT: func(t *testing.T) []byte {
+				t.Helper()
+
+				nonceHash := sha256.Sum256(append([]byte("authdata"), []byte("clienthash")...))
+
+				return safetyNetTestBuildJWT(t, key, cert, SafetyNetResponse{
+					Nonce:           base64.StdEncoding.EncodeToString(nonceHash[:]),
+					TimestampMs:     time.Now().Add(-30 * time.Second).UnixMilli(),
 					CtsProfileMatch: true,
 				})
 			},
@@ -208,7 +250,7 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 			attestationType: string(metadata.BasicFull),
 		},
 		{
-			name: "ShouldPassOldTimestampWithMDSNotValidating",
+			name: "ShouldFailOldTimestampWithMDSNotValidating",
 			buildJWT: func(t *testing.T) []byte {
 				t.Helper()
 
@@ -220,10 +262,10 @@ func TestSafetyNetFormat_JWTValidation(t *testing.T) {
 					CtsProfileMatch: true,
 				})
 			},
-			rawAuthData:     []byte("authdata"),
-			clientDataHash:  []byte("clienthash"),
-			mds:             &safetyNetTestMDS{validateEntry: false},
-			attestationType: string(metadata.BasicFull),
+			rawAuthData:    []byte("authdata"),
+			clientDataHash: []byte("clienthash"),
+			mds:            &safetyNetTestMDS{validateEntry: false},
+			err:            "SafetyNet response with timestamp before one minute ago",
 		},
 		{
 			name: "ShouldSucceedWithValidResponse",
