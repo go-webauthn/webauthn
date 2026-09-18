@@ -11,6 +11,7 @@ import (
 	"math"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/go-tpm/tpm2"
 
@@ -42,9 +43,15 @@ import (
 // Specification: §8.3. TPM Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-tpm-attestation
+func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider, _ AttestationPolicy, signature SignaturePolicy) (attestationType string, x5cs []any, err error) {
+	return attestationFormatValidationTPM(att, clientDataHash, signature, time.Now())
+}
+
+// attestationFormatValidationTPM is the TPM attestation statement format verification procedure, where the AIK
+// certificate must be within its validity period at the given time.
 //
 //nolint:gocyclo
-func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash []byte, _ metadata.Provider, policy AttestationPolicy, signature SignaturePolicy) (attestationType string, x5cs []any, err error) {
+func attestationFormatValidationTPM(att AttestationObject, clientDataHash []byte, signature SignaturePolicy, now time.Time) (attestationType string, x5cs []any, err error) {
 	var statement *tpm2AttStatement
 
 	if statement, err = newTPM2AttStatement(att.AttStatement); err != nil {
@@ -194,6 +201,12 @@ func attestationFormatValidationHandlerTPM(att AttestationObject, clientDataHash
 		return "", nil, ErrInvalidAttestation.WithDetails(fmt.Sprintf("Unsupported COSE alg: %d", statement.Algorithm))
 	} else if err = certCheckSignature(aikCert, sigAlg, statement.CertInfo, statement.Signature, signature); err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails(fmt.Sprintf("Signature validation error: %+v", err))
+	}
+
+	// The AIK certificate must be within its validity period, as with the attestation certificate of the packed
+	// attestation statement format.
+	if aikCert.NotBefore.After(now) || aikCert.NotAfter.Before(now) {
+		return "", nil, ErrAttestationFormat.WithDetails("AIK certificate is either no longer valid or not yet valid")
 	}
 
 	// Verify that aikCert meets the requirements in §8.3.1 TPM Attestation Statement Certificate Requirements.

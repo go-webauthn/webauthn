@@ -643,12 +643,68 @@ func TestTPMAttestationVerificationSuccess(t *testing.T) {
 			pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[i])
 			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
 
-			attestationType, _, err := attestationFormatValidationHandlerTPM(pcc.Response.AttestationObject, clientDataHash[:], nil, AttestationPolicy{}, SignaturePolicy{})
+			attestationType, _, err := attestationFormatValidationTPM(pcc.Response.AttestationObject, clientDataHash[:], SignaturePolicy{}, tpmTestAIKCertificate(t, pcc.Response.AttestationObject).NotBefore)
 			require.NoError(t, err)
 
 			assert.Equal(t, "attca", attestationType)
 		})
 	}
+}
+
+func TestTPMAttestationVerificationAIKValidity(t *testing.T) {
+	now := time.Now()
+
+	testCases := []struct {
+		name      string
+		notBefore time.Time
+		notAfter  time.Time
+		err       string
+	}{
+		{
+			name:      "ShouldAcceptWithinValidityPeriod",
+			notBefore: now.Add(-time.Hour),
+			notAfter:  now.Add(time.Hour),
+		},
+		{
+			name:      "ShouldRejectExpired",
+			notBefore: now.Add(-2 * time.Hour),
+			notAfter:  now.Add(-time.Hour),
+			err:       "AIK certificate is either no longer valid or not yet valid",
+		},
+		{
+			name:      "ShouldRejectNotYetValid",
+			notBefore: now.Add(time.Hour),
+			notAfter:  now.Add(2 * time.Hour),
+			err:       "AIK certificate is either no longer valid or not yet valid",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			att := makeTPMAttestation(t, tpmAttestationOptions{basicConstraintsValid: true, notBefore: tc.notBefore, notAfter: tc.notAfter})
+
+			attestationType, _, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, "attca", attestationType)
+		})
+	}
+
+	t.Run("ShouldRejectExpiredCapturedResponse", func(t *testing.T) {
+		pcc := attestationTestUnpackResponse(t, testAttestationTPMResponses[1])
+		clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+
+		aikCert := tpmTestAIKCertificate(t, pcc.Response.AttestationObject)
+
+		_, _, err := attestationFormatValidationTPM(pcc.Response.AttestationObject, clientDataHash[:], SignaturePolicy{}, aikCert.NotAfter.Add(time.Second))
+		assert.EqualError(t, err, "AIK certificate is either no longer valid or not yet valid")
+	})
 }
 
 func TestTPMAttestationVerificationFailAttStatement(t *testing.T) {
@@ -1403,6 +1459,24 @@ type tpmAttestationOptions struct {
 	certAAGUID            []byte
 	certAAGUIDCritical    bool
 	authDataAAGUID        []byte
+	notBefore             time.Time
+	notAfter              time.Time
+}
+
+func tpmTestAIKCertificate(t *testing.T, att AttestationObject) *x509.Certificate {
+	t.Helper()
+
+	x5c, ok := att.AttStatement[stmtX5C].([]any)
+	require.True(t, ok)
+	require.NotEmpty(t, x5c)
+
+	raw, ok := x5c[0].([]byte)
+	require.True(t, ok)
+
+	cert, err := x509.ParseCertificate(raw)
+	require.NoError(t, err)
+
+	return cert
 }
 
 func makeTPMAttestation(t *testing.T, opts tpmAttestationOptions) AttestationObject {
@@ -1485,10 +1559,18 @@ func makeTPMAttestation(t *testing.T, opts tpmAttestationOptions) AttestationObj
 		extensions = append(extensions, pkix.Extension{Id: oidFIDOGenCeAAGUID, Critical: opts.certAAGUIDCritical, Value: value})
 	}
 
+	if opts.notBefore.IsZero() {
+		opts.notBefore = time.Now().Add(-time.Hour)
+	}
+
+	if opts.notAfter.IsZero() {
+		opts.notAfter = time.Now().Add(time.Hour)
+	}
+
 	template := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
+		NotBefore:             opts.notBefore,
+		NotAfter:              opts.notAfter,
 		BasicConstraintsValid: opts.basicConstraintsValid,
 		IsCA:                  opts.isCA,
 		UnknownExtKeyUsage:    []asn1.ObjectIdentifier{oidTCGKpAIKCertificate},
