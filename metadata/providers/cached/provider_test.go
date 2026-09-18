@@ -1,6 +1,7 @@
 package cached
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,10 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/metadata/providers/memory"
+	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
 func TestNew_Errors(t *testing.T) {
@@ -230,4 +235,58 @@ func TestProviderDoesNotPoisonCache(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestProviderExtended(t *testing.T) {
+	ctx := context.Background()
+
+	entry := &metadata.Entry{MetadataStatement: metadata.Statement{Description: "Test U2F Authenticator"}}
+
+	t.Run("ShouldForwardToExtendedProvider", func(t *testing.T) {
+		inner, err := memory.New(
+			memory.WithMetadata(map[uuid.UUID]*metadata.Entry{}),
+			memory.WithMetadataKeyIdentifiers(map[string]*metadata.Entry{"abcdef": entry}),
+			memory.WithValidateEntryKeyIdentifier(true),
+			memory.WithValidateStatusCertificateScope(true),
+			memory.WithValidateAAGUID(true),
+			memory.WithValidateAttestationFormats(true),
+			memory.WithValidateAlgorithms(true),
+			memory.WithValidateBackupEligibility(true),
+			memory.WithValidateExtensions(true),
+			memory.WithValidateUserVerification(true),
+		)
+		require.NoError(t, err)
+
+		p := &Provider{Provider: inner}
+
+		actual, err := p.GetEntryByKeyIdentifier(ctx, "abcdef")
+		require.NoError(t, err)
+		assert.Equal(t, entry, actual)
+
+		assert.True(t, p.GetValidateEntryKeyIdentifier(ctx))
+		assert.True(t, p.GetValidateStatusCertificateScope(ctx))
+		assert.True(t, p.GetValidateAAGUID(ctx))
+		assert.True(t, p.GetValidateAttestationFormats(ctx))
+		assert.True(t, p.GetValidateAlgorithms(ctx))
+		assert.True(t, p.GetValidateBackupEligibility(ctx))
+		assert.True(t, p.GetValidateExtensions(ctx))
+		assert.True(t, p.GetValidateUserVerification(ctx))
+	})
+
+	t.Run("ShouldNotValidateWithoutExtendedProvider", func(t *testing.T) {
+		p := &Provider{Provider: mocks.NewMockMetadataProvider(gomock.NewController(t))}
+
+		actual, err := p.GetEntryByKeyIdentifier(ctx, "abcdef")
+		require.NoError(t, err)
+		assert.Nil(t, actual)
+
+		assert.False(t, p.GetValidateEntryKeyIdentifier(ctx))
+		assert.False(t, p.GetValidateStatusCertificateScope(ctx))
+		assert.False(t, p.GetValidateAAGUID(ctx))
+		assert.False(t, p.GetValidateAttestationFormats(ctx))
+		assert.False(t, p.GetValidateAlgorithms(ctx))
+		assert.False(t, p.GetValidateBackupEligibility(ctx))
+		assert.False(t, p.GetValidateExtensions(ctx))
+		assert.False(t, p.GetValidateUserVerification(ctx))
+	})
 }

@@ -178,7 +178,7 @@ func compoundVerifySubStatement(att AttestationObject, attStmt NonCompoundAttest
 		return attestationType, nil
 	}
 
-	if e := ValidateMetadata(context.Background(), mds, aaguid, attestationType, object.Format, cx5cs); e != nil {
+	if e := ValidateMetadataWithAuthenticatorData(context.Background(), mds, aaguid, attestationType, object.Format, cx5cs, &object.AuthData); e != nil {
 		return "", ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
 	}
 
