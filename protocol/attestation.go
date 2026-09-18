@@ -305,7 +305,7 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		return nil
 	}
 
-	if e := ValidateMetadata(context.Background(), mds, aaguid, a.Type, a.Format, x5cs); e != nil {
+	if e := ValidateMetadataWithAuthenticatorData(context.Background(), mds, aaguid, a.Type, a.Format, x5cs, &a.AuthData); e != nil {
 		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
 	}
 

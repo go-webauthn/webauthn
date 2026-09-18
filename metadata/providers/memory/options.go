@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"strings"
+
 	"github.com/google/uuid"
 
 	"github.com/go-webauthn/webauthn/metadata"
@@ -84,6 +86,103 @@ func WithStatusUndesired(statuses []metadata.AuthenticatorStatus) Option {
 func WithStatusDesired(statuses []metadata.AuthenticatorStatus) Option {
 	return func(provider *Provider) (err error) {
 		provider.desired = statuses
+
+		return nil
+	}
+}
+
+// WithMetadataKeyIdentifiers provides the metadata indexed by the attestation certificate key identifiers, which is
+// used to look up entries for authenticators without an AAGUID such as FIDO U2F authenticators. Should be used with
+// [WithValidateEntryKeyIdentifier] set to true. See [metadata.Metadata.ToKeyIdentifierMap].
+func WithMetadataKeyIdentifiers(mds map[string]*metadata.Entry) Option {
+	return func(provider *Provider) (err error) {
+		provider.mdsKeyIDs = make(map[string]*metadata.Entry, len(mds))
+
+		for keyIdentifier, entry := range mds {
+			provider.mdsKeyIDs[strings.ToLower(keyIdentifier)] = entry
+		}
+
+		return nil
+	}
+}
+
+// WithValidateEntryKeyIdentifier when set to true enables looking up the entry for an attestation statement with a zero
+// AAGUID using the key identifier of the attestation certificate. The entry is then subject to the same validations as
+// an entry looked up by AAGUID. Should be used with [WithMetadataKeyIdentifiers]. Default is false.
+func WithValidateEntryKeyIdentifier(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.entryKeyID = validate
+
+		return nil
+	}
+}
+
+// WithValidateStatusCertificateScope when set to true only considers status reports which relate to a specific
+// certificate when that certificate is part of the attestation trust path, i.e. a compromise of one batch of
+// authenticators does not affect other batches of the same model. Default is false.
+func WithValidateStatusCertificateScope(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.statusScope = validate
+
+		return nil
+	}
+}
+
+// WithValidateAAGUID when set to true enables the validation that the AAGUID values present in the metadata entry,
+// metadata statement, and authenticatorGetInfo match the AAGUID of the authenticator. Default is false.
+func WithValidateAAGUID(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.aaguid = validate
+
+		return nil
+	}
+}
+
+// WithValidateAttestationFormats when set to true enables the validation of the attestation statement format against
+// the formats the authenticator is known to produce. Default is false.
+func WithValidateAttestationFormats(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.formats = validate
+
+		return nil
+	}
+}
+
+// WithValidateAlgorithms when set to true enables the validation of the credential public key algorithm against the
+// algorithms the authenticator is known to support. Default is false.
+func WithValidateAlgorithms(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.algorithms = validate
+
+		return nil
+	}
+}
+
+// WithValidateBackupEligibility when set to true enables the validation of the Backup Eligibility and Backup State
+// flags against the multi-device credential support of the authenticator. Default is false.
+func WithValidateBackupEligibility(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.backup = validate
+
+		return nil
+	}
+}
+
+// WithValidateExtensions when set to true enables the validation of the authenticator extension outputs against the
+// extensions the authenticator is known to support. Default is false.
+func WithValidateExtensions(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.extensions = validate
+
+		return nil
+	}
+}
+
+// WithValidateUserVerification when set to true enables the validation that the User Verified flag is only set when
+// the authenticator is known to be capable of user verification. Default is false.
+func WithValidateUserVerification(validate bool) Option {
+	return func(provider *Provider) (err error) {
+		provider.uv = validate
 
 		return nil
 	}
