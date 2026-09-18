@@ -229,7 +229,7 @@
 // MUST be written back to storage on every successful FinishLogin / ValidateLogin so the next ceremony observes the
 // current values. [CredentialFlags.UserVerified] is the specification's uvInitialized and only ever advances from
 // false to true, so a Relying Party which does not write it back can never record that the credential has verified
-// its user.
+// its user. After registration it only advances during a login begun with [WithLoginAuthorizeUVInitialization].
 //
 // For [SessionData] stored in a database (rather than a server-side session store), use the same persistence
 // shapes described above. The User Handle on a [SessionData] row is per-session ceremony state rather than
