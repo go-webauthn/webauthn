@@ -389,6 +389,24 @@ func TestValidateMetadataExtendedKeyIdentifier(t *testing.T) {
 		require.NotNil(t, actual)
 		assert.Equal(t, "Failed to validate authenticator metadata for Authenticator Attestation GUID '00000000-0000-0000-0000-000000000000'. The attestation type 'attca' is not known to be used by this authenticator.", actual.DevInfo)
 	})
+
+	t.Run("ShouldValidateTrustAnchorOfAttCAForFIDOU2F", func(t *testing.T) {
+		attca := &metadata.Entry{
+			MetadataStatement: metadata.Statement{
+				AttestationTypes:            metadata.AuthenticatorAttestationTypes{metadata.AttCA},
+				AttestationRootCertificates: []*x509.Certificate{root},
+			},
+		}
+
+		mds := metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, map[string]*metadata.Entry{hex.EncodeToString(withSKI.SubjectKeyId): attca},
+			memory.WithValidateEntry(true),
+			memory.WithValidateTrustAnchor(true),
+			memory.WithValidateAttestationTypes(true),
+			memory.WithValidateEntryKeyIdentifier(true),
+		)
+
+		assert.Nil(t, ValidateMetadata(context.Background(), mds, uuid.Nil, string(metadata.AttCA), "fido-u2f", []any{withSKI.Raw}))
+	})
 }
 
 func TestValidateMetadataExtendedStatusCertificateScope(t *testing.T) {
