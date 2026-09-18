@@ -75,6 +75,8 @@ type SessionData struct {
 	Extensions       protocol.SessionExtensions              `json:"extensions,omitzero" msg:"exts"`
 	CredParams       []protocol.CredentialParameter          `json:"credParams,omitempty" msg:"params,omitempty"`
 	Mediation        protocol.CredentialMediationRequirement `json:"mediation,omitempty" msg:"cmr,omitempty"`
+
+	AuthorizeUVInitialization bool `json:"authorizeUVInitialization,omitempty" msg:"auvi,omitempty"`
 }
 
 // GetRelyingPartyID returns the Relying Party ID the ceremony was begun with, which is the value the rpIdHash in the

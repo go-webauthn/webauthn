@@ -21,43 +21,64 @@ import (
 
 func TestCredentialFlags_Update(t *testing.T) {
 	testCases := []struct {
-		name      string
-		stored    protocol.AuthenticatorFlags
-		assertion protocol.AuthenticatorFlags
-		expected  protocol.AuthenticatorFlags
+		name       string
+		stored     protocol.AuthenticatorFlags
+		assertion  protocol.AuthenticatorFlags
+		expected   protocol.AuthenticatorFlags
+		authorized protocol.AuthenticatorFlags
 	}{
 		{
-			name:      "ShouldLatchUserVerifiedWhenAssertionDoesNotVerify",
-			stored:    protocol.FlagUserPresent | protocol.FlagUserVerified,
-			assertion: protocol.FlagUserPresent,
-			expected:  protocol.FlagUserPresent | protocol.FlagUserVerified,
+			name:       "ShouldLatchUserVerifiedWhenAssertionDoesNotVerify",
+			stored:     protocol.FlagUserPresent | protocol.FlagUserVerified,
+			assertion:  protocol.FlagUserPresent,
+			expected:   protocol.FlagUserPresent | protocol.FlagUserVerified,
+			authorized: protocol.FlagUserPresent | protocol.FlagUserVerified,
 		},
 		{
-			name:      "ShouldAdvanceUserVerifiedWhenAssertionVerifies",
-			stored:    protocol.FlagUserPresent,
-			assertion: protocol.FlagUserPresent | protocol.FlagUserVerified,
-			expected:  protocol.FlagUserPresent | protocol.FlagUserVerified,
+			name:       "ShouldOnlyAdvanceUserVerifiedWhenAuthorized",
+			stored:     protocol.FlagUserPresent,
+			assertion:  protocol.FlagUserPresent | protocol.FlagUserVerified,
+			expected:   protocol.FlagUserPresent,
+			authorized: protocol.FlagUserPresent | protocol.FlagUserVerified,
 		},
 		{
-			name:      "ShouldLeaveUserVerifiedUnsetWhenNeitherVerifies",
-			stored:    protocol.FlagUserPresent,
-			assertion: protocol.FlagUserPresent,
-			expected:  protocol.FlagUserPresent,
+			name:       "ShouldKeepUserVerifiedWhenBothVerify",
+			stored:     protocol.FlagUserPresent | protocol.FlagUserVerified,
+			assertion:  protocol.FlagUserPresent | protocol.FlagUserVerified,
+			expected:   protocol.FlagUserPresent | protocol.FlagUserVerified,
+			authorized: protocol.FlagUserPresent | protocol.FlagUserVerified,
 		},
 		{
-			name:      "ShouldTakeBackupStateFromTheAssertion",
-			stored:    protocol.FlagUserPresent | protocol.FlagBackupEligible | protocol.FlagBackupState,
-			assertion: protocol.FlagUserPresent | protocol.FlagBackupEligible,
-			expected:  protocol.FlagUserPresent | protocol.FlagBackupEligible,
+			name:       "ShouldLeaveUserVerifiedUnsetWhenNeitherVerifies",
+			stored:     protocol.FlagUserPresent,
+			assertion:  protocol.FlagUserPresent,
+			expected:   protocol.FlagUserPresent,
+			authorized: protocol.FlagUserPresent,
+		},
+		{
+			name:       "ShouldTakeBackupStateFromTheAssertion",
+			stored:     protocol.FlagUserPresent | protocol.FlagBackupEligible | protocol.FlagBackupState,
+			assertion:  protocol.FlagUserPresent | protocol.FlagBackupEligible,
+			expected:   protocol.FlagUserPresent | protocol.FlagBackupEligible,
+			authorized: protocol.FlagUserPresent | protocol.FlagBackupEligible,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			updated := NewCredentialFlags(tc.stored).Update(tc.assertion)
+			t.Run("Update", func(t *testing.T) {
+				updated := NewCredentialFlags(tc.stored).Update(tc.assertion)
 
-			assert.Equal(t, NewCredentialFlags(tc.expected), updated)
-			assert.Equal(t, tc.expected, updated.ProtocolValue())
+				assert.Equal(t, NewCredentialFlags(tc.expected), updated)
+				assert.Equal(t, tc.expected, updated.ProtocolValue())
+			})
+
+			t.Run("UpdateWithUVInitialization", func(t *testing.T) {
+				updated := NewCredentialFlags(tc.stored).UpdateWithUVInitialization(tc.assertion)
+
+				assert.Equal(t, NewCredentialFlags(tc.authorized), updated)
+				assert.Equal(t, tc.authorized, updated.ProtocolValue())
+			})
 		})
 	}
 }

@@ -17,7 +17,7 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 7 bits */
+	var zb0001Mask uint8 /* 8 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -128,6 +128,13 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 				z.Mediation = protocol.CredentialMediationRequirement(zb0005)
 			}
 			zb0001Mask |= 0x40
+		case "auvi":
+			z.AuthorizeUVInitialization, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "AuthorizeUVInitialization")
+				return
+			}
+			zb0001Mask |= 0x80
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -137,7 +144,7 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x7f {
+	if zb0001Mask != 0xff {
 		if (zb0001Mask & 0x1) == 0 {
 			z.RelyingPartyID = ""
 		}
@@ -159,6 +166,9 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 		if (zb0001Mask & 0x40) == 0 {
 			z.Mediation = ""
 		}
+		if (zb0001Mask & 0x80) == 0 {
+			z.AuthorizeUVInitialization = false
+		}
 	}
 	return
 }
@@ -166,8 +176,8 @@ func (z *SessionData) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 	// check for omitted fields
-	zb0001Len := uint32(10)
-	var zb0001Mask uint16 /* 10 bits */
+	zb0001Len := uint32(11)
+	var zb0001Mask uint16 /* 11 bits */
 	_ = zb0001Mask
 	if z.RelyingPartyID == "" {
 		zb0001Len--
@@ -196,6 +206,10 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 	if z.Mediation == "" {
 		zb0001Len--
 		zb0001Mask |= 0x200
+	}
+	if z.AuthorizeUVInitialization == false {
+		zb0001Len--
+		zb0001Mask |= 0x400
 	}
 	// variable map header, size zb0001Len
 	err = en.Append(0x80 | uint8(zb0001Len))
@@ -333,6 +347,18 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 				return
 			}
 		}
+		if (zb0001Mask & 0x400) == 0 { // if not omitted
+			// write "auvi"
+			err = en.Append(0xa4, 0x61, 0x75, 0x76, 0x69)
+			if err != nil {
+				return
+			}
+			err = en.WriteBool(z.AuthorizeUVInitialization)
+			if err != nil {
+				err = msgp.WrapError(err, "AuthorizeUVInitialization")
+				return
+			}
+		}
 	}
 	return
 }
@@ -341,8 +367,8 @@ func (z *SessionData) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// check for omitted fields
-	zb0001Len := uint32(10)
-	var zb0001Mask uint16 /* 10 bits */
+	zb0001Len := uint32(11)
+	var zb0001Mask uint16 /* 11 bits */
 	_ = zb0001Mask
 	if z.RelyingPartyID == "" {
 		zb0001Len--
@@ -371,6 +397,10 @@ func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 	if z.Mediation == "" {
 		zb0001Len--
 		zb0001Mask |= 0x200
+	}
+	if z.AuthorizeUVInitialization == false {
+		zb0001Len--
+		zb0001Mask |= 0x400
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -435,6 +465,11 @@ func (z *SessionData) MarshalMsg(b []byte) (o []byte, err error) {
 			o = append(o, 0xa3, 0x63, 0x6d, 0x72)
 			o = msgp.AppendString(o, string(z.Mediation))
 		}
+		if (zb0001Mask & 0x400) == 0 { // if not omitted
+			// string "auvi"
+			o = append(o, 0xa4, 0x61, 0x75, 0x76, 0x69)
+			o = msgp.AppendBool(o, z.AuthorizeUVInitialization)
+		}
 	}
 	return
 }
@@ -449,7 +484,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var zb0001Mask uint8 /* 7 bits */
+	var zb0001Mask uint8 /* 8 bits */
 	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
@@ -560,6 +595,13 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				z.Mediation = protocol.CredentialMediationRequirement(zb0005)
 			}
 			zb0001Mask |= 0x40
+		case "auvi":
+			z.AuthorizeUVInitialization, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AuthorizeUVInitialization")
+				return
+			}
+			zb0001Mask |= 0x80
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -569,7 +611,7 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x7f {
+	if zb0001Mask != 0xff {
 		if (zb0001Mask & 0x1) == 0 {
 			z.RelyingPartyID = ""
 		}
@@ -591,6 +633,9 @@ func (z *SessionData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if (zb0001Mask & 0x40) == 0 {
 			z.Mediation = ""
 		}
+		if (zb0001Mask & 0x80) == 0 {
+			z.AuthorizeUVInitialization = false
+		}
 	}
 	o = bts
 	return
@@ -606,7 +651,7 @@ func (z *SessionData) Msgsize() (s int) {
 	for za0002 := range z.CredParams {
 		s += z.CredParams[za0002].Msgsize()
 	}
-	s += 4 + msgp.StringPrefixSize + len(string(z.Mediation))
+	s += 4 + msgp.StringPrefixSize + len(string(z.Mediation)) + 5 + msgp.BoolSize
 	return
 }
 

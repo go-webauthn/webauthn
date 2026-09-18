@@ -68,6 +68,12 @@ type PublicKeyCredentialRequestOptions struct {
 	// the [github.com/go-webauthn/webauthn/webauthn.SessionData] instead, which the Finish step verifies the
 	// collected client data against in place of the configured origins.
 	Origin string `json:"-"`
+
+	// AuthorizeUVInitialization records that the Relying Party has authorized the credential record's uvInitialized
+	// value to advance from false to true during this ceremony. Used internally only; not serialized, as it is not a
+	// member of the IDL and is never conveyed to the client. It is recorded in the
+	// [github.com/go-webauthn/webauthn/webauthn.SessionData] instead.
+	AuthorizeUVInitialization bool `json:"-"`
 }
 
 // CredentialDescriptor represents the PublicKeyCredentialDescriptor IDL.

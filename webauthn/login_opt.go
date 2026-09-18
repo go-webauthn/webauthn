@@ -118,3 +118,21 @@ func WithAssertionPublicKeyCredentialHints(hints []protocol.PublicKeyCredentialH
 func WithAppIdExtension(appid string) LoginOption {
 	return WithAssertionExtensions(WithExtensionAppID(appid))
 }
+
+// WithLoginAuthorizeUVInitialization authorizes the credential record's uvInitialized value, i.e.
+// [CredentialFlags.UserVerified], to advance from false to true when this ceremony verifies the user. The Relying
+// Party should only authorize this when the user has been authenticated by an additional authentication factor
+// equivalent to WebAuthn user verification, e.g. a password and a one-time code, before the ceremony was begun.
+//
+// Without this option a credential whose user was not verified at registration is never recorded as having been
+// verified, as the specification requires this change to be authorized. A credential already recorded as verified is
+// unaffected.
+//
+// Specification: §7.2. Verifying an Authentication Assertion, step 24 (https://www.w3.org/TR/webauthn-3/#sctn-verifying-assertion)
+func WithLoginAuthorizeUVInitialization(authorize bool) LoginOption {
+	return func(cco *protocol.PublicKeyCredentialRequestOptions) error {
+		cco.AuthorizeUVInitialization = authorize
+
+		return nil
+	}
+}

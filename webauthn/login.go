@@ -146,6 +146,8 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		AllowedCredentialIDs: assertion.Response.GetAllowedCredentialIDs(),
 		UserVerification:     assertion.Response.UserVerification,
 		Extensions:           assertion.Response.Extensions.Session(),
+
+		AuthorizeUVInitialization: assertion.Response.AuthorizeUVInitialization,
 	}
 
 	if webauthn.Config.Timeouts.Login.Enforce {
@@ -402,9 +404,14 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	// Handle step 17.
 	credential.Authenticator.UpdateCounter(parsedResponse.Response.AuthenticatorData.Counter)
 
-	// Update flags from response data. The user verification flag is latched rather than replaced; see
-	// [CredentialFlags.Update].
-	credential.Flags = credential.Flags.Update(parsedResponse.Response.AuthenticatorData.Flags)
+	// Update flags from response data. The user verification flag only advances from false to true when the Relying
+	// Party authorized it when the ceremony was begun; see [CredentialFlags.Update] and
+	// [CredentialFlags.UpdateWithUVInitialization].
+	if session.AuthorizeUVInitialization {
+		credential.Flags = credential.Flags.UpdateWithUVInitialization(parsedResponse.Response.AuthenticatorData.Flags)
+	} else {
+		credential.Flags = credential.Flags.Update(parsedResponse.Response.AuthenticatorData.Flags)
+	}
 
 	return &credential, nil
 }
