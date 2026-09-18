@@ -137,7 +137,9 @@ func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Pro
 
 		x5c, x5cis := certs[0], certs[1:]
 
-		if attestationType == string(metadata.AttCA) {
+		// Only the Attestation Identity Key of the TPM format requires preparation, other formats such as FIDO U2F may
+		// also convey AttCA but their attestation certificates carry no TPM Subject Alternative Name.
+		if attestationType == string(metadata.AttCA) && AttestationFormat(attestationFormat) == AttestationFormatTPM {
 			if x5c, x5cis, protoErr = tpmParseAIKAttCA(x5c, x5cis); protoErr != nil {
 				return ErrMetadata.WithDetails(protoErr.Details).WithInfo(protoErr.DevInfo).WithError(protoErr)
 			}

@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/metadata/providers/memory"
 )
 
 func TestVerifyU2FFormat(t *testing.T) {
@@ -48,6 +50,80 @@ func TestVerifyU2FFormat(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.attestationType, attestationType)
+		})
+	}
+}
+
+func TestVerifyU2FFormat_AttestationType(t *testing.T) {
+	att := attestationTestUnpackResponse(t, u2fTestResponse["success"]).Response.AttestationObject
+	clientDataHash := sha256.Sum256(attestationTestUnpackResponse(t, u2fTestResponse["success"]).Raw.AttestationResponse.ClientDataJSON)
+
+	raw, ok := att.AttStatement[stmtX5C].([]any)[0].([]byte)
+	require.True(t, ok)
+
+	attCert, err := x509.ParseCertificate(raw)
+	require.NoError(t, err)
+
+	keyID := metadataTestPublicKeyHash(t, attCert)
+
+	entry := func(types ...metadata.AuthenticatorAttestationType) map[string]*metadata.Entry {
+		return map[string]*metadata.Entry{keyID: {MetadataStatement: metadata.Statement{AttestationTypes: types}}}
+	}
+
+	testCases := []struct {
+		name     string
+		mds      func(t *testing.T) metadata.Provider
+		expected string
+	}{
+		{
+			name:     "ShouldReturnBasicWithoutMetadata",
+			mds:      func(t *testing.T) metadata.Provider { return nil },
+			expected: string(metadata.BasicFull),
+		},
+		{
+			name: "ShouldReturnAttCAWhenMetadataDeclaresOnlyAttCA",
+			mds: func(t *testing.T) metadata.Provider {
+				return metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, entry(metadata.AttCA), memory.WithValidateEntryKeyIdentifier(true))
+			},
+			expected: string(metadata.AttCA),
+		},
+		{
+			name: "ShouldReturnBasicWhenMetadataDeclaresOnlyBasic",
+			mds: func(t *testing.T) metadata.Provider {
+				return metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, entry(metadata.BasicFull), memory.WithValidateEntryKeyIdentifier(true))
+			},
+			expected: string(metadata.BasicFull),
+		},
+		{
+			name: "ShouldReturnBasicWhenMetadataDeclaresBoth",
+			mds: func(t *testing.T) metadata.Provider {
+				return metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, entry(metadata.BasicFull, metadata.AttCA), memory.WithValidateEntryKeyIdentifier(true))
+			},
+			expected: string(metadata.BasicFull),
+		},
+		{
+			name: "ShouldReturnBasicWhenKeyIdentifierLookupDisabled",
+			mds: func(t *testing.T) metadata.Provider {
+				return metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, entry(metadata.AttCA), memory.WithValidateEntryKeyIdentifier(false))
+			},
+			expected: string(metadata.BasicFull),
+		},
+		{
+			name: "ShouldReturnBasicWhenNoEntryForKeyIdentifier",
+			mds: func(t *testing.T) metadata.Provider {
+				return metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, map[string]*metadata.Entry{}, memory.WithValidateEntryKeyIdentifier(true))
+			},
+			expected: string(metadata.BasicFull),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationType, x5cs, err := attestationFormatValidationHandlerFIDOU2F(att, clientDataHash[:], tc.mds(t), AttestationPolicy{}, SignaturePolicy{})
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, attestationType)
+			assert.Len(t, x5cs, 1)
 		})
 	}
 }
