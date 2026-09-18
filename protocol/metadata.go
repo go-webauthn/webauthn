@@ -146,7 +146,7 @@ func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Pro
 		}
 
 		if x5c != nil {
-			if !entry.MetadataStatement.AttestationTypes.HasBasicFull() {
+			if !entry.MetadataStatement.AttestationTypes.HasCertificateTrustPath() {
 				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. Attestation was provided in the full format but the authenticator doesn't support the full attestation format.", aaguid))
 			}
 
