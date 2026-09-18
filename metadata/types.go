@@ -105,6 +105,20 @@ type PublicKeyCredentialParameters struct {
 
 type AuthenticatorAttestationTypes []AuthenticatorAttestationType
 
+// HasCertificateTrustPath returns true if any of the attestation types conveys an attestation certificate trust path,
+// i.e. basic_full, attca, or anonca. These are the attestation types whose trust path can be verified against the
+// attestation root certificates of the metadata statement.
+func (t AuthenticatorAttestationTypes) HasCertificateTrustPath() bool {
+	for _, a := range t {
+		switch a {
+		case BasicFull, AttCA, AnonCA:
+			return true
+		}
+	}
+
+	return false
+}
+
 func (t AuthenticatorAttestationTypes) HasBasicFull() bool {
 	for _, a := range t {
 		if a == BasicFull || a == AttCA {

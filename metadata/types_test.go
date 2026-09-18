@@ -65,6 +65,61 @@ func TestHasBasicFull(t *testing.T) {
 	}
 }
 
+func TestHasCertificateTrustPath(t *testing.T) {
+	testCases := []struct {
+		name     string
+		types    AuthenticatorAttestationTypes
+		expected bool
+	}{
+		{
+			name:     "ShouldReturnTrueForBasicFull",
+			types:    AuthenticatorAttestationTypes{BasicFull},
+			expected: true,
+		},
+		{
+			name:     "ShouldReturnTrueForAttCA",
+			types:    AuthenticatorAttestationTypes{AttCA},
+			expected: true,
+		},
+		{
+			name:     "ShouldReturnTrueForAnonCA",
+			types:    AuthenticatorAttestationTypes{AnonCA},
+			expected: true,
+		},
+		{
+			name:     "ShouldReturnTrueForMixedWithAnonCA",
+			types:    AuthenticatorAttestationTypes{BasicSurrogate, AnonCA},
+			expected: true,
+		},
+		{
+			name:     "ShouldReturnFalseForBasicSurrogate",
+			types:    AuthenticatorAttestationTypes{BasicSurrogate},
+			expected: false,
+		},
+		{
+			name:     "ShouldReturnFalseForECDAA",
+			types:    AuthenticatorAttestationTypes{Ecdaa},
+			expected: false,
+		},
+		{
+			name:     "ShouldReturnFalseForNone",
+			types:    AuthenticatorAttestationTypes{None},
+			expected: false,
+		},
+		{
+			name:     "ShouldReturnFalseForEmpty",
+			types:    AuthenticatorAttestationTypes{},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, tc.types.HasCertificateTrustPath())
+		})
+	}
+}
+
 func TestIsUndesiredAuthenticatorStatusSlice(t *testing.T) {
 	testCases := []struct {
 		name     string

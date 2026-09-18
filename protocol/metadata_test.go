@@ -279,6 +279,67 @@ func TestValidateMetadataTrustAnchor(t *testing.T) {
 	}
 }
 
+func TestValidateMetadataTrustAnchorAttestationTypes(t *testing.T) {
+	aaguid := uuid.MustParse("0865c31d-05dc-4fb1-adce-3227bfb19967")
+
+	root, rootKey := metadataTestGenerateCertificate(t, "Metadata Root", nil, nil)
+	cert, _ := metadataTestGenerateCertificate(t, "Attestation", root, rootKey)
+
+	testCases := []struct {
+		name            string
+		attestationType metadata.AuthenticatorAttestationType
+		format          AttestationFormat
+		err             string
+	}{
+		{
+			name:            "ShouldAcceptAnonCA",
+			attestationType: metadata.AnonCA,
+			format:          AttestationFormatApple,
+		},
+		{
+			name:            "ShouldAcceptBasicFull",
+			attestationType: metadata.BasicFull,
+			format:          AttestationFormatPacked,
+		},
+		{
+			name:            "ShouldRejectBasicSurrogate",
+			attestationType: metadata.BasicSurrogate,
+			format:          AttestationFormatPacked,
+			err:             fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. Attestation was provided in the full format but the authenticator doesn't support the full attestation format.", aaguid),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mds := mocks.NewMockMetadataProvider(ctrl)
+
+			entry := &metadata.Entry{
+				MetadataStatement: metadata.Statement{
+					AttestationTypes:            metadata.AuthenticatorAttestationTypes{tc.attestationType},
+					AttestationRootCertificates: []*x509.Certificate{root},
+				},
+			}
+
+			mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
+			mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true)
+			mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false)
+			mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(true)
+
+			actual := ValidateMetadata(context.Background(), mds, aaguid, string(tc.attestationType), string(tc.format), []any{cert.Raw})
+
+			if tc.err == "" {
+				assert.Nil(t, actual)
+
+				return
+			}
+
+			require.NotNil(t, actual)
+			assert.Equal(t, tc.err, actual.Details)
+		})
+	}
+}
+
 func TestLoopOrdinalNumber(t *testing.T) {
 	testCases := []struct {
 		name     string
