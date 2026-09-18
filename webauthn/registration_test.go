@@ -703,7 +703,7 @@ func TestCreateCredential_Full(t *testing.T) {
 				setup      func(t *testing.T, provider *mocks.MockMetadataProvider)
 			}{
 				specVector: testRegistrationSpecVectorNoneES256,
-				challenge:  "wrong-challenge",
+				challenge:  "d3JvbmctY2hhbGxlbmdlLXdyb25nLWNoYWxsZW5nZSE",
 			},
 			expected: struct {
 				attestationType   string
@@ -1841,4 +1841,40 @@ func TestBeginMediatedRegistrationRejectsInvalidConfig(t *testing.T) {
 	assert.Nil(t, creation)
 	assert.Nil(t, session)
 	assert.ErrorContains(t, err, "error occurred validating the configuration")
+}
+
+func TestCreateCredentialFailureSessionChallenge(t *testing.T) {
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPDisplayName: "test_rp",
+			RPOrigins:     []string{"https://webauthn.io"},
+			RPID:          "webauthn.io",
+		},
+	}
+
+	userHandle := []byte("0ToAAAAAAAAAAA")
+
+	testCases := []struct {
+		name      string
+		challenge string
+		info      string
+	}{
+		{"ShouldFailEmpty", "", "The challenge must be at least 16 bytes but it has a length of 0"},
+		{"ShouldFailShort", "d3JvbmctY2hhbGxlbmdl", "The challenge must be at least 16 bytes but it has a length of 15"},
+		{"ShouldFailInvalid", "not base64url!", "The challenge could not be decoded: illegal base64 data at input byte 3"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			user := &defaultUser{id: userHandle}
+
+			_, err := webauthn.CreateCredential(user, SessionData{UserID: userHandle, Challenge: tc.challenge}, &protocol.ParsedCredentialCreationData{})
+
+			var e *protocol.Error
+
+			require.ErrorAs(t, err, &e)
+			assert.Equal(t, "Session has an invalid challenge", e.Details)
+			assert.Equal(t, tc.info, e.DevInfo)
+		})
+	}
 }

@@ -196,6 +196,10 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
+	if err = validateSessionChallenge(session.Challenge); err != nil {
+		return nil, err
+	}
+
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
 	shouldVerifyUserPresence := session.Mediation != protocol.MediationConditional
 

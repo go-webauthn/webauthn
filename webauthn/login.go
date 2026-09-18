@@ -239,6 +239,10 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 		return nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
 	}
 
+	if err = validateSessionChallenge(session.Challenge); err != nil {
+		return nil, err
+	}
+
 	return webauthn.validateLogin(user, session, parsedResponse)
 }
 
@@ -274,6 +278,10 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 
 	if !session.Expires.IsZero() && session.Expires.Before(time.Now()) {
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Session has Expired")
+	}
+
+	if err = validateSessionChallenge(session.Challenge); err != nil {
+		return nil, nil, err
 	}
 
 	if len(parsedResponse.Response.UserHandle) == 0 {
