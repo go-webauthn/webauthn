@@ -49,6 +49,7 @@ func doAtomicReplace(name string, data []byte) (err error) {
 func defaultNew(mds *metadata.Metadata) (provider metadata.Provider, err error) {
 	return memory.New(
 		memory.WithMetadata(mds.ToMap()),
+		memory.WithMetadataKeyIdentifiers(mds.ToKeyIdentifierMap()),
 		memory.WithValidateEntry(true),
 		memory.WithValidateEntryPermitZeroAAGUID(false),
 		memory.WithValidateTrustAnchor(true),

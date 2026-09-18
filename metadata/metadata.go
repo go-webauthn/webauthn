@@ -67,6 +67,20 @@ func (m *Metadata) ToMap() (metadata map[uuid.UUID]*Entry) {
 	return metadata
 }
 
+// ToKeyIdentifierMap returns the entries indexed by each of their lowercase hex encoded attestation certificate key
+// identifiers. This is the only index available for authenticators without an AAGUID such as FIDO U2F authenticators.
+func (m *Metadata) ToKeyIdentifierMap() (metadata map[string]*Entry) {
+	metadata = make(map[string]*Entry)
+
+	for _, entry := range m.Parsed.Entries {
+		for _, keyIdentifier := range entry.AttestationCertificateKeyIdentifiers {
+			metadata[strings.ToLower(keyIdentifier)] = &entry
+		}
+	}
+
+	return metadata
+}
+
 // Parsed is a structure representing the Metadata BLOB Payload dictionary.
 //
 // See: https://fidoalliance.org/specs/mds/fido-metadata-service-v3.1.1-ps-20260105.html#sctn-mds-blob-payload

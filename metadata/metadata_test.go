@@ -415,3 +415,47 @@ func getTestMetadata(s string, c *http.Client) (StatementJSON, error) {
 
 	return statement, err
 }
+
+func TestMetadataToKeyIdentifierMap(t *testing.T) {
+	aaguid := uuid.MustParse("0865c31d-05dc-4fb1-adce-3227bfb19967")
+
+	mds := &Metadata{
+		Parsed: Parsed{
+			Entries: []Entry{
+				{AttestationCertificateKeyIdentifiers: []string{"ABCDEF", "012345"}, MetadataStatement: Statement{Description: "U2F"}},
+				{AaGUID: aaguid, MetadataStatement: Statement{Description: "FIDO2"}},
+			},
+		},
+	}
+
+	actual := mds.ToKeyIdentifierMap()
+
+	require.Len(t, actual, 2)
+	assert.Equal(t, "U2F", actual["abcdef"].MetadataStatement.Description)
+	assert.Equal(t, "U2F", actual["012345"].MetadataStatement.Description)
+	assert.Len(t, mds.ToMap(), 1)
+}
+
+func TestAuthenticationAlgorithmCOSEAlgorithmIdentifier(t *testing.T) {
+	testCases := []struct {
+		name     string
+		have     AuthenticationAlgorithm
+		expected webauthncose.COSEAlgorithmIdentifier
+		ok       bool
+	}{
+		{"ShouldMapES256Raw", ALG_SIGN_SECP256R1_ECDSA_SHA256_RAW, webauthncose.AlgES256, true},
+		{"ShouldMapES256DER", ALG_SIGN_SECP256R1_ECDSA_SHA256_DER, webauthncose.AlgES256, true},
+		{"ShouldMapRS256", ALG_SIGN_RSASSA_PKCSV15_SHA256_RAW, webauthncose.AlgRS256, true},
+		{"ShouldMapEd25519", ALG_SIGN_ED25519_EDDSA_SHA512_RAW, webauthncose.AlgEdDSA, true},
+		{"ShouldNotMapUnknown", "sm2_sm3_raw", 0, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, ok := tc.have.COSEAlgorithmIdentifier()
+
+			assert.Equal(t, tc.expected, actual)
+			assert.Equal(t, tc.ok, ok)
+		})
+	}
+}

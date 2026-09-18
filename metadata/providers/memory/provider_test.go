@@ -246,3 +246,94 @@ func TestProvider_GetEntry_NilMDS(t *testing.T) {
 	assert.Nil(t, entry)
 	require.EqualError(t, err, "metadata: not initialized")
 }
+
+func TestProvider_ExtendedConfigurationFlags(t *testing.T) {
+	ctx := context.Background()
+
+	flags := func(provider metadata.ExtendedProvider) []bool {
+		return []bool{
+			provider.GetValidateEntryKeyIdentifier(ctx),
+			provider.GetValidateStatusCertificateScope(ctx),
+			provider.GetValidateAAGUID(ctx),
+			provider.GetValidateAttestationFormats(ctx),
+			provider.GetValidateAlgorithms(ctx),
+			provider.GetValidateBackupEligibility(ctx),
+			provider.GetValidateExtensions(ctx),
+			provider.GetValidateUserVerification(ctx),
+		}
+	}
+
+	testCases := []struct {
+		name     string
+		opts     []Option
+		expected bool
+	}{
+		{
+			name: "ShouldReturnDefaultFlags",
+			opts: []Option{
+				WithMetadata(map[uuid.UUID]*metadata.Entry{}),
+			},
+			expected: false,
+		},
+		{
+			name: "ShouldReturnCustomFlags",
+			opts: []Option{
+				WithMetadata(map[uuid.UUID]*metadata.Entry{}),
+				WithValidateEntryKeyIdentifier(true),
+				WithValidateStatusCertificateScope(true),
+				WithValidateAAGUID(true),
+				WithValidateAttestationFormats(true),
+				WithValidateAlgorithms(true),
+				WithValidateBackupEligibility(true),
+				WithValidateExtensions(true),
+				WithValidateUserVerification(true),
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, err := New(tc.opts...)
+			require.NoError(t, err)
+
+			extended, ok := provider.(metadata.ExtendedProvider)
+			require.True(t, ok)
+
+			for i, actual := range flags(extended) {
+				assert.Equal(t, tc.expected, actual, "flag %d", i)
+			}
+		})
+	}
+}
+
+func TestProvider_GetEntryByKeyIdentifier(t *testing.T) {
+	entry := &metadata.Entry{MetadataStatement: metadata.Statement{Description: "Test U2F Authenticator"}}
+
+	provider, err := New(
+		WithMetadata(map[uuid.UUID]*metadata.Entry{}),
+		WithMetadataKeyIdentifiers(map[string]*metadata.Entry{"ABCDEF0123": entry}),
+	)
+	require.NoError(t, err)
+
+	extended, ok := provider.(metadata.ExtendedProvider)
+	require.True(t, ok)
+
+	actual, err := extended.GetEntryByKeyIdentifier(context.Background(), "abcdef0123")
+	require.NoError(t, err)
+	assert.Equal(t, entry, actual)
+
+	actual, err = extended.GetEntryByKeyIdentifier(context.Background(), "ABCDEF0123")
+	require.NoError(t, err)
+	assert.Equal(t, entry, actual)
+
+	actual, err = extended.GetEntryByKeyIdentifier(context.Background(), "0000")
+	require.NoError(t, err)
+	assert.Nil(t, actual)
+
+	uninitialized := &Provider{}
+
+	actual, err = uninitialized.GetEntryByKeyIdentifier(context.Background(), "abcdef0123")
+	assert.ErrorIs(t, err, metadata.ErrNotInitialized)
+	assert.Nil(t, actual)
+}
