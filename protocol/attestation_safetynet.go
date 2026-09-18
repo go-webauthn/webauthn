@@ -124,12 +124,15 @@ func attestationFormatValidationAndroidSafetyNet(att AttestationObject, clientDa
 	}
 
 	// §8.5.7 If successful, return implementation-specific values representing attestation type Basic and attestation
-	// trust path attestationCert.
-	return string(metadata.BasicFull), nil, nil
+	// trust path attestationCert. The whole chain from the JWS header is conveyed so the Metadata Service can verify it
+	// against the attestation root certificates of the authenticator.
+	return string(metadata.BasicFull), verifier.x5c, nil
 }
 
 // safetyNetJWTVerifier verifies the certificate chain carried in the JWS x5c header before releasing the leaf public
-// key to the JWT parser, and retains the chain so it can be used as the attestation trust path.
+// key to the JWT parser, and retains the chain so it can be used as the attestation trust path. The chain is retained
+// as DER encoded certificates, which is the form every other attestation statement format conveys its trust path in,
+// rather than the base64 encoding the JWS header carries.
 //
 // The SafetyNet documentation requires the chain be validated and the leaf matched to the SafetyNet hostname before
 // the signature is verified with it. Releasing the leaf public key without doing so allows any self-signed
@@ -202,7 +205,13 @@ func (v *safetyNetJWTVerifier) keyFunc(token *jwt.Token) (key any, err error) {
 		return nil, fmt.Errorf("verify x5c chain: %w", err)
 	}
 
-	v.x5c, v.certs = chain, certs
+	v.x5c = make([]any, len(certs))
+
+	for i, cert := range certs {
+		v.x5c[i] = cert.Raw
+	}
+
+	v.certs = certs
 
 	return certs[0].PublicKey, nil
 }
