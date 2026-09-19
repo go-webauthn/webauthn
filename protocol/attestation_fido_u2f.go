@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
@@ -32,6 +33,8 @@ import (
 // Specification: §8.6. FIDO U2F Attestation Statement Format
 //
 // See: https://www.w3.org/TR/webauthn/#sctn-fido-u2f-attestation
+//
+//nolint:gocyclo
 func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientDataHash []byte, mds metadata.Provider, _ AttestationPolicy, signature SignaturePolicy) (attestationType string, x5cs []any, err error) {
 	// Signing procedure. Non-normative verification procedure of expected requirement.
 	// If the credential public key of the attested credential is not of algorithm -7 ("ES256"), stop and return an error.
@@ -42,6 +45,12 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 
 	if webauthncose.COSEAlgorithmIdentifier(key.Algorithm) != webauthncose.AlgES256 {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("Non-ES256 Public Key algorithm used")
+	}
+
+	// The credential public key is converted to the raw P-256 point U2F signs over below, so the curve must be P-256
+	// rather than only implied by the length of the coordinates.
+	if webauthncose.COSEEllipticCurve(key.Curve) != webauthncose.P256 {
+		return "", nil, ErrUnsupportedAlgorithm.WithDetails("Credential public key is not on the P-256 curve")
 	}
 
 	var (
@@ -92,6 +101,12 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 	attCert, err := x509.ParseCertificate(raw)
 	if err != nil {
 		return "", nil, ErrAttestationFormat.WithDetails("Error parsing certificate from ASN.1 data into certificate").WithError(err)
+	}
+
+	// The attestation certificate must be within its validity period, as with the attestation certificates of the
+	// packed and TPM attestation statement formats.
+	if now := time.Now(); attCert.NotBefore.After(now) || attCert.NotAfter.Before(now) {
+		return "", nil, ErrAttestationFormat.WithDetails("Attestation certificate is either no longer valid or not yet valid")
 	}
 
 	// Step 2.3.
