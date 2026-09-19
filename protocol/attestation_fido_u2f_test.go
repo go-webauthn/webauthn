@@ -173,6 +173,26 @@ func TestVerifyU2FFormat_Errors(t *testing.T) {
 			err: "Non-ES256 Public Key algorithm used",
 		},
 		{
+			name: "ShouldFailNonP256Credential",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID: zeroAAGUID,
+						CredentialPublicKey: []byte{
+							0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x02,
+							0x21, 0x58, 0x20,
+							0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+							0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+							0x22, 0x58, 0x20,
+							0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+							0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+						},
+					},
+				},
+			},
+			err: "Credential public key is not on the P-256 curve",
+		},
+		{
 			name: "ShouldFailMissingX5C",
 			att: AttestationObject{
 				AuthData: AuthenticatorData{
@@ -282,6 +302,8 @@ func TestVerifyU2FFormat_CertificateErrors(t *testing.T) {
 	rsaCertDER := u2fTestGenerateRSACert(t)
 	p384CertDER := u2fTestGenerateP384Cert(t)
 	p256CertDER := u2fTestGenerateP256Cert(t)
+	expiredCertDER := u2fTestGenerateP256CertWithValidity(t, time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+	futureCertDER := u2fTestGenerateP256CertWithValidity(t, time.Now().Add(time.Hour), time.Now().Add(2*time.Hour))
 
 	testCases := []struct {
 		name string
@@ -336,6 +358,38 @@ func TestVerifyU2FFormat_CertificateErrors(t *testing.T) {
 			},
 			err: "X or Y Coordinate for key is invalid length",
 		},
+		{
+			name: "ShouldFailExpiredCert",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{expiredCertDER},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "Attestation certificate is either no longer valid or not yet valid",
+		},
+		{
+			name: "ShouldFailNotYetValidCert",
+			att: AttestationObject{
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						AAGUID:              zeroAAGUID,
+						CredentialPublicKey: es256Key,
+					},
+				},
+				AttStatement: map[string]any{
+					stmtX5C:       []any{futureCertDER},
+					stmtSignature: []byte("sig"),
+				},
+			},
+			err: "Attestation certificate is either no longer valid or not yet valid",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -389,14 +443,20 @@ func u2fTestGenerateP384Cert(t *testing.T) []byte {
 func u2fTestGenerateP256Cert(t *testing.T) []byte {
 	t.Helper()
 
+	return u2fTestGenerateP256CertWithValidity(t, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+}
+
+func u2fTestGenerateP256CertWithValidity(t *testing.T, notBefore, notAfter time.Time) []byte {
+	t.Helper()
+
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "Test P256"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
+		NotBefore:    notBefore,
+		NotAfter:     notAfter,
 	}
 
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
