@@ -1,3 +1,26 @@
+# [v0.18.2](https://github.com/go-webauthn/webauthn/compare/v0.18.1...v0.18.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* **protocol:** accept anonca attestation trust anchors ([#801](https://github.com/go-webauthn/webauthn/issues/801)) ([b1dfbf2](https://github.com/go-webauthn/webauthn/commit/b1dfbf24453acf8a221d0ec3536cd8eb2f6247ae))
+* **protocol:** convey safetynet attestation trust path ([#800](https://github.com/go-webauthn/webauthn/issues/800)) ([5f8a38c](https://github.com/go-webauthn/webauthn/commit/5f8a38c895bf8611271faaa0a6190b2eb8cabe05))
+* **protocol:** validate fido-u2f credential curve and certificate validity ([#802](https://github.com/go-webauthn/webauthn/issues/802)) ([55d49f8](https://github.com/go-webauthn/webauthn/commit/55d49f842f0abdb1804e8486c7f14feecc9b8fc9))
+* **protocol:** validate safetynet version and response age ([#799](https://github.com/go-webauthn/webauthn/issues/799)) ([dda068d](https://github.com/go-webauthn/webauthn/commit/dda068d5f41d94fc5c9afbca9cdc36714655ec4a))
+* **protocol:** validate tpm aik certificate validity period ([#797](https://github.com/go-webauthn/webauthn/issues/797)) ([9ab858d](https://github.com/go-webauthn/webauthn/commit/9ab858dcdf87a833c1ffc1afb9f51f44c30d979e))
+* **webauthn:** require authorization to initialize uv ([#795](https://github.com/go-webauthn/webauthn/issues/795)) ([597882d](https://github.com/go-webauthn/webauthn/commit/597882dae157bae51e9753b828f9b8e91cb4bef3))
+* **webauthn:** validate session challenge when finishing ceremonies ([#794](https://github.com/go-webauthn/webauthn/issues/794)) ([bbe2902](https://github.com/go-webauthn/webauthn/commit/bbe2902b0f7d171fceb4b0edfd62433ec0648836))
+
+
+### Features
+
+* **protocol:** determine fido-u2f attestation type from metadata ([#798](https://github.com/go-webauthn/webauthn/issues/798)) ([ccbbb4b](https://github.com/go-webauthn/webauthn/commit/ccbbb4b4dae9b604e6378bfc09c482e64fc60674))
+* **protocol:** validate authenticator data against metadata ([#793](https://github.com/go-webauthn/webauthn/issues/793)) ([1ee00cf](https://github.com/go-webauthn/webauthn/commit/1ee00cf9c9e4a7941e338ee8b0cf156bb62cf05e))
+
+# [0.18.1](https://github.com/go-webauthn/webauthn/compare/v0.18.0...v0.18.1) (2026-09-10)
+
+This release just updates dependencies.
+
 # [0.18.0](https://github.com/go-webauthn/webauthn/compare/v0.17.4...v0.18.0) (2026-08-27)
 
 This release is a fairly major milestone in the development of this library. It has quite a few breaking changes but has
