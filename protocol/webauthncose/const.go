@@ -6,6 +6,8 @@ const (
 
 const ecCoordSize = 32
 
+const rsaMaxModulusBits = 16384
+
 type Error struct {
 	// Short name for the type of error that has occurred.
 	Type string `json:"type"`
