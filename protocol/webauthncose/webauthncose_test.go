@@ -591,6 +591,16 @@ func TestParsePublicKeyValidation(t *testing.T) {
 			"RSA key contains zero or empty modulus",
 		},
 		{
+			"ShouldAcceptRSAWithMaximumModulus",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMaxModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
+			"",
+		},
+		{
+			"ShouldRejectRSAWithOversizedModulus",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x01}, make([]byte, rsaMaxModulusBits/8)...), -2: []byte{0x01, 0x00, 0x01}}),
+			"RSA key modulus size of 16385 bits exceeds the maximum of 16384 bits",
+		},
+		{
 			"ShouldRejectRSAWithEmptyExponent",
 			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: []byte{0xFF}, -2: []byte{}}),
 			"RSA key contains invalid exponent: invalid exponent length",

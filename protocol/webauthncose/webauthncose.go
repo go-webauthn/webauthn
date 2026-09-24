@@ -529,6 +529,10 @@ func validateRSAPublicKey(k *RSAPublicKeyData) (e int, err error) {
 		return e, ErrUnsupportedKey.WithDetails("RSA key contains zero or empty modulus")
 	}
 
+	if n.BitLen() > rsaMaxModulusBits {
+		return e, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key modulus size of %d bits exceeds the maximum of %d bits", n.BitLen(), rsaMaxModulusBits))
+	}
+
 	if e, err = ParseRSAPublicKeyDataExponent(k); err != nil {
 		return e, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key contains invalid exponent: %v", err))
 	}
