@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -67,6 +68,26 @@ func currentStatusReport(effective []StatusReport) (current *StatusReport) {
 	return current
 }
 
+func currentStatusReports(effective []StatusReport) (current []StatusReport) {
+	latest := currentStatusReport(effective)
+
+	if latest == nil {
+		return nil
+	}
+
+	if latest.EffectiveDate == nil {
+		return []StatusReport{*latest}
+	}
+
+	for _, report := range effective {
+		if report.EffectiveDate != nil && report.EffectiveDate.Equal(*latest.EffectiveDate) {
+			current = append(current, report)
+		}
+	}
+
+	return current
+}
+
 // ValidateStatusReports checks a list of [StatusReport] structs against a list of desired and undesired
 // [AuthenticatorStatus] values as at the current time. See [ValidateStatusReportsAt] for the validation performed.
 func ValidateStatusReports(reports []StatusReport, desired, undesired []AuthenticatorStatus) (err error) {
@@ -82,7 +103,10 @@ func ValidateStatusReports(reports []StatusReport, desired, undesired []Authenti
 //
 // The desired statuses are matched against the current status only, and are treated as a set of acceptable statuses of
 // which one must match. MDS3 requires that the latest report reflects the current status, so an authenticator formerly
-// certified at some level but since revoked does not satisfy a desired status naming that certification level.
+// certified at some level but since revoked does not satisfy a desired status naming that certification level. Where
+// several reports share the latest effective date they collectively reflect the current status and any one of them may
+// satisfy the desired statuses. This is common in practice as the metadata BLOB lists a certification level such as
+// [FidoCertifiedL1] alongside the legacy [FidoCertified] status with the same effective date.
 //
 // The undesired statuses are matched against every report in effect rather than the current one alone. Statuses such as
 // [AttestationKeyCompromise] and [UserKeyPhysicalCompromise] describe a weakness discovered in the authenticator model
@@ -119,14 +143,16 @@ func ValidateStatusReportsAt(reports []StatusReport, desired, undesired []Authen
 	}
 
 	var (
-		current     *StatusReport
+		current     []StatusReport
 		unsatisfied bool
 	)
 
 	if len(desired) != 0 {
-		current = currentStatusReport(effective)
+		current = currentStatusReports(effective)
 
-		unsatisfied = current == nil || !hasStatus(current.Status, desired)
+		unsatisfied = !slices.ContainsFunc(current, func(report StatusReport) bool {
+			return hasStatus(report.Status, desired)
+		})
 	}
 
 	switch {
@@ -162,16 +188,25 @@ func hasStatus(status AuthenticatorStatus, values []AuthenticatorStatus) bool {
 }
 
 // describeDesiredUnsatisfied renders the reason the desired statuses were not satisfied by the current status report.
-func describeDesiredUnsatisfied(current *StatusReport, desired []AuthenticatorStatus) string {
+func describeDesiredUnsatisfied(current []StatusReport, desired []AuthenticatorStatus) string {
 	statuses := make([]string, len(desired))
 
 	for i, status := range desired {
 		statuses[i] = string(status)
 	}
 
-	if current == nil {
+	switch len(current) {
+	case 0:
 		return fmt.Sprintf("no status report was in effect so none of the desired statuses could be satisfied: %s", strings.Join(statuses, ", "))
-	}
+	case 1:
+		return fmt.Sprintf("the current status report '%s' was not one of the desired statuses: %s", current[0].Status, strings.Join(statuses, ", "))
+	default:
+		reports := make([]string, len(current))
 
-	return fmt.Sprintf("the current status report '%s' was not one of the desired statuses: %s", current.Status, strings.Join(statuses, ", "))
+		for i, report := range current {
+			reports[i] = fmt.Sprintf("'%s'", report.Status)
+		}
+
+		return fmt.Sprintf("none of the current status reports %s were one of the desired statuses: %s", strings.Join(reports, ", "), strings.Join(statuses, ", "))
+	}
 }
