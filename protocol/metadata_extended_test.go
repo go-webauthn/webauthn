@@ -566,6 +566,86 @@ func TestMetadataStatusReportsInScope(t *testing.T) {
 	assert.Equal(t, reports, metadataStatusReportsInScope(reports, []*x509.Certificate{cert, root}))
 }
 
+func TestValidateCredentialRecordMetadata(t *testing.T) {
+	root, rootKey := metadataTestGenerateCertificate(t, "Metadata Root", nil, nil)
+	cert, _ := metadataTestGenerateCertificate(t, "Attestation", root, rootKey)
+	other, _ := metadataTestGenerateCertificate(t, "Other Root", nil, nil)
+
+	effective := time.Now().Add(-time.Hour)
+
+	certified := &metadata.Entry{
+		MetadataStatement: metadata.Statement{
+			AttestationTypes:            metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+			AttestationRootCertificates: []*x509.Certificate{other},
+		},
+		StatusReports: []metadata.StatusReport{{Status: metadata.FidoCertifiedL1, EffectiveDate: &effective}},
+	}
+
+	revoked := &metadata.Entry{
+		MetadataStatement: certified.MetadataStatement,
+		StatusReports:     []metadata.StatusReport{{Status: metadata.Revoked, EffectiveDate: &effective}},
+	}
+
+	testCases := []struct {
+		name  string
+		entry *metadata.Entry
+		x5cs  []any
+		err   string
+	}{
+		{
+			name:  "ShouldFindEntryByKeyIdentifier",
+			entry: certified,
+			x5cs:  []any{cert.Raw},
+		},
+		{
+			name:  "ShouldValidateStatusOfEntryFoundByKeyIdentifier",
+			entry: revoked,
+			x5cs:  []any{cert.Raw},
+			err:   "Error occurred validating the authenticator status",
+		},
+		{
+			name:  "ShouldFailWithoutTrustPath",
+			entry: certified,
+			err:   "The authenticator has no registered metadata.",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mds := metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, map[string]*metadata.Entry{hex.EncodeToString(cert.SubjectKeyId): tc.entry},
+				memory.WithValidateEntry(true),
+				memory.WithValidateTrustAnchor(true),
+				memory.WithValidateStatus(true),
+				memory.WithValidateAttestationTypes(true),
+				memory.WithValidateEntryKeyIdentifier(true),
+				memory.WithStatusUndesired(metadata.DefaultUndesiredAuthenticatorStatuses()),
+			)
+
+			actual := ValidateCredentialRecordMetadata(context.Background(), mds, uuid.Nil, string(metadata.BasicFull), "fido-u2f", tc.x5cs)
+
+			if tc.err == "" {
+				assert.Nil(t, actual)
+
+				return
+			}
+
+			require.NotNil(t, actual)
+			assert.Contains(t, actual.DevInfo, tc.err)
+		})
+	}
+
+	t.Run("ShouldNotValidateTrustAnchor", func(t *testing.T) {
+		mds := metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{}, map[string]*metadata.Entry{hex.EncodeToString(cert.SubjectKeyId): certified},
+			memory.WithValidateEntry(true),
+			memory.WithValidateTrustAnchor(true),
+			memory.WithValidateEntryKeyIdentifier(true),
+		)
+
+		require.NotNil(t, ValidateMetadata(context.Background(), mds, uuid.Nil, string(metadata.BasicFull), "fido-u2f", []any{cert.Raw}))
+		assert.Nil(t, ValidateCredentialRecordMetadata(context.Background(), mds, uuid.Nil, string(metadata.BasicFull), "fido-u2f", []any{cert.Raw}))
+	})
+}
+
 // Supporting functions and test data.
 
 func metadataTestExtendedProvider(t *testing.T, entries map[uuid.UUID]*metadata.Entry, keyIDs map[string]*metadata.Entry, opts ...memory.Option) metadata.Provider {

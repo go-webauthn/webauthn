@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
 //go:generate msgp
@@ -340,6 +341,22 @@ func (c *Credential) VerifyAttestationType(policy protocol.AttestationPolicy, si
 	c.AttestationType = attestation.AttestationObject.Type
 
 	return nil
+}
+
+func (c *Credential) attestationX5C() (x5cs []any) {
+	if len(c.Attestation.Object) == 0 {
+		return nil
+	}
+
+	var object protocol.AttestationObject
+
+	if err := webauthncbor.Unmarshal(c.Attestation.Object, &object); err != nil {
+		return nil
+	}
+
+	x5cs, _ = object.AttStatement["x5c"].([]any)
+
+	return x5cs
 }
 
 func (c *Credential) toAuthenticatorAttestationResponse() *protocol.AuthenticatorAttestationResponse {

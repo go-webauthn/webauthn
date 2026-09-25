@@ -31,9 +31,24 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 // the [metadata.ExtendedProvider] the additional validations it enables are performed, and the authData is required for
 // the validations of the flags, credential public key, and extension outputs. When authData is nil those validations
 // are not performed.
-//
-//nolint:gocyclo
 func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType, attestationFormat string, x5cs []any, authData *AuthenticatorData) (protoErr *Error) {
+	return validateMetadata(ctx, mds, aaguid, attestationType, attestationFormat, x5cs, authData, true)
+}
+
+// ValidateCredentialRecordMetadata validates the metadata for the authenticator of an existing credential record, such
+// as during an authentication ceremony. The x5cs are the trust path from the attestation statement conveyed when the
+// credential was registered, and may be nil when it was not retained.
+//
+// This is equivalent to [ValidateMetadata] except the trust path is not verified against the trust anchors of the
+// metadata, as that was performed when the credential was registered and the attestation certificates may have since
+// expired. The trust path is still used to find the metadata entry by the attestation certificate key identifier when
+// the AAGUID is the zero value, and to scope the status reports to the attestation certificate.
+func ValidateCredentialRecordMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType, attestationFormat string, x5cs []any) (protoErr *Error) {
+	return validateMetadata(ctx, mds, aaguid, attestationType, attestationFormat, x5cs, nil, false)
+}
+
+//nolint:gocyclo
+func validateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType, attestationFormat string, x5cs []any, authData *AuthenticatorData, trustAnchor bool) (protoErr *Error) {
 	if mds == nil {
 		return nil
 	}
@@ -130,7 +145,7 @@ func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Pro
 		}
 	}
 
-	if mds.GetValidateTrustAnchor(ctx) && len(x5cs) != 0 {
+	if mds.GetValidateTrustAnchor(ctx) && len(x5cs) != 0 && trustAnchor {
 		if protoErr = parse(); protoErr != nil {
 			return protoErr
 		}

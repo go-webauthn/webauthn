@@ -3,6 +3,7 @@ package webauthn
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -512,6 +513,25 @@ func TestCredential_VerifyAttestationType(t *testing.T) {
 			assert.Equal(t, tc.expectedAttestationType, credential.AttestationType)
 		})
 	}
+}
+
+func TestCredential_AttestationX5C(t *testing.T) {
+	packed := testCredentialFromPackedAttestation(t)
+
+	x5cs := packed.attestationX5C()
+	require.Len(t, x5cs, 1)
+
+	raw, ok := x5cs[0].([]byte)
+	require.True(t, ok)
+
+	_, err := x509.ParseCertificate(raw)
+	require.NoError(t, err)
+
+	none := testCredentialFromNoneAttestation(t)
+	assert.Nil(t, none.attestationX5C())
+
+	assert.Nil(t, (&Credential{}).attestationX5C())
+	assert.Nil(t, (&Credential{Attestation: CredentialAttestation{Object: []byte{0xff}}}).attestationX5C())
 }
 
 // testCredentialFromNoneAttestation constructs a Credential with valid "none" format attestation data for testing.
