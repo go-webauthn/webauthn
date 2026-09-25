@@ -148,6 +148,36 @@ func TestValidateStatusReportsAt(t *testing.T) {
 			desired: []AuthenticatorStatus{FidoCertifiedL2},
 			err:     "the current status report 'REVOKED' was not one of the desired statuses: FIDO_CERTIFIED_L2",
 		},
+
+		// Reports sharing the latest effective date collectively reflect the current status.
+		{
+			name:    "ShouldAcceptCoDatedCertificationLevel",
+			reports: []StatusReport{{Status: FidoCertifiedL1, EffectiveDate: date(2025, 1, 1)}, {Status: FidoCertified, EffectiveDate: date(2025, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL1, FidoCertifiedL2},
+		},
+		{
+			name:    "ShouldAcceptCoDatedLegacyCertification",
+			reports: []StatusReport{{Status: FidoCertified, EffectiveDate: date(2025, 1, 1)}, {Status: FidoCertifiedL1, EffectiveDate: date(2025, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertified},
+		},
+		{
+			name:    "ShouldRejectWhenNoCoDatedReportDesired",
+			reports: []StatusReport{{Status: FidoCertifiedL1, EffectiveDate: date(2025, 1, 1)}, {Status: FidoCertified, EffectiveDate: date(2025, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2},
+			err:     "none of the current status reports 'FIDO_CERTIFIED_L1', 'FIDO_CERTIFIED' were one of the desired statuses: FIDO_CERTIFIED_L2",
+		},
+		{
+			name:    "ShouldNotConsiderReportsBeforeTheLatestEffectiveDate",
+			reports: []StatusReport{{Status: FidoCertifiedL2, EffectiveDate: date(2020, 1, 1)}, {Status: FidoCertifiedL1, EffectiveDate: date(2025, 1, 1)}, {Status: FidoCertified, EffectiveDate: date(2025, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2},
+			err:     "none of the current status reports 'FIDO_CERTIFIED_L1', 'FIDO_CERTIFIED' were one of the desired statuses: FIDO_CERTIFIED_L2",
+		},
+		{
+			name:    "ShouldNotConsiderReportsNotYetEffectiveOnTheLatestDate",
+			reports: []StatusReport{{Status: FidoCertifiedL1, EffectiveDate: date(2025, 1, 1)}, {Status: Revoked, EffectiveDate: date(2025, 12, 1)}, {Status: FidoCertifiedL2, EffectiveDate: date(2025, 12, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2},
+			err:     "the current status report 'FIDO_CERTIFIED_L1' was not one of the desired statuses: FIDO_CERTIFIED_L2",
+		},
 	}
 
 	for _, tc := range testCases {
