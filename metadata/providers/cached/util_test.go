@@ -1,8 +1,10 @@
 package cached
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -178,6 +180,41 @@ func TestProviderOutdated(t *testing.T) {
 			assert.Equal(t, tc.expected, p.outdated(mds))
 		})
 	}
+}
+
+func TestDefaultNewKeyIdentifier(t *testing.T) {
+	const keyIdentifier = "923881FE2F214EE465484371AEB72E97F5A58E0A"
+
+	aaguid := uuid.MustParse("2369d4d0-13ce-48cb-9f26-f7ed8c9a6068")
+
+	mds := &metadata.Metadata{
+		Parsed: metadata.Parsed{
+			NextUpdate: time.Now().Add(time.Hour * 24),
+			Entries: []metadata.Entry{
+				{AaGUID: aaguid},
+				{AttestationCertificateKeyIdentifiers: []string{keyIdentifier}},
+			},
+		},
+	}
+
+	provider, err := defaultNew(mds)
+	require.NoError(t, err)
+
+	extended, ok := provider.(metadata.ExtendedProvider)
+	require.True(t, ok)
+
+	ctx := context.Background()
+
+	assert.True(t, extended.GetValidateEntryKeyIdentifier(ctx))
+
+	entry, err := extended.GetEntryByKeyIdentifier(ctx, strings.ToLower(keyIdentifier))
+	require.NoError(t, err)
+	require.NotNil(t, entry)
+	assert.Equal(t, []string{keyIdentifier}, entry.AttestationCertificateKeyIdentifiers)
+
+	entry, err = extended.GetEntryByKeyIdentifier(ctx, "0000000000000000000000000000000000000000")
+	require.NoError(t, err)
+	assert.Nil(t, entry)
 }
 
 type mockClock struct {
