@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
+	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
 func TestAttestationVerify(t *testing.T) {
@@ -167,6 +169,51 @@ func TestAttestationObject_Verify_AlgorithmMismatch(t *testing.T) {
 
 	err := att.Verify("localhost", clientDataHash[:], false, false, nil, wrongParams, AttestationPolicy{}, SignaturePolicy{})
 	require.EqualError(t, err, "Invalid attestation format")
+}
+
+func TestAttestationObject_Verify_InvalidCredentialPublicKey(t *testing.T) {
+	testCases := []struct {
+		name string
+		key  map[int]any
+		info string
+	}{
+		{
+			name: "ShouldFailMismatchedKeyType",
+			key:  map[int]any{1: int(webauthncose.OctetKey), 3: int(webauthncose.AlgES256), -1: int(webauthncose.Ed25519), -2: make([]byte, 32)},
+			info: "Error occurred parsing the credential public key: OKP key has unsupported algorithm ES256",
+		},
+		{
+			name: "ShouldFailOffCurvePoint",
+			key:  map[int]any{1: int(webauthncose.EllipticKey), 3: int(webauthncose.AlgES256), -1: int(webauthncose.P256), -2: make([]byte, 32), -3: make([]byte, 32)},
+			info: "Error occurred parsing the credential public key: EC2 key point is not on curve",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pcc := attestationTestUnpackResponse(t, testAttestationResponses[0])
+			att := pcc.Response.AttestationObject
+			clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+
+			key, err := webauthncbor.Marshal(tc.key)
+			require.NoError(t, err)
+
+			att.Format = string(AttestationFormatNone)
+			att.AttStatement = nil
+			att.AuthData.AttData.CredentialPublicKey = key
+
+			params := []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}}
+
+			err = att.Verify("localhost", clientDataHash[:], false, false, nil, params, AttestationPolicy{}, SignaturePolicy{})
+
+			var protoErr *Error
+
+			require.ErrorAs(t, err, &protoErr)
+			assert.Equal(t, ErrAttestationFormat.Type, protoErr.Type)
+			assert.Equal(t, "Error parsing the credential public key", protoErr.Details)
+			assert.Equal(t, tc.info, protoErr.DevInfo)
+		})
+	}
 }
 
 func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
