@@ -355,7 +355,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	}
 
 	if !found {
-		return nil, protocol.ErrBadRequest.WithDetails("Unable to find the credential for the returned credential ID")
+		return nil, &protocol.ErrorUnknownCredential{Err: protocol.ErrBadRequest.WithDetails("Unable to find the credential for the returned credential ID")}
 	}
 
 	var (

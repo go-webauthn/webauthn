@@ -352,6 +352,65 @@ func TestFinishLoginFailureCredentialNotOwned(t *testing.T) {
 	require.Equal(t, &protocol.ErrorUnknownCredential{Err: protocol.ErrBadRequest.WithDetails("The credential ID provided is not owned by the user")}, err)
 }
 
+func TestValidatePasskeyLoginFailureCredentialNotOwned(t *testing.T) {
+	const (
+		credentialIDOne = "AI7D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng" //nolint:gosec
+		credentialIDTwo = "AI6D5q2P0LS-Fal9ZT7CHM2N5BLbUunF92T8b6iYC199bO2kagSuU05-5dZGqb1SP0A0lyTWng" //nolint:gosec
+		userHandle      = "0ToAAAAAAAAAAA"
+	)
+
+	byteIDOne, err := base64.RawURLEncoding.DecodeString(credentialIDOne)
+	require.NoError(t, err)
+
+	byteUserHandle, err := base64.RawURLEncoding.DecodeString(userHandle)
+	require.NoError(t, err)
+
+	user := &defaultUser{
+		id:          byteUserHandle,
+		credentials: []Credential{{ID: byteIDOne}},
+	}
+
+	session := SessionData{
+		Challenge: "E4PTcIH_HfX1pC6Sigk1SC9NAlgeztN0439vi8z_c9k",
+	}
+
+	webauthn := &WebAuthn{
+		Config: &Config{
+			RPDisplayName: "test_rp",
+			RPOrigins:     []string{"https://webauthn.io"},
+			RPID:          "webauthn.io",
+		},
+	}
+
+	parsed, err := protocol.ParseCredentialRequestResponseBytes([]byte(fmt.Sprintf(`{
+			"id":"%[1]s",
+			"rawId":"%[1]s",
+			"type":"public-key",
+			"response":{
+				"authenticatorData":"dKbqkhPJnC90siSSsyDPQCYqlMGpUKA5fyklC2CEHvBFXJJiGa3OAAI1vMYKZIsLJfHwVQMANwCOw-atj9C0vhWpfWU-whzNjeQS21Lpxfdk_G-omAtffWztpGoErlNOfuXWRqm9Uj9ANJck1p6lAQIDJiABIVggKAhfsdHcBIc0KPgAcRyAIK_-Vi-nCXHkRHPNaCMBZ-4iWCBxB8fGYQSBONi9uvq0gv95dGWlhJrBwCsj_a4LJQKVHQ",
+				"clientDataJSON":"eyJjaGFsbGVuZ2UiOiJFNFBUY0lIX0hmWDFwQzZTaWdrMVNDOU5BbGdlenROMDQzOXZpOHpfYzlrIiwibmV3X2tleXNfbWF5X2JlX2FkZGVkX2hlcmUiOiJkbyBub3QgY29tcGFyZSBjbGllbnREYXRhSlNPTiBhZ2FpbnN0IGEgdGVtcGxhdGUuIFNlZSBodHRwczovL2dvby5nbC95YWJQZXgiLCJvcmlnaW4iOiJodHRwczovL3dlYmF1dGhuLmlvIiwidHlwZSI6IndlYmF1dGhuLmdldCJ9",
+				"signature":"MEUCIBtIVOQxzFYdyWQyxaLR0tik1TnuPhGVhXVSNgFwLmN5AiEAnxXdCq0UeAVGWxOaFcjBZ_mEZoXqNboY5IkQDdlWZYc",
+				"userHandle":"%[2]s"
+			}
+		}`, credentialIDTwo, userHandle,
+	)))
+	require.NoError(t, err)
+
+	handler := func(rawID, handle []byte) (User, error) {
+		return user, nil
+	}
+
+	actualUser, credential, err := webauthn.ValidatePasskeyLogin(handler, session, parsed)
+
+	assert.Nil(t, actualUser)
+	assert.Nil(t, credential)
+	require.Equal(t, &protocol.ErrorUnknownCredential{Err: protocol.ErrBadRequest.WithDetails("Unable to find the credential for the returned credential ID")}, err)
+
+	var unknown *protocol.ErrorUnknownCredential
+
+	assert.ErrorAs(t, err, &unknown)
+}
+
 func TestFinishDiscoverableLogin_Failure(t *testing.T) {
 	session := SessionData{}
 	webauthn := &WebAuthn{}
