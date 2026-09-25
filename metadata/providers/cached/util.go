@@ -51,6 +51,7 @@ func defaultNew(mds *metadata.Metadata) (provider metadata.Provider, err error) 
 		memory.WithMetadata(mds.ToMap()),
 		memory.WithMetadataKeyIdentifiers(mds.ToKeyIdentifierMap()),
 		memory.WithValidateEntry(true),
+		memory.WithValidateEntryKeyIdentifier(true),
 		memory.WithValidateEntryPermitZeroAAGUID(false),
 		memory.WithValidateTrustAnchor(true),
 		memory.WithValidateStatus(true),
