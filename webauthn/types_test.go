@@ -182,7 +182,7 @@ func TestConfig_Validate_OpaqueOrigins(t *testing.T) {
 			name: "ShouldPassTheRelatedOriginLabelBudgetInRPOrigins",
 			config: &Config{
 				RPID:            "example.com",
-				RPOrigins:       []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com", "https://www.a.com"},
+				RPOrigins:       []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com", "https://a.de"},
 				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
 			},
 		},
