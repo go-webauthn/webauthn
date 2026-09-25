@@ -20,7 +20,15 @@ func TestPayloadJSON_Parse(t *testing.T) {
 			have: PayloadJSON{
 				NextUpdate: "not-a-date",
 			},
-			err: "error occurred parsing next update value 'not-a-date': parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
+			err: "error occurred parsing metadata blob 0: error occurred parsing next update value 'not-a-date': parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
+		},
+		{
+			name: "ShouldIncludeBlobNumber",
+			have: PayloadJSON{
+				Number:     42,
+				NextUpdate: "not-a-date",
+			},
+			err: "error occurred parsing metadata blob 42: error occurred parsing next update value 'not-a-date': parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
 		},
 		{
 			name: "ShouldFailInvalidEntry",
@@ -32,7 +40,7 @@ func TestPayloadJSON_Parse(t *testing.T) {
 					},
 				},
 			},
-			err: "error occurred parsing entry 0: error occurred parsing metadata entry with AAGUID '': error occurred parsing time of last status change value: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
+			err: "error occurred parsing metadata blob 0: error occurred parsing entry 0: error occurred parsing metadata entry with no identifiers: error occurred parsing time of last status change value: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
 		},
 		{
 			name: "ShouldSucceedEmptyEntries",
@@ -70,11 +78,35 @@ func TestEntryJSON_Parse(t *testing.T) {
 			err: "error occurred parsing metadata entry with AAGUID 'not-a-uuid': error parsing AAGUID: invalid UUID length: 10",
 		},
 		{
+			name: "ShouldDescribeEntryByAAID",
+			have: EntryJSON{
+				Aaid:                   "1234#5678",
+				TimeOfLastStatusChange: "not-a-date",
+			},
+			err: "error occurred parsing metadata entry with AAID '1234#5678': error occurred parsing time of last status change value: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
+		},
+		{
+			name: "ShouldDescribeEntryByAttestationCertificateKeyIdentifiers",
+			have: EntryJSON{
+				AttestationCertificateKeyIdentifiers: []string{"aa", "bb"},
+				TimeOfLastStatusChange:               "not-a-date",
+			},
+			err: "error occurred parsing metadata entry with attestation certificate key identifiers 'aa', 'bb': error occurred parsing time of last status change value: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
+		},
+		{
+			name: "ShouldDescribeEntryByDescription",
+			have: EntryJSON{
+				MetadataStatement:      StatementJSON{Description: "example"},
+				TimeOfLastStatusChange: "not-a-date",
+			},
+			err: "error occurred parsing metadata entry with description 'example': error occurred parsing time of last status change value: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
+		},
+		{
 			name: "ShouldFailInvalidTimeOfLastStatusChange",
 			have: EntryJSON{
 				TimeOfLastStatusChange: "not-a-date",
 			},
-			err: "error occurred parsing metadata entry with AAGUID '': error occurred parsing time of last status change value: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
+			err: "error occurred parsing metadata entry with no identifiers: error occurred parsing time of last status change value: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"",
 		},
 		{
 			name: "ShouldFailInvalidBiometricStatusReport",
@@ -86,7 +118,7 @@ func TestEntryJSON_Parse(t *testing.T) {
 					},
 				},
 			},
-			err: "error occurred parsing metadata entry with AAGUID '': error occurred parsing biometric status report 0: error occurred parsing effective date value: parsing time \"bad\" as \"2006-01-02\": cannot parse \"bad\" as \"2006\"",
+			err: "error occurred parsing metadata entry with no identifiers: error occurred parsing biometric status report 0: error occurred parsing effective date value: parsing time \"bad\" as \"2006-01-02\": cannot parse \"bad\" as \"2006\"",
 		},
 		{
 			name: "ShouldFailInvalidStatusReport",
@@ -98,7 +130,7 @@ func TestEntryJSON_Parse(t *testing.T) {
 					},
 				},
 			},
-			err: "error occurred parsing metadata entry with AAGUID '': error occurred parsing status report 0: error occurred parsing effective date value: parsing time \"bad\" as \"2006-01-02\": cannot parse \"bad\" as \"2006\"",
+			err: "error occurred parsing metadata entry with no identifiers: error occurred parsing status report 0: error occurred parsing effective date value: parsing time \"bad\" as \"2006-01-02\": cannot parse \"bad\" as \"2006\"",
 		},
 		{
 			name: "ShouldFailInvalidRogueListURL",
@@ -111,7 +143,7 @@ func TestEntryJSON_Parse(t *testing.T) {
 				},
 				RogueListURL: "://bad-url",
 			},
-			err: "error occurred parsing metadata entry with AAGUID '': error occurred parsing rogue list URL value: parse \"://bad-url\": missing protocol scheme",
+			err: "error occurred parsing metadata entry with no identifiers: error occurred parsing rogue list URL value: parse \"://bad-url\": missing protocol scheme",
 		},
 		{
 			name: "ShouldFailRogueListURLWithoutHash",
@@ -124,7 +156,7 @@ func TestEntryJSON_Parse(t *testing.T) {
 				},
 				RogueListURL: "https://example.com/rogues",
 			},
-			err: "error occurred parsing metadata entry with AAGUID '': error occurred validating rogue list URL value: the rogue list hash was absent",
+			err: "error occurred parsing metadata entry with no identifiers: error occurred validating rogue list URL value: the rogue list hash was absent",
 		},
 		{
 			name: "ShouldSucceedMinimal",
