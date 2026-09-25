@@ -234,6 +234,12 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 		return ErrAttestationFormat.WithInfo("Credential public key algorithm not supported")
 	}
 
+	// The credential public key must be a valid COSE_Key for its declared key type and algorithm, as not every
+	// attestation statement format parses it, and a credential whose key cannot be parsed can never be used.
+	if _, err = webauthncose.ParsePublicKey(a.AuthData.AttData.CredentialPublicKey); err != nil {
+		return ErrAttestationFormat.WithDetails("Error parsing the credential public key").WithInfo(fmt.Sprintf("Error occurred parsing the credential public key: %+v", err)).WithError(err)
+	}
+
 	return a.VerifyAttestation(clientDataHash, mds, policy, signature)
 }
 

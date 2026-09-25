@@ -43,6 +43,10 @@ func attestationFormatValidationHandlerFIDOU2F(att AttestationObject, clientData
 		return "", nil, ErrAttestationCertificate.WithDetails("Error parsing public key").WithError(err)
 	}
 
+	if webauthncose.COSEKeyType(key.KeyType) != webauthncose.EllipticKey {
+		return "", nil, ErrUnsupportedKey.WithDetails("Credential public key is not an EC2 key")
+	}
+
 	if webauthncose.COSEAlgorithmIdentifier(key.Algorithm) != webauthncose.AlgES256 {
 		return "", nil, ErrUnsupportedAlgorithm.WithDetails("Non-ES256 Public Key algorithm used")
 	}
