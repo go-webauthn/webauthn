@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -263,6 +264,112 @@ func TestStatementJSON_Parse(t *testing.T) {
 			} else {
 				assert.EqualError(t, err, tc.err)
 			}
+		})
+	}
+}
+
+func TestStatementJSONKeyRestrictionDefaults(t *testing.T) {
+	const (
+		keyRestricted = "isKeyRestricted"
+		freshUV       = "isFreshUserVerificationRequired"
+		tagName       = "json"
+	)
+
+	testCases := []struct {
+		name                            string
+		have                            map[string]bool
+		isKeyRestricted                 bool
+		isFreshUserVerificationRequired bool
+	}{
+		{
+			name:                            "ShouldAssumeTrueWhenOmitted",
+			have:                            map[string]bool{},
+			isKeyRestricted:                 true,
+			isFreshUserVerificationRequired: true,
+		},
+		{
+			name:                            "ShouldDecodeExplicitTrue",
+			have:                            map[string]bool{keyRestricted: true, freshUV: true},
+			isKeyRestricted:                 true,
+			isFreshUserVerificationRequired: true,
+		},
+		{
+			name:                            "ShouldDecodeExplicitFalse",
+			have:                            map[string]bool{keyRestricted: false, freshUV: false},
+			isKeyRestricted:                 false,
+			isFreshUserVerificationRequired: false,
+		},
+		{
+			name:                            "ShouldDecodeEachMemberIndependently",
+			have:                            map[string]bool{keyRestricted: false},
+			isKeyRestricted:                 false,
+			isFreshUserVerificationRequired: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := make(map[string]any, len(tc.have))
+
+			for key, value := range tc.have {
+				raw[key] = value
+			}
+
+			t.Run("ShouldDecodeWithMapstructure", func(t *testing.T) {
+				var statement StatementJSON
+
+				decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{Result: &statement, TagName: tagName})
+				require.NoError(t, err)
+				require.NoError(t, decoder.Decode(raw))
+
+				parsed, err := statement.Parse()
+				require.NoError(t, err)
+
+				assert.Equal(t, tc.isKeyRestricted, parsed.IsKeyRestricted)
+				assert.Equal(t, tc.isFreshUserVerificationRequired, parsed.IsFreshUserVerificationRequired)
+			})
+
+			t.Run("ShouldDecodeWithEncodingJSON", func(t *testing.T) {
+				data, err := json.Marshal(raw)
+				require.NoError(t, err)
+
+				var statement StatementJSON
+
+				require.NoError(t, json.Unmarshal(data, &statement))
+
+				parsed, err := statement.Parse()
+				require.NoError(t, err)
+
+				assert.Equal(t, tc.isKeyRestricted, parsed.IsKeyRestricted)
+				assert.Equal(t, tc.isFreshUserVerificationRequired, parsed.IsFreshUserVerificationRequired)
+			})
+
+			t.Run("ShouldRoundTripWithEncodingJSON", func(t *testing.T) {
+				data, err := json.Marshal(raw)
+				require.NoError(t, err)
+
+				var statement StatementJSON
+
+				require.NoError(t, json.Unmarshal(data, &statement))
+
+				data, err = json.Marshal(statement)
+				require.NoError(t, err)
+
+				var encoded map[string]any
+
+				require.NoError(t, json.Unmarshal(data, &encoded))
+
+				for _, key := range []string{keyRestricted, freshUV} {
+					expected, present := tc.have[key]
+					actual, ok := encoded[key]
+
+					assert.Equal(t, present, ok)
+
+					if present {
+						assert.Equal(t, expected, actual)
+					}
+				}
+			})
 		})
 	}
 }

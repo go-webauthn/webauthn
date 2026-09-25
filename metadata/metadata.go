@@ -515,10 +515,12 @@ type StatementJSON struct {
 	KeyProtection []string `json:"keyProtection"`
 
 	// IsKeyRestricted indicates if the Uauth private key is restricted to only sign valid FIDO signature assertions.
-	IsKeyRestricted bool `json:"isKeyRestricted"`
+	// It is nil when the member is omitted, in which case the assumed value is true.
+	IsKeyRestricted *bool `json:"isKeyRestricted,omitempty"`
 
-	// IsFreshUserVerificationRequired indicates if Uauth key usage always requires a fresh user verification.
-	IsFreshUserVerificationRequired bool `json:"isFreshUserVerificationRequired"`
+	// IsFreshUserVerificationRequired indicates if Uauth key usage always requires a fresh user verification. It is nil
+	// when the member is omitted, in which case the assumed value is true.
+	IsFreshUserVerificationRequired *bool `json:"isFreshUserVerificationRequired,omitempty"`
 
 	// MatcherProtection is a list of MATCHER_PROTECTION short form case-sensitive string name constants.
 	MatcherProtection []string `json:"matcherProtection"`
@@ -657,8 +659,8 @@ func (j StatementJSON) Parse() (statement Statement, err error) {
 		AttestationTypes:                     j.AttestationTypes,
 		UserVerificationDetails:              j.UserVerificationDetails,
 		KeyProtection:                        j.KeyProtection,
-		IsKeyRestricted:                      j.IsKeyRestricted,
-		IsFreshUserVerificationRequired:      j.IsFreshUserVerificationRequired,
+		IsKeyRestricted:                      j.IsKeyRestricted == nil || *j.IsKeyRestricted,
+		IsFreshUserVerificationRequired:      j.IsFreshUserVerificationRequired == nil || *j.IsFreshUserVerificationRequired,
 		MatcherProtection:                    j.MatcherProtection,
 		CryptoStrength:                       j.CryptoStrength,
 		AttachmentHint:                       j.AttachmentHint,
