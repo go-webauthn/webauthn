@@ -5,8 +5,10 @@ import (
 	"crypto/ecdh"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
+	"math/big"
 	"testing"
 
 	cbor "github.com/fxamacker/cbor/v2"
@@ -551,7 +553,7 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		},
 		{
 			"ShouldAcceptValidRSAKey",
-			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: []byte{0xFF}, -2: []byte{0x01, 0x00, 0x01}}),
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMinModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
 			"",
 		},
 		{
@@ -591,6 +593,11 @@ func TestParsePublicKeyValidation(t *testing.T) {
 			"RSA key contains zero or empty modulus",
 		},
 		{
+			"ShouldRejectRSAWithUndersizedModulus",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x7F}, make([]byte, rsaMinModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
+			"RSA key modulus size of 2047 bits is less than the minimum of 2048 bits",
+		},
+		{
 			"ShouldAcceptRSAWithMaximumModulus",
 			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMaxModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
 			"",
@@ -602,7 +609,7 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		},
 		{
 			"ShouldRejectRSAWithEmptyExponent",
-			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: []byte{0xFF}, -2: []byte{}}),
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMinModulusBits/8-1)...), -2: []byte{}}),
 			"RSA key contains invalid exponent: invalid exponent length",
 		},
 	}
@@ -617,6 +624,47 @@ func TestParsePublicKeyValidation(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
+func TestRSAVerifyModulusSize(t *testing.T) {
+	testCases := []struct {
+		name string
+		bits int
+		err  string
+	}{
+		{"ShouldRejectRSA1024", 1024, "RSA key modulus size of 1024 bits is less than the minimum of 2048 bits"},
+		{"ShouldRejectRSA1536", 1536, "RSA key modulus size of 1536 bits is less than the minimum of 2048 bits"},
+		{"ShouldAcceptRSA2048", 2048, ""},
+	}
+
+	data := []byte("signed data")
+	digest := sha256.Sum256(data)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			priv, err := rsa.GenerateKey(rand.Reader, tc.bits)
+			require.NoError(t, err)
+
+			sig, err := rsa.SignPKCS1v15(rand.Reader, priv, crypto.SHA256, digest[:])
+			require.NoError(t, err)
+
+			key := &RSAPublicKeyData{
+				PublicKeyData: PublicKeyData{KeyType: int64(RSAKey), Algorithm: int64(AlgRS256)},
+				Modulus:       priv.N.Bytes(),
+				Exponent:      big.NewInt(int64(priv.E)).Bytes(),
+			}
+
+			valid, err := key.Verify(data, sig)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.False(t, valid)
+			} else {
+				assert.NoError(t, err)
+				assert.True(t, valid)
 			}
 		})
 	}
