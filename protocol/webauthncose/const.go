@@ -6,7 +6,10 @@ const (
 
 const ecCoordSize = 32
 
-const rsaMaxModulusBits = 16384
+const (
+	rsaMinModulusBits = 2048
+	rsaMaxModulusBits = 16384
+)
 
 type Error struct {
 	// Short name for the type of error that has occurred.
