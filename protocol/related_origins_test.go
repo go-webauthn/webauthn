@@ -150,6 +150,16 @@ func TestNewRelatedOrigins(t *testing.T) {
 			err:  "error validating related origins: the origins have 6 distinct registrable domain labels but clients only process 5 of them, so origins beyond that limit are ignored",
 		},
 		{
+			name: "ShouldRejectDistinctDomainsUnderAMultiLabelPublicSuffix",
+			have: []string{"https://a.co.uk", "https://b.co.uk", "https://c.co.uk", "https://d.co.uk", "https://e.co.uk", "https://f.co.uk"},
+			err:  "error validating related origins: the origins have 6 distinct registrable domain labels but clients only process 5 of them, so origins beyond that limit are ignored",
+		},
+		{
+			name: "ShouldRejectDistinctDomainsSharingAllButTheTopLevelDomain",
+			have: []string{"https://alice.github.io", "https://alice.github.com", "https://a.com", "https://b.com", "https://c.com", "https://d.com"},
+			err:  "error validating related origins: the origins have 6 distinct registrable domain labels but clients only process 5 of them, so origins beyond that limit are ignored",
+		},
+		{
 			name: "ShouldAcceptExactlyTheLabelLimit",
 			have: []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com"},
 			expected: []string{
@@ -186,7 +196,7 @@ func TestNewRelatedOriginsWithLabeler(t *testing.T) {
 	}
 
 	// Every one of these is the registrable domain 'example' under a multi-label public suffix, so a client counts
-	// one label for the set. The default labeler sees six distinct labels instead: co, com, ne, or, ac and gov.
+	// one label for the set. The default labeler counts each of the six hosts as a distinct label instead.
 	origins := []string{
 		"https://example.co.uk", "https://example.com.au", "https://example.ne.jp",
 		"https://example.or.kr", "https://example.ac.nz", "https://example.gov.uk",
@@ -234,16 +244,17 @@ func TestDefaultRelatedOriginLabeler(t *testing.T) {
 		err      string
 	}{
 		{name: "ShouldUseTheRegistrableLabel", have: "https://example.com", expected: "example"},
-		{name: "ShouldIgnoreASubdomain", have: "https://www.example.com", expected: "example"},
+		{name: "ShouldIgnoreTheTopLevelDomain", have: "https://example.de", expected: "example"},
 		{name: "ShouldIgnoreAPort", have: "https://example.com:8443", expected: "example"},
 		{name: "ShouldLowercaseTheLabel", have: "https://EXAMPLE.com", expected: "example"},
 		{name: "ShouldUseTheWholeHostWhenSingleLabel", have: "http://localhost:8080", expected: "localhost"},
 		{name: "ShouldUseTheWholeHostForAnIPv4Address", have: "https://127.0.0.1", expected: "127.0.0.1"},
 		{name: "ShouldUseTheWholeHostForAnIPv6Address", have: "https://[::1]:8443", expected: "::1"},
 
-		// The documented imprecision of the default labeler: a multi-label public suffix yields the suffix's own
-		// leading label rather than the registrable one, which over-counts against the limit.
-		{name: "ShouldOverCountAMultiLabelPublicSuffix", have: "https://example.co.uk", expected: "co"},
+		{name: "ShouldKeepASubdomain", have: "https://www.example.com", expected: "www.example.com"},
+		{name: "ShouldKeepAMultiLabelPublicSuffix", have: "https://example.co.uk", expected: "example.co.uk"},
+		{name: "ShouldKeepAPrivatePublicSuffix", have: "https://bob.github.io", expected: "bob.github.io"},
+		{name: "ShouldIgnoreATrailingRootLabel", have: "https://example.com.", expected: "example"},
 
 		{name: "ShouldErrorOnAnUnparseableOrigin", have: "https://exa mple.com", err: "error parsing origin"},
 		{name: "ShouldErrorOnAnOriginWithoutAHost", have: "https:///path", err: "the origin has no host component"},
