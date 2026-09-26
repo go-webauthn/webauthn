@@ -48,7 +48,7 @@ func TestValidateChainMalformed(t *testing.T) {
 				valid, err := validateChain(ConformanceMDSRoot, tc.chain)
 
 				assert.False(t, valid)
-				assert.Equal(t, errInvalidCertificateChain, err)
+				assert.ErrorIs(t, err, errInvalidCertificateChain)
 			})
 		})
 	}
@@ -72,6 +72,7 @@ func TestDecodeBytesRejectsX509URIHeader(t *testing.T) {
 
 	assert.Nil(t, payload)
 	require.Error(t, err)
+	assert.ErrorContains(t, err, "error occurred decoding metadata blob 1: ")
 	assert.ErrorContains(t, err, "x5u encountered in header of metadata TOC payload")
 }
 
@@ -94,6 +95,7 @@ func TestValidateChainDepth(t *testing.T) {
 		name  string
 		chain []any
 		valid bool
+		err   string
 	}{
 		{
 			name:  "ShouldValidateSingleIntermediate",
@@ -109,6 +111,7 @@ func TestValidateChainDepth(t *testing.T) {
 			name:  "ShouldRejectIncompleteChain",
 			chain: []any{deepEncoded, secondEncoded},
 			valid: false,
+			err:   "error occurred validating the certificate chain: signing certificate with subject 'CN=deep leaf', issuer 'CN=intermediate two', and serial '5' could not be verified against the trust anchor with subject 'CN=root', issuer 'CN=root', and serial '1': ",
 		},
 	}
 
@@ -121,7 +124,7 @@ func TestValidateChainDepth(t *testing.T) {
 			if tc.valid {
 				assert.NoError(t, err)
 			} else {
-				assert.Error(t, err)
+				assert.ErrorContains(t, err, tc.err)
 			}
 		})
 	}
@@ -234,6 +237,7 @@ func TestValidateChainRevocation(t *testing.T) {
 		chain []any
 		valid bool
 		err   error
+		want  string
 	}{
 		{
 			name:  "ShouldPermitLeafWithUnknownStatus",
@@ -250,12 +254,14 @@ func TestValidateChainRevocation(t *testing.T) {
 			chain: []any{leafRevoked, interEncoded},
 			valid: false,
 			err:   errLeafCertRevoked,
+			want:  "error occurred validating the certificate chain: signing certificate with subject 'CN=leaf revoked', issuer 'CN=intermediate', and serial '17' failed revocation checks: Leaf certificate is on issuers revocation list",
 		},
 		{
 			name:  "ShouldRejectRevokedIntermediate",
 			chain: []any{leafOfRevoked, interRevokedEncoded},
 			valid: false,
 			err:   errIntermediateCertRevoked,
+			want:  "error occurred validating the certificate chain: intermediate certificate 1 with subject 'CN=intermediate revoked', issuer 'CN=root', and serial '19' failed revocation checks: Intermediate certificate is on issuers revocation list",
 		},
 	}
 
@@ -266,7 +272,8 @@ func TestValidateChainRevocation(t *testing.T) {
 			assert.Equal(t, tc.valid, valid)
 
 			if tc.err != nil {
-				assert.Equal(t, tc.err, err)
+				assert.ErrorIs(t, err, tc.err)
+				assert.EqualError(t, err, tc.want)
 			} else {
 				assert.NoError(t, err)
 			}
@@ -295,4 +302,26 @@ func TestDecodeDoesNotCloseTheReader(t *testing.T) {
 	require.Error(t, err)
 
 	assert.False(t, rc.closed, "Decode must leave closing the reader to the caller")
+}
+
+func TestDecoderParseDescribesEntryErrors(t *testing.T) {
+	decoder, err := NewDecoder()
+	require.NoError(t, err)
+
+	payload := &PayloadJSON{
+		Number:     7,
+		NextUpdate: "2025-01-01",
+		Entries: []EntryJSON{
+			{AaGUID: "0132d110-bf4e-4208-a403-ab4f5f12efe5", TimeOfLastStatusChange: "2025-01-01"},
+			{AaGUID: "not-a-uuid", TimeOfLastStatusChange: "2025-01-01"},
+			{AttestationCertificateKeyIdentifiers: []string{"aa"}, TimeOfLastStatusChange: "bad"},
+		},
+	}
+
+	metadata, err := decoder.Parse(payload)
+
+	require.NotNil(t, metadata)
+	assert.Len(t, metadata.Parsed.Entries, 1)
+	assert.Len(t, metadata.Unparsed, 2)
+	assert.EqualError(t, err, "error occurred parsing metadata blob 7: 2 entries had errors during parsing: entry 1: error occurred parsing metadata entry with AAGUID 'not-a-uuid': error parsing AAGUID: invalid UUID length: 10; entry 2: error occurred parsing metadata entry with attestation certificate key identifiers 'aa': error occurred parsing time of last status change value: parsing time \"bad\" as \"2006-01-02\": cannot parse \"bad\" as \"2006\"")
 }
