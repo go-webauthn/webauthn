@@ -155,6 +155,11 @@ func TestNewRelatedOrigins(t *testing.T) {
 			err:  "error validating related origins: the origins have 6 distinct registrable domain labels but clients only process 5 of them, so origins beyond that limit are ignored",
 		},
 		{
+			name: "ShouldRejectDistinctDomainsSharingAllButTheTopLevelDomain",
+			have: []string{"https://alice.github.io", "https://alice.github.com", "https://a.com", "https://b.com", "https://c.com", "https://d.com"},
+			err:  "error validating related origins: the origins have 6 distinct registrable domain labels but clients only process 5 of them, so origins beyond that limit are ignored",
+		},
+		{
 			name: "ShouldAcceptExactlyTheLabelLimit",
 			have: []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com"},
 			expected: []string{
@@ -191,8 +196,7 @@ func TestNewRelatedOriginsWithLabeler(t *testing.T) {
 	}
 
 	// Every one of these is the registrable domain 'example' under a multi-label public suffix, so a client counts
-	// one label for the set. The default labeler sees six distinct labels instead: example.co, example.com, example.ne,
-	// example.or, example.ac and example.gov.
+	// one label for the set. The default labeler counts each of the six hosts as a distinct label instead.
 	origins := []string{
 		"https://example.co.uk", "https://example.com.au", "https://example.ne.jp",
 		"https://example.or.kr", "https://example.ac.nz", "https://example.gov.uk",
@@ -247,8 +251,9 @@ func TestDefaultRelatedOriginLabeler(t *testing.T) {
 		{name: "ShouldUseTheWholeHostForAnIPv4Address", have: "https://127.0.0.1", expected: "127.0.0.1"},
 		{name: "ShouldUseTheWholeHostForAnIPv6Address", have: "https://[::1]:8443", expected: "::1"},
 
-		{name: "ShouldKeepASubdomain", have: "https://www.example.com", expected: "www.example"},
-		{name: "ShouldKeepAMultiLabelPublicSuffix", have: "https://example.co.uk", expected: "example.co"},
+		{name: "ShouldKeepASubdomain", have: "https://www.example.com", expected: "www.example.com"},
+		{name: "ShouldKeepAMultiLabelPublicSuffix", have: "https://example.co.uk", expected: "example.co.uk"},
+		{name: "ShouldKeepAPrivatePublicSuffix", have: "https://bob.github.io", expected: "bob.github.io"},
 		{name: "ShouldIgnoreATrailingRootLabel", have: "https://example.com.", expected: "example"},
 
 		{name: "ShouldErrorOnAnUnparseableOrigin", have: "https://exa mple.com", err: "error parsing origin"},

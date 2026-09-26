@@ -223,19 +223,20 @@ func (r RelatedOrigins) ServeHTTP(w http.ResponseWriter, request *http.Request) 
 	w.Write(data)
 }
 
-// DefaultRelatedOriginLabeler derives a conservative stand in for the registrable domain label of an origin by taking
-// every label of its host other than the top level domain. An IP address literal, and a host of a single label such as
-// localhost, is its own label.
+// DefaultRelatedOriginLabeler derives a conservative stand in for the registrable domain label of an origin without a
+// public suffix list. A host of exactly two labels, such as example.com, has its leading label as the label. Any other
+// host, including an IP address literal and a host of a single label such as localhost, is its own label.
 //
 // The registrable domain label of an origin is the leading label of its registrable domain, which can only be found
-// exactly with a public suffix list. Without one this function never merges two origins which a client would count
-// separately under any common public suffix, so it errs towards over-counting against [MaximumRelatedOriginLabels],
-// which rejects a set of origins a client would have accepted rather than serving one a client would truncate. For
-// example https://example.com and https://example.de share the label 'example', as a client counts them, while
-// https://a.co.uk and https://b.co.uk have the distinct labels 'a.co' and 'b.co' where taking a single label would
-// have wrongly merged them as 'co'. The cost is that origins which a client counts once are sometimes counted more than
-// once: https://www.example.com has the label 'www.example' so it is counted separately to https://example.com, and
-// https://example.co.uk has the label 'example.co' so it is counted separately to https://example.com.
+// exactly with a public suffix list. Without one this function only gives two origins the same label when a client
+// counts them as the same label too, so it errs towards over-counting against [MaximumRelatedOriginLabels], which
+// rejects a set of origins a client would have accepted rather than serving one a client would truncate. Two hosts of
+// two labels which share a leading label, such as https://example.com and https://example.de, share the label
+// 'example' as a client counts them. Every longer host is counted separately, as its registrable domain depends on
+// the public suffix: https://a.co.uk and https://b.co.uk are two labels, as are https://alice.github.io and
+// https://alice.github.com. The cost is that origins which a client counts once are sometimes counted more than once:
+// https://www.example.com is counted separately to https://example.com, and https://example.co.uk is counted
+// separately to https://example.com.
 //
 // A deployment which lists origins under a multi-label public suffix, or several subdomains of one registrable domain,
 // should count labels exactly by passing a labeler backed by a public suffix list to [NewRelatedOriginsWithLabeler];
@@ -276,13 +277,11 @@ func DefaultRelatedOriginLabeler(origin string) (label string, err error) {
 		return host, nil
 	}
 
-	labels := strings.Split(host, ".")
-
-	if len(labels) < 2 {
-		return host, nil
+	if label, suffix, ok := strings.Cut(host, "."); ok && label != "" && suffix != "" && !strings.Contains(suffix, ".") {
+		return label, nil
 	}
 
-	return strings.Join(labels[:len(labels)-1], "."), nil
+	return host, nil
 }
 
 const (
