@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"math/big"
 	"testing"
 	"time"
@@ -451,6 +452,100 @@ func TestPackedFormat_BasicAttestationCertRequirements(t *testing.T) {
 			require.EqualError(t, err, tc.err)
 
 			_ = cert
+		})
+	}
+}
+
+func TestPackedFormat_BasicAttestationAAGUIDExtension(t *testing.T) {
+	const (
+		errMismatch = "Certificate AAGUID does not match Auth Data certificate"
+		errInvalid  = "Error unmarshalling AAGUID from certificate"
+	)
+
+	authData := []byte("fake-auth-data")
+	clientDataHash := []byte("fake-client-hash")
+	signatureData := append(authData, clientDataHash...) //nolint:gocritic
+
+	aaguid := []byte{0x23, 0x69, 0xd4, 0xd0, 0x13, 0xce, 0x48, 0xcb, 0x9f, 0x26, 0xf7, 0xed, 0x8c, 0x9a, 0x60, 0x68}
+	other := []byte{0xad, 0xce, 0x00, 0x02, 0x35, 0xbc, 0xc6, 0x0a, 0x64, 0x8b, 0x0b, 0x25, 0xf1, 0xf0, 0x55, 0x03}
+
+	encode := func(value []byte) []byte {
+		der, err := asn1.Marshal(value)
+		require.NoError(t, err)
+
+		return der
+	}
+
+	testCases := []struct {
+		name  string
+		value []byte
+		err   string
+	}{
+		{
+			name:  "ShouldAcceptMatchingAAGUID",
+			value: encode(aaguid),
+		},
+		{
+			name:  "ShouldRejectMismatchedAAGUID",
+			value: encode(other),
+			err:   errMismatch,
+		},
+		{
+			name:  "ShouldRejectEmptyAAGUID",
+			value: encode([]byte{}),
+			err:   errInvalid,
+		},
+		{
+			name:  "ShouldRejectShortAAGUID",
+			value: encode(aaguid[:8]),
+			err:   errInvalid,
+		},
+		{
+			name:  "ShouldRejectTrailingData",
+			value: append(encode(aaguid), 0xff, 0xff),
+			err:   errInvalid,
+		},
+		{
+			name:  "ShouldRejectEmptyExtensionValue",
+			value: []byte{},
+			err:   errInvalid,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			require.NoError(t, err)
+
+			template := &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"US"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore:       time.Now().Add(-time.Hour),
+				NotAfter:        time.Now().Add(time.Hour),
+				KeyUsage:        x509.KeyUsageDigitalSignature,
+				ExtraExtensions: []pkix.Extension{{Id: oidFIDOGenCeAAGUID, Value: tc.value}},
+			}
+
+			certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+			require.NoError(t, err)
+
+			sigAlg := webauthncose.SigAlgFromCOSEAlg(webauthncose.AlgES256)
+
+			sig, err := key.Sign(rand.Reader, packedTestHashForSigAlg(t, sigAlg, signatureData), nil)
+			require.NoError(t, err)
+
+			_, _, err = handleBasicAttestation(sig, clientDataHash, authData, aaguid, int64(webauthncose.AlgES256), []any{certDER}, nil, SignaturePolicy{})
+
+			if tc.err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.err)
+			}
 		})
 	}
 }
