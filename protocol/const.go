@@ -24,6 +24,10 @@ const (
 )
 
 const (
+	aaguidLength = 16
+)
+
+const (
 	maxDomainLength           = 253
 	maxDomainLabelLength      = 63
 	forbiddenDomainCodePoints = " #/:<>?@[\\]^|%"

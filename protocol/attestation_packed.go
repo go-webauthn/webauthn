@@ -163,15 +163,16 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 	var (
 		certAAGUID []byte
 		critical   bool
+		found      bool
 	)
 
-	if certAAGUID, critical, _, err = attestationCertAAGUID(attestnCert); critical {
+	if certAAGUID, critical, found, err = attestationCertAAGUID(attestnCert); critical {
 		return "", x5c, ErrInvalidAttestation.WithDetails("Attestation certificate FIDO extension marked as critical")
 	} else if err != nil {
-		return "", x5c, ErrInvalidAttestation.WithDetails("Error unmarshalling AAGUID from certificate")
+		return "", x5c, ErrInvalidAttestation.WithDetails("Error unmarshalling AAGUID from certificate").WithError(err)
 	}
 
-	if len(certAAGUID) > 0 && !bytes.Equal(aaguid, certAAGUID) {
+	if found && !bytes.Equal(aaguid, certAAGUID) {
 		return "", x5c, ErrInvalidAttestation.WithDetails("Certificate AAGUID does not match Auth Data certificate")
 	}
 

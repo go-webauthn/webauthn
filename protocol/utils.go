@@ -83,12 +83,22 @@ func attestationCertAAGUID(cert *x509.Certificate) (aaguid []byte, critical, fou
 		raw = extension.Value
 	}
 
-	if len(raw) == 0 {
+	if !found {
 		return nil, critical, found, nil
 	}
 
-	if _, err = asn1.Unmarshal(raw, &aaguid); err != nil {
+	var rest []byte
+
+	if rest, err = asn1.Unmarshal(raw, &aaguid); err != nil {
 		return nil, critical, found, err
+	}
+
+	if len(rest) != 0 {
+		return nil, critical, found, fmt.Errorf("the extension value has %d bytes of trailing data", len(rest))
+	}
+
+	if len(aaguid) != aaguidLength {
+		return nil, critical, found, fmt.Errorf("the extension value has an AAGUID of %d bytes but %d bytes are required", len(aaguid), aaguidLength)
 	}
 
 	return aaguid, critical, found, nil
