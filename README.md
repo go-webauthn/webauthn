@@ -1,11 +1,12 @@
 # WebAuthn Library
 
-[![GoDoc](https://godoc.org/github.com/go-webauthn/webauthn?status.svg)](https://godoc.org/github.com/go-webauthn/webauthn)
-[![Go Report Card](https://goreportcard.com/badge/github.com/go-webauthn/webauthn)](https://goreportcard.com/report/github.com/go-webauthn/webauthn)
-[![Version](https://img.shields.io/github/release/go-webauthn/webauthn.svg)](https://github.com/go-webauthn/webauthn/releases)
-![Go version](https://img.shields.io/badge/Go-1.25-brightgreen.svg)
-[![codecov](https://codecov.io/github/go-webauthn/webauthn/graph/badge.svg?token=P1FN91DTLE)](https://codecov.io/github/go-webauthn/webauthn)
-[![License](https://img.shields.io/github/license/go-webauthn/webauthn?color=blue)](https://github.com/go-webauthn/webauthn?tab=BSD-3-Clause-1-ov-file#readme)
+<p>
+  <a href="https://pkg.go.dev/github.com/go-webauthn/webauthn"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/go-reference-blue.svg?logo=go&logoColor=%2300add8&mode=dark&size=sm&variant=outline"><img alt="Go Reference" src="https://shieldcn.dev/badge/go-reference-blue.svg?logo=go&logoColor=%2300add8&mode=light&size=sm&variant=outline"></picture></a>
+  <a href="https://github.com/go-webauthn/webauthn/releases"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/go-webauthn/webauthn/release.svg?logo=github&mode=dark&size=sm&variant=outline"><img alt="GitHub Release" src="https://shieldcn.dev/github/go-webauthn/webauthn/release.svg?logo=github&logoColor=%23181717&mode=light&size=sm&variant=outline"></picture></a>
+  <a href="https://github.com/go-webauthn/webauthn/blob/master/go.mod"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/dynamic/json.svg?url=https%3A%2F%2Fimg.shields.io%2Fgithub%2Fgo-mod%2Fgo-version%2Fgo-webauthn%2Fwebauthn.json&query=%24.message&label=go&logo=go&logoColor=%2300add8&mode=dark&size=sm&variant=outline"><img alt="Go Version" src="https://shieldcn.dev/badge/dynamic/json.svg?url=https%3A%2F%2Fimg.shields.io%2Fgithub%2Fgo-mod%2Fgo-version%2Fgo-webauthn%2Fwebauthn.json&query=%24.message&label=go&logo=go&logoColor=%2300add8&mode=light&size=sm&variant=outline"></picture></a>
+  <a href="https://codecov.io/gh/go-webauthn/webauthn"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/badge/dynamic/json.svg?url=https%3A%2F%2Fimg.shields.io%2Fcodecov%2Fc%2Fgithub%2Fgo-webauthn%2Fwebauthn.json&query=%24.message&label=coverage&logo=codecov&logoColor=%23f01f7a&mode=dark&size=sm&variant=outline"><img alt="Codecov" src="https://shieldcn.dev/badge/dynamic/json.svg?url=https%3A%2F%2Fimg.shields.io%2Fcodecov%2Fc%2Fgithub%2Fgo-webauthn%2Fwebauthn.json&query=%24.message&label=coverage&logo=codecov&logoColor=%23f01f7a&mode=light&size=sm&variant=outline"></picture></a>
+  <a href="https://github.com/go-webauthn/webauthn?tab=BSD-3-Clause-1-ov-file#readme"><picture><source media="(prefers-color-scheme: dark)" srcset="https://shieldcn.dev/github/go-webauthn/webauthn/license.svg?logo=opensourceinitiative&logoColor=%233da639&mode=dark&size=sm&variant=outline"><img alt="License" src="https://shieldcn.dev/github/go-webauthn/webauthn/license.svg?logo=opensourceinitiative&logoColor=%233da639&mode=light&size=sm&variant=outline"></picture></a>
+</p>
 
 This library is meant to handle [Web Authentication](https://www.w3.org/TR/webauthn) for Go apps that wish to implement 
 a multi-factor authentication, passwordless, or usernameless solution for users. This library conforms as much as
