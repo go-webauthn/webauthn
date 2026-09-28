@@ -24,7 +24,7 @@ func Fetch() (metadata *Metadata, err error) {
 	client := &http.Client{Timeout: DefaultMDSTimeout}
 
 	if resp, err = client.Get(ProductionMDSURL); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error occurred fetching metadata from '%s': %w", ProductionMDSURL, err)
 	}
 
 	defer func() {
@@ -32,7 +32,7 @@ func Fetch() (metadata *Metadata, err error) {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error occurred fetching metadata: status code %d", resp.StatusCode)
+		return nil, fmt.Errorf("error occurred fetching metadata from '%s': status code %d", ProductionMDSURL, resp.StatusCode)
 	}
 
 	if decoder, err = NewDecoder(WithIgnoreEntryParsingErrors()); err != nil {
@@ -40,7 +40,7 @@ func Fetch() (metadata *Metadata, err error) {
 	}
 
 	if payload, err = decoder.Decode(resp.Body); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error occurred fetching metadata from '%s': %w", ProductionMDSURL, err)
 	}
 
 	return decoder.Parse(payload)
@@ -124,7 +124,7 @@ func (j PayloadJSON) Parse() (payload Parsed, err error) {
 	var update time.Time
 
 	if update, err = time.Parse(time.DateOnly, j.NextUpdate); err != nil {
-		return payload, fmt.Errorf("error occurred parsing next update value '%s': %w", j.NextUpdate, err)
+		return payload, fmt.Errorf("error occurred parsing metadata blob %d: error occurred parsing next update value '%s': %w", j.Number, j.NextUpdate, err)
 	}
 
 	n := len(j.Entries)
@@ -133,7 +133,7 @@ func (j PayloadJSON) Parse() (payload Parsed, err error) {
 
 	for i := 0; i < n; i++ {
 		if entries[i], err = j.Entries[i].Parse(); err != nil {
-			return payload, fmt.Errorf("error occurred parsing entry %d: %w", i, err)
+			return payload, fmt.Errorf("error occurred parsing metadata blob %d: error occurred parsing entry %d: %w", j.Number, i, err)
 		}
 	}
 
@@ -216,19 +216,34 @@ type EntryJSON struct {
 	RogueListHash string `json:"rogueListHash"`
 }
 
+func (j EntryJSON) describe() string {
+	switch {
+	case len(j.AaGUID) != 0:
+		return fmt.Sprintf("AAGUID '%s'", j.AaGUID)
+	case len(j.Aaid) != 0:
+		return fmt.Sprintf("AAID '%s'", j.Aaid)
+	case len(j.AttestationCertificateKeyIdentifiers) != 0:
+		return fmt.Sprintf("attestation certificate key identifiers '%s'", strings.Join(j.AttestationCertificateKeyIdentifiers, "', '"))
+	case len(j.MetadataStatement.Description) != 0:
+		return fmt.Sprintf("description '%s'", j.MetadataStatement.Description)
+	default:
+		return "no identifiers"
+	}
+}
+
 func (j EntryJSON) Parse() (entry Entry, err error) {
 	var aaguid uuid.UUID
 
 	if len(j.AaGUID) != 0 {
 		if aaguid, err = uuid.Parse(j.AaGUID); err != nil {
-			return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': error parsing AAGUID: %w", j.AaGUID, err)
+			return entry, fmt.Errorf("error occurred parsing metadata entry with %s: error parsing AAGUID: %w", j.describe(), err)
 		}
 	}
 
 	var statement Statement
 
 	if statement, err = j.MetadataStatement.Parse(); err != nil {
-		return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': %w", j.AaGUID, err)
+		return entry, fmt.Errorf("error occurred parsing metadata entry with %s: %w", j.describe(), err)
 	}
 
 	var i, n int
@@ -239,7 +254,7 @@ func (j EntryJSON) Parse() (entry Entry, err error) {
 
 	for i = 0; i < n; i++ {
 		if bsrs[i], err = j.BiometricStatusReports[i].Parse(); err != nil {
-			return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': error occurred parsing biometric status report %d: %w", j.AaGUID, i, err)
+			return entry, fmt.Errorf("error occurred parsing metadata entry with %s: error occurred parsing biometric status report %d: %w", j.describe(), i, err)
 		}
 	}
 
@@ -249,25 +264,25 @@ func (j EntryJSON) Parse() (entry Entry, err error) {
 
 	for i = 0; i < n; i++ {
 		if srs[i], err = j.StatusReports[i].Parse(); err != nil {
-			return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': error occurred parsing status report %d: %w", j.AaGUID, i, err)
+			return entry, fmt.Errorf("error occurred parsing metadata entry with %s: error occurred parsing status report %d: %w", j.describe(), i, err)
 		}
 	}
 
 	var change time.Time
 
 	if change, err = time.Parse(time.DateOnly, j.TimeOfLastStatusChange); err != nil {
-		return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': error occurred parsing time of last status change value: %w", j.AaGUID, err)
+		return entry, fmt.Errorf("error occurred parsing metadata entry with %s: error occurred parsing time of last status change value: %w", j.describe(), err)
 	}
 
 	var rogues *url.URL
 
 	if len(j.RogueListURL) != 0 {
 		if rogues, err = url.ParseRequestURI(j.RogueListURL); err != nil {
-			return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': error occurred parsing rogue list URL value: %w", j.AaGUID, err)
+			return entry, fmt.Errorf("error occurred parsing metadata entry with %s: error occurred parsing rogue list URL value: %w", j.describe(), err)
 		}
 
 		if len(j.RogueListHash) == 0 {
-			return entry, fmt.Errorf("error occurred parsing metadata entry with AAGUID '%s': error occurred validating rogue list URL value: the rogue list hash was absent", j.AaGUID)
+			return entry, fmt.Errorf("error occurred parsing metadata entry with %s: error occurred validating rogue list URL value: the rogue list hash was absent", j.describe())
 		}
 	}
 

@@ -151,7 +151,7 @@ func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Pro
 			}
 
 			if _, err = x5c.Verify(entry.MetadataStatement.Verifier(x5cis)); err != nil {
-				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. The attestation certificate could not be verified due to an error validating the trust chain against the Metadata Service.", aaguid)).WithError(err)
+				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. The attestation certificate could not be verified due to an error validating the trust chain against the Metadata Service.", aaguid)).WithInfo(fmt.Sprintf("Error occurred verifying the attestation certificate with subject '%s', issuer '%s', and serial '%s' using %d intermediate certificates: %+v", x5c.Subject, x5c.Issuer, metadataCertificateSerial(x5c), len(x5cis), err)).WithError(err)
 			}
 		}
 	}
@@ -248,9 +248,14 @@ func metadataParseX5C(aaguid uuid.UUID, x5cs []any) (certs []*x509.Certificate, 
 	return certs, nil
 }
 
-// metadataKeyIdentifiers returns the candidate attestation certificate key identifiers for a certificate. The value of
-// the Subject Key Identifier extension is preferred, followed by the SHA-1 hash of the subjectPublicKey (RFC5280 §4.2.1.2
-// method 1) which is used when the extension is absent.
+func metadataCertificateSerial(cert *x509.Certificate) string {
+	if cert.SerialNumber == nil {
+		return "<nil>"
+	}
+
+	return cert.SerialNumber.Text(16)
+}
+
 func metadataKeyIdentifiers(cert *x509.Certificate) (keyIdentifiers []string) {
 	if len(cert.SubjectKeyId) != 0 {
 		keyIdentifiers = append(keyIdentifiers, hex.EncodeToString(cert.SubjectKeyId))
