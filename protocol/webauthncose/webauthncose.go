@@ -16,7 +16,6 @@ import (
 
 	"github.com/google/go-tpm/tpm2"
 
-	"github.com/go-webauthn/x/crypto/secp256k1"
 	"github.com/go-webauthn/x/encoding/asn1"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
@@ -381,10 +380,7 @@ func ec2AlgCurve(coseAlg int64) elliptic.Curve {
 	case AlgES256, AlgESP256:
 		return elliptic.P256()
 	case AlgES256K:
-		// The adaptor is returned so a secp256k1 key is measured and represented like any other, but neither the
-		// point check nor the signature verification goes through this interface: both use the specialized
-		// implementation instead. See [validateEC2PublicKey] and [verifySecp256k1].
-		return secp256k1.S256() //nolint:staticcheck // The adaptor supplies the curve parameters and nothing else.
+		return secp256k1Curve()
 	default:
 		return nil
 	}
@@ -502,15 +498,8 @@ func validateEC2PublicKey(k *EC2PublicKeyData) error {
 		return ErrUnsupportedKey.WithDetails("EC2 key x or y coordinate has invalid length")
 	}
 
-	// A secp256k1 point is checked by the same parser which verification uses, so the two agree on what a valid
-	// key is. It additionally rejects a coordinate which is not reduced modulo the field prime, where the generic
-	// curve reduces it and reports the resulting point as valid.
 	if COSEAlgorithmIdentifier(k.Algorithm) == AlgES256K {
-		if _, err := secp256k1.ParsePubKey(secp256k1PointUncompressed(k)); err != nil {
-			return ErrUnsupportedKey.WithDetails("EC2 key point is not on curve")
-		}
-
-		return nil
+		return validateSecp256k1PublicKey(k)
 	}
 
 	x := new(big.Int).SetBytes(k.XCoord)
