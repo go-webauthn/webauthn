@@ -3,6 +3,7 @@ package metadata
 import (
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -54,17 +55,22 @@ func (d *Decoder) Parse(payload *PayloadJSON) (metadata *Metadata, err error) {
 	}
 
 	if metadata.Parsed.NextUpdate, err = time.Parse(time.DateOnly, payload.NextUpdate); err != nil {
-		return nil, fmt.Errorf("error occurred parsing next update value '%s': %w", payload.NextUpdate, err)
+		return nil, fmt.Errorf("error occurred parsing metadata blob %d: error occurred parsing next update value '%s': %w", payload.Number, payload.NextUpdate, err)
 	}
 
-	var parsed Entry
+	var (
+		parsed Entry
+		errs   []error
+	)
 
-	for _, entry := range payload.Entries {
+	for i, entry := range payload.Entries {
 		if parsed, err = entry.Parse(); err != nil {
 			metadata.Unparsed = append(metadata.Unparsed, EntryError{
 				Error:     err,
 				EntryJSON: entry,
 			})
+
+			errs = append(errs, fmt.Errorf("entry %d: %w", i, err))
 
 			continue
 		}
@@ -72,8 +78,8 @@ func (d *Decoder) Parse(payload *PayloadJSON) (metadata *Metadata, err error) {
 		metadata.Parsed.Entries = append(metadata.Parsed.Entries, parsed)
 	}
 
-	if n := len(metadata.Unparsed); n != 0 && !d.ignoreEntryParsingErrors {
-		return metadata, fmt.Errorf("error occurred parsing metadata: %d entries had errors during parsing", n)
+	if n := len(errs); n != 0 && !d.ignoreEntryParsingErrors {
+		return metadata, fmt.Errorf("error occurred parsing metadata blob %d: %d entries had errors during parsing: %w", payload.Number, n, joinErrors(errs))
 	}
 
 	return metadata, nil
@@ -94,7 +100,15 @@ func (d *Decoder) Decode(r io.Reader) (payload *PayloadJSON, err error) {
 func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 	var token *jwt.Token
 
+	// The blob is described by its serial number in errors once the claims have been decoded, which happens before the
+	// signature is verified.
+	blob := "metadata blob"
+
 	if token, err = d.parser.Parse(string(bytes), func(token *jwt.Token) (any, error) {
+		if number, ok := decodeBlobNumber(token.Claims); ok {
+			blob = fmt.Sprintf("metadata blob %d", number)
+		}
+
 		// 2. If the x5u attribute is present in the JWT Header.
 		if _, ok := token.Header[HeaderX509URI]; ok {
 			// Never seen an x5u here, although it is in the spec.
@@ -130,19 +144,19 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 
 		// Decode the base64 certificate into the buffer.
 		if n, err = base64.StdEncoding.Decode(o, []byte(chain[0].(string))); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error occurred decoding the signing certificate: %w", err)
 		}
 
 		// Parse the certificate from the buffer.
 		if cert, err = x509.ParseCertificate(o[:n]); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error occurred parsing the signing certificate: %w", err)
 		}
 
 		// 4. Verify the signature of the Metadata TOC object using the TOC signing certificate chain
 		// jwt.Parse() uses the TOC signing certificate public key internally to verify the signature.
 		return cert.PublicKey, err
 	}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error occurred decoding %s: %w", blob, err)
 	}
 
 	var decoder *mapstructure.Decoder
@@ -155,11 +169,11 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 		DecodeHook: d.hook,
 		TagName:    "json",
 	}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error occurred decoding %s: %w", blob, err)
 	}
 
 	if err = decoder.Decode(token.Claims); err != nil {
-		return payload, err
+		return payload, fmt.Errorf("error occurred decoding %s: %w", blob, err)
 	}
 
 	return payload, nil
@@ -189,7 +203,7 @@ func WithRootCertificate(value string) DecoderOption {
 
 func validateChain(root string, chain []any) (bool, error) {
 	if len(chain) == 0 {
-		return false, errInvalidCertificateChain
+		return false, fmt.Errorf("error occurred validating the certificate chain: the chain is empty: %w", errInvalidCertificateChain)
 	}
 
 	// When no x5c header is present the caller sets chain = []any{root}, meaning
@@ -197,9 +211,14 @@ func validateChain(root string, chain []any) (bool, error) {
 	// fallback; reject any other single-entry chain as malformed.
 	if len(chain) == 1 {
 		entry, ok := chain[0].(string)
-		if !ok || entry != root {
-			return false, errInvalidCertificateChain
+		if !ok {
+			return false, fmt.Errorf("error occurred validating the certificate chain: the chain has a single certificate of type '%T' when a string was expected: %w", chain[0], errInvalidCertificateChain)
 		}
+
+		if entry != root {
+			return false, fmt.Errorf("error occurred validating the certificate chain: the chain has a single certificate which is not the trust anchor: %w", errInvalidCertificateChain)
+		}
+
 		// Root is the signing cert; no further chain validation needed.
 		return true, nil
 	}
@@ -212,7 +231,7 @@ func validateChain(root string, chain []any) (bool, error) {
 	for i, entry := range chain {
 		value, ok := entry.(string)
 		if !ok {
-			return false, errInvalidCertificateChain
+			return false, fmt.Errorf("error occurred validating the certificate chain: certificate %d has type '%T' when a string was expected: %w", i, entry, errInvalidCertificateChain)
 		}
 
 		encoded[i] = value
@@ -220,7 +239,7 @@ func validateChain(root string, chain []any) (bool, error) {
 
 	rootcert, err := mdsParseX509Certificate(root)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error occurred validating the certificate chain: error occurred parsing the trust anchor: %w", err)
 	}
 
 	roots := x509.NewCertPool()
@@ -229,15 +248,15 @@ func validateChain(root string, chain []any) (bool, error) {
 
 	ints := x509.NewCertPool()
 
-	for _, value := range encoded[1:] {
+	for i, value := range encoded[1:] {
 		var intcert *x509.Certificate
 
 		if intcert, err = mdsParseX509Certificate(value); err != nil {
-			return false, err
+			return false, fmt.Errorf("error occurred validating the certificate chain: error occurred parsing intermediate certificate %d: %w", i+1, err)
 		}
 
 		if err = validateChainCheckRevocation(intcert, errIntermediateCertRevoked); err != nil {
-			return false, err
+			return false, fmt.Errorf("error occurred validating the certificate chain: intermediate certificate %d with %s failed revocation checks: %w", i+1, mdsDescribeCertificate(intcert), err)
 		}
 
 		ints.AddCert(intcert)
@@ -245,11 +264,11 @@ func validateChain(root string, chain []any) (bool, error) {
 
 	leafcert, err := mdsParseX509Certificate(encoded[0])
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error occurred validating the certificate chain: error occurred parsing the signing certificate: %w", err)
 	}
 
 	if err = validateChainCheckRevocation(leafcert, errLeafCertRevoked); err != nil {
-		return false, err
+		return false, fmt.Errorf("error occurred validating the certificate chain: signing certificate with %s failed revocation checks: %w", mdsDescribeCertificate(leafcert), err)
 	}
 
 	opts := x509.VerifyOptions{
@@ -258,9 +277,11 @@ func validateChain(root string, chain []any) (bool, error) {
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
-	_, err = leafcert.Verify(opts)
+	if _, err = leafcert.Verify(opts); err != nil {
+		return false, fmt.Errorf("error occurred validating the certificate chain: signing certificate with %s could not be verified against the trust anchor with %s: %w", mdsDescribeCertificate(leafcert), mdsDescribeCertificate(rootcert), err)
+	}
 
-	return err == nil, err
+	return true, nil
 }
 
 func validateChainCheckRevocation(cert *x509.Certificate, revokedErr error) error {
@@ -269,6 +290,58 @@ func validateChainCheckRevocation(cert *x509.Certificate, revokedErr error) erro
 	}
 
 	return nil
+}
+
+func mdsDescribeCertificate(cert *x509.Certificate) string {
+	serial := "<nil>"
+
+	if cert.SerialNumber != nil {
+		serial = cert.SerialNumber.Text(16)
+	}
+
+	return fmt.Sprintf("subject '%s', issuer '%s', and serial '%s'", cert.Subject, cert.Issuer, serial)
+}
+
+func decodeBlobNumber(claims jwt.Claims) (number int, ok bool) {
+	var mapped jwt.MapClaims
+
+	if mapped, ok = claims.(jwt.MapClaims); !ok {
+		return 0, false
+	}
+
+	switch value := mapped["no"].(type) {
+	case float64:
+		return int(value), true
+	case json.Number:
+		n, err := value.Int64()
+
+		return int(n), err == nil
+	default:
+		return 0, false
+	}
+}
+
+func joinErrors(errs []error) error {
+	messages := make([]string, len(errs))
+
+	for i, err := range errs {
+		messages[i] = err.Error()
+	}
+
+	return &joinedError{errs: errs, msg: strings.Join(messages, "; ")}
+}
+
+type joinedError struct {
+	errs []error
+	msg  string
+}
+
+func (e *joinedError) Error() string {
+	return e.msg
+}
+
+func (e *joinedError) Unwrap() []error {
+	return e.errs
 }
 
 func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err error) {
@@ -281,7 +354,7 @@ func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err e
 	}
 
 	if certificate, err = x509.ParseCertificate(raw[:n]); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error occurred parsing *x509.certificate: %w", err)
 	}
 
 	return certificate, nil

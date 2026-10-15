@@ -82,11 +82,11 @@ func (p *Provider) init() (err error) {
 	}
 
 	if mds, err = p.parseBytes(data); err != nil {
-		return err
+		return fmt.Errorf("error occurred parsing metadata from '%s': %w", p.uri, err)
 	}
 
 	if err = doAtomicReplace(p.name, data); err != nil {
-		return err
+		return fmt.Errorf("error occurred saving metadata blob %d to the cache file '%s': %w", mds.Parsed.Number, p.name, err)
 	}
 
 	return p.setup(mds)
@@ -100,21 +100,25 @@ func (p *Provider) cached() (mds *metadata.Metadata, err error) {
 			return nil, nil
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("error occurred opening the cache file '%s': %w", p.name, err)
 	}
 
 	defer func() {
 		_ = f.Close()
 	}()
 
-	return p.parse(f)
+	if mds, err = p.parse(f); err != nil {
+		return nil, fmt.Errorf("error occurred parsing metadata from the cache file '%s': %w", p.name, err)
+	}
+
+	return mds, nil
 }
 
 func (p *Provider) setup(mds *metadata.Metadata) (err error) {
 	var provider metadata.Provider
 
 	if provider, err = p.newup(mds); err != nil {
-		return err
+		return fmt.Errorf("error occurred initializing the provider with metadata blob %d: %w", mds.Parsed.Number, err)
 	}
 
 	p.Provider = provider
@@ -162,7 +166,7 @@ func (p *Provider) get() (data []byte, err error) {
 	var res *http.Response
 
 	if res, err = p.client.Get(p.uri); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error occurred requesting metadata from '%s': %w", p.uri, err)
 	}
 
 	defer func() {
