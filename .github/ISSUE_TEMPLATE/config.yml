@@ -1,6 +1,9 @@
 ---
 blank_issues_enabled: false
 contact_links:
+  - name: Report a Security Vulnerability
+    url: https://github.com/go-webauthn/webauthn/security/advisories/new
+    about: Report it privately, do not open a public issue. See SECURITY.md.
   - name: Documentation
     url: https://github.com/go-webauthn/webauthn
     about: Read the documentation
