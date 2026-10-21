@@ -47,7 +47,8 @@ const (
 	// AlgES256K is ECDSA using secp256k1 curve and SHA-256. It is not requested by any of the credential parameter
 	// lists this library provides, so a Relying Party that wants it must ask for it explicitly. An attestation
 	// statement whose own algorithm is AlgES256K cannot convey an x5c chain, as certificates on this curve cannot
-	// be parsed.
+	// be parsed. Building with the webauthn_no_es256k tag removes ES256K support, and with it the secp256k1
+	// implementation and its precomputed tables, so ES256K keys are rejected as an unsupported algorithm.
 	AlgES256K COSEAlgorithmIdentifier = -47
 
 	// The ML-DSA parameter sets occupy -48, -49 and -50. They are declared in the file which implements them, as
