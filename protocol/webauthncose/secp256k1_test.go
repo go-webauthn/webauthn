@@ -1,3 +1,5 @@
+//go:build !webauthn_no_es256k
+
 package webauthncose
 
 import (
@@ -269,6 +271,59 @@ func TestParsePublicKeySecp256k1(t *testing.T) {
 	})
 }
 
+// TestParsePublicKeyCurveBindingES256K asserts the binding §5.8.5 places between a credential public key with
+// algorithm -47 (ES256K) and the curve it names. ES256K names secp256k1 in the algorithm itself, so a crv is optional
+// but may not contradict the algorithm.
+//
+// Specification: §5.8.5. Cryptographic Algorithm Identifier (https://www.w3.org/TR/webauthn-3/#sctn-alg-identifier)
+func TestParsePublicKeyCurveBindingES256K(t *testing.T) {
+	_, key := secp256k1TestKey(t)
+
+	testCases := []struct {
+		name string
+		crv  any
+		err  string
+	}{
+		{
+			name: "ShouldAcceptES256KWithSecp256k1",
+			crv:  int64(Secp256k1),
+		},
+		{
+			name: "ShouldAcceptES256KWithoutCurve",
+		},
+		{
+			name: "ShouldRejectES256KWithP256",
+			crv:  int64(P256),
+			err:  "EC2 key with algorithm ES256K must specify curve secp256k1 but it specified curve P-256",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cose := map[int64]any{1: int64(EllipticKey), 3: int64(AlgES256K), -2: key.XCoord, -3: key.YCoord}
+
+			if tc.crv != nil {
+				cose[-1] = tc.crv
+			}
+
+			data, err := webauthncbor.Marshal(cose)
+			require.NoError(t, err)
+
+			parsed, err := ParsePublicKey(data)
+
+			if tc.err != "" {
+				assert.Nil(t, parsed)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, parsed)
+		})
+	}
+}
+
 // TestDisplayPublicKeySecp256k1 asserts that a secp256k1 credential public key renders as a PEM encoded
 // SubjectPublicKeyInfo. The standard library has no object identifier for the curve and cannot marshal it, so
 // without a dedicated encoding the key would silently render as undisplayable.
@@ -308,4 +363,23 @@ func TestDisplayPublicKeySecp256k1(t *testing.T) {
 	point = append(point, key.YCoord...)
 
 	assert.Equal(t, point, spki.PublicKey.Bytes)
+}
+
+// requireSecp256k1PKIX asserts that der is the SubjectPublicKeyInfo [DisplayPublicKey] renders for the ES256K key k.
+func requireSecp256k1PKIX(t *testing.T, k *EC2PublicKeyData, der []byte) {
+	t.Helper()
+
+	info := pkixPublicKey{}
+
+	trailing, err := asn1.Unmarshal(der, &info)
+
+	require.NoError(t, err)
+	require.Empty(t, trailing)
+	require.True(t, info.Algorithm.Algorithm.Equal(oidPublicKeyECDSA))
+	require.True(t, info.Algorithm.Parameters.Equal(oidNamedCurveSecp256k1))
+	require.Equal(t, secp256k1PointUncompressed(k), info.PublicKey.Bytes)
+
+	_, err = secp256k1.ParsePubKey(info.PublicKey.Bytes)
+
+	require.NoError(t, err)
 }
