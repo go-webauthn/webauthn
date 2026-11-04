@@ -209,6 +209,7 @@ func TestValidateMetadataTrustAnchor(t *testing.T) {
 		name string
 		x5cs []any
 		err  *Error
+		info string
 	}{
 		{
 			// Self-signed by an attacker so it reaches no trust anchor, with the subject and issuer Common Names
@@ -219,7 +220,8 @@ func TestValidateMetadataTrustAnchor(t *testing.T) {
 
 				return []any{cert.Raw}
 			}(),
-			err: errUntrusted,
+			err:  errUntrusted,
+			info: "Error occurred verifying the attestation certificate with subject 'CN=Attacker', issuer 'CN=Attacker', and serial '1' using 0 intermediate certificates: ",
 		},
 		{
 			name: "ShouldRejectCertificateNotIssuedByMetadataRoot",
@@ -229,7 +231,8 @@ func TestValidateMetadataTrustAnchor(t *testing.T) {
 
 				return []any{cert.Raw}
 			}(),
-			err: errUntrusted,
+			err:  errUntrusted,
+			info: "Error occurred verifying the attestation certificate with subject 'CN=Attestation', issuer 'CN=Other Root', and serial '1' using 0 intermediate certificates: ",
 		},
 		{
 			name: "ShouldAcceptCertificateIssuedByMetadataRoot",
@@ -275,6 +278,7 @@ func TestValidateMetadataTrustAnchor(t *testing.T) {
 			require.NotNil(t, actual)
 			assert.Equal(t, tc.err.Type, actual.Type)
 			assert.Equal(t, tc.err.Details, actual.Details)
+			assert.Contains(t, actual.DevInfo, tc.info)
 		})
 	}
 }
