@@ -69,3 +69,6 @@ jobs:
       - name: 'Test'
         run: |
           go test -race -v ./...
+      - name: 'Test (webauthn_no_es256k)'
+        run: |
+          go test -race -v -tags webauthn_no_es256k ./...

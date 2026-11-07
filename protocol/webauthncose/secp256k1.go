@@ -1,6 +1,9 @@
+//go:build !webauthn_no_es256k
+
 package webauthncose
 
 import (
+	"crypto/elliptic"
 	"math/big"
 
 	"github.com/go-webauthn/x/crypto/secp256k1"
@@ -35,6 +38,25 @@ type pkixPublicKey struct {
 type pkixAlgorithmIdentifier struct {
 	Algorithm  asn1.ObjectIdentifier
 	Parameters asn1.ObjectIdentifier
+}
+
+// secp256k1Curve returns the curve adaptor for secp256k1. The adaptor is returned so a secp256k1 key is measured and
+// represented like any other, but neither the point check nor the signature verification goes through this
+// interface: both use the specialized implementation instead. See [validateSecp256k1PublicKey] and
+// [verifySecp256k1].
+func secp256k1Curve() elliptic.Curve {
+	return secp256k1.S256() //nolint:staticcheck // The adaptor supplies the curve parameters and nothing else.
+}
+
+// validateSecp256k1PublicKey checks a secp256k1 point with the same parser which verification uses, so the two agree
+// on what a valid key is. It additionally rejects a coordinate which is not reduced modulo the field prime, where the
+// generic curve reduces it and reports the resulting point as valid.
+func validateSecp256k1PublicKey(k *EC2PublicKeyData) error {
+	if _, err := secp256k1.ParsePubKey(secp256k1PointUncompressed(k)); err != nil {
+		return ErrUnsupportedKey.WithDetails("EC2 key point is not on curve")
+	}
+
+	return nil
 }
 
 // marshalSecp256k1PublicKey encodes a secp256k1 credential public key as a SubjectPublicKeyInfo, mirroring what

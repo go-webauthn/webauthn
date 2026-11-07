@@ -12,9 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-webauthn/x/crypto/secp256k1"
-	"github.com/go-webauthn/x/encoding/asn1"
-
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
 
@@ -94,19 +91,7 @@ func FuzzDisplayPublicKey(f *testing.F) {
 			require.Equal(t, ed25519.PublicKey(k.XCoord), public)
 		case EC2PublicKeyData:
 			if COSEAlgorithmIdentifier(k.Algorithm) == AlgES256K {
-				info := pkixPublicKey{}
-
-				trailing, err := asn1.Unmarshal(block.Bytes, &info)
-
-				require.NoError(t, err)
-				require.Empty(t, trailing)
-				require.True(t, info.Algorithm.Algorithm.Equal(oidPublicKeyECDSA))
-				require.True(t, info.Algorithm.Parameters.Equal(oidNamedCurveSecp256k1))
-				require.Equal(t, secp256k1PointUncompressed(&k), info.PublicKey.Bytes)
-
-				_, err = secp256k1.ParsePubKey(info.PublicKey.Bytes)
-
-				require.NoError(t, err)
+				requireSecp256k1PKIX(t, &k, block.Bytes)
 
 				break
 			}
