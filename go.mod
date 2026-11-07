@@ -2,17 +2,17 @@ module github.com/go-webauthn/webauthn
 
 go 1.26.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
-	github.com/fxamacker/cbor/v2 v2.9.4
+	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/go-webauthn/x v0.3.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-tpm v0.9.8
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.12.1
-	github.com/tinylib/msgp v1.6.4
+	github.com/tinylib/msgp v1.6.5
 	go.uber.org/mock v0.6.0
 )
 
