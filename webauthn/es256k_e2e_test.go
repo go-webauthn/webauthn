@@ -1,3 +1,5 @@
+//go:build !webauthn_no_es256k
+
 package webauthn
 
 import (
