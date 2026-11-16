@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +47,7 @@ func TestValidateChainMalformed(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.NotPanics(t, func() {
-				valid, err := validateChain(ConformanceMDSRoot, tc.chain)
+				valid, err := validateChain(ConformanceMDSRoot, tc.chain, false)
 
 				assert.False(t, valid)
 				assert.Equal(t, errInvalidCertificateChain, err)
@@ -77,7 +78,7 @@ func TestDecodeBytesRejectsX509URIHeader(t *testing.T) {
 }
 
 func TestValidateChainFallbackRoot(t *testing.T) {
-	valid, err := validateChain(ConformanceMDSRoot, []any{ConformanceMDSRoot})
+	valid, err := validateChain(ConformanceMDSRoot, []any{ConformanceMDSRoot}, false)
 
 	assert.True(t, valid)
 	assert.NoError(t, err)
@@ -115,7 +116,7 @@ func TestValidateChainDepth(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			valid, err := validateChain(rootEncoded, tc.chain)
+			valid, err := validateChain(rootEncoded, tc.chain, false)
 
 			assert.Equal(t, tc.valid, valid)
 
@@ -228,13 +229,18 @@ func TestValidateChainRevocation(t *testing.T) {
 	})
 
 	_, _, leafOfRevoked := newTestCertificate(t, 26, "leaf of revoked", interRevoked, interRevokedKey, false)
+
+	interUnknown, interUnknownKey, interUnknownEncoded := newTestCertificate(t, 27, "intermediate unknown", root, rootKey, true, unreachableCRL)
+
+	_, _, leafOfUnknown := newTestCertificate(t, 28, "leaf of unknown", interUnknown, interUnknownKey, false)
 	_, _, leafOK := newTestCertificate(t, 24, "leaf", inter, interKey, false)
 
 	testCases := []struct {
-		name  string
-		chain []any
-		valid bool
-		err   error
+		name     string
+		chain    []any
+		hardfail bool
+		valid    bool
+		err      error
 	}{
 		{
 			name:  "ShouldPermitLeafWithUnknownStatus",
@@ -258,11 +264,43 @@ func TestValidateChainRevocation(t *testing.T) {
 			valid: false,
 			err:   errIntermediateCertRevoked,
 		},
+		{
+			name:  "ShouldPermitIntermediateWithUnknownStatus",
+			chain: []any{leafOfUnknown, interUnknownEncoded},
+			valid: true,
+		},
+		{
+			name:     "ShouldRejectLeafWithUnknownStatusWhenHardFail",
+			chain:    []any{leafUnknown, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errCRLUnavailable,
+		},
+		{
+			name:     "ShouldRejectIntermediateWithUnknownStatusWhenHardFail",
+			chain:    []any{leafOfUnknown, interUnknownEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errCRLUnavailable,
+		},
+		{
+			name:     "ShouldPermitDeterminableChainWhenHardFail",
+			chain:    []any{leafOK, interEncoded},
+			hardfail: true,
+			valid:    true,
+		},
+		{
+			name:     "ShouldRejectRevokedLeafWhenHardFail",
+			chain:    []any{leafRevoked, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errLeafCertRevoked,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			valid, err := validateChain(rootEncoded, tc.chain)
+			valid, err := validateChain(rootEncoded, tc.chain, tc.hardfail)
 
 			assert.Equal(t, tc.valid, valid)
 
@@ -273,6 +311,42 @@ func TestValidateChainRevocation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDecodeBytesRevocationHardFail(t *testing.T) {
+	root, rootKey, rootEncoded := newTestCertificate(t, 40, "root", nil, nil, true)
+	inter, interKey, interEncoded := newTestCertificate(t, 41, "intermediate", root, rootKey, true)
+
+	_, leafKey, leafEncoded := newTestCertificate(t, 42, "leaf unknown", inter, interKey, false, unreachableCRL)
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{"no": 1, "nextUpdate": "2099-01-01"})
+
+	token.Header[HeaderX509Certificate] = []string{leafEncoded, interEncoded}
+
+	blob, err := token.SignedString(leafKey)
+	require.NoError(t, err)
+
+	decoder, err := NewDecoder(WithRootCertificate(rootEncoded))
+	require.NoError(t, err)
+
+	payload, err := decoder.DecodeBytes([]byte(blob))
+	require.NoError(t, err)
+	assert.Equal(t, 1, payload.Number)
+
+	decoder, err = NewDecoder(WithRootCertificate(rootEncoded), WithRevocationHardFail())
+	require.NoError(t, err)
+
+	_, err = decoder.DecodeBytes([]byte(blob))
+	assert.ErrorIs(t, err, errCRLUnavailable)
+}
+
+func TestValidateChainRevocationHardFailExemptsTrustAnchor(t *testing.T) {
+	_, _, rootEncoded := newTestCertificate(t, 60, "root unknown", nil, nil, true, unreachableCRL)
+
+	valid, err := validateChain(rootEncoded, []any{rootEncoded}, true)
+
+	assert.True(t, valid)
+	assert.NoError(t, err)
 }
 
 func TestValidateChainDoesNotCheckRevocationOfUntrustedChain(t *testing.T) {
@@ -298,7 +372,7 @@ func TestValidateChainDoesNotCheckRevocationOfUntrustedChain(t *testing.T) {
 	untrustedInter, untrustedInterKey, untrustedInterEncoded := newTestCertificate(t, 32, "untrusted intermediate", other, otherKey, true, distribution)
 	_, _, untrustedLeaf := newTestCertificate(t, 33, "untrusted leaf", untrustedInter, untrustedInterKey, false, distribution)
 
-	valid, err := validateChain(rootEncoded, []any{untrustedLeaf, untrustedInterEncoded, otherEncoded})
+	valid, err := validateChain(rootEncoded, []any{untrustedLeaf, untrustedInterEncoded, otherEncoded}, false)
 
 	assert.False(t, valid)
 	assert.Error(t, err)
@@ -315,7 +389,7 @@ func TestValidateChainLeafIsRoot(t *testing.T) {
 	)
 
 	require.NotPanics(t, func() {
-		valid, err = validateChain(rootEncoded, []any{rootEncoded, interEncoded})
+		valid, err = validateChain(rootEncoded, []any{rootEncoded, interEncoded}, false)
 	})
 
 	assert.True(t, valid)
