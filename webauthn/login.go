@@ -57,6 +57,10 @@ func (webauthn *WebAuthn) BeginDiscoverableLogin(opts ...LoginOption) (*protocol
 // BeginMediatedLogin is similar to [WebAuthn.BeginLogin] however it also allows specifying a credential mediation
 // requirement.
 func (webauthn *WebAuthn) BeginMediatedLogin(user User, mediation protocol.CredentialMediationRequirement, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+	if isNil(user) {
+		return nil, nil, protocol.ErrBadRequest.WithDetails("User is nil")
+	}
+
 	credentials := user.WebAuthnCredentials()
 
 	if len(credentials) == 0 { // If the user does not have any credentials, we cannot perform an assertion.
@@ -245,6 +249,10 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 		return nil, err
 	}
 
+	if isNil(user) {
+		return nil, protocol.ErrBadRequest.WithDetails("User is nil")
+	}
+
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
 	}
@@ -255,6 +263,10 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 
 	if err = validateSessionChallenge(session.Challenge); err != nil {
 		return nil, err
+	}
+
+	if parsedResponse == nil {
+		return nil, protocol.ErrBadRequest.WithDetails("Parsed response is nil")
 	}
 
 	return validateLogin(config, user, session, parsedResponse)
@@ -304,15 +316,23 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 		return nil, nil, err
 	}
 
+	if parsedResponse == nil {
+		return nil, nil, protocol.ErrBadRequest.WithDetails("Parsed response is nil")
+	}
+
 	if len(parsedResponse.Response.UserHandle) == 0 {
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Client-side Discoverable Assertion was attempted with a blank User Handle")
+	}
+
+	if handler == nil {
+		return nil, nil, protocol.ErrBadRequest.WithDetails("Discoverable user handler is nil")
 	}
 
 	if user, err = handler(parsedResponse.RawID, parsedResponse.Response.UserHandle); err != nil {
 		return nil, nil, protocol.ErrBadRequest.WithDetails(fmt.Sprintf("Failed to lookup Client-side Discoverable Credential: %s", err)).WithError(err)
 	}
 
-	if user == nil {
+	if isNil(user) {
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Failed to lookup Client-side Discoverable Credential: handler returned a nil user")
 	}
 

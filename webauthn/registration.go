@@ -34,6 +34,10 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, err
 	}
 
+	if isNil(user) {
+		return nil, nil, protocol.ErrBadRequest.WithDetails("User is nil")
+	}
+
 	var (
 		challenge    protocol.URLEncodedBase64
 		entityUserID any
@@ -92,6 +96,10 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 
 	if len(creation.Response.RelyingParty.Name) == 0 {
 		return nil, nil, fmt.Errorf("error generating credential creation: the relying party display name must be provided via the configuration or a functional option for a creation")
+	}
+
+	if len(creation.Response.Parameters) == 0 {
+		return nil, nil, fmt.Errorf("error generating credential creation: at least one credential parameter must be provided")
 	}
 
 	if len(creation.Response.Origin) != 0 {
@@ -200,6 +208,10 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, err
 	}
 
+	if isNil(user) {
+		return nil, protocol.ErrBadRequest.WithDetails("User is nil")
+	}
+
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
 	}
@@ -210,6 +222,10 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 
 	if err = validateSessionChallenge(session.Challenge); err != nil {
 		return nil, err
+	}
+
+	if parsedResponse == nil {
+		return nil, protocol.ErrBadRequest.WithDetails("Parsed response is nil")
 	}
 
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
@@ -251,9 +267,9 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 // as "no filtering" and the function returns nil.
 //
 // The zero AAGUID ([uuid.Nil]) is never excluded by the permitted list, preserving the documented
-// [FilteringConfig] contract for authenticators that report no AAGUID. The FIDO U2F attestation signature does not
-// cover the AAGUID, so a credential with the fido-u2f attestation format is treated as having the zero AAGUID
-// regardless of the AAGUID it reported.
+// [FilteringConfig] contract for authenticators that report no AAGUID. A credential with an empty AAGUID is treated
+// as having the zero AAGUID. The FIDO U2F attestation signature does not cover the AAGUID, so a credential with the
+// fido-u2f attestation format is also treated as having the zero AAGUID regardless of the AAGUID it reported.
 //
 // This function is invoked automatically by [WebAuthn.CreateCredential] using the [Config.Filtering] value;
 // relying parties may also call it directly (e.g. to pre-validate a credential before persistence) with any
@@ -275,8 +291,10 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 
 	var aaguid uuid.UUID
 
-	if err = aaguid.UnmarshalBinary(credential.Authenticator.AAGUID); err != nil {
-		return protocol.ErrBadRequest.WithInfo("The AAGUID of the credential is not a valid UUID")
+	if len(credential.Authenticator.AAGUID) != 0 {
+		if err = aaguid.UnmarshalBinary(credential.Authenticator.AAGUID); err != nil {
+			return protocol.ErrBadRequest.WithInfo("The AAGUID of the credential is not a valid UUID")
+		}
 	}
 
 	if protocol.AttestationFormat(credential.AttestationFormat) == protocol.AttestationFormatFIDOUniversalSecondFactor {

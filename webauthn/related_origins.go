@@ -1,6 +1,8 @@
 package webauthn
 
 import (
+	"fmt"
+
 	"github.com/go-webauthn/webauthn/protocol"
 )
 
@@ -29,5 +31,9 @@ import (
 //
 // Specification: §5.11. Related Origin Requests (https://www.w3.org/TR/webauthn-3/#sctn-related-origins)
 func (webauthn *WebAuthn) RelatedOrigins() (related *protocol.RelatedOrigins, err error) {
+	if webauthn == nil || webauthn.Config == nil {
+		return nil, fmt.Errorf(errFmtConfigValidate, errConfigNil)
+	}
+
 	return protocol.NewRelatedOrigins(webauthn.Config.RPOrigins...)
 }

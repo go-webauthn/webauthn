@@ -2,6 +2,7 @@ package webauthn
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/go-webauthn/webauthn/protocol"
@@ -84,6 +85,15 @@ func forAnyCeremony(apply func(e *protocol.AuthenticationExtensions)) ExtensionO
 func WithExtensionInputs(in protocol.AuthenticationExtensions) ExtensionOption {
 	return forAnyCeremony(func(e *protocol.AuthenticationExtensions) {
 		*e = in
+
+		e.Extra = maps.Clone(in.Extra)
+
+		if in.PRF != nil {
+			prf := *in.PRF
+			prf.EvalByCredential = maps.Clone(in.PRF.EvalByCredential)
+
+			e.PRF = &prf
+		}
 	})
 }
 

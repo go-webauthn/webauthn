@@ -464,17 +464,36 @@ type CredentialFlags struct {
 	raw protocol.AuthenticatorFlags
 }
 
-// ProtocolValue returns the underlying [protocol.AuthenticatorFlags] provided this [CredentialFlags] was created using
-// NewCredentialFlags.
+// ProtocolValue returns the [protocol.AuthenticatorFlags] these flags represent. The UP, UV, BE and BS bits are taken
+// from the boolean members, so the value is correct for flags decoded from JSON or constructed directly as well as
+// those created using [NewCredentialFlags]; any other bits are those of the value the flags were created from.
 func (f CredentialFlags) ProtocolValue() protocol.AuthenticatorFlags {
-	return f.raw
+	flags := f.raw &^ (protocol.FlagUserPresent | protocol.FlagUserVerified | protocol.FlagBackupEligible | protocol.FlagBackupState)
+
+	if f.UserPresent {
+		flags |= protocol.FlagUserPresent
+	}
+
+	if f.UserVerified {
+		flags |= protocol.FlagUserVerified
+	}
+
+	if f.BackupEligible {
+		flags |= protocol.FlagBackupEligible
+	}
+
+	if f.BackupState {
+		flags |= protocol.FlagBackupState
+	}
+
+	return flags
 }
 
-// MsgpByte returns the [CredentialFlags] encoded as a single byte, equivalent to the raw
-// [protocol.AuthenticatorFlags] value. It is intended for use by the msgp-generated serialization layer (see the
-// //msgp:shim directive in this file); normal callers should prefer [CredentialFlags.ProtocolValue].
+// MsgpByte returns the [CredentialFlags] encoded as a single byte, equivalent to [CredentialFlags.ProtocolValue]. It
+// is intended for use by the msgp-generated serialization layer (see the //msgp:shim directive in this file); normal
+// callers should prefer [CredentialFlags.ProtocolValue].
 func (f CredentialFlags) MsgpByte() byte {
-	return byte(f.raw)
+	return byte(f.ProtocolValue())
 }
 
 // CredentialAttestation holds the raw attestation data from a registration ceremony. These values are intentionally

@@ -284,8 +284,17 @@ func TestWebAuthn_ShouldSupportConcurrentUseWithoutNew(t *testing.T) {
 	wg.Wait()
 }
 
-func TestWebAuthn_ShouldFailNilConfig(t *testing.T) {
-	const errNilConfig = "error occurred validating the configuration: the configuration must be provided"
+func TestWebAuthn_ShouldFailNilInputs(t *testing.T) {
+	const (
+		errNilConfig = "error occurred validating the configuration: the configuration must be provided"
+		challenge    = "AAAAAAAAAAAAAAAAAAAAAA"
+	)
+
+	var (
+		nilUser    User
+		typedUser  *defaultUser
+		nilHandler DiscoverableUserHandler
+	)
 
 	user := &defaultUser{id: []byte("user"), credentials: []Credential{{ID: []byte("credential")}}}
 
@@ -297,45 +306,61 @@ func TestWebAuthn_ShouldFailNilConfig(t *testing.T) {
 		Response: protocol.ParsedAssertionResponse{UserHandle: user.id},
 	}
 
+	valid := &WebAuthn{Config: &Config{
+		RPID:          "example.com",
+		RPDisplayName: "Example",
+		RPOrigins:     []string{"https://example.com"},
+	}}
+
 	testCases := []struct {
 		name string
 		have func(w *WebAuthn) (err error)
 		w    *WebAuthn
+		err  string
+		is   error
 	}{
 		{
-			name: "ShouldFailNew",
+			name: "ShouldFailNewNilConfig",
 			have: func(_ *WebAuthn) (err error) {
 				_, err = New(nil)
 
 				return err
 			},
+			err: errNilConfig,
+			is:  errConfigNil,
 		},
 		{
-			name: "ShouldFailBeginRegistration",
+			name: "ShouldFailBeginRegistrationNilConfig",
 			have: func(w *WebAuthn) (err error) {
 				_, _, err = w.BeginRegistration(user)
 
 				return err
 			},
-			w: &WebAuthn{},
+			w:   &WebAuthn{},
+			err: errNilConfig,
+			is:  errConfigNil,
 		},
 		{
-			name: "ShouldFailBeginLogin",
+			name: "ShouldFailBeginLoginNilConfig",
 			have: func(w *WebAuthn) (err error) {
 				_, _, err = w.BeginLogin(user)
 
 				return err
 			},
-			w: &WebAuthn{},
+			w:   &WebAuthn{},
+			err: errNilConfig,
+			is:  errConfigNil,
 		},
 		{
-			name: "ShouldFailBeginDiscoverableLogin",
+			name: "ShouldFailBeginDiscoverableLoginNilConfig",
 			have: func(w *WebAuthn) (err error) {
 				_, _, err = w.BeginDiscoverableLogin()
 
 				return err
 			},
-			w: &WebAuthn{},
+			w:   &WebAuthn{},
+			err: errNilConfig,
+			is:  errConfigNil,
 		},
 		{
 			name: "ShouldFailBeginDiscoverableLoginNilWebAuthn",
@@ -344,33 +369,162 @@ func TestWebAuthn_ShouldFailNilConfig(t *testing.T) {
 
 				return err
 			},
+			err: errNilConfig,
+			is:  errConfigNil,
 		},
 		{
-			name: "ShouldFailCreateCredentialSessionMismatch",
+			name: "ShouldFailCreateCredentialNilConfig",
 			have: func(w *WebAuthn) (err error) {
 				_, err = w.CreateCredential(user, SessionData{UserID: []byte("other")}, &protocol.ParsedCredentialCreationData{})
 
 				return err
 			},
-			w: &WebAuthn{},
+			w:   &WebAuthn{},
+			err: errNilConfig,
+			is:  errConfigNil,
 		},
 		{
-			name: "ShouldFailValidateLoginSessionMismatch",
+			name: "ShouldFailValidateLoginNilConfig",
 			have: func(w *WebAuthn) (err error) {
 				_, err = w.ValidateLogin(user, SessionData{UserID: []byte("other")}, assertion)
 
 				return err
 			},
-			w: &WebAuthn{},
+			w:   &WebAuthn{},
+			err: errNilConfig,
+			is:  errConfigNil,
 		},
 		{
-			name: "ShouldFailValidatePasskeyLoginSessionMismatch",
+			name: "ShouldFailValidatePasskeyLoginNilConfig",
 			have: func(w *WebAuthn) (err error) {
 				_, _, err = w.ValidatePasskeyLogin(handler, SessionData{UserID: user.id}, assertion)
 
 				return err
 			},
-			w: &WebAuthn{},
+			w:   &WebAuthn{},
+			err: errNilConfig,
+			is:  errConfigNil,
+		},
+		{
+			name: "ShouldFailRelatedOriginsNilConfig",
+			have: func(w *WebAuthn) (err error) {
+				_, err = w.RelatedOrigins()
+
+				return err
+			},
+			w:   &WebAuthn{},
+			err: errNilConfig,
+			is:  errConfigNil,
+		},
+		{
+			name: "ShouldFailBeginRegistrationNilUser",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginRegistration(nilUser)
+
+				return err
+			},
+			w:   valid,
+			err: "User is nil",
+		},
+		{
+			name: "ShouldFailBeginRegistrationTypedNilUser",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginRegistration(typedUser)
+
+				return err
+			},
+			w:   valid,
+			err: "User is nil",
+		},
+		{
+			name: "ShouldFailBeginLoginNilUser",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginLogin(nilUser)
+
+				return err
+			},
+			w:   valid,
+			err: "User is nil",
+		},
+		{
+			name: "ShouldFailBeginLoginTypedNilUser",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginLogin(typedUser)
+
+				return err
+			},
+			w:   valid,
+			err: "User is nil",
+		},
+		{
+			name: "ShouldFailCreateCredentialNilUser",
+			have: func(w *WebAuthn) (err error) {
+				_, err = w.CreateCredential(nilUser, SessionData{}, &protocol.ParsedCredentialCreationData{})
+
+				return err
+			},
+			w:   valid,
+			err: "User is nil",
+		},
+		{
+			name: "ShouldFailCreateCredentialNilParsedResponse",
+			have: func(w *WebAuthn) (err error) {
+				_, err = w.CreateCredential(user, SessionData{UserID: user.id, Challenge: challenge}, nil)
+
+				return err
+			},
+			w:   valid,
+			err: "Parsed response is nil",
+		},
+		{
+			name: "ShouldFailValidateLoginNilUser",
+			have: func(w *WebAuthn) (err error) {
+				_, err = w.ValidateLogin(nilUser, SessionData{}, assertion)
+
+				return err
+			},
+			w:   valid,
+			err: "User is nil",
+		},
+		{
+			name: "ShouldFailValidateLoginNilParsedResponse",
+			have: func(w *WebAuthn) (err error) {
+				_, err = w.ValidateLogin(user, SessionData{UserID: user.id, Challenge: challenge, AllowedCredentialIDs: [][]byte{[]byte("credential")}}, nil)
+
+				return err
+			},
+			w:   valid,
+			err: "Parsed response is nil",
+		},
+		{
+			name: "ShouldFailValidatePasskeyLoginNilHandler",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.ValidatePasskeyLogin(nilHandler, SessionData{Challenge: challenge}, assertion)
+
+				return err
+			},
+			w:   valid,
+			err: "Discoverable user handler is nil",
+		},
+		{
+			name: "ShouldFailValidatePasskeyLoginNilParsedResponse",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.ValidatePasskeyLogin(handler, SessionData{Challenge: challenge}, nil)
+
+				return err
+			},
+			w:   valid,
+			err: "Parsed response is nil",
+		},
+		{
+			name: "ShouldFailValidatePasskeyLoginTypedNilUserFromHandler",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.ValidatePasskeyLogin(func(_, _ []byte) (User, error) { return typedUser, nil }, SessionData{Challenge: challenge}, assertion)
+
+				return err
+			},
+			w:   valid,
+			err: "Failed to lookup Client-side Discoverable Credential: handler returned a nil user",
 		},
 	}
 
@@ -382,7 +536,18 @@ func TestWebAuthn_ShouldFailNilConfig(t *testing.T) {
 				err = tc.have(tc.w)
 			})
 
-			assert.EqualError(t, err, errNilConfig)
+			if tc.is != nil {
+				require.ErrorIs(t, err, tc.is)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			var e *protocol.Error
+
+			require.ErrorAs(t, err, &e)
+			assert.Equal(t, protocol.ErrBadRequest.Type, e.Type)
+			assert.Equal(t, tc.err, e.Details)
 		})
 	}
 }
