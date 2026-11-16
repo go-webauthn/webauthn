@@ -172,6 +172,28 @@ func TestParsePublicKeyAKPRejectsMalformedKey(t *testing.T) {
 	}
 }
 
+func TestParsePublicKeyAKPRequiresByteString(t *testing.T) {
+	_, encoded := akpTestKey(t, AlgMLDSA44)
+
+	var key AKPPublicKeyData
+
+	require.NoError(t, webauthncbor.Unmarshal(encoded, &key))
+
+	elements := make([]int, len(key.PublicKey))
+
+	for i, v := range key.PublicKey {
+		elements[i] = int(v)
+	}
+
+	data, err := webauthncbor.Marshal(map[int64]any{1: int64(AKP), 3: int64(AlgMLDSA44), -1: elements})
+	require.NoError(t, err)
+
+	parsed, err := ParsePublicKey(data)
+
+	assert.Nil(t, parsed)
+	assert.EqualError(t, err, "AKP key parameter -1 is not a byte string")
+}
+
 // TestParsePublicKeyAKPWireFormat asserts that the key material is read from the label RFC 9964 registers it at.
 //
 // Specification: §6. COSE Key Type AKP (https://www.rfc-editor.org/rfc/rfc9964#section-6)

@@ -788,6 +788,101 @@ func TestParsePublicKeyValidation(t *testing.T) {
 	}
 }
 
+func TestParsePublicKeyRequiresByteStrings(t *testing.T) {
+	elements := func(b []byte) []int {
+		out := make([]int, len(b))
+
+		for i, v := range b {
+			out[i] = int(v)
+		}
+
+		return out
+	}
+
+	okpPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	ec2Priv, err := ecdh.P256().GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	ec2Pub := ec2Priv.PublicKey().Bytes()
+	ec2X, ec2Y := ec2Pub[1:33], ec2Pub[33:65]
+
+	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	rsaN, rsaE := rsaPriv.N.Bytes(), big.NewInt(int64(rsaPriv.E)).Bytes()
+
+	testCases := []struct {
+		name string
+		key  map[int64]any
+		err  string
+	}{
+		{
+			"ShouldAcceptOKPKey",
+			map[int64]any{1: int64(OctetKey), 3: int64(AlgEdDSA), -1: int64(Ed25519), -2: []byte(okpPub)},
+			"",
+		},
+		{
+			"ShouldAcceptEC2Key",
+			map[int64]any{1: int64(EllipticKey), 3: int64(AlgES256), -1: int64(P256), -2: ec2X, -3: ec2Y},
+			"",
+		},
+		{
+			"ShouldAcceptRSAKey",
+			map[int64]any{1: int64(RSAKey), 3: int64(AlgRS256), -1: rsaN, -2: rsaE},
+			"",
+		},
+		{
+			"ShouldRejectOKPKeyWithArrayX",
+			map[int64]any{1: int64(OctetKey), 3: int64(AlgEdDSA), -1: int64(Ed25519), -2: elements(okpPub)},
+			"OKP key parameter -2 is not a byte string",
+		},
+		{
+			"ShouldRejectEC2KeyWithArrayX",
+			map[int64]any{1: int64(EllipticKey), 3: int64(AlgES256), -1: int64(P256), -2: elements(ec2X), -3: ec2Y},
+			"EC2 key parameter -2 is not a byte string",
+		},
+		{
+			"ShouldRejectEC2KeyWithArrayY",
+			map[int64]any{1: int64(EllipticKey), 3: int64(AlgES256), -1: int64(P256), -2: ec2X, -3: elements(ec2Y)},
+			"EC2 key parameter -3 is not a byte string",
+		},
+		{
+			"ShouldRejectRSAKeyWithArrayModulus",
+			map[int64]any{1: int64(RSAKey), 3: int64(AlgRS256), -1: elements(rsaN), -2: rsaE},
+			"RSA key parameter -1 is not a byte string",
+		},
+		{
+			"ShouldRejectRSAKeyWithArrayExponent",
+			map[int64]any{1: int64(RSAKey), 3: int64(AlgRS256), -1: rsaN, -2: elements(rsaE)},
+			"RSA key parameter -2 is not a byte string",
+		},
+		{
+			"ShouldRejectOKPKeyWithNullX",
+			map[int64]any{1: int64(OctetKey), 3: int64(AlgEdDSA), -1: int64(Ed25519), -2: nil},
+			"OKP key x coordinate has invalid length 0, expected 32",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := webauthncbor.Marshal(tc.key)
+			require.NoError(t, err)
+
+			result, err := ParsePublicKey(data)
+
+			if tc.err != "" {
+				assert.Nil(t, result)
+				assert.EqualError(t, err, tc.err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+		})
+	}
+}
+
 func TestRSAVerifyModulusSize(t *testing.T) {
 	testCases := []struct {
 		name string

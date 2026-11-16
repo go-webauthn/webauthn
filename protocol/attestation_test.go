@@ -128,6 +128,44 @@ func TestAttestationResponseParseRejectsTrailingCBOR(t *testing.T) {
 	require.EqualError(t, err, "Error parsing the authenticator response")
 }
 
+func TestAttestationObjectUnmarshalCBORRequiresByteStringAuthData(t *testing.T) {
+	authData := make([]byte, 37)
+
+	elements := make([]int, len(authData))
+
+	testCases := []struct {
+		name     string
+		authData any
+		err      string
+	}{
+		{"ShouldAcceptByteString", authData, ""},
+		{"ShouldRejectArray", elements, "cbor: attestation object member authData is not a byte string"},
+		{"ShouldRejectEmptyArray", []int{}, "cbor: attestation object member authData is not a byte string"},
+		{"ShouldRejectNull", nil, "cbor: attestation object member authData is not a byte string"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := webauthncbor.Marshal(map[string]any{"fmt": "none", "attStmt": map[string]any{}, "authData": tc.authData})
+			require.NoError(t, err)
+
+			var att AttestationObject
+
+			err = webauthncbor.Unmarshal(data, &att)
+
+			if tc.err != "" {
+				assert.EqualError(t, err, tc.err)
+				assert.Empty(t, att.RawAuthData)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, authData, att.RawAuthData)
+		})
+	}
+}
+
 func TestAttestationObject_VerifyAttestation_Errors(t *testing.T) {
 	testCases := []struct {
 		name string

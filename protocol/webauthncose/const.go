@@ -11,6 +11,11 @@ const (
 	rsaMaxModulusBits = 16384
 )
 
+var (
+	cborNull      = []byte{0xf6}
+	cborUndefined = []byte{0xf7}
+)
+
 const (
 	rsaMinExponent = 3
 	rsaMaxExponent = 1<<31 - 1
