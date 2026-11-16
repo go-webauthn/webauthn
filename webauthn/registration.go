@@ -28,8 +28,10 @@ func (webauthn *WebAuthn) BeginRegistration(user User, opts ...RegistrationOptio
 // BeginMediatedRegistration is similar to [WebAuthn.BeginRegistration] however it also allows specifying a credential
 // mediation requirement.
 func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protocol.CredentialMediationRequirement, opts ...RegistrationOption) (creation *protocol.CredentialCreation, session *SessionData, err error) {
-	if err = webauthn.Config.validate(); err != nil {
-		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
+	var config *Config
+
+	if config, err = webauthn.config(); err != nil {
+		return nil, nil, err
 	}
 
 	var (
@@ -41,7 +43,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, err
 	}
 
-	if webauthn.Config.EncodeUserIDAsString {
+	if config.EncodeUserIDAsString {
 		entityUserID = string(user.WebAuthnID())
 	} else {
 		entityUserID = protocol.URLEncodedBase64(user.WebAuthnID())
@@ -56,9 +58,9 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	entityRelyingParty := protocol.RelyingPartyEntity{
-		ID: webauthn.Config.RPID,
+		ID: config.RPID,
 		CredentialEntity: protocol.CredentialEntity{
-			Name: webauthn.Config.RPDisplayName,
+			Name: config.RPDisplayName,
 		},
 	}
 
@@ -70,8 +72,8 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 			User:                   entityUser,
 			Challenge:              challenge,
 			Parameters:             credentialParams,
-			AuthenticatorSelection: webauthn.Config.AuthenticatorSelection,
-			Attestation:            webauthn.Config.AttestationPreference,
+			AuthenticatorSelection: config.AuthenticatorSelection,
+			Attestation:            config.AttestationPreference,
 		},
 		Mediation: mediation,
 	}
@@ -93,7 +95,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	if len(creation.Response.Origin) != 0 {
-		if err = validateCeremonyOrigin(creation.Response.Origin, webauthn.Config.RPOrigins); err != nil {
+		if err = validateCeremonyOrigin(creation.Response.Origin, config.RPOrigins); err != nil {
 			return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
 		}
 	}
@@ -110,12 +112,16 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
 	}
 
+	if err = validateCeremonyTimeout(creation.Response.Timeout); err != nil {
+		return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
+	}
+
 	if creation.Response.Timeout == 0 {
 		switch creation.Response.AuthenticatorSelection.UserVerification {
 		case protocol.VerificationDiscouraged:
-			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.TimeoutUVD.Milliseconds())
+			creation.Response.Timeout = int(config.Timeouts.Registration.TimeoutUVD.Milliseconds())
 		default:
-			creation.Response.Timeout = int(webauthn.Config.Timeouts.Registration.Timeout.Milliseconds())
+			creation.Response.Timeout = int(config.Timeouts.Registration.Timeout.Milliseconds())
 		}
 	}
 
@@ -132,7 +138,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		Mediation:        creation.Mediation,
 	}
 
-	if webauthn.Config.Timeouts.Registration.Enforce {
+	if config.Timeouts.Registration.Enforce {
 		session.Expires = time.Now().Add(time.Millisecond * time.Duration(creation.Response.Timeout))
 	}
 
@@ -188,6 +194,12 @@ func (webauthn *WebAuthn) FinishRegistration(user User, session SessionData, req
 // If you wish to skip performing the step required to parse the [*protocol.ParsedCredentialCreationData] and
 // you're using net/http then you can use [WebAuthn.FinishRegistration] instead.
 func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parsedResponse *protocol.ParsedCredentialCreationData) (credential *Credential, err error) {
+	var config *Config
+
+	if config, err = webauthn.config(); err != nil {
+		return nil, err
+	}
+
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
 	}
@@ -205,7 +217,7 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 
 	var clientDataHash []byte
 
-	if clientDataHash, err = parsedResponse.Verify(session.Challenge, session.GetRelyingPartyID(webauthn.Config.RPID), session.GetOrigins(webauthn.Config.RPOrigins), webauthn.Config.RPOpaqueOrigins, webauthn.Config.RPTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, webauthn.Config.MDS, session.CredParams, webauthn.Config.Attestation, webauthn.Config.Signature); err != nil {
+	if clientDataHash, err = parsedResponse.Verify(session.Challenge, session.GetRelyingPartyID(config.RPID), session.GetOrigins(config.RPOrigins), config.RPOpaqueOrigins, config.RPTopOrigins, config.RPTopOriginVerificationMode, config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, config.MDS, session.CredParams, config.Attestation, config.Signature); err != nil {
 		return nil, err
 	}
 
@@ -214,7 +226,7 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, protocol.ErrBadRequest.WithDetails("Backup State Flag is true but Backup Eligible flag is false which is invalid")
 	}
 
-	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.CreateCeremony, webauthn.Config.ExtensionsUnsolicitedOutputPolicy); err != nil {
+	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.CreateCeremony, config.ExtensionsUnsolicitedOutputPolicy); err != nil {
 		return nil, err
 	}
 
@@ -226,7 +238,7 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 		return nil, err
 	}
 
-	if err = ValidateFilteredCredential(credential, webauthn.Config.Filtering); err != nil {
+	if err = ValidateFilteredCredential(credential, config.Filtering); err != nil {
 		return nil, err
 	}
 

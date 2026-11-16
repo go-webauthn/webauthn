@@ -79,14 +79,16 @@ func (webauthn *WebAuthn) BeginDiscoverableMediatedLogin(mediation protocol.Cred
 }
 
 func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protocol.CredentialDescriptor, mediation protocol.CredentialMediationRequirement, opts ...LoginOption) (assertion *protocol.CredentialAssertion, session *SessionData, err error) {
-	if err = webauthn.Config.validate(); err != nil {
-		return nil, nil, fmt.Errorf(errFmtConfigValidate, err)
+	var config *Config
+
+	if config, err = webauthn.config(); err != nil {
+		return nil, nil, err
 	}
 
 	assertion = &protocol.CredentialAssertion{
 		Response: protocol.PublicKeyCredentialRequestOptions{
-			RelyingPartyID:     webauthn.Config.RPID,
-			UserVerification:   webauthn.Config.AuthenticatorSelection.UserVerification,
+			RelyingPartyID:     config.RPID,
+			UserVerification:   config.AuthenticatorSelection.UserVerification,
 			AllowedCredentials: allowedCredentials,
 		},
 		Mediation: mediation,
@@ -118,17 +120,21 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	if len(assertion.Response.Origin) != 0 {
-		if err = validateCeremonyOrigin(assertion.Response.Origin, webauthn.Config.RPOrigins); err != nil {
+		if err = validateCeremonyOrigin(assertion.Response.Origin, config.RPOrigins); err != nil {
 			return nil, nil, fmt.Errorf("error generating assertion: %w", err)
 		}
+	}
+
+	if err = validateCeremonyTimeout(assertion.Response.Timeout); err != nil {
+		return nil, nil, fmt.Errorf("error generating assertion: %w", err)
 	}
 
 	if assertion.Response.Timeout == 0 {
 		switch assertion.Response.UserVerification {
 		case protocol.VerificationDiscouraged:
-			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.TimeoutUVD.Milliseconds())
+			assertion.Response.Timeout = int(config.Timeouts.Login.TimeoutUVD.Milliseconds())
 		default:
-			assertion.Response.Timeout = int(webauthn.Config.Timeouts.Login.Timeout.Milliseconds())
+			assertion.Response.Timeout = int(config.Timeouts.Login.Timeout.Milliseconds())
 		}
 	}
 
@@ -150,7 +156,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		AuthorizeUVInitialization: assertion.Response.AuthorizeUVInitialization,
 	}
 
-	if webauthn.Config.Timeouts.Login.Enforce {
+	if config.Timeouts.Login.Enforce {
 		session.Expires = time.Now().Add(time.Millisecond * time.Duration(assertion.Response.Timeout))
 	}
 
@@ -233,6 +239,12 @@ func (webauthn *WebAuthn) FinishPasskeyLogin(handler DiscoverableUserHandler, se
 // a [Credential] with the same ID byte array provided all [Credential]'s in the [SessionData] exist in
 // the [User]'s [Credential] list.
 func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (credential *Credential, err error) {
+	var config *Config
+
+	if config, err = webauthn.config(); err != nil {
+		return nil, err
+	}
+
 	if !bytes.Equal(user.WebAuthnID(), session.UserID) {
 		return nil, protocol.ErrBadRequest.WithDetails("ID mismatch for User and Session")
 	}
@@ -245,7 +257,7 @@ func (webauthn *WebAuthn) ValidateLogin(user User, session SessionData, parsedRe
 		return nil, err
 	}
 
-	return webauthn.validateLogin(user, session, parsedResponse)
+	return validateLogin(config, user, session, parsedResponse)
 }
 
 // ValidateDiscoverableLogin is similar to [WebAuthn.ValidateLogin] that allows for discoverable credentials. It's
@@ -274,6 +286,12 @@ func (webauthn *WebAuthn) ValidateDiscoverableLogin(handler DiscoverableUserHand
 // handler does not contain a [Credential] with the same ID byte array provided all [Credential]'s
 // in the [SessionData] exist in the [User]'s [Credential] list.
 func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (user User, credential *Credential, err error) {
+	var config *Config
+
+	if config, err = webauthn.config(); err != nil {
+		return nil, nil, err
+	}
+
 	if len(session.UserID) != 0 {
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Session was not initiated as a client-side discoverable login")
 	}
@@ -298,7 +316,7 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 		return nil, nil, protocol.ErrBadRequest.WithDetails("Failed to lookup Client-side Discoverable Credential: handler returned a nil user")
 	}
 
-	if credential, err = webauthn.validateLogin(user, session, parsedResponse); err != nil {
+	if credential, err = validateLogin(config, user, session, parsedResponse); err != nil {
 		return nil, nil, err
 	}
 
@@ -308,7 +326,7 @@ func (webauthn *WebAuthn) ValidatePasskeyLogin(handler DiscoverableUserHandler, 
 // validateLogin takes a parsed response and validates it against the user credentials and session data.
 //
 //nolint:gocyclo
-func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
+func validateLogin(config *Config, user User, session SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*Credential, error) {
 	// Step 1. If the allowCredentials option was given when this authentication ceremony was initiated,
 	// verify that credential.id identifies one of the public key credentials that were listed in
 	// allowCredentials.
@@ -364,7 +382,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	)
 
 	// Ensure authenticators with a bad status are not used.
-	if webauthn.Config.MDS != nil {
+	if config.MDS != nil {
 		var aaguid uuid.UUID
 
 		if len(credential.Authenticator.AAGUID) == 0 {
@@ -373,7 +391,7 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to decode AAGUID").WithInfo(fmt.Sprintf("Error occurred decoding AAGUID from the credential record: %s", err)).WithError(err)
 		}
 
-		if e := protocol.ValidateMetadata(context.Background(), webauthn.Config.MDS, aaguid, credential.AttestationType, credential.AttestationFormat, nil); e != nil {
+		if e := protocol.ValidateMetadata(context.Background(), config.MDS, aaguid, credential.AttestationType, credential.AttestationFormat, nil); e != nil {
 			return nil, protocol.ErrBadRequest.WithDetails("Failed to validate credential record metadata").WithInfo(e.DevInfo).WithError(e)
 		}
 	}
@@ -381,21 +399,21 @@ func (webauthn *WebAuthn) validateLogin(user User, session SessionData, parsedRe
 	shouldVerifyUser := session.UserVerification == protocol.VerificationRequired
 	shouldVerifyUserPresence := true
 
-	rpID := session.GetRelyingPartyID(webauthn.Config.RPID)
-	rpOrigins := session.GetOrigins(webauthn.Config.RPOrigins)
-	rpOpaqueOrigins := webauthn.Config.RPOpaqueOrigins
-	rpTopOrigins := webauthn.Config.RPTopOrigins
+	rpID := session.GetRelyingPartyID(config.RPID)
+	rpOrigins := session.GetOrigins(config.RPOrigins)
+	rpOpaqueOrigins := config.RPOpaqueOrigins
+	rpTopOrigins := config.RPTopOrigins
 
 	if appID, err = parsedResponse.GetAppID(session.Extensions, credential.AttestationFormat); err != nil {
 		return nil, err
 	}
 
 	// Handle steps 4 through 16.
-	if err = parsedResponse.Verify(session.Challenge, rpID, appID, rpOrigins, rpOpaqueOrigins, rpTopOrigins, webauthn.Config.RPTopOriginVerificationMode, webauthn.Config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, credential.PublicKey, webauthn.Config.Signature); err != nil {
+	if err = parsedResponse.Verify(session.Challenge, rpID, appID, rpOrigins, rpOpaqueOrigins, rpTopOrigins, config.RPTopOriginVerificationMode, config.RPAllowCrossOrigin, shouldVerifyUser, shouldVerifyUserPresence, credential.PublicKey, config.Signature); err != nil {
 		return nil, err
 	}
 
-	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.AssertCeremony, webauthn.Config.ExtensionsUnsolicitedOutputPolicy); err != nil {
+	if err = parsedResponse.ClientExtensionResults.Verify(session.Extensions, protocol.AssertCeremony, config.ExtensionsUnsolicitedOutputPolicy); err != nil {
 		return nil, err
 	}
 

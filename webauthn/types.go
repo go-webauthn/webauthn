@@ -1,6 +1,7 @@
 package webauthn
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,7 +12,8 @@ import (
 )
 
 // New creates a new [WebAuthn] instance from the provided [Config]. The configuration is validated before the
-// instance is returned.
+// instance is returned, and the defaults validation selects are written to the provided [Config]. This happens on
+// every call regardless of whether the [Config], or the value it was copied from, has been given to New before.
 func New(config *Config) (*WebAuthn, error) {
 	if err := config.validate(); err != nil {
 		return nil, fmt.Errorf(errFmtConfigValidate, err)
@@ -25,9 +27,30 @@ func New(config *Config) (*WebAuthn, error) {
 // WebAuthn is the primary interface of this package. It provides methods to begin and finish both registration and
 // login ceremonies. Create an instance using [New] and then call the appropriate Begin/Finish methods for your
 // use case. See the package documentation for detailed ceremony flows.
+//
+// The [Config] is validated again by every Begin and Finish method, which read it without writing to it, so the
+// methods are safe for concurrent use provided the [Config] is not modified at the same time. A change made to the
+// [Config] after [New] takes effect on the next call, and one which is not valid fails that call. An instance which
+// was not created using [New] has the defaults applied for the duration of each call rather than to its [Config].
 type WebAuthn struct {
 	Config *Config
 }
+
+func (webauthn *WebAuthn) config() (config *Config, err error) {
+	if webauthn == nil || webauthn.Config == nil {
+		return nil, fmt.Errorf(errFmtConfigValidate, errConfigNil)
+	}
+
+	effective := *webauthn.Config
+
+	if err = effective.validate(); err != nil {
+		return nil, fmt.Errorf(errFmtConfigValidate, err)
+	}
+
+	return &effective, nil
+}
+
+var errConfigNil = errors.New("the configuration must be provided")
 
 // Config represents the Relying Party configuration for WebAuthn operations. At minimum, RPID and RPOrigins must
 // be configured. The RPID should be the effective domain of the Relying Party (i.e. "example.com") and RPOrigins
@@ -67,8 +90,10 @@ type Config struct {
 	//
 	// Configuring this field constrains the other origin fields to what a Related Origin Requests document can
 	// express, so that the origins a client resolves and the origins this Relying Party accepts cannot drift apart:
-	// [Config.RPOrigins] and [Config.RPTopOrigins] must then hold only non-opaque origins, and [Config.RPOrigins]
-	// must carry no more than [protocol.MaximumRelatedOriginLabels] distinct registrable domain labels.
+	// [Config.RPOrigins] and [Config.RPTopOrigins] must then hold only non-opaque origins. The number of distinct
+	// registrable domain labels [Config.RPOrigins] carries is not validated, as origins which are same-site with
+	// [Config.RPID] need no Related Origin Requests document at all; [WebAuthn.RelatedOrigins] holds the origins to
+	// [protocol.MaximumRelatedOriginLabels] when the document is built.
 	RPOpaqueOrigins []string
 
 	// RPTopOrigins configures the list of Relying Party Server Top Origins that are permitted. The provided origins can
@@ -155,8 +180,6 @@ type Config struct {
 	// Begin* functions verbatim, will lose the record of which extensions were requested and see legitimate
 	// outputs rejected.
 	ExtensionsUnsolicitedOutputPolicy protocol.UnsolicitedOutputPolicy
-
-	validated bool
 }
 
 // FilteringConfig configures the filtering of authenticators based on their AAGUIDs. This is useful for enforcing
@@ -191,17 +214,24 @@ type TimeoutConfig struct {
 	Enforce bool
 
 	// Timeout is the timeout for logins/registrations when the UserVerificationRequirement is set to anything other
-	// than discouraged.
+	// than discouraged. The zero value selects the default of 5 minutes. The client is given the timeout in whole
+	// milliseconds as an unsigned long, so a negative value, a positive value of less than a millisecond, or a value
+	// above 4294967295 milliseconds is rejected by validation. The ceremony options hold the timeout as an int, so on
+	// a platform where an int is 32 bits a value above 2147483647 milliseconds is rejected instead.
 	Timeout time.Duration
 
 	// TimeoutUVD is the timeout for logins/registrations when the UserVerificationRequirement is set to discouraged.
+	// The zero value selects the default of 2 minutes. The client is given the timeout in whole milliseconds as an
+	// unsigned long, so a negative value, a positive value of less than a millisecond, or a value above 4294967295
+	// milliseconds is rejected by validation. The ceremony options hold the timeout as an int, so on a platform where
+	// an int is 32 bits a value above 2147483647 milliseconds is rejected instead.
 	TimeoutUVD time.Duration
 }
 
 // Validate that the config flags in Config are properly set.
 func (config *Config) validate() (err error) {
-	if config.validated {
-		return nil
+	if config == nil {
+		return errConfigNil
 	}
 
 	if len(config.RPID) != 0 {
@@ -210,23 +240,20 @@ func (config *Config) validate() (err error) {
 		}
 	}
 
-	defaultTimeoutConfig := defaultTimeout
-	defaultTimeoutUVDConfig := defaultTimeoutUVD
-
-	if config.Timeouts.Login.Timeout.Milliseconds() == 0 {
-		config.Timeouts.Login.Timeout = defaultTimeoutConfig
+	if err = validateTimeout("Timeouts.Login.Timeout", &config.Timeouts.Login.Timeout, defaultTimeout); err != nil {
+		return err
 	}
 
-	if config.Timeouts.Login.TimeoutUVD.Milliseconds() == 0 {
-		config.Timeouts.Login.TimeoutUVD = defaultTimeoutUVDConfig
+	if err = validateTimeout("Timeouts.Login.TimeoutUVD", &config.Timeouts.Login.TimeoutUVD, defaultTimeoutUVD); err != nil {
+		return err
 	}
 
-	if config.Timeouts.Registration.Timeout.Milliseconds() == 0 {
-		config.Timeouts.Registration.Timeout = defaultTimeoutConfig
+	if err = validateTimeout("Timeouts.Registration.Timeout", &config.Timeouts.Registration.Timeout, defaultTimeout); err != nil {
+		return err
 	}
 
-	if config.Timeouts.Registration.TimeoutUVD.Milliseconds() == 0 {
-		config.Timeouts.Registration.TimeoutUVD = defaultTimeoutUVDConfig
+	if err = validateTimeout("Timeouts.Registration.TimeoutUVD", &config.Timeouts.Registration.TimeoutUVD, defaultTimeoutUVD); err != nil {
+		return err
 	}
 
 	if len(config.RPOrigins) == 0 {
@@ -249,7 +276,31 @@ func (config *Config) validate() (err error) {
 		}
 	}
 
-	config.validated = true
+	return nil
+}
+
+func validateTimeout(field string, timeout *time.Duration, fallback time.Duration) (err error) {
+	switch {
+	case *timeout == 0:
+		*timeout = fallback
+	case *timeout < 0:
+		return fmt.Errorf(errFmtTimeoutNegative, field, *timeout)
+	case *timeout < time.Millisecond:
+		return fmt.Errorf(errFmtTimeoutSubMillisecond, field, *timeout)
+	case *timeout > maximumTimeout:
+		return fmt.Errorf(errFmtTimeoutMaximum, field, maximumTimeout, *timeout)
+	}
+
+	return nil
+}
+
+func validateCeremonyTimeout(timeout int) (err error) {
+	switch {
+	case timeout < 0:
+		return fmt.Errorf(errFmtTimeoutCeremonyNegative, timeout)
+	case int64(timeout) > maximumTimeout.Milliseconds():
+		return fmt.Errorf(errFmtTimeoutCeremonyMaximum, maximumTimeout.Milliseconds(), timeout)
+	}
 
 	return nil
 }
@@ -259,8 +310,9 @@ func (config *Config) validate() (err error) {
 // comparison. It is a no op unless that field is populated, so a Relying Party which lists an opaque origin in
 // [Config.RPOrigins] keeps the behavior it has always had.
 //
-// The Top Origins are held to the same standard as the Origins minus the label budget, which applies to the origins
-// declared in the document rather than to the origin of a top level browsing context.
+// The label budget of a Related Origin Requests document is deliberately not enforced here. It applies only to the
+// origins a client has to resolve through the document, and the origins which are same-site with the Relying Party ID
+// are not among them, so it is left to [WebAuthn.RelatedOrigins].
 //
 // Each value is additionally held to the forms a client is known to convey, i.e. [protocol.IsKnownOpaqueOrigin]. An
 // opaque origin is only ever matched by simple string comparison against a value configured here, so one no client
@@ -281,8 +333,10 @@ func (config *Config) validateOpaqueOrigins() (err error) {
 		}
 	}
 
-	if _, err = protocol.NewRelatedOrigins(config.RPOrigins...); err != nil {
-		return fmt.Errorf(errFmtOriginsNotRelated, "RPOrigins", err)
+	for _, origin := range config.RPOrigins {
+		if protocol.IsOpaqueOrigin(origin) {
+			return fmt.Errorf(errFmtOriginsNotRelatedValue, "RPOrigins", origin)
+		}
 	}
 
 	for _, origin := range config.RPTopOrigins {

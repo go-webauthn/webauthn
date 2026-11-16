@@ -620,6 +620,95 @@ func TestBeginLogin_Timeouts(t *testing.T) {
 	}
 }
 
+func TestBeginLogin_TimeoutOption(t *testing.T) {
+	testCases := []struct {
+		name     string
+		timeout  int64
+		expected int64
+		err      string
+	}{
+		{
+			name:     "ShouldUseOptionTimeout",
+			timeout:  60000,
+			expected: 60000,
+		},
+		{
+			name:     "ShouldAcceptMaximumTimeout",
+			timeout:  maximumTimeout.Milliseconds(),
+			expected: maximumTimeout.Milliseconds(),
+		},
+		{
+			name:    "ShouldFailNegativeTimeout",
+			timeout: -1,
+			err:     "error generating assertion: the timeout must not be negative but it is -1 milliseconds",
+		},
+		{
+			name:    "ShouldFailTimeoutAboveMaximum",
+			timeout: 4294967296,
+			err:     "error generating assertion: the timeout must be at most 4294967295 milliseconds as it is sent to the client as an unsigned long but it is 4294967296 milliseconds",
+		},
+	}
+
+	begins := map[string]func(w *WebAuthn, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error){
+		"BeginLogin": func(w *WebAuthn, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+			return w.BeginLogin(newTestLoginUser(t), opts...)
+		},
+		"BeginMediatedLogin": func(w *WebAuthn, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+			return w.BeginMediatedLogin(newTestLoginUser(t), protocol.MediationConditional, opts...)
+		},
+		"BeginDiscoverableLogin": (*WebAuthn).BeginDiscoverableLogin,
+		"BeginDiscoverableMediatedLogin": func(w *WebAuthn, opts ...LoginOption) (*protocol.CredentialAssertion, *SessionData, error) {
+			return w.BeginDiscoverableMediatedLogin(protocol.MediationConditional, opts...)
+		},
+	}
+
+	for _, tc := range testCases {
+		for name, begin := range begins {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				w, err := New(&Config{
+					RPID:          "example.com",
+					RPDisplayName: "Test Display Name",
+					RPOrigins:     []string{"https://example.com"},
+					Timeouts:      TimeoutsConfig{Login: TimeoutConfig{Enforce: true}},
+				})
+				require.NoError(t, err)
+
+				opt := func(options *protocol.PublicKeyCredentialRequestOptions) error {
+					options.Timeout = int(tc.timeout)
+
+					return nil
+				}
+
+				if int64(int(tc.timeout)) != tc.timeout {
+					t.Skipf("timeout %d is not representable as an int on this platform", tc.timeout)
+				}
+
+				before := time.Now()
+
+				assertion, session, err := begin(w, opt)
+
+				after := time.Now()
+
+				if tc.err != "" {
+					assert.Nil(t, assertion)
+					assert.Nil(t, session)
+					assert.EqualError(t, err, tc.err)
+
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, int64(assertion.Response.Timeout))
+
+				timeout := time.Millisecond * time.Duration(tc.expected)
+
+				assert.False(t, session.Expires.Before(before.Add(timeout)))
+				assert.False(t, session.Expires.After(after.Add(timeout)))
+			})
+		}
+	}
+}
+
 func TestValidateLogin_Errors(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -2187,7 +2276,7 @@ func TestValidateLoginExtensionOutputs(t *testing.T) {
 }
 
 func TestBeginLoginRejectsInvalidConfig(t *testing.T) {
-	// As with registration, the lazily validated configuration must stop the ceremony rather than producing
+	// As with registration, the configuration validated on use must stop the ceremony rather than producing
 	// request options from an incomplete configuration.
 	w := &WebAuthn{Config: &Config{}}
 

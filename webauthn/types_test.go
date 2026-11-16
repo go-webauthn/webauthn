@@ -1,7 +1,9 @@
 package webauthn
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -131,6 +133,371 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestNew_ShouldValidateCopiedConfig(t *testing.T) {
+	w, err := New(&Config{
+		RPID:      "example.com",
+		RPOrigins: []string{"https://example.com"},
+	})
+	require.NoError(t, err)
+
+	config := *w.Config
+	config.RPID = "%%&&"
+
+	w, err = New(&config)
+
+	assert.Nil(t, w)
+	assert.EqualError(t, err, "error occurred validating the configuration: field 'RPID' is not a valid domain string: parse \"%%&&\": invalid URL escape \"%%&\"")
+}
+
+func TestWebAuthn_ShouldValidateConfigModifiedAfterNew(t *testing.T) {
+	user := &defaultUser{id: []byte("user"), credentials: []Credential{{ID: []byte("credential")}}}
+
+	testCases := []struct {
+		name string
+		have func(t *testing.T, w *WebAuthn) (err error)
+	}{
+		{
+			name: "ShouldFailBeginRegistration",
+			have: func(t *testing.T, w *WebAuthn) (err error) {
+				_, _, err = w.BeginRegistration(user)
+
+				return err
+			},
+		},
+		{
+			name: "ShouldFailBeginLogin",
+			have: func(t *testing.T, w *WebAuthn) (err error) {
+				_, _, err = w.BeginLogin(user)
+
+				return err
+			},
+		},
+		{
+			name: "ShouldFailBeginDiscoverableLogin",
+			have: func(t *testing.T, w *WebAuthn) (err error) {
+				_, _, err = w.BeginDiscoverableLogin()
+
+				return err
+			},
+		},
+		{
+			name: "ShouldFailCreateCredential",
+			have: func(t *testing.T, w *WebAuthn) (err error) {
+				_, err = w.CreateCredential(user, SessionData{UserID: user.id}, &protocol.ParsedCredentialCreationData{})
+
+				return err
+			},
+		},
+		{
+			name: "ShouldFailValidateLogin",
+			have: func(t *testing.T, w *WebAuthn) (err error) {
+				_, err = w.ValidateLogin(user, SessionData{UserID: user.id}, &protocol.ParsedCredentialAssertionData{})
+
+				return err
+			},
+		},
+		{
+			name: "ShouldFailValidatePasskeyLogin",
+			have: func(t *testing.T, w *WebAuthn) (err error) {
+				handler := func(_, _ []byte) (User, error) {
+					t.Error("the handler must not be called")
+
+					return user, nil
+				}
+
+				_, _, err = w.ValidatePasskeyLogin(handler, SessionData{}, &protocol.ParsedCredentialAssertionData{})
+
+				return err
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:          "example.com",
+				RPDisplayName: "Example",
+				RPOrigins:     []string{"https://example.com"},
+			})
+			require.NoError(t, err)
+
+			w.Config.RPOpaqueOrigins = []string{"https://app.example.com"}
+
+			assert.EqualError(t, tc.have(t, w), "error occurred validating the configuration: the 'RPOpaqueOrigins' field must only contain opaque origins but the value 'https://app.example.com' is not opaque; it belongs in the 'RPOrigins' field")
+		})
+	}
+}
+
+func TestWebAuthn_ShouldNotModifyConfigWithoutNew(t *testing.T) {
+	w := &WebAuthn{Config: &Config{
+		RPID:          "example.com",
+		RPDisplayName: "Example",
+		RPOrigins:     []string{"https://example.com"},
+	}}
+
+	creation, _, err := w.BeginRegistration(&defaultUser{id: []byte("user")})
+	require.NoError(t, err)
+
+	assertion, _, err := w.BeginDiscoverableLogin()
+	require.NoError(t, err)
+
+	assert.Equal(t, 300000, creation.Response.Timeout)
+	assert.Equal(t, 300000, assertion.Response.Timeout)
+	assert.Equal(t, TimeoutsConfig{}, w.Config.Timeouts)
+	assert.Equal(t, protocol.TopOriginDefaultVerificationMode, w.Config.RPTopOriginVerificationMode)
+}
+
+func TestWebAuthn_ShouldSupportConcurrentUseWithoutNew(t *testing.T) {
+	w := &WebAuthn{Config: &Config{
+		RPID:          "example.com",
+		RPDisplayName: "Example",
+		RPOrigins:     []string{"https://example.com"},
+	}}
+
+	user := &defaultUser{id: []byte("user"), credentials: []Credential{{ID: []byte("credential")}}}
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			_, _, err := w.BeginRegistration(user)
+			assert.NoError(t, err)
+
+			_, _, err = w.BeginLogin(user)
+			assert.NoError(t, err)
+
+			_, _, err = w.BeginDiscoverableLogin()
+			assert.NoError(t, err)
+
+			_, err = w.CreateCredential(user, SessionData{UserID: user.id}, &protocol.ParsedCredentialCreationData{})
+			assert.Error(t, err)
+
+			_, err = w.ValidateLogin(user, SessionData{UserID: user.id}, &protocol.ParsedCredentialAssertionData{})
+			assert.Error(t, err)
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestWebAuthn_ShouldFailNilConfig(t *testing.T) {
+	const errNilConfig = "error occurred validating the configuration: the configuration must be provided"
+
+	user := &defaultUser{id: []byte("user"), credentials: []Credential{{ID: []byte("credential")}}}
+
+	handler := func(_, _ []byte) (User, error) {
+		return user, nil
+	}
+
+	assertion := &protocol.ParsedCredentialAssertionData{
+		Response: protocol.ParsedAssertionResponse{UserHandle: user.id},
+	}
+
+	testCases := []struct {
+		name string
+		have func(w *WebAuthn) (err error)
+		w    *WebAuthn
+	}{
+		{
+			name: "ShouldFailNew",
+			have: func(_ *WebAuthn) (err error) {
+				_, err = New(nil)
+
+				return err
+			},
+		},
+		{
+			name: "ShouldFailBeginRegistration",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginRegistration(user)
+
+				return err
+			},
+			w: &WebAuthn{},
+		},
+		{
+			name: "ShouldFailBeginLogin",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginLogin(user)
+
+				return err
+			},
+			w: &WebAuthn{},
+		},
+		{
+			name: "ShouldFailBeginDiscoverableLogin",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginDiscoverableLogin()
+
+				return err
+			},
+			w: &WebAuthn{},
+		},
+		{
+			name: "ShouldFailBeginDiscoverableLoginNilWebAuthn",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.BeginDiscoverableLogin()
+
+				return err
+			},
+		},
+		{
+			name: "ShouldFailCreateCredentialSessionMismatch",
+			have: func(w *WebAuthn) (err error) {
+				_, err = w.CreateCredential(user, SessionData{UserID: []byte("other")}, &protocol.ParsedCredentialCreationData{})
+
+				return err
+			},
+			w: &WebAuthn{},
+		},
+		{
+			name: "ShouldFailValidateLoginSessionMismatch",
+			have: func(w *WebAuthn) (err error) {
+				_, err = w.ValidateLogin(user, SessionData{UserID: []byte("other")}, assertion)
+
+				return err
+			},
+			w: &WebAuthn{},
+		},
+		{
+			name: "ShouldFailValidatePasskeyLoginSessionMismatch",
+			have: func(w *WebAuthn) (err error) {
+				_, _, err = w.ValidatePasskeyLogin(handler, SessionData{UserID: user.id}, assertion)
+
+				return err
+			},
+			w: &WebAuthn{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var err error
+
+			require.NotPanics(t, func() {
+				err = tc.have(tc.w)
+			})
+
+			assert.EqualError(t, err, errNilConfig)
+		})
+	}
+}
+
+func TestConfig_Validate_Timeouts(t *testing.T) {
+	testCases := []struct {
+		name     string
+		timeouts TimeoutsConfig
+		expected TimeoutsConfig
+		err      string
+	}{
+		{
+			name: "ShouldDefaultZeroTimeouts",
+			expected: TimeoutsConfig{
+				Login:        TimeoutConfig{Timeout: time.Minute * 5, TimeoutUVD: time.Minute * 2},
+				Registration: TimeoutConfig{Timeout: time.Minute * 5, TimeoutUVD: time.Minute * 2},
+			},
+		},
+		{
+			name: "ShouldPreserveConfiguredTimeouts",
+			timeouts: TimeoutsConfig{
+				Login:        TimeoutConfig{Enforce: true, Timeout: time.Millisecond, TimeoutUVD: time.Second},
+				Registration: TimeoutConfig{Timeout: time.Minute, TimeoutUVD: time.Hour},
+			},
+			expected: TimeoutsConfig{
+				Login:        TimeoutConfig{Enforce: true, Timeout: time.Millisecond, TimeoutUVD: time.Second},
+				Registration: TimeoutConfig{Timeout: time.Minute, TimeoutUVD: time.Hour},
+			},
+		},
+		{
+			name: "ShouldPreserveMaximumTimeouts",
+			timeouts: TimeoutsConfig{
+				Login:        TimeoutConfig{Timeout: maximumTimeout, TimeoutUVD: maximumTimeout},
+				Registration: TimeoutConfig{Timeout: maximumTimeout, TimeoutUVD: maximumTimeout},
+			},
+			expected: TimeoutsConfig{
+				Login:        TimeoutConfig{Timeout: maximumTimeout, TimeoutUVD: maximumTimeout},
+				Registration: TimeoutConfig{Timeout: maximumTimeout, TimeoutUVD: maximumTimeout},
+			},
+		},
+		{
+			name:     "ShouldFailNegativeLoginTimeout",
+			timeouts: TimeoutsConfig{Login: TimeoutConfig{Enforce: true, Timeout: -time.Minute}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Login.Timeout' must not be negative but it is -1m0s",
+		},
+		{
+			name:     "ShouldFailNegativeLoginTimeoutUVD",
+			timeouts: TimeoutsConfig{Login: TimeoutConfig{TimeoutUVD: -time.Minute}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Login.TimeoutUVD' must not be negative but it is -1m0s",
+		},
+		{
+			name:     "ShouldFailNegativeRegistrationTimeout",
+			timeouts: TimeoutsConfig{Registration: TimeoutConfig{Timeout: -time.Minute}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Registration.Timeout' must not be negative but it is -1m0s",
+		},
+		{
+			name:     "ShouldFailNegativeRegistrationTimeoutUVD",
+			timeouts: TimeoutsConfig{Registration: TimeoutConfig{TimeoutUVD: -time.Nanosecond}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Registration.TimeoutUVD' must not be negative but it is -1ns",
+		},
+		{
+			name:     "ShouldFailSubMillisecondLoginTimeout",
+			timeouts: TimeoutsConfig{Login: TimeoutConfig{Timeout: time.Microsecond * 500}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Login.Timeout' must be at least a millisecond as the timeout is sent to the client in milliseconds but it is 500µs",
+		},
+		{
+			name:     "ShouldFailSubMillisecondRegistrationTimeoutUVD",
+			timeouts: TimeoutsConfig{Registration: TimeoutConfig{TimeoutUVD: 60000}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Registration.TimeoutUVD' must be at least a millisecond as the timeout is sent to the client in milliseconds but it is 60µs",
+		},
+		{
+			name:     "ShouldFailLoginTimeoutAboveMaximum",
+			timeouts: TimeoutsConfig{Login: TimeoutConfig{Timeout: maximumTimeout + time.Millisecond}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Login.Timeout' must be at most " + maximumTimeout.String() + " as the timeout is sent to the client as an unsigned long in milliseconds but it is " + (maximumTimeout + time.Millisecond).String(),
+		},
+		{
+			name:     "ShouldFailLoginTimeoutUVDAboveMaximum",
+			timeouts: TimeoutsConfig{Login: TimeoutConfig{TimeoutUVD: time.Hour * 24 * 100}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Login.TimeoutUVD' must be at most " + maximumTimeout.String() + " as the timeout is sent to the client as an unsigned long in milliseconds but it is 2400h0m0s",
+		},
+		{
+			name:     "ShouldFailRegistrationTimeoutAboveMaximum",
+			timeouts: TimeoutsConfig{Registration: TimeoutConfig{Timeout: maximumTimeout + time.Nanosecond}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Registration.Timeout' must be at most " + maximumTimeout.String() + " as the timeout is sent to the client as an unsigned long in milliseconds but it is " + (maximumTimeout + time.Nanosecond).String(),
+		},
+		{
+			name:     "ShouldFailRegistrationTimeoutUVDAboveMaximum",
+			timeouts: TimeoutsConfig{Registration: TimeoutConfig{TimeoutUVD: time.Duration(1<<63 - 1)}},
+			err:      "error occurred validating the configuration: field 'Timeouts.Registration.TimeoutUVD' must be at most " + maximumTimeout.String() + " as the timeout is sent to the client as an unsigned long in milliseconds but it is 2562047h47m16.854775807s",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &Config{
+				RPID:      "example.com",
+				RPOrigins: []string{"https://example.com"},
+				Timeouts:  tc.timeouts,
+			}
+
+			w, err := New(config)
+
+			if tc.err != "" {
+				assert.Nil(t, w)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, w.Config.Timeouts)
+		})
+	}
+}
+
 func TestConfig_Validate_OpaqueOrigins(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -167,16 +534,23 @@ func TestConfig_Validate_OpaqueOrigins(t *testing.T) {
 				RPOrigins:       []string{"https://example.com", "android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
 				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
 			},
-			err: "error occurred validating the configuration: when the 'RPOpaqueOrigins' field is configured the 'RPOrigins' field must only contain origins a Related Origin Requests document can declare: error validating related origin 'android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk': the scheme must be either http or https but it is 'android'",
+			err: "error occurred validating the configuration: when the 'RPOpaqueOrigins' field is configured the 'RPOrigins' field must only contain origins a Related Origin Requests document can declare but the value 'android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk' is opaque",
 		},
 		{
-			name: "ShouldFailMoreThanTheRelatedOriginLabelBudgetInRPOrigins",
+			name: "ShouldPassMoreThanTheRelatedOriginLabelBudgetInRPOrigins",
 			config: &Config{
 				RPID:            "example.com",
 				RPOrigins:       []string{"https://a.com", "https://b.com", "https://c.com", "https://d.com", "https://e.com", "https://f.com"},
 				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
 			},
-			err: "error occurred validating the configuration: when the 'RPOpaqueOrigins' field is configured the 'RPOrigins' field must only contain origins a Related Origin Requests document can declare: error validating related origins: the origins have 6 distinct registrable domain labels but clients only process 5 of them, so origins beyond that limit are ignored",
+		},
+		{
+			name: "ShouldPassSameSiteOriginsBeyondTheRelatedOriginLabelBudgetInRPOrigins",
+			config: &Config{
+				RPID:            "example.com",
+				RPOrigins:       []string{"https://example.com", "https://a.example.com", "https://b.example.com", "https://c.example.com", "https://d.example.com", "https://e.example.com"},
+				RPOpaqueOrigins: []string{"android:apk-key-hash:2jmj7l5rSw0yVb-vlWAYkK-YBwk"},
+			},
 		},
 		{
 			name: "ShouldPassTheRelatedOriginLabelBudgetInRPOrigins",

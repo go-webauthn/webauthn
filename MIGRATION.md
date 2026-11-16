@@ -485,10 +485,12 @@ A Relying Party which keeps its opaque origins in `RPOrigins` is unaffected and 
 Populating `RPOpaqueOrigins` opts into a stricter arrangement, so that the origins a client resolves and the
 origins this Relying Party accepts cannot drift apart. Once it is set:
 
-- `RPOrigins` and `RPTopOrigins` must contain only non-opaque origins;
-- `RPOrigins` must carry no more than `protocol.MaximumRelatedOriginLabels` distinct registrable domain labels.
+- `RPOrigins` and `RPTopOrigins` must contain only non-opaque origins.
 
-Either violation fails configuration validation, so `webauthn.New` returns an error.
+A violation fails configuration validation, so `webauthn.New` returns an error. The number of distinct registrable
+domain labels in `RPOrigins` is not validated, since origins which are same-site with the `RPID` need no Related
+Origin Requests document; `WebAuthn.RelatedOrigins` returns an error when the origins exceed
+`protocol.MaximumRelatedOriginLabels`.
 
 ```go
 config := &webauthn.Config{
@@ -619,6 +621,25 @@ library cannot verify those signatures before then. On an earlier toolchain the 
 The classical algorithms follow rather than being omitted because no authenticator in general use implements
 ML-DSA yet; a list naming only the post-quantum algorithms would fail every registration. Name the ML-DSA
 identifiers on their own if you intend to enforce a post-quantum policy.
+
+### 2.12 Timeouts must fit what a client accepts
+
+A client is given the ceremony timeout in whole milliseconds as a WebIDL `unsigned long`, which it reduces modulo
+2<sup>32</sup>, while an enforced session expiry used the full value. Previously only a timeout which truncated to
+zero milliseconds was replaced with the default, so a negative timeout reached the client and, with `Enforce` set,
+produced a session which had already expired.
+
+Only the zero value now selects the default. `webauthn.New` and every `Begin` and `Finish` method return an error
+when any of the four `Config.Timeouts` durations is:
+
+- negative;
+- positive but under one millisecond, such as a bare `Timeout: 60000`, which is 60µs rather than a minute and used
+  to fall back to the default silently;
+- above 4294967295 milliseconds, roughly 49.7 days, or above 2147483647 milliseconds, roughly 24.8 days, on a
+  platform where an `int` is 32 bits, as the ceremony options hold the timeout as an `int`.
+
+A timeout set on the options by a `RegistrationOption` or `LoginOption` which is negative or above the same bound
+now fails the `Begin` method. Express durations with the `time` constants, i.e. `Timeout: time.Minute`.
 
 ---
 
