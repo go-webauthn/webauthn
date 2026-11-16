@@ -236,19 +236,11 @@ func validateChain(root string, chain []any) (bool, error) {
 			return false, err
 		}
 
-		if err = validateChainCheckRevocation(intcert, errIntermediateCertRevoked); err != nil {
-			return false, err
-		}
-
 		ints.AddCert(intcert)
 	}
 
 	leafcert, err := mdsParseX509Certificate(encoded[0])
 	if err != nil {
-		return false, err
-	}
-
-	if err = validateChainCheckRevocation(leafcert, errLeafCertRevoked); err != nil {
 		return false, err
 	}
 
@@ -258,9 +250,25 @@ func validateChain(root string, chain []any) (bool, error) {
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
 	}
 
-	_, err = leafcert.Verify(opts)
+	var chains [][]*x509.Certificate
 
-	return err == nil, err
+	if chains, err = leafcert.Verify(opts); err != nil {
+		return false, err
+	}
+
+	if verified := chains[0]; len(verified) > 2 {
+		for _, intcert := range verified[1 : len(verified)-1] {
+			if err = validateChainCheckRevocation(intcert, errIntermediateCertRevoked); err != nil {
+				return false, err
+			}
+		}
+	}
+
+	if err = validateChainCheckRevocation(leafcert, errLeafCertRevoked); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func validateChainCheckRevocation(cert *x509.Certificate, revokedErr error) error {

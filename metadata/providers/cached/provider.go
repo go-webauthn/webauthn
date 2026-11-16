@@ -10,7 +10,9 @@ import (
 )
 
 // New returns a new cached Provider given a set of functional [Option]'s. This provider will download a new version and
-// save it to the configured file path if it doesn't exist or if it's out of date by default.
+// save it to the configured file path if it doesn't exist or if it's out of date by default. If a usable cached blob
+// exists and the download fails or the downloaded blob cannot be decoded or verified, the cached blob is used instead
+// unless a forced update was requested.
 func New(opts ...Option) (provider metadata.Provider, err error) {
 	p := &Provider{
 		update: true,
@@ -63,26 +65,34 @@ type Provider struct {
 }
 
 func (p *Provider) init() (err error) {
-	var mds *metadata.Metadata
+	var current, mds *metadata.Metadata
 
 	if !p.force {
-		if mds, err = p.cached(); err != nil {
+		if current, err = p.cached(); err != nil {
 			return err
 		}
 
-		if mds != nil && !p.outdated(mds) {
-			return p.setup(mds)
+		if current != nil && !p.outdated(current) {
+			return p.setup(current)
 		}
 	}
 
 	var data []byte
 
-	if data, err = p.get(); err != nil {
+	if data, err = p.get(); err == nil {
+		mds, err = p.parseBytes(data)
+	}
+
+	if err != nil {
+		if current != nil {
+			return p.setup(current)
+		}
+
 		return err
 	}
 
-	if mds, err = p.parseBytes(data); err != nil {
-		return err
+	if current != nil && mds.Parsed.Number <= current.Parsed.Number {
+		return p.setup(current)
 	}
 
 	if err = doAtomicReplace(p.name, data); err != nil {
@@ -93,9 +103,9 @@ func (p *Provider) init() (err error) {
 }
 
 func (p *Provider) cached() (mds *metadata.Metadata, err error) {
-	var f *os.File
+	var data []byte
 
-	if f, err = os.Open(p.name); err != nil {
+	if data, err = os.ReadFile(p.name); err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
@@ -103,11 +113,15 @@ func (p *Provider) cached() (mds *metadata.Metadata, err error) {
 		return nil, err
 	}
 
-	defer func() {
-		_ = f.Close()
-	}()
+	if mds, err = p.parseBytes(data); err != nil {
+		if p.update {
+			return nil, nil
+		}
 
-	return p.parse(f)
+		return nil, err
+	}
+
+	return mds, nil
 }
 
 func (p *Provider) setup(mds *metadata.Metadata) (err error) {
@@ -120,20 +134,6 @@ func (p *Provider) setup(mds *metadata.Metadata) (err error) {
 	p.Provider = provider
 
 	return nil
-}
-
-func (p *Provider) parse(r io.Reader) (data *metadata.Metadata, err error) {
-	var payload *metadata.PayloadJSON
-
-	if payload, err = p.decoder.Decode(r); err != nil {
-		return nil, err
-	}
-
-	if data, err = p.decoder.Parse(payload); err != nil {
-		return nil, err
-	}
-
-	return data, nil
 }
 
 func (p *Provider) parseBytes(data []byte) (mds *metadata.Metadata, err error) {

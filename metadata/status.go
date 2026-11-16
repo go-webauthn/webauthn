@@ -68,24 +68,82 @@ func currentStatusReport(effective []StatusReport) (current *StatusReport) {
 	return current
 }
 
-func currentStatusReports(effective []StatusReport) (current []StatusReport) {
-	latest := currentStatusReport(effective)
+func currentStatusReports(effective []StatusReport, desired []AuthenticatorStatus) (current []StatusReport) {
+	var tracks []statusTrack
 
-	if latest == nil {
-		return nil
+	for _, status := range desired {
+		if track := statusTrackOf(status); !slices.Contains(tracks, track) {
+			tracks = append(tracks, track)
+		}
 	}
 
-	if latest.EffectiveDate == nil {
-		return []StatusReport{*latest}
+	selected := make([]bool, len(effective))
+
+	for _, track := range tracks {
+		latest := -1
+
+		for i := range effective {
+			if !track.includes(effective[i].Status) {
+				continue
+			}
+
+			if latest == -1 || effective[latest].EffectiveDate == nil || effective[i].EffectiveDate == nil || !effective[i].EffectiveDate.Before(*effective[latest].EffectiveDate) {
+				latest = i
+			}
+		}
+
+		if latest == -1 {
+			continue
+		}
+
+		selected[latest] = true
+
+		if effective[latest].EffectiveDate == nil {
+			continue
+		}
+
+		for i := range effective {
+			if track.includes(effective[i].Status) && effective[i].EffectiveDate != nil && effective[i].EffectiveDate.Equal(*effective[latest].EffectiveDate) {
+				selected[i] = true
+			}
+		}
 	}
 
-	for _, report := range effective {
-		if report.EffectiveDate != nil && report.EffectiveDate.Equal(*latest.EffectiveDate) {
-			current = append(current, report)
+	for i := range effective {
+		if selected[i] {
+			current = append(current, effective[i])
 		}
 	}
 
 	return current
+}
+
+type statusTrack int
+
+const (
+	statusTrackAll statusTrack = iota
+	statusTrackFIDO
+	statusTrackFIPS140
+	statusTrackInfo
+)
+
+func (t statusTrack) includes(status AuthenticatorStatus) bool {
+	track := statusTrackOf(status)
+
+	return t == statusTrackAll || track == statusTrackAll || track == t
+}
+
+func statusTrackOf(status AuthenticatorStatus) statusTrack {
+	switch status {
+	case NotFidoCertified, SelfAssertionSubmitted, FidoCertified, FidoCertifiedL1, FidoCertifiedL1plus, FidoCertifiedL2, FidoCertifiedL2plus, FidoCertifiedL3, FidoCertifiedL3plus:
+		return statusTrackFIDO
+	case FIPS140CertifiedL1, FIPS140CertifiedL2, FIPS140CertifiedL3, FIPS140CertifiedL4:
+		return statusTrackFIPS140
+	case UpdateAvailable:
+		return statusTrackInfo
+	default:
+		return statusTrackAll
+	}
 }
 
 // ValidateStatusReports checks a list of [StatusReport] structs against a list of desired and undesired
@@ -107,6 +165,12 @@ func ValidateStatusReports(reports []StatusReport, desired, undesired []Authenti
 // several reports share the latest effective date they collectively reflect the current status and any one of them may
 // satisfy the desired statuses. This is common in practice as the metadata BLOB lists a certification level such as
 // [FidoCertifiedL1] alongside the legacy [FidoCertified] status with the same effective date.
+//
+// The current status is determined separately for the FIDO certification statuses, the FIPS 140 certification statuses,
+// and the informational [UpdateAvailable] status, as a report from one of these groups says nothing about the standing
+// of another. A later [FIPS140CertifiedL2] or [UpdateAvailable] report therefore does not replace [FidoCertifiedL2] as
+// the current FIDO certification status. Every other status, such as [Revoked], [Retired], and the security
+// notification statuses, applies to all of the groups and does replace an earlier report from any of them.
 //
 // The undesired statuses are matched against every report in effect rather than the current one alone. Statuses such as
 // [AttestationKeyCompromise] and [UserKeyPhysicalCompromise] describe a weakness discovered in the authenticator model
@@ -148,7 +212,7 @@ func ValidateStatusReportsAt(reports []StatusReport, desired, undesired []Authen
 	)
 
 	if len(desired) != 0 {
-		current = currentStatusReports(effective)
+		current = currentStatusReports(effective, desired)
 
 		unsatisfied = !slices.ContainsFunc(current, func(report StatusReport) bool {
 			return hasStatus(report.Status, desired)
