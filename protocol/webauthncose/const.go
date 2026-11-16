@@ -11,6 +11,11 @@ const (
 	rsaMaxModulusBits = 16384
 )
 
+const (
+	rsaMinExponent = 3
+	rsaMaxExponent = 1<<31 - 1
+)
+
 type Error struct {
 	// Short name for the type of error that has occurred.
 	Type string `json:"type"`

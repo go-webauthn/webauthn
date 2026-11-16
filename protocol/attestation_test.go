@@ -187,6 +187,16 @@ func TestAttestationObject_Verify_InvalidCredentialPublicKey(t *testing.T) {
 			key:  map[int]any{1: int(webauthncose.EllipticKey), 3: int(webauthncose.AlgES256), -1: int(webauthncose.P256), -2: make([]byte, 32), -3: make([]byte, 32)},
 			info: "Error occurred parsing the credential public key: EC2 key point is not on curve",
 		},
+		{
+			name: "ShouldFailRSALeadingZeroModulus",
+			key:  map[int]any{1: int(webauthncose.RSAKey), 3: int(webauthncose.AlgRS256), -1: append([]byte{0x00}, attestationTestRSAModulus()...), -2: []byte{0x01, 0x00, 0x01}},
+			info: "Error occurred parsing the credential public key: RSA key modulus has a leading zero octet",
+		},
+		{
+			name: "ShouldFailRSALeadingZeroExponent",
+			key:  map[int]any{1: int(webauthncose.RSAKey), 3: int(webauthncose.AlgRS256), -1: attestationTestRSAModulus(), -2: []byte{0x00, 0x01, 0x00, 0x01}},
+			info: "Error occurred parsing the credential public key: RSA key exponent has a leading zero octet",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -202,7 +212,7 @@ func TestAttestationObject_Verify_InvalidCredentialPublicKey(t *testing.T) {
 			att.AttStatement = nil
 			att.AuthData.AttData.CredentialPublicKey = key
 
-			params := []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}}
+			params := []CredentialParameter{{Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}, {Type: PublicKeyCredentialType, Algorithm: webauthncose.AlgRS256}}
 
 			err = att.Verify("localhost", clientDataHash[:], false, false, nil, params, AttestationPolicy{}, SignaturePolicy{})
 
@@ -461,4 +471,12 @@ var testAttestationResponses = []string{
 			"attestationObject": "o2NmbXRmcGFja2VkZ2F0dFN0bXSjY2FsZyZjc2lnWEYwRAIgaTjQj-hC9GH1fCbOT_8m4wdVJBZMG0252iBEwIGKWkUCIApZyPGh_ihn57GRKN-qTVCwgBqe4V40LL-r9_Y2pRXiY3g1Y4FZAgUwggIBMIIBpqADAgECAgVixtGpsjAKBggqhkjOPQQDAjBQMQswCQYDVQQGEwJHUjESMBAGA1UECgwJVU5JUEkgU1NMMS0wKwYDVQQDEyRVTklQSSBGSURPMiBWaXJ0dWFsIEF1dGhlbnRpY2F0b3IgQ0EwIhgPMjAyMDEyMzEyMjAwMDBaGA8yMTIwMTIzMTIyMDAwMFowcTELMAkGA1UEBhMCR1IxEjAQBgNVBAoMCVVOSVBJIFNTTDEiMCAGA1UECwwZQXV0aGVudGljYXRvciBBdHRlc3RhdGlvbjEqMCgGA1UEAwwhVU5JUEkgRklETzIgVmlydHVhbCBBdXRoZW50aWNhdG9yMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE_l8G-E0tTiXogmgXZZ0nRUMc7NO5-sowWP0lZhX8GZbU_n2TPO1J-39UbRABHUK_2J-ZbzcDAu2oy_nazsz4CqNIMEYwIQYLKwYBBAGC5RwBAQQEEgQQCJhwWMrcS4G24TDeUNy-ljATBgsrBgEEAYLlHAIBAQQEAwIFIDAMBgNVHRMBAf8EAjAAMAoGCCqGSM49BAMCA0kAMEYCIQDsyXh97GlMAcRq8khd4U-26d1E92a0lupZUGNBlki_MQIhAJFqO_qmBakyeD1esP4v3gIWsYKmHpiwJ64UKlid5NobaGF1dGhEYXRhWQGWou-FTChrR7AO-C0KXtsaxN1QIX4DOq_aCmYeKeUXnlZFAAAAAQiYcFjK3EuBtuEw3lDcvpYBEhq2pk4Wp6LPKckzKXZNKiS793i4VD9xFyF4w_rsqg9IGm9aXbxstYoO-2S5f2VP753dtvehaCGeu6WakwoaUiT6v6KlIY5q-TrL_yy4mO2BrAGnzFHSG_yyjncHOrH18sv2IJd_8Pr5d7VPRDxss4LSO4UwXjF50iGjleglFH-nfaKeCcsRAya_q6FsUTCT351QDC77-JRfwqXejn9KO-Zw3ArRLE4spyDYoSMHntYJoNAQFSod7HlqDalzKYl4D1nPSbfIm4zfTvm7GoN7RC1bPbjqHvjWRJsG6YdIyYf2Onth-TcJKe1oIUk9D-pK0y_7FJW6Zg6JYXxbrdGJYy6zq8_5ZVvlh8ksL2gBtr84L8SlAQIDJiABIVgg_l8G-E0tTiXogmgXZZ0nRUMc7NO5-sowWP0lZhX8GZYiWCDU_n2TPO1J-39UbRABHUK_2J-ZbzcDAu2oy_nazsz4Cg"
 		}
 	}`,
+}
+
+func attestationTestRSAModulus() []byte {
+	modulus := make([]byte, 256)
+	modulus[0] = 0x80
+	modulus[255] = 0x01
+
+	return modulus
 }

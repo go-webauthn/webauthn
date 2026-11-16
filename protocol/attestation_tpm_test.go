@@ -933,13 +933,13 @@ func TestTPMAttestationVerificationRSAExponent(t *testing.T) {
 		},
 		{
 			"ShouldNotPanicWithTwoByteExponentMatchingPubArea",
-			[]byte{0x01, 0x00},
-			256,
+			[]byte{0x01, 0x01},
+			257,
 			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest', EOF",
 		},
 		{
 			"ShouldNotPanicWithTwoByteExponentMismatchingPubArea",
-			[]byte{0x01, 0x00},
+			[]byte{0x01, 0x01},
 			1,
 			"Mismatch between RSAParameters in pubArea and credentialPublicKey",
 		},
@@ -951,9 +951,21 @@ func TestTPMAttestationVerificationRSAExponent(t *testing.T) {
 		},
 		{
 			"ShouldRejectExponentExceedingMaxUint32",
-			[]byte{0x01, 0x00, 0x00, 0x00, 0x00},
+			[]byte{0x01, 0x00, 0x00, 0x00, 0x01},
 			65537,
-			"Invalid RSA public key size",
+			"RSA key exponent 4294967297 is not between 3 and 2147483647",
+		},
+		{
+			"ShouldRejectEvenExponent",
+			[]byte{0x01, 0x00},
+			256,
+			"RSA key exponent 256 is even",
+		},
+		{
+			"ShouldNotPanicWithLeadingZeroExponentMatchingPubArea",
+			[]byte{0x00, 0x01, 0x00, 0x01},
+			65537,
+			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest', EOF",
 		},
 	}
 

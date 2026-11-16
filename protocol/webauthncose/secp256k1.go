@@ -67,9 +67,11 @@ func verifySecp256k1(k *EC2PublicKeyData, digest []byte, r, s *big.Int) (valid b
 	}
 
 	// ECDSA defines both integers over the interval [1, n-1]. A signature which falls outside it is rejected here
-	// as the scalar type below reduces rather than reports a value it cannot represent, and a negative integer
-	// loses its sign entirely when its magnitude is taken.
-	if r.Sign() <= 0 || s.Sign() <= 0 {
+	// as the scalar type below reads only the first 32 bytes of a longer input, and a negative integer loses its
+	// sign entirely when its magnitude is taken.
+	order := secp256k1.Params().N
+
+	if r.Sign() <= 0 || s.Sign() <= 0 || r.Cmp(order) >= 0 || s.Cmp(order) >= 0 {
 		return false, ErrSigNotProvidedOrInvalid
 	}
 

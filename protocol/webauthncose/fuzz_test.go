@@ -1,6 +1,7 @@
 package webauthncose
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
@@ -178,7 +179,7 @@ func fuzzSeedsCOSEKeys(tb testing.TB) (seeds [][]byte) {
 	okp := OKPPublicKeyData{
 		PublicKeyData: PublicKeyData{KeyType: int64(OctetKey), Algorithm: int64(AlgEdDSA)},
 		Curve:         int64(Ed25519),
-		XCoord:        make([]byte, 32),
+		XCoord:        append([]byte{0x58}, bytes.Repeat([]byte{0x66}, 31)...),
 	}
 
 	rsa := RSAPublicKeyData{
@@ -187,7 +188,7 @@ func fuzzSeedsCOSEKeys(tb testing.TB) (seeds [][]byte) {
 		Exponent:      []byte{0x01, 0x00, 0x01},
 	}
 
-	rsa.Modulus[0] = 0xc0
+	rsa.Modulus[0], rsa.Modulus[255] = 0xc0, 0x01
 
 	for _, key := range []any{okp, rsa, PublicKeyData{KeyType: int64(OctetKey), Algorithm: int64(AlgEdDSA)}} {
 		data, err := webauthncbor.Marshal(key)
