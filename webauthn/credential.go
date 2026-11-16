@@ -181,7 +181,8 @@ type CredentialExtensions struct {
 
 	// CredBlobSet reports whether the blob submitted with [WithExtensionCredBlob] at registration was stored by
 	// the authenticator, which is what determines whether requesting [WithExtensionGetCredBlob] at authentication
-	// can return anything.
+	// can return anything. A registration ceremony which submitted a blob records false when the authenticator did
+	// not report an outcome, as an authenticator which does not support the extension ignores it.
 	CredBlobSet *bool `json:"credBlobSet,omitempty" msg:"cbs,omitempty"`
 }
 

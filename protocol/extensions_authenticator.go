@@ -1,10 +1,8 @@
 package protocol
 
 import (
-	"errors"
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 )
@@ -140,12 +138,15 @@ func (o *AuthenticatorExtensionOutputs) extra(key string, value any) {
 // Verify checks these authenticator extension outputs against the extensions recorded in the session.
 //
 // A nil receiver is valid and means the authenticator returned no extension outputs at all, which is itself a
-// failure when a credential protection policy was requested with enforcement.
+// failure when a credential protection policy other than 'userVerificationOptional' was requested with enforcement.
 //
-// Two rules are enforced, both of which apply only to registration. The credProtect policy must be honoured when
-// enforcement was requested, and a blob submitted for storage with the credential must actually have been stored.
-// Every problem found is reported rather than only the first, matching
-// [AuthenticationExtensionsClientOutputs.Verify].
+// One rule is enforced, which applies only to registration: the credProtect policy must be honoured when enforcement
+// was requested.
+//
+// Whether a blob submitted with the credBlob extension was stored is not asserted. An authenticator which does not
+// support the extension ignores it, which a Relying Party must be prepared for, and failing the ceremony would leave
+// a credential on the authenticator which the Relying Party never records. The outcome is recorded on the credential
+// instead; see CredentialExtensions.CredBlobSet in the webauthn package.
 //
 // CTAP requires the client to fail the ceremony when 'enforceCredentialProtectionPolicy' is set and the
 // authenticator cannot honour the requested policy, but the Relying Party is the only party that can confirm this
@@ -153,7 +154,9 @@ func (o *AuthenticatorExtensionOutputs) extra(key string, value any) {
 // here are covered by the attestation signature.
 //
 // The applied policy is compared as at-least-as-strict rather than equal, because an authenticator is permitted to
-// apply a stricter policy than the one requested, for instance where its own default exceeds the request.
+// apply a stricter policy than the one requested, for instance where its own default exceeds the request. An absent
+// policy is accepted when 'userVerificationOptional' was requested, as that is the policy an authenticator applies by
+// default, including one which does not support the extension.
 //
 // A ceremony which is neither [CreateCeremony] nor [AssertCeremony] is treated as a registration, matching
 // [AuthenticationExtensionsClientOutputs.Verify], so an unexpected value fails closed rather than skipping the
@@ -161,38 +164,18 @@ func (o *AuthenticatorExtensionOutputs) extra(key string, value any) {
 //
 // Registry: https://www.iana.org/assignments/webauthn/webauthn.xhtml
 func (o *AuthenticatorExtensionOutputs) Verify(session SessionExtensions, ceremony CeremonyType) error {
-	// Both rules cover registration extensions, so there is nothing to assert for an assertion ceremony.
+	// The rule covers a registration extension, so there is nothing to assert for an assertion ceremony.
 	if ceremony == AssertCeremony {
 		return nil
 	}
 
-	var errs []error
-
 	if err := o.verifyCredentialProtectionPolicy(session); err != nil {
-		errs = append(errs, err)
+		return ErrBadRequest.
+			WithDetails(fmt.Sprintf("Error validating the authenticator extension outputs: %s", err.Error())).
+			WithError(err)
 	}
 
-	// A blob the authenticator did not store is a silent failure: the Relying Party would otherwise believe its
-	// data is held against the credential and only discover otherwise when a later getCredBlob returns nothing.
-	if session.CredBlob {
-		if o == nil || o.CredBlobSet == nil {
-			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with a blob to store but the authenticator did not report whether it was stored", ExtensionCredBlob)))
-		} else if !*o.CredBlobSet {
-			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with a blob to store but the authenticator reported it was not stored", ExtensionCredBlob)))
-		}
-	}
-
-	if len(errs) == 0 {
-		return nil
-	}
-
-	// As with the client extension outputs, the joined error is kept as the cause so errors.As and errors.Is reach
-	// each individual problem while the caller still receives an *Error.
-	joined := errors.Join(errs...)
-
-	return ErrBadRequest.
-		WithDetails(fmt.Sprintf("Error validating the authenticator extension outputs: %s", strings.ReplaceAll(joined.Error(), "\n", "; "))).
-		WithError(joined)
+	return nil
 }
 
 // verifyCredentialProtectionPolicy asserts the policy the authenticator applied against the one the Relying Party
@@ -208,6 +191,10 @@ func (o *AuthenticatorExtensionOutputs) verifyCredentialProtectionPolicy(session
 	}
 
 	if o == nil || o.CredProtect == nil {
+		if session.CredentialProtectionPolicy == CredentialProtectionPolicyUserVerificationOptional {
+			return nil
+		}
+
 		return ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension was requested with enforcement but the authenticator did not report the policy it applied", ExtensionCredentialProtectionPolicy))
 	}
 

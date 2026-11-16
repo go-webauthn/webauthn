@@ -367,12 +367,74 @@ func TestAuthenticationExtensionsValidate(t *testing.T) {
 			AssertCeremony,
 			[]string{"credentialProtectionPolicy"},
 		},
-		{"EnforceCredentialProtectionPolicyCreation", AuthenticationExtensions{EnforceCredentialProtectionPolicy: true}, CreateCeremony, nil},
+		{
+			"EnforceCredentialProtectionPolicyCreation",
+			AuthenticationExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
+			CreateCeremony,
+			nil,
+		},
+		{
+			"EnforceCredentialProtectionPolicyWithoutPolicy",
+			AuthenticationExtensions{EnforceCredentialProtectionPolicy: true},
+			CreateCeremony,
+			[]string{"enforceCredentialProtectionPolicy", "requires"},
+		},
+		{
+			"CredentialProtectionPolicyUnknown",
+			AuthenticationExtensions{CredentialProtectionPolicy: "bogus", EnforceCredentialProtectionPolicy: true},
+			CreateCeremony,
+			[]string{"credentialProtectionPolicy", "bogus"},
+		},
+		{"LargeBlobSupportPreferred", AuthenticationExtensions{LargeBlob: LargeBlobInputs{Support: LargeBlobSupportPreferred}}, CreateCeremony, nil},
+		{"LargeBlobSupportUnknown", AuthenticationExtensions{LargeBlob: LargeBlobInputs{Support: "bogus"}}, CreateCeremony, nil},
+		{
+			"PRFEvalByCredentialEmptyKey",
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"": {First: []byte("a")}}}},
+			AssertCeremony,
+			[]string{"evalByCredential", "base64url"},
+		},
+		{
+			"PRFEvalByCredentialKeyNotBase64URL",
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"aa+/": {First: []byte("a")}}}},
+			AssertCeremony,
+			[]string{"evalByCredential", "aa+/", "base64url"},
+		},
+		{
+			"PRFEvalByCredentialKeyPadded",
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"aQ==": {First: []byte("a")}}}},
+			AssertCeremony,
+			[]string{"evalByCredential", "base64url"},
+		},
+		{
+			"PRFEvalByCredentialKeyLineFeed",
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"AQ\nID": {First: []byte("a")}}}},
+			AssertCeremony,
+			[]string{"evalByCredential", `AQ\nID`, "base64url"},
+		},
+		{
+			"PRFEvalByCredentialKeyCarriageReturn",
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"AQID\r": {First: []byte("a")}}}},
+			AssertCeremony,
+			[]string{"evalByCredential", `AQID\r`, "base64url"},
+		},
+		{
+			"PRFEvalByCredentialKeyValid",
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"AQID": {First: []byte("a")}}}},
+			AssertCeremony,
+			nil,
+		},
+		{
+			"ExtraCollidesWithModelledExtension",
+			AuthenticationExtensions{Extra: map[string]any{"CredProps": true, "custom": true}},
+			CreateCeremony,
+			[]string{"CredProps", "collides"},
+		},
+		{"ExtraUnmodelled", AuthenticationExtensions{Extra: map[string]any{"custom": true}}, CreateCeremony, nil},
 		{
 			"EnforceCredentialProtectionPolicyAssertion",
 			AuthenticationExtensions{EnforceCredentialProtectionPolicy: true},
 			AssertCeremony,
-			[]string{"enforceCredentialProtectionPolicy"},
+			[]string{`"enforceCredentialProtectionPolicy" is a registration extension but was provided for an authentication ceremony`},
 		},
 		{"MinPinLengthCreation", AuthenticationExtensions{MinPinLength: true}, CreateCeremony, nil},
 		{"MinPinLengthAssertion", AuthenticationExtensions{MinPinLength: true}, AssertCeremony, []string{"minPinLength"}},
@@ -396,7 +458,7 @@ func TestAuthenticationExtensionsValidate(t *testing.T) {
 		},
 		{
 			"EvalByCredentialCreation",
-			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"a": {First: []byte("b")}}}},
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"AQID": {First: []byte("b")}}}},
 			CreateCeremony,
 			[]string{"prf"},
 		},
@@ -493,7 +555,7 @@ func TestAuthenticationExtensionsValidate(t *testing.T) {
 		},
 		{
 			"EvalByCredentialUnknownCeremony",
-			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"a": {First: []byte("b")}}}},
+			AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: map[string]PRFValues{"AQID": {First: []byte("b")}}}},
 			testCeremonyUnknown,
 			[]string{"prf"},
 		},
@@ -513,6 +575,104 @@ func TestAuthenticationExtensionsValidate(t *testing.T) {
 
 			for _, fragment := range tc.errs {
 				assert.ErrorContains(t, err, fragment)
+			}
+		})
+	}
+}
+
+func TestPublicKeyCredentialCreationOptionsValidateExtensions(t *testing.T) {
+	testCases := []struct {
+		name string
+		have AuthenticationExtensions
+		errs []string
+	}{
+		{"ShouldAcceptNoExtensions", AuthenticationExtensions{}, nil},
+		{"ShouldAcceptRegistrationExtensions", AuthenticationExtensions{CredProps: true, CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired}, nil},
+		{"ShouldRejectUnknownPolicy", AuthenticationExtensions{CredentialProtectionPolicy: "bogus"}, []string{"credentialProtectionPolicy", "bogus"}},
+		{"ShouldRejectAuthenticationExtension", AuthenticationExtensions{GetCredBlob: true}, []string{"getCredBlob", "registration ceremony"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			options := PublicKeyCredentialCreationOptions{Extensions: tc.have}
+
+			err := options.ValidateExtensions()
+
+			if len(tc.errs) == 0 {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+
+			for _, fragment := range tc.errs {
+				assert.ErrorContains(t, err, fragment)
+			}
+		})
+	}
+}
+
+func TestPublicKeyCredentialRequestOptionsValidateExtensions(t *testing.T) {
+	allowed := []CredentialDescriptor{
+		{Type: PublicKeyCredentialType, CredentialID: []byte{0x01, 0x02, 0x03}},
+		{Type: PublicKeyCredentialType, CredentialID: []byte{0x04, 0x05, 0x06}},
+	}
+
+	evalByCredential := func(keys ...string) AuthenticationExtensions {
+		values := map[string]PRFValues{}
+
+		for _, key := range keys {
+			values[key] = PRFValues{First: []byte("salt")}
+		}
+
+		return AuthenticationExtensions{PRF: &PRFInputs{EvalByCredential: values}}
+	}
+
+	testCases := []struct {
+		name    string
+		have    PublicKeyCredentialRequestOptions
+		errs    []string
+		allowed bool
+		once    bool
+	}{
+		{"ShouldAcceptNoExtensions", PublicKeyCredentialRequestOptions{}, nil, true, false},
+		{"ShouldAcceptAllowedKeys", PublicKeyCredentialRequestOptions{Extensions: evalByCredential("AQID", "BAUG")}, nil, true, false},
+		{"ShouldRejectKeyNotAllowed", PublicKeyCredentialRequestOptions{Extensions: evalByCredential("AQID", "BwgJ")}, []string{"BwgJ", "does not name an allowed credential"}, true, false},
+		{"ShouldRejectEmptyAllowList", PublicKeyCredentialRequestOptions{Extensions: evalByCredential("AQID")}, []string{"non-empty list of allowed credentials"}, false, false},
+		{"ShouldRejectInvalidKeyOnce", PublicKeyCredentialRequestOptions{Extensions: evalByCredential("A+ID")}, []string{"A+ID", "base64url"}, true, true},
+		{"ShouldRejectKeyWithLineFeedOnce", PublicKeyCredentialRequestOptions{Extensions: evalByCredential("AQ\nID")}, []string{`AQ\nID`, "base64url"}, true, true},
+		{"ShouldRejectKeyWithCarriageReturnOnce", PublicKeyCredentialRequestOptions{Extensions: evalByCredential("AQ\rID")}, []string{`AQ\rID`, "base64url"}, true, true},
+		{"ShouldApplyAssertionValidation", PublicKeyCredentialRequestOptions{Extensions: AuthenticationExtensions{CredProps: true}}, []string{"credProps"}, true, true},
+		{"ShouldAcceptLargeBlobWriteWithOneAllowed", PublicKeyCredentialRequestOptions{AllowedCredentials: allowed[:1], Extensions: AuthenticationExtensions{LargeBlob: LargeBlobInputs{Write: []byte("blob")}}}, nil, false, false},
+		{"ShouldRejectLargeBlobWriteWithSeveralAllowed", PublicKeyCredentialRequestOptions{Extensions: AuthenticationExtensions{LargeBlob: LargeBlobInputs{Write: []byte("blob")}}}, []string{"largeBlob", "requires exactly one allowed credential"}, true, false},
+		{"ShouldRejectLargeBlobWriteWithEmptyAllowList", PublicKeyCredentialRequestOptions{Extensions: AuthenticationExtensions{LargeBlob: LargeBlobInputs{Write: []byte("blob")}}}, []string{"largeBlob", "requires exactly one allowed credential"}, false, false},
+		{"ShouldAcceptLargeBlobReadWithEmptyAllowList", PublicKeyCredentialRequestOptions{Extensions: AuthenticationExtensions{LargeBlob: LargeBlobInputs{Read: true}}}, nil, false, false},
+		{"ShouldAcceptLargeBlobReadWithSeveralAllowed", PublicKeyCredentialRequestOptions{Extensions: AuthenticationExtensions{LargeBlob: LargeBlobInputs{Read: true}}}, nil, true, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.allowed {
+				tc.have.AllowedCredentials = allowed
+			}
+
+			err := tc.have.ValidateExtensions()
+
+			if len(tc.errs) == 0 {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+
+			for _, fragment := range tc.errs {
+				assert.ErrorContains(t, err, fragment)
+			}
+
+			if tc.once {
+				assert.EqualError(t, err, tc.have.Extensions.Validate(AssertCeremony).Error())
 			}
 		})
 	}

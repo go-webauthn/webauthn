@@ -119,6 +119,38 @@ func TestClientOutputsVerify(t *testing.T) {
 			policy:   UnsolicitedOutputPolicyIgnore,
 		},
 		{
+			name:     "PRFEnabledCreation",
+			outputs:  AuthenticationExtensionsClientOutputs{PRF: &PRFOutputs{Enabled: ptr(true)}},
+			session:  SessionExtensions{Requested: []string{ExtensionPRF}},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "PRFEnabledAssertion",
+			outputs:  AuthenticationExtensionsClientOutputs{PRF: &PRFOutputs{Enabled: ptr(false), Results: &PRFValues{First: []byte("a")}}},
+			session:  SessionExtensions{Requested: []string{ExtensionPRF}},
+			ceremony: AssertCeremony,
+			errs:     []string{"prf", "enabled"},
+		},
+		{
+			name:     "PRFEnabledAssertionIgnorePolicy",
+			outputs:  AuthenticationExtensionsClientOutputs{PRF: &PRFOutputs{Enabled: ptr(true)}},
+			session:  SessionExtensions{Requested: []string{ExtensionPRF}},
+			ceremony: AssertCeremony,
+			policy:   UnsolicitedOutputPolicyIgnore,
+		},
+		{
+			name:     "PRFEnabledAssertionNotRequestedIgnorePolicy",
+			outputs:  AuthenticationExtensionsClientOutputs{PRF: &PRFOutputs{Enabled: ptr(true)}},
+			ceremony: AssertCeremony,
+			policy:   UnsolicitedOutputPolicyIgnore,
+		},
+		{
+			name:     "PRFResultsAssertion",
+			outputs:  AuthenticationExtensionsClientOutputs{PRF: &PRFOutputs{Results: &PRFValues{First: []byte("a")}}},
+			session:  SessionExtensions{Requested: []string{ExtensionPRF}},
+			ceremony: AssertCeremony,
+		},
+		{
 			name:     "UnsolicitedExtra",
 			outputs:  AuthenticationExtensionsClientOutputs{Extra: map[string]any{"vendorThing": true}},
 			session:  SessionExtensions{},

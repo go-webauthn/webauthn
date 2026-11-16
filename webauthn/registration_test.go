@@ -1870,6 +1870,50 @@ func TestBeginRegistration_StoresSessionExtensions(t *testing.T) {
 	}, session.Extensions)
 }
 
+func TestBeginRegistrationValidatesExtensionsAfterOptions(t *testing.T) {
+	testCases := []struct {
+		name string
+		have protocol.AuthenticationExtensions
+		err  string
+	}{
+		{"ShouldRejectUnknownPolicy", protocol.AuthenticationExtensions{CredentialProtectionPolicy: "bogus"}, "is not a known credential protection policy"},
+		{"ShouldRejectEnforceWithoutPolicy", protocol.AuthenticationExtensions{EnforceCredentialProtectionPolicy: true}, "requires the \"credentialProtectionPolicy\" extension"},
+		{"ShouldRejectAuthenticationExtension", protocol.AuthenticationExtensions{GetCredBlob: true}, "is an authentication extension but was provided for a registration ceremony"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			opt := func(cco *protocol.PublicKeyCredentialCreationOptions) error {
+				cco.Extensions = tc.have
+
+				return nil
+			}
+
+			creation, session, err := newTestWebAuthn(t).BeginRegistration(newTestUser(t), opt)
+
+			assert.Nil(t, creation)
+			assert.Nil(t, session)
+			assert.ErrorContains(t, err, "error generating credential creation: ")
+			assert.ErrorContains(t, err, tc.err)
+		})
+	}
+
+	t.Run("ShouldAcceptUnknownLargeBlobSupport", func(t *testing.T) {
+		opt := func(cco *protocol.PublicKeyCredentialCreationOptions) error {
+			cco.Extensions = protocol.AuthenticationExtensions{LargeBlob: protocol.LargeBlobInputs{Support: "nope"}}
+
+			return nil
+		}
+
+		creation, session, err := newTestWebAuthn(t).BeginRegistration(newTestUser(t), opt)
+
+		require.NoError(t, err)
+		require.NotNil(t, creation)
+		require.NotNil(t, session)
+		assert.Equal(t, protocol.LargeBlobSupport("nope"), session.Extensions.LargeBlob)
+	})
+}
+
 func TestBeginRegistrationAppIDExcludePruning(t *testing.T) {
 	u2f := protocol.CredentialDescriptor{
 		Type:              protocol.PublicKeyCredentialType,
@@ -1983,6 +2027,32 @@ func TestCreateCredentialAcceptsSolicitedExtensionOutput(t *testing.T) {
 	assert.True(t, *credential.Extensions.RK)
 }
 
+func TestCreateCredentialRecordsIgnoredCredBlob(t *testing.T) {
+	testCases := []struct {
+		name     string
+		session  protocol.SessionExtensions
+		expected *bool
+	}{
+		{"ShouldRecordNotStoredWhenRequested", protocol.SessionExtensions{Requested: []string{protocol.ExtensionCredBlob}, CredBlob: true}, ptr(false)},
+		{"ShouldRecordNothingWhenNotRequested", protocol.SessionExtensions{}, nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, session, response := newRegistrationFixture(t)
+
+			session.Extensions = tc.session
+
+			credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+			require.NoError(t, err)
+			require.NotNil(t, credential)
+
+			assert.Equal(t, tc.expected, credential.Extensions.CredBlobSet)
+		})
+	}
+}
+
 func testRegDecodeHex(t *testing.T, s string) []byte {
 	t.Helper()
 
@@ -2045,22 +2115,41 @@ func newRegistrationFixture(t *testing.T) (w *WebAuthn, session SessionData, res
 	return w, session, response
 }
 
-func TestCreateCredentialRejectsUnhonouredCredentialProtectionPolicy(t *testing.T) {
-	// End to end cover for the authenticator extension output check: the session required enforcement, and this
-	// authenticator's data carries no extension outputs at all, so it cannot have honoured the policy.
-	w, session, response := newRegistrationFixture(t)
-
-	session.Extensions = protocol.SessionExtensions{
-		Requested:                         []string{protocol.ExtensionCredentialProtectionPolicy},
-		CredentialProtectionPolicy:        protocol.CredentialProtectionPolicyUserVerificationRequired,
-		EnforceCredentialProtectionPolicy: true,
+func TestCreateCredentialCredentialProtectionPolicyNotReported(t *testing.T) {
+	testCases := []struct {
+		name   string
+		policy protocol.CredentialProtectionPolicy
+		err    string
+	}{
+		{"ShouldAcceptUserVerificationOptional", protocol.CredentialProtectionPolicyUserVerificationOptional, ""},
+		{"ShouldRejectUserVerificationOptionalWithCredentialIDList", protocol.CredentialProtectionPolicyUserVerificationOptionalWithCredentialIDList, "did not report the policy"},
+		{"ShouldRejectUserVerificationRequired", protocol.CredentialProtectionPolicyUserVerificationRequired, "did not report the policy"},
 	}
 
-	credential, err := w.CreateCredential(newTestUser(t), session, response)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, session, response := newRegistrationFixture(t)
 
-	assert.Nil(t, credential)
-	assert.ErrorContains(t, err, "credentialProtectionPolicy")
-	assert.ErrorContains(t, err, "did not report the policy")
+			session.Extensions = protocol.SessionExtensions{
+				Requested:                         []string{protocol.ExtensionCredentialProtectionPolicy},
+				CredentialProtectionPolicy:        tc.policy,
+				EnforceCredentialProtectionPolicy: true,
+			}
+
+			credential, err := w.CreateCredential(newTestUser(t), session, response)
+
+			if tc.err == "" {
+				require.NoError(t, err)
+				assert.NotNil(t, credential)
+
+				return
+			}
+
+			assert.Nil(t, credential)
+			assert.ErrorContains(t, err, "credentialProtectionPolicy")
+			assert.ErrorContains(t, err, tc.err)
+		})
+	}
 }
 
 func TestCreateCredentialPropagatesFilteringFailure(t *testing.T) {

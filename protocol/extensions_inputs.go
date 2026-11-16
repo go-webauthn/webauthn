@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -255,6 +257,15 @@ func ParseAuthenticationExtensions(in map[string]any) (out AuthenticationExtensi
 // Members the IDL marks required must also be non-empty when the dictionary containing them is present: the 'first'
 // value of a PRF 'eval' and of every 'evalByCredential' entry, and the 'salt1' value of an 'hmacGetSecret'. Without
 // these the member would be marshalled as a JSON null.
+//
+// Values the client would reject or the finish step could never verify are also reported: an 'evalByCredential' key
+// which is empty or not base64url encoded, a credential protection policy which is not known, an enforced credential
+// protection policy without a policy, and an Extra key which collides with a modelled extension. Whether each
+// 'evalByCredential' key names an allowed credential depends on the request options rather than these inputs; see
+// [PublicKeyCredentialRequestOptions.ValidateExtensions].
+//
+// A large blob 'support' value which is not known is not reported, as the client treats any value other than
+// 'required' as 'preferred' and Relying Parties are expected to handle unknown enumeration values.
 func (e AuthenticationExtensions) Validate(c CeremonyType) (err error) {
 	var errs []error
 
@@ -311,9 +322,27 @@ func (e AuthenticationExtensions) Validate(c CeremonyType) (err error) {
 
 		// The keys are sorted so the reported problems do not depend on the map iteration order.
 		for _, id := range slices.Sorted(maps.Keys(e.PRF.EvalByCredential)) {
+			if _, ok := decodePRFCredentialID(id); !ok {
+				errs = append(errs, fmt.Errorf("extension %q member 'evalByCredential' entry %q is not a non-empty base64url encoded credential id", ExtensionPRF, id))
+			}
+
 			if len(e.PRF.EvalByCredential[id].First) == 0 {
 				errs = append(errs, fmt.Errorf("extension %q member 'evalByCredential' entry %q requires a non-empty 'first' value", ExtensionPRF, id))
 			}
+		}
+	}
+
+	if e.CredentialProtectionPolicy != "" {
+		if _, ok := e.CredentialProtectionPolicy.Value(); !ok {
+			errs = append(errs, fmt.Errorf("extension %q value %q is not a known credential protection policy", ExtensionCredentialProtectionPolicy, e.CredentialProtectionPolicy))
+		}
+	} else if e.EnforceCredentialProtectionPolicy {
+		errs = append(errs, fmt.Errorf("extension %q requires the %q extension", ExtensionEnforceCredentialProtectionPolicy, ExtensionCredentialProtectionPolicy))
+	}
+
+	for _, key := range slices.Sorted(maps.Keys(e.Extra)) {
+		if extensionNameModelled(extensionInputNames, key) {
+			errs = append(errs, fmt.Errorf("extra extension %q collides with a modelled extension", key))
 		}
 	}
 
@@ -323,6 +352,64 @@ func (e AuthenticationExtensions) Validate(c CeremonyType) (err error) {
 
 	if len(e.LargeBlob.Write) != 0 && e.LargeBlob.Read {
 		errs = append(errs, fmt.Errorf("extension %q members 'read' and 'write' are mutually exclusive", ExtensionLargeBlob))
+	}
+
+	return errors.Join(errs...)
+}
+
+func decodePRFCredentialID(id string) (decoded []byte, ok bool) {
+	var err error
+
+	// The strict decoder still ignores line breaks, so the value is also required to be the canonical encoding.
+	if decoded, err = base64.RawURLEncoding.Strict().DecodeString(id); err != nil || len(decoded) == 0 {
+		return nil, false
+	}
+
+	return decoded, base64.RawURLEncoding.EncodeToString(decoded) == id
+}
+
+// ValidateExtensions reports whether the extension inputs of these options are valid for a registration ceremony,
+// applying [AuthenticationExtensions.Validate].
+//
+// Specification: §9. WebAuthn Extensions (https://www.w3.org/TR/webauthn-3/#extensions)
+func (c *PublicKeyCredentialCreationOptions) ValidateExtensions() (err error) {
+	return c.Extensions.Validate(CreateCeremony)
+}
+
+// ValidateExtensions reports whether the extension inputs of these options are valid for an authentication ceremony,
+// applying [AuthenticationExtensions.Validate] and the checks which depend on the other members of the options: the
+// PRF 'evalByCredential' member requires a non-empty list of allowed credentials, each of its keys must name one of
+// them, and the large blob 'write' member requires exactly one allowed credential. A client rejects options which
+// fail any of these checks.
+//
+// Specification: §10.1.4. Pseudo-random function extension (https://www.w3.org/TR/webauthn-3/#prf-extension)
+//
+// Specification: §10.1.5. Large blob storage extension (https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)
+func (a *PublicKeyCredentialRequestOptions) ValidateExtensions() (err error) {
+	errs := []error{a.Extensions.Validate(AssertCeremony)}
+
+	if len(a.Extensions.LargeBlob.Write) != 0 && len(a.AllowedCredentials) != 1 {
+		errs = append(errs, fmt.Errorf("extension %q member 'write' requires exactly one allowed credential", ExtensionLargeBlob))
+	}
+
+	if a.Extensions.PRF != nil && len(a.Extensions.PRF.EvalByCredential) != 0 {
+		if len(a.AllowedCredentials) == 0 {
+			errs = append(errs, fmt.Errorf("extension %q member 'evalByCredential' requires a non-empty list of allowed credentials", ExtensionPRF))
+		} else {
+			for _, id := range slices.Sorted(maps.Keys(a.Extensions.PRF.EvalByCredential)) {
+				// A key which does not decode is already reported by Validate.
+				decoded, ok := decodePRFCredentialID(id)
+				if !ok {
+					continue
+				}
+
+				if !slices.ContainsFunc(a.AllowedCredentials, func(credential CredentialDescriptor) bool {
+					return bytes.Equal(credential.CredentialID, decoded)
+				}) {
+					errs = append(errs, fmt.Errorf("extension %q member 'evalByCredential' entry %q does not name an allowed credential", ExtensionPRF, id))
+				}
+			}
+		}
 	}
 
 	return errors.Join(errs...)

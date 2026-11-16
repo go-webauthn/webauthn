@@ -1036,6 +1036,72 @@ func TestBeginLoginAppIDPruningUpdatesRequested(t *testing.T) {
 	assert.Contains(t, session.Extensions.Requested, protocol.ExtensionGetCredBlob)
 }
 
+func TestBeginLoginValidatesPRFEvalByCredential(t *testing.T) {
+	w := newTestWebAuthn(t)
+
+	byCredential := func(id []byte) LoginOption {
+		return WithAssertionExtensions(WithExtensionPRFByCredential(map[string]protocol.PRFValues{
+			base64.RawURLEncoding.EncodeToString(id): {First: []byte("salt")},
+		}, nil))
+	}
+
+	t.Run("ShouldAcceptAllowedCredential", func(t *testing.T) {
+		assertion, _, err := w.BeginLogin(newTestLoginUser(t), byCredential([]byte("credential-id")))
+
+		require.NoError(t, err)
+		assert.Len(t, assertion.Response.Extensions.PRF.EvalByCredential, 1)
+	})
+
+	t.Run("ShouldRejectCredentialNotAllowed", func(t *testing.T) {
+		assertion, session, err := w.BeginLogin(newTestLoginUser(t), byCredential([]byte("other-credential-id")))
+
+		assert.Nil(t, assertion)
+		assert.Nil(t, session)
+		assert.ErrorContains(t, err, "does not name an allowed credential")
+	})
+
+	t.Run("ShouldRejectDiscoverableLogin", func(t *testing.T) {
+		assertion, session, err := w.BeginDiscoverableLogin(byCredential([]byte("credential-id")))
+
+		assert.Nil(t, assertion)
+		assert.Nil(t, session)
+		assert.ErrorContains(t, err, "non-empty list of allowed credentials")
+	})
+}
+
+func TestBeginLoginValidatesLargeBlobWrite(t *testing.T) {
+	w := newTestWebAuthn(t)
+
+	write := WithAssertionExtensions(WithExtensionLargeBlobWrite([]byte("blob")))
+
+	t.Run("ShouldAcceptOneAllowedCredential", func(t *testing.T) {
+		assertion, session, err := w.BeginLogin(newTestLoginUser(t), write)
+
+		require.NoError(t, err)
+		assert.Len(t, assertion.Response.AllowedCredentials, 1)
+		assert.True(t, session.Extensions.LargeBlobWrite)
+	})
+
+	t.Run("ShouldRejectSeveralAllowedCredentials", func(t *testing.T) {
+		assertion, session, err := w.BeginLogin(newTestLoginUser(t), write, WithAllowedCredentials([]protocol.CredentialDescriptor{
+			{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("credential-id")},
+			{Type: protocol.PublicKeyCredentialType, CredentialID: []byte("other-credential-id")},
+		}))
+
+		assert.Nil(t, assertion)
+		assert.Nil(t, session)
+		assert.ErrorContains(t, err, "requires exactly one allowed credential")
+	})
+
+	t.Run("ShouldRejectDiscoverableLogin", func(t *testing.T) {
+		assertion, session, err := w.BeginDiscoverableLogin(write)
+
+		assert.Nil(t, assertion)
+		assert.Nil(t, session)
+		assert.ErrorContains(t, err, "requires exactly one allowed credential")
+	})
+}
+
 func TestValidateLogin_Full(t *testing.T) {
 	parsedResponse, credPubKey, challenge, credentialID := testLoginSpecVectorNoneES256(t)
 
