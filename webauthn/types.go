@@ -68,6 +68,9 @@ type Config struct {
 	// case-insensitive equal scheme and host component, they are equal, otherwise simple string comparison is utilized
 	// to determine equality.
 	//
+	// No IDNA normalization is performed, so the host of an internationalized domain must be configured as its A-label,
+	// i.e. "https://xn--bcher-kva.example" rather than "https://bücher.example", as that is the form a client conveys.
+	//
 	// See Also: [RPOpaqueOrigins].
 	RPOrigins []string
 

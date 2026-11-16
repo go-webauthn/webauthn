@@ -1615,6 +1615,21 @@ func TestBeginRegistrationOrigin(t *testing.T) {
 			expected: "https://b.example.com:443",
 		},
 		{
+			name:     "ShouldBindAConfiguredOriginWithATrailingSlash",
+			origin:   "https://b.example.com/",
+			expected: "https://b.example.com",
+		},
+		{
+			name:     "ShouldBindAConfiguredOriginWithAPathQueryAndFragment",
+			origin:   "https://user@b.example.com/path?x=1#y",
+			expected: "https://b.example.com",
+		},
+		{
+			name:   "ShouldRejectAnOriginWithATrailingSlashWhichIsNotConfigured",
+			origin: "https://c.example.com/",
+			err:    "error generating credential creation: the ceremony origin 'https://c.example.com/' must be one of the origins in the 'RPOrigins' configuration",
+		},
+		{
 			name:   "ShouldRejectAnOriginWhichIsNotConfigured",
 			origin: "https://c.example.com",
 			err:    "error generating credential creation: the ceremony origin 'https://c.example.com' must be one of the origins in the 'RPOrigins' configuration",
@@ -1673,6 +1688,7 @@ func TestCreateCredentialBoundOrigin(t *testing.T) {
 		name            string
 		responseOrigin  string
 		sessionOrigin   string
+		bindOrigin      string
 		rpOpaqueOrigins []string
 		err             string
 	}{
@@ -1693,6 +1709,16 @@ func TestCreateCredentialBoundOrigin(t *testing.T) {
 			responseOrigin:  originOpaque,
 			sessionOrigin:   originVector,
 			rpOpaqueOrigins: []string{originOpaque},
+		},
+		{
+			name:       "ShouldAcceptTheOriginWhenBoundWithATrailingSlash",
+			bindOrigin: originVector + "/",
+		},
+		{
+			name:           "ShouldRejectATrailingSlashWhenBoundWithATrailingSlash",
+			responseOrigin: originVector + "/",
+			bindOrigin:     originVector + "/",
+			err:            "Error validating origin",
 		},
 	}
 
@@ -1718,6 +1744,7 @@ func TestCreateCredentialBoundOrigin(t *testing.T) {
 			w := &WebAuthn{
 				Config: &Config{
 					RPID:            "example.org",
+					RPDisplayName:   "Test",
 					RPOrigins:       []string{originVector, originOther},
 					RPOpaqueOrigins: tc.rpOpaqueOrigins,
 				},
@@ -1728,6 +1755,14 @@ func TestCreateCredentialBoundOrigin(t *testing.T) {
 				Origin:     tc.sessionOrigin,
 				UserID:     userID,
 				CredParams: []protocol.CredentialParameter{{Type: protocol.PublicKeyCredentialType, Algorithm: webauthncose.AlgES256}},
+			}
+
+			if tc.bindOrigin != "" {
+				_, begun, err := w.BeginRegistration(&defaultUser{id: userID}, WithRegistrationOrigin(tc.bindOrigin))
+				require.NoError(t, err)
+				require.Equal(t, originVector, begun.Origin)
+
+				session.Origin = begun.Origin
 			}
 
 			credential, err := w.CreateCredential(&defaultUser{id: userID}, session, parsedResponse)

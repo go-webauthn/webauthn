@@ -2001,6 +2001,21 @@ func TestBeginLoginOrigin(t *testing.T) {
 			expected: "https://b.example.com",
 		},
 		{
+			name:     "ShouldBindAConfiguredOriginWithATrailingSlash",
+			origin:   "https://b.example.com/",
+			expected: "https://b.example.com",
+		},
+		{
+			name:     "ShouldBindAConfiguredOriginWithAPathQueryAndFragment",
+			origin:   "https://user@b.example.com/path?x=1#y",
+			expected: "https://b.example.com",
+		},
+		{
+			name:   "ShouldRejectAnOriginWithATrailingSlashWhichIsNotConfigured",
+			origin: "https://c.example.com/",
+			err:    "error generating assertion: the ceremony origin 'https://c.example.com/' must be one of the origins in the 'RPOrigins' configuration",
+		},
+		{
 			name:   "ShouldRejectAnOriginWhichIsNotConfigured",
 			origin: "https://c.example.com",
 			err:    "error generating assertion: the ceremony origin 'https://c.example.com' must be one of the origins in the 'RPOrigins' configuration",
@@ -2060,6 +2075,7 @@ func TestValidateLoginBoundOrigin(t *testing.T) {
 		name            string
 		responseOrigin  string
 		sessionOrigin   string
+		bindOrigin      string
 		rpOpaqueOrigins []string
 		err             string
 	}{
@@ -2081,6 +2097,16 @@ func TestValidateLoginBoundOrigin(t *testing.T) {
 			sessionOrigin:   originVector,
 			rpOpaqueOrigins: []string{originOpaque},
 			err:             "Error validating the assertion signature: <nil>",
+		},
+		{
+			name:       "ShouldAcceptTheOriginWhenBoundWithATrailingSlash",
+			bindOrigin: originVector + "/",
+		},
+		{
+			name:           "ShouldRejectATrailingSlashWhenBoundWithATrailingSlash",
+			responseOrigin: originVector + "/",
+			bindOrigin:     originVector + "/",
+			err:            "Error validating origin",
 		},
 	}
 
@@ -2104,6 +2130,7 @@ func TestValidateLoginBoundOrigin(t *testing.T) {
 			w := &WebAuthn{
 				Config: &Config{
 					RPID:            "example.org",
+					RPDisplayName:   "Test",
 					RPOrigins:       []string{originVector, originOther},
 					RPOpaqueOrigins: tc.rpOpaqueOrigins,
 				},
@@ -2127,6 +2154,14 @@ func TestValidateLoginBoundOrigin(t *testing.T) {
 				Challenge: challenge,
 				Origin:    tc.sessionOrigin,
 				UserID:    userID,
+			}
+
+			if tc.bindOrigin != "" {
+				_, begun, err := w.BeginDiscoverableLogin(WithLoginOrigin(tc.bindOrigin))
+				require.NoError(t, err)
+				require.Equal(t, originVector, begun.Origin)
+
+				session.Origin = begun.Origin
 			}
 
 			credential, err := w.ValidateLogin(user, session, parsedResponse)

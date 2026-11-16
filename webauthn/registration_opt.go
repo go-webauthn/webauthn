@@ -132,6 +132,9 @@ func WithRegistrationRelyingPartyID(id string) RegistrationOption {
 // acceptable while a ceremony is bound, as a Relying Party which accepts native clients cannot tell them apart from
 // browser clients in advance.
 //
+// As with [Config.RPOrigins] the origin is reduced to its scheme and host, so a value such as 'https://example.com/' is
+// accepted and bound as 'https://example.com', which is the value [SessionData.Origin] records.
+//
 // The binding covers the ceremony origin only. A topOrigin is verified against [Config.RPTopOrigins] under the
 // configured [protocol.TopOriginVerificationMode] as usual.
 //

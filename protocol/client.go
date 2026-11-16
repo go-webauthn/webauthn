@@ -3,7 +3,9 @@ package protocol
 import (
 	"crypto/subtle"
 	"fmt"
+	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -98,7 +100,9 @@ const (
 	NotSupported TokenBindingStatus = "not-supported"
 )
 
-// FullyQualifiedOrigin returns the origin per the HTML spec: (scheme)://(host)[:(port)].
+// FullyQualifiedOrigin returns the origin per the HTML spec: (scheme)://(host)[:(port)]. For the http and https schemes
+// the host is lowercased, an IPv6 address is written in its canonical form, and the default port of the scheme is
+// omitted, as they are in the serialization of an origin.
 //
 // A known opaque origin which carries no authority component, i.e. one a client conveys for a native application such
 // as 'android:apk-key-hash:...' or the origin of a document loaded from the local file system, has no such
@@ -119,7 +123,12 @@ func FullyQualifiedOrigin(rawOrigin string) (fqOrigin string, err error) {
 		return "", fmt.Errorf("url '%s' does not have a host", rawOrigin)
 	}
 
-	origin.Path, origin.RawPath, origin.RawQuery, origin.User = "", "", "", nil
+	switch origin.Scheme {
+	case "http", "https":
+		return relatedOriginNormalize(rawOrigin)
+	}
+
+	origin.Path, origin.RawPath, origin.RawQuery, origin.ForceQuery, origin.User = "", "", "", false, nil
 
 	return origin.String(), nil
 }
@@ -273,8 +282,14 @@ const (
 // URL; we check each item in the haystack to see if it matches the same rules, and then if the scheme and host (with
 // a normalized port) components match case-insensitively then they're considered a match.
 //
-// If the needle value does not have the 'http://' or 'https://' prefix (case-insensitive) or can't be parsed as a URL
-// equality is determined using simple string comparison.
+// The leniency applies to the needle only when it is the serialization of an origin, i.e. when it has no userinfo,
+// path, query, or fragment component, as the value a client conveys never has one. The items in the haystack are
+// reduced to their scheme and host before they are compared, so an origin may be configured with any of them.
+//
+// If the needle value does not have the 'http://' or 'https://' prefix (case-insensitive), can't be parsed as a URL,
+// has no host or a port out of range, or has any of the components an origin does not have, equality is determined
+// using simple string comparison. An item in the haystack which can't be reduced to a scheme and host in the same
+// way is only ever matched by simple string comparison.
 //
 // It is important to note that this function completely ignores Apple Associated Domains entirely as Apple is using
 // an unassigned Well-Known URI in breech of Well-Known Uniform Resource Identifiers (RFC8615).
@@ -289,14 +304,10 @@ const (
 //
 // See (Well-Known Uniform Resource Identifiers): https://datatracker.ietf.org/doc/html/rfc8615
 func IsOriginInHaystack(needle string, haystack []string) bool {
-	needleURI := parseOriginURI(needle)
-
-	if needleURI != nil {
+	if origin, ok := normalizeBareOrigin(needle); ok {
 		for _, hay := range haystack {
-			if hayURI := parseOriginURI(hay); hayURI != nil {
-				if isOriginEqual(needleURI, hayURI) {
-					return true
-				}
+			if normalized, ok := normalizeOrigin(hay); ok && normalized == origin {
+				return true
 			}
 		}
 	} else {
@@ -330,43 +341,116 @@ func IsOpaqueOriginInHaystack(needle string, haystack []string) bool {
 	return false
 }
 
-func isOriginEqual(a *url.URL, b *url.URL) bool {
-	if !strings.EqualFold(a.Scheme, b.Scheme) {
-		return false
+func toLowerASCII(s string) string {
+	b := []byte(s)
+
+	for i, c := range b {
+		if 'A' <= c && c <= 'Z' {
+			b[i] = c + ('a' - 'A')
+		}
 	}
 
-	if !strings.EqualFold(a.Host, b.Host) {
-		return false
-	}
-
-	return true
+	return string(b)
 }
 
-func parseOriginURI(raw string) *url.URL {
+func isBareOrigin(raw string, uri *url.URL) bool {
+	return uri.User == nil && uri.Path == "" && uri.RawPath == "" && !strings.ContainsAny(raw, "?#")
+}
+
+func normalizeBareOrigin(raw string) (normalized string, ok bool) {
 	if !isPossibleFQDN(raw) {
-		return nil
+		return "", false
 	}
 
-	// We can ignore the error here because it's effectively not a FQDN if this fails.
-	uri, _ := url.Parse(raw)
+	uri, err := url.Parse(raw)
 
-	if uri == nil {
-		return nil
+	if err != nil || !isBareOrigin(raw, uri) {
+		return "", false
 	}
 
-	// Normalize the port if necessary.
-	switch uri.Scheme {
-	case "http":
-		if uri.Port() == "80" {
-			uri.Host = uri.Hostname()
+	return normalizeOrigin(raw)
+}
+
+func normalizeOrigin(raw string) (normalized string, ok bool) {
+	if !isPossibleFQDN(raw) {
+		return "", false
+	}
+
+	normalized, err := relatedOriginNormalize(raw)
+
+	return normalized, err == nil
+}
+
+func canonicalOriginHost(uri *url.URL) string {
+	host := uri.Host
+
+	if port := uri.Port(); port != "" {
+		canonical := strings.TrimLeft(port, "0")
+
+		if canonical == "" {
+			canonical = "0"
 		}
-	case "https":
-		if uri.Port() == "443" {
-			uri.Host = uri.Hostname()
+
+		host = strings.TrimSuffix(host, port) + canonical
+	}
+
+	if end := strings.IndexByte(host, ']'); end != -1 && strings.HasPrefix(host, "[") {
+		if addr, err := netip.ParseAddr(host[1:end]); err == nil && addr.Is6() && addr.Zone() == "" {
+			host = "[" + serializeIPv6(addr) + host[end:]
 		}
 	}
 
-	return uri
+	return host
+}
+
+func serializeIPv6(addr netip.Addr) string {
+	var pieces [8]uint16
+
+	raw := addr.As16()
+
+	for i := range pieces {
+		pieces[i] = uint16(raw[2*i])<<8 | uint16(raw[2*i+1])
+	}
+
+	start, length := -1, 1
+
+	for i := 0; i < len(pieces); i++ {
+		if pieces[i] != 0 {
+			continue
+		}
+
+		j := i
+
+		for j < len(pieces) && pieces[j] == 0 {
+			j++
+		}
+
+		if j-i > length {
+			start, length = i, j-i
+		}
+
+		i = j
+	}
+
+	var b strings.Builder
+
+	for i := 0; i < len(pieces); i++ {
+		if i == start {
+			b.WriteString("::")
+
+			i += length - 1
+
+			continue
+		}
+
+		if i != 0 && i != start+length {
+			b.WriteByte(':')
+		}
+
+		b.WriteString(strconv.FormatUint(uint64(pieces[i]), 16))
+	}
+
+	return b.String()
 }
 
 func isPossibleFQDN(raw string) bool {

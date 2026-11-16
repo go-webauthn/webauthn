@@ -274,6 +274,8 @@ func attestationCredentialPublicKey(credentialPublicKey any) (public crypto.Publ
 // A Relying Party ID is hashed verbatim to compare against the rpIdHash an authenticator reports, while a client
 // normalizes the value it was handed, so a name which is not already in its ASCII form can never produce a matching
 // hash. Callers serving an internationalized domain must apply IDNA themselves and configure the resulting A-label.
+// For the same reason a value carrying uppercase letters is rejected rather than lowercased, and the labels may only
+// carry the letters, digits, hyphens, and underscores a host a client resolves can carry.
 //
 // See: https://www.w3.org/TR/webauthn/#rp-id
 //
@@ -354,17 +356,14 @@ func validateDomainString(value string) error {
 			return errDomainLabelHyphen
 		}
 
-		if strings.ContainsAny(label, forbiddenDomainCodePoints) {
-			return errDomainForbiddenCharacter
-		}
-
 		for _, r := range label {
-			if r < 0x20 || r == 0x7F {
-				return errDomainForbiddenCharacter
-			}
-
-			if r > 0x7F {
+			switch {
+			case r > 0x7F:
 				return errDomainNotASCII
+			case 'A' <= r && r <= 'Z':
+				return errDomainNotLowercase
+			case !isDomainLabelCharacter(r):
+				return errDomainForbiddenCharacter
 			}
 		}
 	}
@@ -411,4 +410,8 @@ func IsAttestationFormatString(s string) bool {
 	default:
 		return false
 	}
+}
+
+func isDomainLabelCharacter(r rune) bool {
+	return 'a' <= r && r <= 'z' || '0' <= r && r <= '9' || r == '-' || r == '_'
 }

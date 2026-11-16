@@ -168,5 +168,6 @@ var (
 	errDomainTooLong            = errors.New("the domain must not exceed 253 characters")
 	errDomainForbiddenCharacter = errors.New("the domain must not contain a forbidden character")
 	errDomainFinalLabelNumeric  = errors.New("the final domain label must not be a number")
+	errDomainNotLowercase       = errors.New("the domain must not contain uppercase characters, and credentials registered with such a value will not authenticate with the lowercase value")
 	errDomainNotASCII           = errors.New("the domain must not contain non-ascii characters, apply IDNA normalization to it first")
 )

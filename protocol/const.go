@@ -28,9 +28,8 @@ const (
 )
 
 const (
-	maxDomainLength           = 253
-	maxDomainLabelLength      = 63
-	forbiddenDomainCodePoints = " #/:<>?@[\\]^|%"
+	maxDomainLength      = 253
+	maxDomainLabelLength = 63
 )
 
 const (

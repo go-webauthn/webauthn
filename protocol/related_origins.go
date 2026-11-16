@@ -271,7 +271,7 @@ func DefaultRelatedOriginLabeler(origin string) (label string, err error) {
 	}
 
 	// A fully qualified host may carry a trailing root label, which is not one of the labels being counted.
-	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	host = toLowerASCII(strings.TrimSuffix(host, "."))
 
 	if ip := net.ParseIP(host); ip != nil {
 		return host, nil
@@ -453,7 +453,7 @@ func relatedOriginNormalize(origin string) (normalized string, err error) {
 		return "", errors.New("the origin must be an absolute URL with a http or https scheme")
 	}
 
-	scheme := strings.ToLower(uri.Scheme)
+	scheme := toLowerASCII(uri.Scheme)
 
 	switch scheme {
 	case "http", "https":
@@ -466,7 +466,7 @@ func relatedOriginNormalize(origin string) (normalized string, err error) {
 		return "", errors.New("the origin must have a host component")
 	}
 
-	host := strings.ToLower(uri.Host)
+	host := toLowerASCII(canonicalOriginHost(uri))
 
 	if port := uri.Port(); port == "" {
 		// A host may carry a colon with no port after it, which is not part of the serialization of an origin.
