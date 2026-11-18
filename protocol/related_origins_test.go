@@ -50,6 +50,21 @@ func TestNewRelatedOrigins(t *testing.T) {
 			expected: []string{"https://example.com"},
 		},
 		{
+			name:     "ShouldNormalizeAwayADefaultPortWithLeadingZeros",
+			have:     []string{"https://example.com", "https://example.com:0443", "http://localhost:080"},
+			expected: []string{"https://example.com", "http://localhost"},
+		},
+		{
+			name:     "ShouldNormalizeLeadingZerosOfAPort",
+			have:     []string{"https://example.com:08443", "https://[::1]:0443"},
+			expected: []string{"https://example.com:8443", "https://[::1]"},
+		},
+		{
+			name:     "ShouldNotFoldANonASCIIHostIntoASCII",
+			have:     []string{"https://kiwi.com", "https://Kiwi.com"},
+			expected: []string{"https://kiwi.com", "https://%E2%84%AAiwi.com"},
+		},
+		{
 			name:     "ShouldAcceptAnHTTPOrigin",
 			have:     []string{"http://localhost:8080"},
 			expected: []string{"http://localhost:8080"},
@@ -247,6 +262,7 @@ func TestDefaultRelatedOriginLabeler(t *testing.T) {
 		{name: "ShouldIgnoreTheTopLevelDomain", have: "https://example.de", expected: "example"},
 		{name: "ShouldIgnoreAPort", have: "https://example.com:8443", expected: "example"},
 		{name: "ShouldLowercaseTheLabel", have: "https://EXAMPLE.com", expected: "example"},
+		{name: "ShouldNotFoldANonASCIILabelIntoASCII", have: "https://Kiwi.com", expected: "Kiwi"},
 		{name: "ShouldUseTheWholeHostWhenSingleLabel", have: "http://localhost:8080", expected: "localhost"},
 		{name: "ShouldUseTheWholeHostForAnIPv4Address", have: "https://127.0.0.1", expected: "127.0.0.1"},
 		{name: "ShouldUseTheWholeHostForAnIPv6Address", have: "https://[::1]:8443", expected: "::1"},

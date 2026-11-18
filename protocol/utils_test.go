@@ -80,12 +80,57 @@ func TestValidateRPID(t *testing.T) {
 			err:   errDomainFinalLabelNumeric.Error(),
 		},
 		{
-			name:  "ValidRPIDUppercase",
+			name:  "InvalidRPIDUppercase",
 			value: "EXAMPLE.COM",
+			err:   errDomainNotLowercase.Error(),
+		},
+		{
+			name:  "InvalidRPIDMixedCase",
+			value: "Example.com",
+			err:   errDomainNotLowercase.Error(),
+		},
+		{
+			name:  "InvalidRPIDUppercaseLocalhost",
+			value: "LOCALHOST",
+			err:   errDomainNotLowercase.Error(),
+		},
+		{
+			name:  "ValidRPIDDigitsAndHyphens",
+			value: "a-1.example2.com",
 		},
 		{
 			name:  "ValidRPIDUnderscoreIsNotForbidden",
 			value: "exa_mple.com",
+		},
+		{
+			name:  "InvalidRPIDAsterisk",
+			value: "ex*ample.com",
+			err:   errDomainForbiddenCharacter.Error(),
+		},
+		{
+			name:  "InvalidRPIDQuote",
+			value: "exa\"mple.com",
+			err:   errDomainForbiddenCharacter.Error(),
+		},
+		{
+			name:  "InvalidRPIDBrace",
+			value: "ex{ample.com",
+			err:   errDomainForbiddenCharacter.Error(),
+		},
+		{
+			name:  "InvalidRPIDComma",
+			value: "a.b,c",
+			err:   errDomainForbiddenCharacter.Error(),
+		},
+		{
+			name:  "InvalidRPIDExclamation",
+			value: "exa!mple.com",
+			err:   errDomainForbiddenCharacter.Error(),
+		},
+		{
+			name:  "InvalidRPIDTilde",
+			value: "exa~mple.com",
+			err:   errDomainForbiddenCharacter.Error(),
 		},
 		{
 			name:  "ValidRPIDShortest",

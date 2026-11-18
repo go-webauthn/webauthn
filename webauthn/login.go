@@ -124,7 +124,7 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 	}
 
 	if len(assertion.Response.Origin) != 0 {
-		if err = validateCeremonyOrigin(assertion.Response.Origin, config.RPOrigins); err != nil {
+		if assertion.Response.Origin, err = validateCeremonyOrigin(assertion.Response.Origin, config.RPOrigins); err != nil {
 			return nil, nil, fmt.Errorf("error generating assertion: %w", err)
 		}
 	}

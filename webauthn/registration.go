@@ -103,7 +103,7 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 	}
 
 	if len(creation.Response.Origin) != 0 {
-		if err = validateCeremonyOrigin(creation.Response.Origin, config.RPOrigins); err != nil {
+		if creation.Response.Origin, err = validateCeremonyOrigin(creation.Response.Origin, config.RPOrigins); err != nil {
 			return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
 		}
 	}

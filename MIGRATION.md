@@ -449,11 +449,19 @@ deferred to the client. It is now rejected where it is configured.
 - has a label beginning or ending with a hyphen;
 - has a leading or trailing space, or any control character;
 - contains a non-ASCII character, as no IDNA normalization is performed (see below);
+- contains an uppercase letter (see below);
+- contains any character other than a letter, digit, hyphen, or underscore, such as `*`, `!`, `+`, or `~`;
 - has a final label which is entirely numeric;
 - exceeds 253 characters overall or 63 characters in any one label;
 - is a single label other than `localhost`.
 
 An underscore is still accepted, as the URL standard does not forbid one in a domain.
+
+A Relying Party ID with an uppercase letter is rejected rather than lowercased. A client compares the ID it is handed
+with the lowercase host of the caller origin, and Chromium and Firefox do so byte for byte, so such an ID was refused
+by those clients. Lowercase the configured value. Before doing so, check whether any credentials were registered
+under the mixed case ID through a client which passed it through unchanged: their `rpIdHash` is the hash of the mixed
+case value, so they will not authenticate under the lowercase ID and those users will need to register again.
 
 Internationalized domains must be configured as A-labels. A Relying Party ID is hashed verbatim to compare
 against the `rpIdHash` an authenticator reports, while a client normalizes the value it is handed, so a name that
@@ -520,6 +528,9 @@ The bound origin must be one of those configured, so the option can only narrow,
 when the ceremony begins rather than when it completes. An opaque origin cannot be bound, since a client conveys
 one only in the response; those in `RPOpaqueOrigins` remain acceptable. The Top Origin is unaffected. A session
 carrying no origin behaves exactly as before, so this is opt-in.
+
+Like a configured origin, the bound origin is reduced to its scheme and host, so `https://app.example.com/` is
+accepted and recorded in `SessionData.Origin` as `https://app.example.com`.
 
 ### 2.4 Unrequested extension outputs fail the ceremony by default
 
@@ -640,6 +651,22 @@ when any of the four `Config.Timeouts` durations is:
 
 A timeout set on the options by a `RegistrationOption` or `LoginOption` which is negative or above the same bound
 now fails the `Begin` method. Express durations with the `time` constants, i.e. `Timeout: time.Minute`.
+
+### 2.13 The client origin must be an origin
+
+The `origin` and `topOrigin` in the collected client data were previously reduced to their scheme and host before they
+were compared, so a value carrying userinfo, a path, a query, or a fragment, including a bare trailing slash such as
+`https://example.com/`, matched a configured `https://example.com`. A client conveys the serialization of an origin,
+which has none of these, so such a value now matches only a configured origin which is the identical string.
+
+The origins you configure in `RPOrigins` and `RPTopOrigins`, or bind with `WithRegistrationOrigin` and
+`WithLoginOrigin`, are still reduced to their scheme and host, so `https://example.com/` there continues to work. A
+client of your own which reports the origin with a trailing slash or a path must report the origin itself instead.
+
+Hosts are now compared with ASCII case folding only. Unicode case folding previously let a host spelled with the Kelvin
+sign (U+212A) in place of `K` match the same host spelled with `k`, which no client conveys. A client conveys the host
+of an internationalized domain in its ASCII form, so the origins you configure for one must use the A-label, such as
+`https://xn--bcher-kva.example` rather than `https://bücher.example`.
 
 ---
 
