@@ -178,6 +178,57 @@ func TestValidateStatusReportsAt(t *testing.T) {
 			desired: []AuthenticatorStatus{FidoCertifiedL2},
 			err:     "the current status report 'FIDO_CERTIFIED_L1' was not one of the desired statuses: FIDO_CERTIFIED_L2",
 		},
+
+		// The current status is determined per group of statuses.
+		{
+			name:    "ShouldAcceptCertificationFollowedByFIPS140Certification",
+			reports: []StatusReport{{Status: FidoCertifiedL2, EffectiveDate: date(2022, 1, 1)}, {Status: FIPS140CertifiedL2, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2},
+		},
+		{
+			name:    "ShouldAcceptFIPS140CertificationFollowedByCertification",
+			reports: []StatusReport{{Status: FIPS140CertifiedL2, EffectiveDate: date(2022, 1, 1)}, {Status: FidoCertifiedL2, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FIPS140CertifiedL2},
+		},
+		{
+			name:    "ShouldAcceptCertificationFollowedByUpdateAvailable",
+			reports: []StatusReport{{Status: FidoCertifiedL1, EffectiveDate: date(2022, 1, 1)}, {Status: UpdateAvailable, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL1},
+		},
+		{
+			name:    "ShouldAcceptUndatedCertificationFollowedByUpdateAvailable",
+			reports: []StatusReport{{Status: FidoCertifiedL1}, {Status: UpdateAvailable}},
+			desired: []AuthenticatorStatus{FidoCertifiedL1},
+		},
+		{
+			name:    "ShouldAcceptEitherGroupWhenBothDesired",
+			reports: []StatusReport{{Status: FidoCertifiedL1, EffectiveDate: date(2022, 1, 1)}, {Status: FIPS140CertifiedL2, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2, FIPS140CertifiedL2},
+		},
+		{
+			name:    "ShouldRejectSupersededCertificationFollowedByFIPS140Certification",
+			reports: []StatusReport{{Status: FidoCertifiedL2, EffectiveDate: date(2021, 1, 1)}, {Status: FidoCertifiedL1, EffectiveDate: date(2022, 1, 1)}, {Status: FIPS140CertifiedL2, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2},
+			err:     "the current status report 'FIDO_CERTIFIED_L1' was not one of the desired statuses: FIDO_CERTIFIED_L2",
+		},
+		{
+			name:    "ShouldRejectRevokedFollowedByFIPS140Certification",
+			reports: []StatusReport{{Status: FidoCertifiedL2, EffectiveDate: date(2021, 1, 1)}, {Status: Revoked, EffectiveDate: date(2022, 1, 1)}, {Status: FIPS140CertifiedL2, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2},
+			err:     "the current status report 'REVOKED' was not one of the desired statuses: FIDO_CERTIFIED_L2",
+		},
+		{
+			name:    "ShouldRejectSecurityNotificationFollowedByUpdateAvailable",
+			reports: []StatusReport{{Status: FidoCertifiedL1, EffectiveDate: date(2021, 1, 1)}, {Status: UserVerificationBypass, EffectiveDate: date(2022, 1, 1)}, {Status: UpdateAvailable, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL1},
+			err:     "the current status report 'USER_VERIFICATION_BYPASS' was not one of the desired statuses: FIDO_CERTIFIED_L1",
+		},
+		{
+			name:    "ShouldRejectFIPS140CertificationWhenCertificationDesired",
+			reports: []StatusReport{{Status: FIPS140CertifiedL2, EffectiveDate: date(2023, 1, 1)}},
+			desired: []AuthenticatorStatus{FidoCertifiedL2},
+			err:     "no status report was in effect so none of the desired statuses could be satisfied: FIDO_CERTIFIED_L2",
+		},
 	}
 
 	for _, tc := range testCases {

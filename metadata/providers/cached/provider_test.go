@@ -2,6 +2,13 @@ package cached
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -237,6 +245,241 @@ func TestProviderDoesNotPoisonCache(t *testing.T) {
 	}
 }
 
+func TestProviderUndecodableCache(t *testing.T) {
+	root, key := newTestRoot(t)
+
+	fresh := newTestBlob(t, key, 2, "2099-01-01")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(fresh)
+	}))
+	defer srv.Close()
+
+	decoder, err := metadata.NewDecoder(metadata.WithRootCertificate(root))
+	require.NoError(t, err)
+
+	_, otherKey := newTestRoot(t)
+
+	testCases := []struct {
+		name  string
+		cache []byte
+	}{
+		{
+			name:  "ShouldReplaceCorruptCache",
+			cache: []byte("this is not a jwt"),
+		},
+		{
+			name:  "ShouldReplaceCacheFailingVerification",
+			cache: newTestBlob(t, otherKey, 1, "2099-01-01"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("ShouldFetchWhenUpdating", func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "mds.jwt")
+				require.NoError(t, os.WriteFile(path, tc.cache, 0600))
+
+				var actual *metadata.Metadata
+
+				_, err := New(WithPath(path), WithMetadataURL(srv.URL), WithDecoder(decoder), WithNew(captureMetadata(&actual)))
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				assert.Equal(t, 2, actual.Parsed.Number)
+
+				content, err := os.ReadFile(path)
+				require.NoError(t, err)
+				assert.Equal(t, fresh, content)
+			})
+
+			t.Run("ShouldFailWhenNotUpdating", func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "mds.jwt")
+				require.NoError(t, os.WriteFile(path, tc.cache, 0600))
+
+				_, err := New(WithPath(path), WithMetadataURL(srv.URL), WithDecoder(decoder), WithUpdate(false))
+				require.Error(t, err)
+
+				content, err := os.ReadFile(path)
+				require.NoError(t, err)
+				assert.Equal(t, tc.cache, content)
+			})
+		})
+	}
+}
+
+func TestProviderBlobNumber(t *testing.T) {
+	root, key := newTestRoot(t)
+
+	decoder, err := metadata.NewDecoder(metadata.WithRootCertificate(root))
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name     string
+		fetched  int
+		force    bool
+		expected int
+	}{
+		{
+			name:     "ShouldIgnoreOlderBlob",
+			fetched:  4,
+			expected: 5,
+		},
+		{
+			name:     "ShouldIgnoreBlobWithSameNumber",
+			fetched:  5,
+			expected: 5,
+		},
+		{
+			name:     "ShouldAcceptNewerBlob",
+			fetched:  6,
+			expected: 6,
+		},
+		{
+			name:     "ShouldAcceptOlderBlobWhenForced",
+			fetched:  4,
+			force:    true,
+			expected: 4,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := newTestBlob(t, key, 5, "2020-01-01")
+			fetched := newTestBlob(t, key, tc.fetched, "2020-02-01")
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write(fetched)
+			}))
+			defer srv.Close()
+
+			path := filepath.Join(t.TempDir(), "mds.jwt")
+			require.NoError(t, os.WriteFile(path, cache, 0600))
+
+			var actual *metadata.Metadata
+
+			_, err := New(WithPath(path), WithMetadataURL(srv.URL), WithDecoder(decoder), WithForceUpdate(tc.force), WithNew(captureMetadata(&actual)))
+			require.NoError(t, err)
+			require.NotNil(t, actual)
+			assert.Equal(t, tc.expected, actual.Parsed.Number)
+
+			content, err := os.ReadFile(path)
+			require.NoError(t, err)
+
+			if tc.expected == 5 {
+				assert.Equal(t, cache, content)
+			} else {
+				assert.Equal(t, fetched, content)
+			}
+		})
+	}
+}
+
+func TestProviderFetchFailure(t *testing.T) {
+	root, key := newTestRoot(t)
+
+	decoder, err := metadata.NewDecoder(metadata.WithRootCertificate(root))
+	require.NoError(t, err)
+
+	_, otherKey := newTestRoot(t)
+
+	cache := newTestBlob(t, key, 5, "2020-01-01")
+
+	testCases := []struct {
+		name   string
+		status int
+		body   []byte
+		cache  bool
+		force  bool
+		err    string
+	}{
+		{
+			name:   "ShouldUseCacheOnServerError",
+			status: http.StatusInternalServerError,
+			body:   []byte("internal server error"),
+			cache:  true,
+		},
+		{
+			name:   "ShouldUseCacheOnTooManyRequests",
+			status: http.StatusTooManyRequests,
+			body:   []byte("too many requests"),
+			cache:  true,
+		},
+		{
+			name:   "ShouldUseCacheOnUnparseableBody",
+			status: http.StatusOK,
+			body:   []byte("this is not a jwt"),
+			cache:  true,
+		},
+		{
+			name:   "ShouldUseCacheOnNewerBlobFailingVerification",
+			status: http.StatusOK,
+			body:   newTestBlob(t, otherKey, 6, "2099-01-01"),
+			cache:  true,
+		},
+		{
+			name:   "ShouldFailWithoutCache",
+			status: http.StatusInternalServerError,
+			body:   []byte("internal server error"),
+			err:    "unexpected status code 500",
+		},
+		{
+			name:   "ShouldFailWhenForced",
+			status: http.StatusInternalServerError,
+			body:   []byte("internal server error"),
+			cache:  true,
+			force:  true,
+			err:    "unexpected status code 500",
+		},
+		{
+			name:   "ShouldFailWhenForcedWithNewerBlobFailingVerification",
+			status: http.StatusOK,
+			body:   newTestBlob(t, otherKey, 6, "2099-01-01"),
+			cache:  true,
+			force:  true,
+			err:    "token signature is invalid",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write(tc.body)
+			}))
+			defer srv.Close()
+
+			path := filepath.Join(t.TempDir(), "mds.jwt")
+
+			if tc.cache {
+				require.NoError(t, os.WriteFile(path, cache, 0600))
+			}
+
+			var actual *metadata.Metadata
+
+			_, err := New(WithPath(path), WithMetadataURL(srv.URL), WithDecoder(decoder), WithForceUpdate(tc.force), WithNew(captureMetadata(&actual)))
+
+			if tc.err != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.err)
+				assert.Nil(t, actual)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, actual)
+				assert.Equal(t, 5, actual.Parsed.Number)
+			}
+
+			content, err := os.ReadFile(path)
+
+			if tc.cache {
+				require.NoError(t, err)
+				assert.Equal(t, cache, content)
+			} else {
+				assert.True(t, os.IsNotExist(err))
+			}
+		})
+	}
+}
+
 func TestProviderExtended(t *testing.T) {
 	ctx := context.Background()
 
@@ -289,4 +532,50 @@ func TestProviderExtended(t *testing.T) {
 		assert.False(t, p.GetValidateExtensions(ctx))
 		assert.False(t, p.GetValidateUserVerification(ctx))
 	})
+}
+
+func newTestRoot(t *testing.T) (encoded string, key *ecdsa.PrivateKey) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "root"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour * 24),
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	return base64.StdEncoding.EncodeToString(der), key
+}
+
+func newTestBlob(t *testing.T, key *ecdsa.PrivateKey, number int, nextUpdate string) []byte {
+	t.Helper()
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.MapClaims{
+		"legalHeader": "test",
+		"no":          number,
+		"nextUpdate":  nextUpdate,
+		"entries":     []any{},
+	})
+
+	signed, err := token.SignedString(key)
+	require.NoError(t, err)
+
+	return []byte(signed)
+}
+
+func captureMetadata(actual **metadata.Metadata) NewFunc {
+	return func(mds *metadata.Metadata) (metadata.Provider, error) {
+		*actual = mds
+
+		return defaultNew(mds)
+	}
 }

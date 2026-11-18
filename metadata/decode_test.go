@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -272,6 +273,53 @@ func TestValidateChainRevocation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateChainDoesNotCheckRevocationOfUntrustedChain(t *testing.T) {
+	_, _, rootEncoded := newTestCertificate(t, 30, "root", nil, nil, true)
+	other, otherKey, otherEncoded := newTestCertificate(t, 31, "untrusted root", nil, nil, true)
+
+	var hits atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	t.Cleanup(server.Close)
+
+	distribution := func(template *x509.Certificate) {
+		template.CRLDistributionPoints = []string{server.URL}
+		template.OCSPServer = []string{server.URL}
+		template.IssuingCertificateURL = []string{server.URL}
+	}
+
+	untrustedInter, untrustedInterKey, untrustedInterEncoded := newTestCertificate(t, 32, "untrusted intermediate", other, otherKey, true, distribution)
+	_, _, untrustedLeaf := newTestCertificate(t, 33, "untrusted leaf", untrustedInter, untrustedInterKey, false, distribution)
+
+	valid, err := validateChain(rootEncoded, []any{untrustedLeaf, untrustedInterEncoded, otherEncoded})
+
+	assert.False(t, valid)
+	assert.Error(t, err)
+	assert.Zero(t, hits.Load())
+}
+
+func TestValidateChainLeafIsRoot(t *testing.T) {
+	root, rootKey, rootEncoded := newTestCertificate(t, 40, "root", nil, nil, true)
+	_, _, interEncoded := newTestCertificate(t, 41, "intermediate", root, rootKey, true)
+
+	var (
+		valid bool
+		err   error
+	)
+
+	require.NotPanics(t, func() {
+		valid, err = validateChain(rootEncoded, []any{rootEncoded, interEncoded})
+	})
+
+	assert.True(t, valid)
+	assert.NoError(t, err)
 }
 
 type recordingReadCloser struct {
