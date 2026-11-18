@@ -144,6 +144,9 @@ type Config struct {
 	// The second outcome is the dangerous one, since nothing reports it. Enable this only for a client which does
 	// its own decoding, which is the situation it exists for.
 	//
+	// The user.id must be valid UTF-8 when this is enabled, as any other value can't be represented in a JSON string
+	// without being altered; a registration for a user whose id is not valid UTF-8 fails to begin.
+	//
 	// Specification: §5.1.8. Deserialize Registration Ceremony Options (https://www.w3.org/TR/webauthn-3/#sctn-parseCreationOptionsFromJSON)
 	EncodeUserIDAsString bool
 

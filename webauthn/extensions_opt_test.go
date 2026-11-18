@@ -394,6 +394,34 @@ func TestWithExtensionInputsReplacesEarlierOptions(t *testing.T) {
 	assert.Equal(t, protocol.AuthenticationExtensions{MinPinLength: true}, exts)
 }
 
+func TestWithExtensionInputsDoesNotMutateTheInputs(t *testing.T) {
+	template := protocol.AuthenticationExtensions{
+		PRF:   &protocol.PRFInputs{EvalByCredential: map[string]protocol.PRFValues{}},
+		Extra: map[string]any{"shared": true},
+	}
+
+	first, err := applyAssertion(t,
+		WithExtensionInputs(template),
+		WithExtensionPRF(protocol.PRFValues{First: []byte("alice")}),
+		WithExtensionPRFByCredential(map[string]protocol.PRFValues{testCredentialIDB64: {First: []byte("alice")}}, nil),
+		WithExtension("perUser", "alice"),
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, protocol.URLEncodedBase64("alice"), first.PRF.Eval.First)
+	assert.Equal(t, "alice", first.Extra["perUser"])
+
+	assert.Empty(t, template.PRF.Eval.First)
+	assert.Empty(t, template.PRF.EvalByCredential)
+	assert.Equal(t, map[string]any{"shared": true}, template.Extra)
+
+	second, err := applyAssertion(t, WithExtensionInputs(template))
+
+	require.NoError(t, err)
+	assert.Empty(t, second.PRF.Eval.First)
+	assert.NotContains(t, second.Extra, "perUser")
+}
+
 // TestWithExtensionLargeBlobKeyIsReachableAsAnUnmodelledExtension guards the decision recorded on
 // [protocol.ExtensionLargeBlobKey]: the identifier has no dedicated option because CTAP 2.1 §12.3 defines no
 // client extension input or output for it, so it must route through the generic escape hatch instead.

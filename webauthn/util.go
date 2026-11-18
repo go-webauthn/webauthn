@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"reflect"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-webauthn/webauthn/protocol"
 )
@@ -46,6 +48,19 @@ func isCredentialIDInCredentials(credentialID []byte, credentials []Credential) 
 	return false
 }
 
+func isNil(v any) bool {
+	if v == nil {
+		return true
+	}
+
+	switch value := reflect.ValueOf(v); value.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
 // ptr returns a pointer to the given value.
 func ptr[T any](v T) *T {
 	return &v
@@ -54,7 +69,9 @@ func ptr[T any](v T) *T {
 // validateUserHandle checks a user entity id against the user handle bounds. The member is typed as an any because it
 // is encoded either as a base64url string or as a plain string depending on [Config.EncodeUserIDAsString], and because
 // a [RegistrationOption] supplied by the caller may replace it with either form. An id of any other type cannot be
-// measured against the bounds and is rejected rather than passed to the client.
+// measured against the bounds and is rejected rather than passed to the client. An id in the plain string form must
+// also be valid UTF-8, as the JSON encoding replaces every invalid byte with U+FFFD and the authenticator would store
+// a user handle which no longer identifies the user.
 //
 // A client throws a TypeError when the length of the handle it is given is not between 1 and 64 bytes inclusive, so
 // a ceremony every user agent would reject fails here instead. The handle itself is not returned because the id which
@@ -71,6 +88,10 @@ func validateUserHandle(id any) (err error) {
 	case []byte:
 		handle = v
 	case string:
+		if !utf8.ValidString(v) {
+			return fmt.Errorf("the user id must be valid UTF-8 to be encoded as a string as the client would otherwise be given a different id to the one provided")
+		}
+
 		handle = []byte(v)
 	default:
 		return fmt.Errorf("the user id must be a string, []byte, or protocol.URLEncodedBase64 but it has a type of %T", id)

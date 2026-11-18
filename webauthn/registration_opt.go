@@ -2,7 +2,9 @@ package webauthn
 
 import "github.com/go-webauthn/webauthn/protocol"
 
-// WithCredentialParameters adjusts the credential parameters in the registration options.
+// WithCredentialParameters adjusts the credential parameters in the registration options. At least one parameter must
+// be provided, as a client given none falls back to algorithms of its own choosing which the ceremony would then be
+// unable to complete with; [WebAuthn.BeginRegistration] returns an error when the parameters are empty.
 //
 // Specification: §5.4. Parameters for Credential Generation (https://www.w3.org/TR/webauthn/#dom-publickeycredentialcreationoptions-pubkeycredparams)
 func WithCredentialParameters(credentialParams []protocol.CredentialParameter) RegistrationOption {

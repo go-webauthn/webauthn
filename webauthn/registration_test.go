@@ -381,6 +381,64 @@ func TestBeginRegistration_EncodeUserIDAsString(t *testing.T) {
 	}
 }
 
+func TestBeginRegistration_EncodeUserIDAsStringInvalidUTF8(t *testing.T) {
+	testCases := []struct {
+		name           string
+		encodeAsString bool
+		userID         []byte
+		expected       string
+		err            string
+	}{
+		{
+			name:           "ShouldFailInvalidUTF8AsString",
+			encodeAsString: true,
+			userID:         []byte{0xff, 0xfe, 0x01},
+			err:            "error generating credential creation: the user id must be valid UTF-8 to be encoded as a string as the client would otherwise be given a different id to the one provided",
+		},
+		{
+			name:           "ShouldPassValidUTF8AsString",
+			encodeAsString: true,
+			userID:         []byte("müller"),
+			expected:       `"müller"`,
+		},
+		{
+			name:     "ShouldPassInvalidUTF8AsBase64",
+			userID:   []byte{0xff, 0xfe, 0x01},
+			expected: `"__4B"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := New(&Config{
+				RPID:                 "example.com",
+				RPDisplayName:        "Test Display Name",
+				RPOrigins:            []string{"https://example.com"},
+				EncodeUserIDAsString: tc.encodeAsString,
+			})
+			require.NoError(t, err)
+
+			creation, session, err := w.BeginRegistration(&defaultUser{id: tc.userID})
+
+			if tc.err != "" {
+				assert.Nil(t, creation)
+				assert.Nil(t, session)
+				assert.EqualError(t, err, tc.err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			data, err := json.Marshal(creation.Response.User.ID)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expected, string(data))
+			assert.Equal(t, tc.userID, session.UserID)
+		})
+	}
+}
+
 func TestBeginMediatedRegistration_ChallengeLength(t *testing.T) {
 	// withTestChallenge is a test-only RegistrationOption that overrides the generated challenge. It mirrors the
 	// WithChallenge login option; no equivalent is exported for registration, so we synthesise one here to exercise
@@ -1100,6 +1158,11 @@ func TestBeginRegistrationUserHandleAfterOptions(t *testing.T) {
 			err:  "error generating credential creation: the user id must be a string, []byte, or protocol.URLEncodedBase64 but it has a type of int",
 		},
 		{
+			name: "ShouldRejectAnInvalidUTF8StringHandleSetByAnOptionWithoutStringEncoding",
+			opts: []RegistrationOption{withUserHandle("\xff\xfe")},
+			err:  "error generating credential creation: the user id must be valid UTF-8 to be encoded as a string as the client would otherwise be given a different id to the one provided",
+		},
+		{
 			name:     "ShouldRecordTheUsersHandleWithoutAnOption",
 			entity:   protocol.URLEncodedBase64(testUserID),
 			expected: []byte(testUserID),
@@ -1309,6 +1372,22 @@ func TestValidateFilteredCredential(t *testing.T) {
 			err:        "Policy restriction prevented the operation from completing",
 		},
 		{
+			name:       "ShouldAllowNilAAGUIDWhenFilteringEmpty",
+			filtering:  &FilteringConfig{},
+			credential: &Credential{},
+		},
+		{
+			name:       "ShouldAllowEmptyAAGUIDWhenNotInPermitList",
+			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA}},
+			credential: &Credential{Authenticator: Authenticator{AAGUID: []byte{}}},
+		},
+		{
+			name:       "ShouldRejectEmptyAAGUIDWhenZeroAAGUIDProhibited",
+			filtering:  &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{uuid.Nil}},
+			credential: &Credential{},
+			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
 			name:       "ShouldAllowFIDOU2FClaimingAAGUIDNotInPermitList",
 			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA}},
 			credential: credentialWithFormat(aaguidC, protocol.AttestationFormatFIDOUniversalSecondFactor),
@@ -1329,6 +1408,12 @@ func TestValidateFilteredCredential(t *testing.T) {
 			filtering:  &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{aaguidB}},
 			credential: credentialWithFormat(aaguidB, protocol.AttestationFormatPacked),
 			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
+			name:       "ShouldRejectAAGUIDOfInvalidLength",
+			filtering:  &FilteringConfig{},
+			credential: &Credential{Authenticator: Authenticator{AAGUID: []byte{0x01}}},
+			err:        "Error reading the request data",
 		},
 	}
 
@@ -1711,6 +1796,26 @@ func TestBeginRegistrationOptionError(t *testing.T) {
 	assert.Nil(t, creation)
 	assert.Nil(t, session)
 	assert.EqualError(t, err, "error applying registration option: boom")
+}
+
+func TestBeginRegistrationEmptyCredentialParameters(t *testing.T) {
+	testCases := []struct {
+		name string
+		have []protocol.CredentialParameter
+	}{
+		{"ShouldFailNil", nil},
+		{"ShouldFailEmpty", []protocol.CredentialParameter{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			creation, session, err := newTestWebAuthn(t).BeginRegistration(newTestUser(t), WithCredentialParameters(tc.have))
+
+			assert.Nil(t, creation)
+			assert.Nil(t, session)
+			assert.EqualError(t, err, "error generating credential creation: at least one credential parameter must be provided")
+		})
+	}
 }
 
 func TestBeginRegistration_StoresSessionExtensions(t *testing.T) {

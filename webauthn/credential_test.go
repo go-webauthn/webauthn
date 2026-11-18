@@ -139,6 +139,47 @@ func TestNewCredentialFlags(t *testing.T) {
 	}
 }
 
+func TestCredentialFlags_ProtocolValueFromBooleans(t *testing.T) {
+	all := protocol.FlagUserPresent | protocol.FlagUserVerified | protocol.FlagBackupEligible | protocol.FlagBackupState
+
+	t.Run("ShouldSurviveJSONThenMsgp", func(t *testing.T) {
+		data, err := json.Marshal(NewCredentialFlags(all | protocol.FlagAttestedCredentialData))
+		require.NoError(t, err)
+
+		var fromJSON CredentialFlags
+
+		require.NoError(t, json.Unmarshal(data, &fromJSON))
+		assert.Equal(t, all, fromJSON.ProtocolValue())
+
+		encoded, err := fromJSON.MarshalMsg(nil)
+		require.NoError(t, err)
+
+		var decoded CredentialFlags
+
+		_, err = decoded.UnmarshalMsg(encoded)
+		require.NoError(t, err)
+
+		assert.True(t, decoded.UserPresent)
+		assert.True(t, decoded.UserVerified)
+		assert.True(t, decoded.BackupEligible)
+		assert.True(t, decoded.BackupState)
+	})
+
+	t.Run("ShouldUseBooleansOfLiteral", func(t *testing.T) {
+		flags := CredentialFlags{UserVerified: true, BackupEligible: true}
+
+		assert.Equal(t, protocol.FlagUserVerified|protocol.FlagBackupEligible, flags.ProtocolValue())
+		assert.Equal(t, byte(protocol.FlagUserVerified|protocol.FlagBackupEligible), flags.MsgpByte())
+	})
+
+	t.Run("ShouldPreferBooleansOverRawAndKeepOtherBits", func(t *testing.T) {
+		flags := NewCredentialFlags(all | protocol.FlagAttestedCredentialData)
+		flags.BackupState = false
+
+		assert.Equal(t, all&^protocol.FlagBackupState|protocol.FlagAttestedCredentialData, flags.ProtocolValue())
+	})
+}
+
 func TestCredential_Verify(t *testing.T) {
 	assert.EqualError(t, (&Credential{}).Verify(nil, protocol.AttestationPolicy{}, protocol.SignaturePolicy{}), "error verifying credential: the metadata provider must be provided but it's nil")
 
