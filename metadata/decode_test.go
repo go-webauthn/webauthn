@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"io"
 	"math/big"
@@ -180,6 +181,12 @@ func unreachableCRL(template *x509.Certificate) {
 func newRevocationListServer(t *testing.T, issuer *x509.Certificate, issuerKey *ecdsa.PrivateKey, revoked ...int64) *httptest.Server {
 	t.Helper()
 
+	return newRevocationListServerWithTemplate(t, issuer, issuerKey, nil, revoked...)
+}
+
+func newRevocationListServerWithTemplate(t *testing.T, issuer *x509.Certificate, issuerKey *ecdsa.PrivateKey, mutator func(template *x509.RevocationList), revoked ...int64) *httptest.Server {
+	t.Helper()
+
 	entries := make([]x509.RevocationListEntry, len(revoked))
 
 	for i, serial := range revoked {
@@ -189,12 +196,18 @@ func newRevocationListServer(t *testing.T, issuer *x509.Certificate, issuerKey *
 		}
 	}
 
-	der, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+	template := &x509.RevocationList{
 		Number:                    big.NewInt(1),
 		ThisUpdate:                time.Now().Add(-time.Hour),
 		NextUpdate:                time.Now().Add(time.Hour),
 		RevokedCertificateEntries: entries,
-	}, issuer, issuerKey)
+	}
+
+	if mutator != nil {
+		mutator(template)
+	}
+
+	der, err := x509.CreateRevocationList(rand.Reader, template, issuer, issuerKey)
 	require.NoError(t, err)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -396,6 +409,293 @@ func TestValidateChainLeafIsRoot(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestValidateChainRevocationRequiresChainIssuer(t *testing.T) {
+	root, rootKey, rootEncoded := newTestCertificate(t, 50, "root", nil, nil, true)
+	inter, interKey, interEncoded := newTestCertificate(t, 51, "intermediate", root, rootKey, true)
+
+	// The impostor has the subject of the intermediate but a different key.
+	impostor, impostorKey, _ := newTestCertificate(t, 52, "intermediate", nil, nil, true)
+
+	impostorCRL := newRevocationListServer(t, impostor, impostorKey, 53)
+	impostorEmptyCRL := newRevocationListServer(t, impostor, impostorKey)
+	rootCRL := newRevocationListServer(t, root, rootKey, 55)
+
+	var hits atomic.Int32
+
+	issuers := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+
+		_, _ = w.Write(impostor.Raw)
+	}))
+
+	t.Cleanup(issuers.Close)
+
+	distribution := func(uri string) func(template *x509.Certificate) {
+		return func(template *x509.Certificate) {
+			template.CRLDistributionPoints = []string{uri}
+			template.IssuingCertificateURL = []string{issuers.URL}
+		}
+	}
+
+	_, _, leafListed := newTestCertificate(t, 53, "leaf listed", inter, interKey, false, distribution(impostorCRL.URL))
+	_, _, leafUnlisted := newTestCertificate(t, 54, "leaf unlisted", inter, interKey, false, distribution(impostorEmptyCRL.URL))
+	_, _, leafListedByRoot := newTestCertificate(t, 55, "leaf listed by root", inter, interKey, false, distribution(rootCRL.URL))
+
+	testCases := []struct {
+		name     string
+		chain    []any
+		hardfail bool
+		valid    bool
+		err      error
+	}{
+		{
+			name:  "ShouldNotTrustRevocationFromImpostor",
+			chain: []any{leafListed, interEncoded},
+			valid: true,
+		},
+		{
+			name:     "ShouldRejectRevocationFromImpostorWhenHardFail",
+			chain:    []any{leafListed, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errCRLUnavailable,
+		},
+		{
+			name:     "ShouldRejectNonRevocationFromImpostorWhenHardFail",
+			chain:    []any{leafUnlisted, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errCRLUnavailable,
+		},
+		{
+			name:  "ShouldNotTrustRevocationFromOtherChainCertificate",
+			chain: []any{leafListedByRoot, interEncoded},
+			valid: true,
+		},
+		{
+			name:     "ShouldRejectRevocationFromOtherChainCertificateWhenHardFail",
+			chain:    []any{leafListedByRoot, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errCRLUnavailable,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := validateChain(rootEncoded, tc.chain, tc.hardfail)
+
+			assert.Equal(t, tc.valid, valid)
+
+			if tc.err != nil {
+				assert.Equal(t, tc.err, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+
+	assert.Zero(t, hits.Load())
+}
+
+func TestValidateChainRevocationReasonLimitedList(t *testing.T) {
+	root, rootKey, rootEncoded := newTestCertificate(t, 60, "root", nil, nil, true)
+	inter, interKey, interEncoded := newTestCertificate(t, 61, "intermediate", root, rootKey, true)
+
+	listedCRL := newRevocationListServerWithTemplate(t, inter, interKey, reasonLimitedCRL(t), 62)
+	unlistedCRL := newRevocationListServerWithTemplate(t, inter, interKey, reasonLimitedCRL(t))
+
+	_, _, leafListed := newTestCertificate(t, 62, "leaf listed", inter, interKey, false, distributionPoints(listedCRL.URL))
+	_, _, leafUnlisted := newTestCertificate(t, 63, "leaf unlisted", inter, interKey, false, distributionPoints(unlistedCRL.URL))
+
+	testCases := []struct {
+		name     string
+		chain    []any
+		hardfail bool
+		valid    bool
+		err      error
+	}{
+		{
+			name:  "ShouldRejectListedCertificate",
+			chain: []any{leafListed, interEncoded},
+			valid: false,
+			err:   errLeafCertRevoked,
+		},
+		{
+			name:     "ShouldRejectListedCertificateWhenHardFail",
+			chain:    []any{leafListed, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errLeafCertRevoked,
+		},
+		{
+			name:  "ShouldNotTreatUnlistedCertificateAsRevoked",
+			chain: []any{leafUnlisted, interEncoded},
+			valid: true,
+		},
+		{
+			name:     "ShouldRejectUnlistedCertificateWhenHardFail",
+			chain:    []any{leafUnlisted, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errCRLUnavailable,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := validateChain(rootEncoded, tc.chain, tc.hardfail)
+
+			assert.Equal(t, tc.valid, valid)
+
+			if tc.err != nil {
+				assert.Equal(t, tc.err, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateChainRevocationReissuedIssuer(t *testing.T) {
+	root, rootKey, rootEncoded := newTestCertificate(t, 70, "root", nil, nil, true)
+	inter, interKey, _ := newTestCertificate(t, 71, "intermediate", root, rootKey, true)
+
+	// The reissued intermediate has the subject and key of the intermediate which issued the leaves, but not its
+	// subject key id, and is the only intermediate in the chain.
+	reissued, reissuedEncoded := newTestReissuedCertificate(t, 72, inter, interKey, root, rootKey)
+
+	require.NotEqual(t, inter.SubjectKeyId, reissued.SubjectKeyId)
+
+	listedCRL := newRevocationListServer(t, inter, interKey, 73)
+	unlistedCRL := newRevocationListServer(t, inter, interKey)
+
+	leafListedCert, _, leafListed := newTestCertificate(t, 73, "leaf listed", inter, interKey, false, distributionPoints(listedCRL.URL))
+	_, _, leafUnlisted := newTestCertificate(t, 74, "leaf unlisted", inter, interKey, false, distributionPoints(unlistedCRL.URL))
+
+	require.Equal(t, inter.SubjectKeyId, leafListedCert.AuthorityKeyId)
+
+	testCases := []struct {
+		name     string
+		chain    []any
+		hardfail bool
+		valid    bool
+		err      error
+	}{
+		{
+			name:  "ShouldRejectListedCertificate",
+			chain: []any{leafListed, reissuedEncoded},
+			valid: false,
+			err:   errLeafCertRevoked,
+		},
+		{
+			name:     "ShouldRejectListedCertificateWhenHardFail",
+			chain:    []any{leafListed, reissuedEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errLeafCertRevoked,
+		},
+		{
+			name:  "ShouldAcceptUnlistedCertificate",
+			chain: []any{leafUnlisted, reissuedEncoded},
+			valid: true,
+		},
+		{
+			name:     "ShouldAcceptUnlistedCertificateWhenHardFail",
+			chain:    []any{leafUnlisted, reissuedEncoded},
+			hardfail: true,
+			valid:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := validateChain(rootEncoded, tc.chain, tc.hardfail)
+
+			assert.Equal(t, tc.valid, valid)
+
+			if tc.err != nil {
+				assert.Equal(t, tc.err, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateChainRevocationChecksEveryDistributionPoint(t *testing.T) {
+	root, rootKey, rootEncoded := newTestCertificate(t, 80, "root", nil, nil, true)
+	inter, interKey, interEncoded := newTestCertificate(t, 81, "intermediate", root, rootKey, true)
+
+	emptyCRL := newRevocationListServer(t, inter, interKey)
+	otherEmptyCRL := newRevocationListServer(t, inter, interKey)
+	listedCRL := newRevocationListServer(t, inter, interKey, 82)
+
+	_, _, leafListedBySecond := newTestCertificate(t, 82, "leaf listed by second", inter, interKey, false, distributionPoints(emptyCRL.URL, listedCRL.URL))
+	_, _, leafListedByFirst := newTestCertificate(t, 82, "leaf listed by first", inter, interKey, false, distributionPoints(listedCRL.URL, emptyCRL.URL))
+	_, _, leafUnlisted := newTestCertificate(t, 83, "leaf unlisted", inter, interKey, false, distributionPoints(emptyCRL.URL, otherEmptyCRL.URL))
+
+	testCases := []struct {
+		name     string
+		chain    []any
+		hardfail bool
+		valid    bool
+		err      error
+	}{
+		{
+			name:  "ShouldRejectCertificateListedBySecond",
+			chain: []any{leafListedBySecond, interEncoded},
+			valid: false,
+			err:   errLeafCertRevoked,
+		},
+		{
+			name:     "ShouldRejectCertificateListedBySecondWhenHardFail",
+			chain:    []any{leafListedBySecond, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errLeafCertRevoked,
+		},
+		{
+			name:  "ShouldRejectCertificateListedByFirst",
+			chain: []any{leafListedByFirst, interEncoded},
+			valid: false,
+			err:   errLeafCertRevoked,
+		},
+		{
+			name:     "ShouldRejectCertificateListedByFirstWhenHardFail",
+			chain:    []any{leafListedByFirst, interEncoded},
+			hardfail: true,
+			valid:    false,
+			err:      errLeafCertRevoked,
+		},
+		{
+			name:  "ShouldAcceptCertificateListedByNeither",
+			chain: []any{leafUnlisted, interEncoded},
+			valid: true,
+		},
+		{
+			name:     "ShouldAcceptCertificateListedByNeitherWhenHardFail",
+			chain:    []any{leafUnlisted, interEncoded},
+			hardfail: true,
+			valid:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := validateChain(rootEncoded, tc.chain, tc.hardfail)
+
+			assert.Equal(t, tc.valid, valid)
+
+			if tc.err != nil {
+				assert.Equal(t, tc.err, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 type recordingReadCloser struct {
 	io.Reader
 	closed bool
@@ -417,4 +717,48 @@ func TestDecodeDoesNotCloseTheReader(t *testing.T) {
 	require.Error(t, err)
 
 	assert.False(t, rc.closed, "Decode must leave closing the reader to the caller")
+}
+
+func distributionPoints(uris ...string) func(template *x509.Certificate) {
+	return func(template *x509.Certificate) {
+		template.CRLDistributionPoints = uris
+	}
+}
+
+func reasonLimitedCRL(t *testing.T) func(template *x509.RevocationList) {
+	t.Helper()
+
+	value, err := asn1.Marshal(struct {
+		OnlySomeReasons asn1.BitString `asn1:"optional,tag:3"`
+	}{
+		OnlySomeReasons: asn1.BitString{Bytes: []byte{0x40}, BitLength: 2},
+	})
+	require.NoError(t, err)
+
+	return func(template *x509.RevocationList) {
+		template.ExtraExtensions = []pkix.Extension{{Id: asn1.ObjectIdentifier{2, 5, 29, 28}, Critical: true, Value: value}}
+	}
+}
+
+func newTestReissuedCertificate(t *testing.T, serial int64, original *x509.Certificate, originalKey *ecdsa.PrivateKey, parent *x509.Certificate, parentKey *ecdsa.PrivateKey) (cert *x509.Certificate, encoded string) {
+	t.Helper()
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(serial),
+		Subject:               original.Subject,
+		SubjectKeyId:          []byte{0x72, 0x65, 0x69, 0x73, 0x73, 0x75, 0x65, 0x64},
+		NotBefore:             original.NotBefore,
+		NotAfter:              original.NotAfter,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              original.KeyUsage,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, parent, &originalKey.PublicKey, parentKey)
+	require.NoError(t, err)
+
+	cert, err = x509.ParseCertificate(der)
+	require.NoError(t, err)
+
+	return cert, base64.StdEncoding.EncodeToString(der)
 }

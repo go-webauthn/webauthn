@@ -1,6 +1,7 @@
 package metadata
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
@@ -190,7 +191,8 @@ func WithRootCertificate(value string) DecoderOption {
 
 // WithRevocationHardFail is a DecoderOption which rejects the metadata payload when the revocation status of a
 // certificate in the signing certificate chain can't be determined, for example because the certificate revocation list
-// is unreachable. By default such a certificate is treated as not revoked.
+// is unreachable or is not signed by the issuer of the certificate in the verified chain. By default such a certificate
+// is treated as not revoked.
 //
 // The trust anchor is never checked for revocation, with or without this option, including when it signs the metadata
 // payload directly.
@@ -271,23 +273,25 @@ func validateChain(root string, chain []any, hardfail bool) (bool, error) {
 		return false, err
 	}
 
-	if verified := chains[0]; len(verified) > 2 {
-		for _, intcert := range verified[1 : len(verified)-1] {
-			if err = validateChainCheckRevocation(intcert, errIntermediateCertRevoked, hardfail); err != nil {
-				return false, err
-			}
+	verified := chains[0]
+
+	for i := 1; i < len(verified)-1; i++ {
+		if err = validateChainCheckRevocation(verified[i], verified[i+1], errIntermediateCertRevoked, hardfail); err != nil {
+			return false, err
 		}
 	}
 
-	if err = validateChainCheckRevocation(leafcert, errLeafCertRevoked, hardfail); err != nil {
-		return false, err
+	if len(verified) > 1 {
+		if err = validateChainCheckRevocation(verified[0], verified[1], errLeafCertRevoked, hardfail); err != nil {
+			return false, err
+		}
 	}
 
 	return true, nil
 }
 
-func validateChainCheckRevocation(cert *x509.Certificate, revokedErr error, hardfail bool) error {
-	revoked, ok := revoke.VerifyCertificate(cert)
+func validateChainCheckRevocation(cert, issuer *x509.Certificate, revokedErr error, hardfail bool) error {
+	revoked, ok, _ := revoke.VerifyCertificateWithIssuer(context.Background(), cert, issuer)
 
 	switch {
 	case !ok && hardfail:
