@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -48,8 +48,9 @@ type ParsedAssertionResponse struct {
 	UserHandle          []byte
 }
 
-// ParseCredentialRequestResponse parses a login/assertion response from a [*http.Request]. The request body is
-// automatically drained and closed after parsing.
+// ParseCredentialRequestResponse parses a login/assertion response from a [*http.Request]. At most 10 MiB of the
+// request body is read and a larger body is rejected with an [ErrBadRequest]. The request body is drained, up to a
+// limit, and closed after parsing.
 //
 // This is the standard entry point when using [net/http]. For implementations that don't use [net/http], see
 // [ParseCredentialRequestResponseBody] (accepts an [io.Reader]) or [ParseCredentialRequestResponseBytes] (accepts a
@@ -59,16 +60,14 @@ func ParseCredentialRequestResponse(response *http.Request) (*ParsedCredentialAs
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
-	defer func(request *http.Request) {
-		_, _ = io.Copy(io.Discard, request.Body)
-		_ = request.Body.Close()
-	}(response)
+	defer drainAndClose(response.Body)
 
 	return ParseCredentialRequestResponseBody(response.Body)
 }
 
-// ParseCredentialRequestResponseBody parses a login/assertion response from an [io.Reader]. The caller is responsible
-// for closing the reader if applicable.
+// ParseCredentialRequestResponseBody parses a login/assertion response from an [io.Reader]. At most 10 MiB is read
+// from the reader and a larger body is rejected with an [ErrBadRequest]. The caller is responsible for closing the
+// reader if applicable.
 //
 // This is the framework-agnostic variant of [ParseCredentialRequestResponse]. For a [*http.Request] use
 // [ParseCredentialRequestResponse] instead. For raw bytes use [ParseCredentialRequestResponseBytes].
@@ -76,6 +75,10 @@ func ParseCredentialRequestResponseBody(body io.Reader) (par *ParsedCredentialAs
 	var car CredentialAssertionResponse
 
 	if err = decodeBody(body, &car); err != nil {
+		if errors.Is(err, errBodyTooLarge) {
+			return nil, ErrBadRequest.WithDetails("Request body is too large").WithInfo(err.Error()).WithError(err)
+		}
+
 		return nil, ErrBadRequest.WithDetails("Parse error for Assertion").WithInfo(err.Error()).WithError(err)
 	}
 
@@ -146,7 +149,7 @@ func (car CredentialAssertionResponse) Parse() (par *ParsedCredentialAssertionDa
 
 	// Step 5. Let JSONtext be the result of running UTF-8 decode on the value of cData.
 	// We don't call it cData but this is Step 5 in the spec.
-	if err = json.Unmarshal(car.AssertionResponse.ClientDataJSON, &par.Response.CollectedClientData); err != nil {
+	if err = parseCollectedClientData(car.AssertionResponse.ClientDataJSON, &par.Response.CollectedClientData); err != nil {
 		return nil, err
 	}
 

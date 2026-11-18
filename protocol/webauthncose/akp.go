@@ -47,6 +47,10 @@ func (k *AKPPublicKeyData) ToPublicKey() (key crypto.PublicKey, err error) {
 func parseAKPPublicKey(pk PublicKeyData, keyBytes []byte) (key any, err error) {
 	var a AKPPublicKeyData
 
+	if err = validateKeyByteStrings(keyBytes, "AKP", -1); err != nil {
+		return nil, err
+	}
+
 	if err = webauthncbor.Unmarshal(keyBytes, &a); err != nil {
 		return nil, err
 	}

@@ -198,6 +198,10 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 	case OctetKey:
 		var o OKPPublicKeyData
 
+		if err = validateKeyByteStrings(keyBytes, "OKP", -2); err != nil {
+			return nil, err
+		}
+
 		if err = webauthncbor.Unmarshal(keyBytes, &o); err != nil {
 			return nil, err
 		}
@@ -212,6 +216,10 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 	case EllipticKey:
 		var e EC2PublicKeyData
 
+		if err = validateKeyByteStrings(keyBytes, "EC2", -2, -3); err != nil {
+			return nil, err
+		}
+
 		if err = webauthncbor.Unmarshal(keyBytes, &e); err != nil {
 			return nil, err
 		}
@@ -225,6 +233,10 @@ func ParsePublicKey(keyBytes []byte) (publicKey any, err error) {
 		return e, nil
 	case RSAKey:
 		var r RSAPublicKeyData
+
+		if err = validateKeyByteStrings(keyBytes, "RSA", -1, -2); err != nil {
+			return nil, err
+		}
 
 		if err = webauthncbor.Unmarshal(keyBytes, &r); err != nil {
 			return nil, err
@@ -464,6 +476,30 @@ func validateKeyCurve(keyType string, algorithm, curve int64) error {
 	}
 
 	return ErrUnsupportedKey.WithDetails(fmt.Sprintf("%s key with algorithm %s must specify curve %s but it specified %s", keyType, alg, expected.curve, specified))
+}
+
+func validateKeyByteStrings(keyBytes []byte, keyType string, labels ...int64) error {
+	var members map[any]webauthncbor.RawMessage
+
+	if err := webauthncbor.Unmarshal(keyBytes, &members); err != nil {
+		return ErrUnsupportedKey
+	}
+
+	// The decoder accepts an array of integers for a byte slice, which is a second encoding of the same key and not
+	// one COSE defines. It leaves the parameter unset for a null as it does for an absent one, which is left to the
+	// validation of the key to reject.
+	for _, label := range labels {
+		member, ok := members[label]
+		if !ok || bytes.Equal(member, cborNull) || bytes.Equal(member, cborUndefined) {
+			continue
+		}
+
+		if !webauthncbor.IsByteString(member) {
+			return ErrUnsupportedKey.WithDetails(fmt.Sprintf("%s key parameter %d is not a byte string", keyType, label))
+		}
+	}
+
+	return nil
 }
 
 func validateOKPPublicKey(k *OKPPublicKeyData) error {

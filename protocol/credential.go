@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net/http"
 
@@ -74,8 +75,9 @@ type ParsedCredentialCreationData struct {
 	Raw      CredentialCreationResponse
 }
 
-// ParseCredentialCreationResponse parses a registration/attestation response from a [*http.Request]. The request body
-// is automatically drained and closed after parsing.
+// ParseCredentialCreationResponse parses a registration/attestation response from a [*http.Request]. At most 10 MiB of
+// the request body is read and a larger body is rejected with an [ErrBadRequest]. The request body is drained, up to a
+// limit, and closed after parsing.
 //
 // This is the standard entry point when using [net/http]. For implementations that don't use [net/http], see
 // [ParseCredentialCreationResponseBody] (accepts an [io.Reader]) or [ParseCredentialCreationResponseBytes] (accepts a
@@ -85,16 +87,14 @@ func ParseCredentialCreationResponse(request *http.Request) (*ParsedCredentialCr
 		return nil, ErrBadRequest.WithDetails("No response given")
 	}
 
-	defer func() {
-		_, _ = io.Copy(io.Discard, request.Body)
-		_ = request.Body.Close()
-	}()
+	defer drainAndClose(request.Body)
 
 	return ParseCredentialCreationResponseBody(request.Body)
 }
 
-// ParseCredentialCreationResponseBody parses a registration/attestation response from an [io.Reader]. The caller is
-// responsible for closing the reader if applicable.
+// ParseCredentialCreationResponseBody parses a registration/attestation response from an [io.Reader]. At most 10 MiB
+// is read from the reader and a larger body is rejected with an [ErrBadRequest]. The caller is responsible for closing
+// the reader if applicable.
 //
 // This is the framework-agnostic variant of [ParseCredentialCreationResponse]. For a [*http.Request] use
 // [ParseCredentialCreationResponse] instead. For raw bytes use [ParseCredentialCreationResponseBytes].
@@ -102,6 +102,10 @@ func ParseCredentialCreationResponseBody(body io.Reader) (pcc *ParsedCredentialC
 	var ccr CredentialCreationResponse
 
 	if err = decodeBody(body, &ccr); err != nil {
+		if errors.Is(err, errBodyTooLarge) {
+			return nil, ErrBadRequest.WithDetails("Request body is too large").WithInfo(err.Error()).WithError(err)
+		}
+
 		return nil, ErrBadRequest.WithDetails("Parse error for Registration").WithInfo(err.Error()).WithError(err)
 	}
 

@@ -3,7 +3,6 @@ package protocol
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -99,7 +98,7 @@ type AttestationObject struct {
 // compound format. Which of the two applies is determined by the fmt member of the same map, so the statement cannot
 // be decoded until the rest of the object has been.
 type attestationObjectEncoded struct {
-	RawAuthData  []byte                  `json:"authData"`
+	RawAuthData  webauthncbor.RawMessage `json:"authData"`
 	Format       string                  `json:"fmt"`
 	AttStatement webauthncbor.RawMessage `json:"attStmt,omitempty"`
 }
@@ -130,7 +129,21 @@ func (a *AttestationObject) UnmarshalCBOR(data []byte) (err error) {
 		return err
 	}
 
-	*a = AttestationObject{RawAuthData: encoded.RawAuthData, Format: encoded.Format}
+	var authData []byte
+
+	// The authenticator data is deferred so that its type can be checked, as the decoder would otherwise accept an
+	// array of integers for it.
+	if len(encoded.RawAuthData) != 0 {
+		if !webauthncbor.IsByteString(encoded.RawAuthData) {
+			return fmt.Errorf("cbor: attestation object member authData is not a byte string")
+		}
+
+		if err = webauthncbor.Unmarshal(encoded.RawAuthData, &authData); err != nil {
+			return err
+		}
+	}
+
+	*a = AttestationObject{RawAuthData: authData, Format: encoded.Format}
 
 	if len(encoded.AttStatement) == 0 {
 		return nil
@@ -172,7 +185,7 @@ func RegisterAttestationFormat(format AttestationFormat, handler attestationForm
 func (ccr *AuthenticatorAttestationResponse) Parse() (p *ParsedAttestationResponse, err error) {
 	p = &ParsedAttestationResponse{}
 
-	if err = json.Unmarshal(ccr.ClientDataJSON, &p.CollectedClientData); err != nil {
+	if err = parseCollectedClientData(ccr.ClientDataJSON, &p.CollectedClientData); err != nil {
 		return nil, ErrParsingData.WithInfo(err.Error()).WithError(err)
 	}
 
