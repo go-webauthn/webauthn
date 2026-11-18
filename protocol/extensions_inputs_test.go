@@ -234,6 +234,79 @@ func TestAuthenticationExtensionsPRFBareProbe(t *testing.T) {
 	assert.ErrorContains(t, outputs.Verify(absent.Session(), CreateCeremony, UnsolicitedOutputPolicyReject), "prf")
 }
 
+// See: https://www.w3.org/TR/webauthn-3/#test-vectors-extensions-prf-webauthn
+func TestAuthenticationExtensionsPRFSpecVectors(t *testing.T) {
+	const credentialID = "e02eZ9lPp0UdkF4vGRO4-NxlhWBkL1FCmsmb1tTfRyE" //nolint:gosec
+
+	testCases := []struct {
+		name     string
+		have     string
+		expected PRFInputs
+		create   []string
+		assert   []string
+	}{
+		{
+			name:     "ShouldHandleProbe",
+			have:     `{"prf":{}}`,
+			expected: PRFInputs{},
+		},
+		{
+			name:     "ShouldHandleEvalFirst",
+			have:     `{"prf":{"eval":{"first":"AQIDBA"}}}`,
+			expected: PRFInputs{Eval: PRFValues{First: []byte{1, 2, 3, 4}}},
+		},
+		{
+			name: "ShouldHandleEvalFirstAndSecondWithEvalByCredential",
+			have: `{"prf":{"eval":{"first":"AQIDBA","second":"BQYHCA"},"evalByCredential":{"` + credentialID + `":{"first":"CQoLDA"}}}}`,
+			expected: PRFInputs{
+				Eval:             PRFValues{First: []byte{1, 2, 3, 4}, Second: []byte{5, 6, 7, 8}},
+				EvalByCredential: map[string]PRFValues{credentialID: {First: []byte{9, 10, 11, 12}}},
+			},
+			create: []string{"prf", "evalByCredential"},
+		},
+		{
+			name: "ShouldHandleEvalByCredentialEqualFirstAndSecond",
+			have: `{"prf":{"evalByCredential":{"` + credentialID + `":{"first":"CQoLDA","second":"CQoLDA"}}}}`,
+			expected: PRFInputs{
+				EvalByCredential: map[string]PRFValues{credentialID: {First: []byte{9, 10, 11, 12}, Second: []byte{9, 10, 11, 12}}},
+			},
+			create: []string{"prf", "evalByCredential"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var actual AuthenticationExtensions
+
+			require.NoError(t, json.Unmarshal([]byte(tc.have), &actual))
+			require.NotNil(t, actual.PRF)
+			assert.Equal(t, tc.expected, *actual.PRF)
+			assert.Empty(t, actual.Extra)
+			assert.Equal(t, []string{ExtensionPRF}, actual.Requested())
+
+			data, err := json.Marshal(actual)
+			require.NoError(t, err)
+			assert.Equal(t, tc.have, string(data))
+
+			for ceremony, errs := range map[CeremonyType][]string{CreateCeremony: tc.create, AssertCeremony: tc.assert} {
+				err = actual.Validate(ceremony)
+
+				if len(errs) == 0 {
+					assert.NoError(t, err)
+
+					continue
+				}
+
+				require.Error(t, err)
+
+				for _, fragment := range errs {
+					assert.ErrorContains(t, err, fragment)
+				}
+			}
+		})
+	}
+}
+
 func TestAuthenticationExtensionsRequestedMatchesMarshalledKeys(t *testing.T) {
 	// Requested is hand-written per field. This invariant catches it drifting from the codec.
 	testCases := []AuthenticationExtensions{

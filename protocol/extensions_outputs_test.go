@@ -71,6 +71,83 @@ func TestClientOutputsRoundTrip(t *testing.T) {
 	assert.Equal(t, original, decoded)
 }
 
+// See: https://www.w3.org/TR/webauthn-3/#test-vectors-extensions-prf-webauthn
+func TestClientOutputsPRFSpecVectors(t *testing.T) {
+	result := specTestDecodeHex(t, "c4172e982e9097c39a6c0cb720cb375b92e3fcad154a63e43a93f1096b1e1973")
+	other := specTestDecodeHex(t, "16367aacb67a4a017c8da8ab95682ccb390863780f7114dda0a0e0c55644c7c4")
+
+	testCases := []struct {
+		name     string
+		have     string
+		expected PRFOutputs
+		ceremony CeremonyType
+	}{
+		{
+			name:     "ShouldHandleEmpty",
+			have:     `{"prf":{}}`,
+			expected: PRFOutputs{},
+			ceremony: AssertCeremony,
+		},
+		{
+			name:     "ShouldHandleEnabled",
+			have:     `{"prf":{"enabled":true}}`,
+			expected: PRFOutputs{Enabled: ptr(true)},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "ShouldHandleNotEnabled",
+			have:     `{"prf":{"enabled":false}}`,
+			expected: PRFOutputs{Enabled: ptr(false)},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "ShouldHandleEnabledWithResultsFirst",
+			have:     `{"prf":{"enabled":true,"results":{"first":"xBcumC6Ql8OabAy3IMs3W5Lj_K0VSmPkOpPxCWseGXM"}}}`,
+			expected: PRFOutputs{Enabled: ptr(true), Results: &PRFValues{First: result}},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "ShouldHandleResultsFirst",
+			have:     `{"prf":{"results":{"first":"xBcumC6Ql8OabAy3IMs3W5Lj_K0VSmPkOpPxCWseGXM"}}}`,
+			expected: PRFOutputs{Results: &PRFValues{First: result}},
+			ceremony: AssertCeremony,
+		},
+		{
+			name:     "ShouldHandleResultsFirstAndSecond",
+			have:     `{"prf":{"results":{"first":"xBcumC6Ql8OabAy3IMs3W5Lj_K0VSmPkOpPxCWseGXM","second":"xBcumC6Ql8OabAy3IMs3W5Lj_K0VSmPkOpPxCWseGXM"}}}`,
+			expected: PRFOutputs{Results: &PRFValues{First: result, Second: result}},
+			ceremony: AssertCeremony,
+		},
+		{
+			name:     "ShouldHandleResultsDistinctFirstAndSecond",
+			have:     `{"prf":{"results":{"first":"xBcumC6Ql8OabAy3IMs3W5Lj_K0VSmPkOpPxCWseGXM","second":"FjZ6rLZ6SgF8jairlWgsyzkIY3gPcRTdoKDgxVZEx8Q"}}}`,
+			expected: PRFOutputs{Results: &PRFValues{First: result, Second: other}},
+			ceremony: AssertCeremony,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var actual AuthenticationExtensionsClientOutputs
+
+			require.NoError(t, json.Unmarshal([]byte(tc.have), &actual))
+			require.NotNil(t, actual.PRF)
+			assert.Equal(t, tc.expected, *actual.PRF)
+			assert.Empty(t, actual.Extra)
+			assert.Equal(t, []string{ExtensionPRF}, actual.Present())
+
+			data, err := json.Marshal(actual)
+			require.NoError(t, err)
+			assert.Equal(t, tc.have, string(data))
+
+			requested := AuthenticationExtensions{PRF: &PRFInputs{}}.Session()
+
+			assert.NoError(t, actual.Verify(requested, tc.ceremony, UnsolicitedOutputPolicyReject))
+			assert.ErrorContains(t, actual.Verify(SessionExtensions{}, tc.ceremony, UnsolicitedOutputPolicyReject), ExtensionPRF)
+		})
+	}
+}
+
 func TestClientOutputsAppIDWrongType(t *testing.T) {
 	var outputs AuthenticationExtensionsClientOutputs
 
