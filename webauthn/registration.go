@@ -112,6 +112,10 @@ func (webauthn *WebAuthn) BeginMediatedRegistration(user User, mediation protoco
 		return nil, nil, fmt.Errorf("error generating credential creation: the challenge must be at least 16 bytes")
 	}
 
+	if err = creation.Response.ValidateExtensions(); err != nil {
+		return nil, nil, fmt.Errorf("error generating credential creation: %w", err)
+	}
+
 	// The user handle is validated after the options have been applied because a [RegistrationOption] receives the
 	// whole creation options and may therefore replace the user entity id derived from the [User] above, and it is
 	// the id which is actually sent to the client that has to satisfy the bounds. The session records the id of the
@@ -252,6 +256,12 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 
 	if credential, err = NewCredential(clientDataHash, parsedResponse); err != nil {
 		return nil, err
+	}
+
+	// An authenticator which does not support credBlob ignores it rather than reporting that it did not store the
+	// blob, so for a requested blob the absence of an outcome is recorded as not stored.
+	if session.Extensions.CredBlob && credential.Extensions.CredBlobSet == nil {
+		credential.Extensions.CredBlobSet = ptr(false)
 	}
 
 	if err = ValidateFilteredCredential(credential, config.Filtering); err != nil {

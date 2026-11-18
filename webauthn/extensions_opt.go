@@ -257,6 +257,9 @@ func WithExtensionMinPinLength() ExtensionOption {
 
 // WithExtensionCredBlob requests that the given blob is stored with the credential.
 //
+// The registration does not fail when the authenticator does not store the blob, as many authenticators do not
+// support the extension. Whether it was stored is recorded on [CredentialExtensions.CredBlobSet].
+//
 // Registry: https://www.iana.org/assignments/webauthn/webauthn.xhtml
 func WithExtensionCredBlob(blob []byte) ExtensionOption {
 	return forCeremony(protocol.ExtensionCredBlob, protocol.CreateCeremony, func(e *protocol.AuthenticationExtensions) {
@@ -317,6 +320,9 @@ func WithExtensionLargeBlobRead() ExtensionOption {
 
 // WithExtensionLargeBlobWrite requests that the given blob is written to the credential. This is mutually
 // exclusive with [WithExtensionLargeBlobRead].
+//
+// A client rejects a write unless the request names exactly one allowed credential, so a login which requests one
+// with any other number of allowed credentials, which includes every discoverable login, fails to begin.
 //
 // Specification: §10.1.5. Large blob storage extension (https://www.w3.org/TR/webauthn-3/#sctn-large-blob-extension)
 func WithExtensionLargeBlobWrite(blob []byte) ExtensionOption {

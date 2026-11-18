@@ -104,6 +104,10 @@ func (webauthn *WebAuthn) beginLogin(userID []byte, allowedCredentials []protoco
 		}
 	}
 
+	if err = assertion.Response.ValidateExtensions(); err != nil {
+		return nil, nil, fmt.Errorf("error generating assertion: %w", err)
+	}
+
 	if len(assertion.Response.Challenge) == 0 {
 		var challenge protocol.URLEncodedBase64
 		if challenge, err = protocol.CreateChallenge(); err != nil {

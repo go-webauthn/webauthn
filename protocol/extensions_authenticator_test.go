@@ -85,6 +85,25 @@ func TestAuthenticatorExtensionOutputsVerify(t *testing.T) {
 			errs:     []string{"credentialProtectionPolicy", "did not report the policy"},
 		},
 		{
+			name:     "EnforcedOptionalButNotReported",
+			outputs:  &AuthenticatorExtensionOutputs{},
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationOptional, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "EnforcedOptionalWithNoOutputsAtAll",
+			outputs:  nil,
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationOptional, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+		},
+		{
+			name:     "EnforcedOptionalWithCredentialIDListNotReported",
+			outputs:  nil,
+			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationOptionalWithCredentialIDList, EnforceCredentialProtectionPolicy: true},
+			ceremony: CreateCeremony,
+			errs:     []string{"credentialProtectionPolicy", "did not report the policy"},
+		},
+		{
 			name:     "EnforcedWithUnknownPolicy",
 			outputs:  &AuthenticatorExtensionOutputs{CredProtect: ptr(CredentialProtectionPolicyUserVerificationRequired)},
 			session:  SessionExtensions{CredentialProtectionPolicy: CredentialProtectionPolicy("nonsense"), EnforceCredentialProtectionPolicy: true},
@@ -117,14 +136,12 @@ func TestAuthenticatorExtensionOutputsVerify(t *testing.T) {
 			outputs:  &AuthenticatorExtensionOutputs{CredBlobSet: ptr(false)},
 			session:  SessionExtensions{CredBlob: true},
 			ceremony: CreateCeremony,
-			errs:     []string{"credBlob", "was not stored"},
 		},
 		{
-			name:     "CredBlobOutcomeMissing",
-			outputs:  &AuthenticatorExtensionOutputs{},
+			name:     "CredBlobIgnored",
+			outputs:  nil,
 			session:  SessionExtensions{CredBlob: true},
 			ceremony: CreateCeremony,
-			errs:     []string{"credBlob", "did not report whether it was stored"},
 		},
 		{
 			name:     "CredBlobNotRequested",
@@ -138,14 +155,6 @@ func TestAuthenticatorExtensionOutputsVerify(t *testing.T) {
 			outputs:  &AuthenticatorExtensionOutputs{},
 			session:  SessionExtensions{CredBlob: true},
 			ceremony: AssertCeremony,
-		},
-		{
-			// Both rules are reported together rather than stopping at the first.
-			name:     "EveryProblemIsReported",
-			outputs:  &AuthenticatorExtensionOutputs{CredBlobSet: ptr(false)},
-			session:  SessionExtensions{CredBlob: true, CredentialProtectionPolicy: CredentialProtectionPolicyUserVerificationRequired, EnforceCredentialProtectionPolicy: true},
-			ceremony: CreateCeremony,
-			errs:     []string{"credBlob", "was not stored", "credentialProtectionPolicy", "did not report the policy"},
 		},
 	}
 

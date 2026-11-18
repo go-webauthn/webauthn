@@ -109,6 +109,11 @@ const (
 // subsumes ceremony applicability, because an output that cannot be requested for a ceremony cannot have been
 // requested at all. Second, a registration that required large blob support must have received it.
 //
+// The members of an output which only the other ceremony produces are also rejected. The large blob read and write
+// outcomes are checked against the operation requested regardless of the policy. The PRF 'enabled' member, which a
+// client reports only when a credential is created, is rejected in an authentication ceremony when the PRF extension
+// was requested and the policy is not [UnsolicitedOutputPolicyIgnore].
+//
 // Every problem found is reported rather than only the first. The result is an [Error] whose details name every
 // problem and whose cause is the [errors.Join] of them, so [errors.As] and [errors.Is] reach each one individually.
 //
@@ -142,6 +147,11 @@ func (o AuthenticationExtensionsClientOutputs) Verify(session SessionExtensions,
 		}
 	} else {
 		errs = append(errs, o.verifyLargeBlobAssertion(session)...)
+
+		// The client only reports 'enabled' when a credential is created.
+		if policy != UnsolicitedOutputPolicyIgnore && o.PRF != nil && o.PRF.Enabled != nil && slices.Contains(session.Requested, ExtensionPRF) {
+			errs = append(errs, ErrBadRequest.WithDetails(fmt.Sprintf("The %q extension output member 'enabled' is a registration output but was returned for an authentication ceremony", ExtensionPRF)))
+		}
 	}
 
 	if len(errs) == 0 {
