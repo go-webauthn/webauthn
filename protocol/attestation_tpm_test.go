@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/go-webauthn/x/crypto/secp256k1"
+
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
@@ -823,7 +825,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			"CurveMismatch",
 			webauthncose.EllipticKey,
 			nil,
-			&TPMECCTestParameters{Curve: tpm2.TPMECCNistP224, X: eccKey.X.Bytes(), Y: eccKey.Y.Bytes()},
+			&TPMECCTestParameters{Curve: tpm2.TPMECCNistP224, X: eccKey.X.FillBytes(make([]byte, 32)), Y: eccKey.Y.FillBytes(make([]byte, 32))},
 			epk,
 			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
 		},
@@ -831,7 +833,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			"XMismatch",
 			webauthncose.EllipticKey,
 			nil,
-			&TPMECCTestParameters{X: corruptBytes(eccKey.X.Bytes()), Y: eccKey.Y.Bytes()},
+			&TPMECCTestParameters{X: corruptBytes(eccKey.X.FillBytes(make([]byte, 32))), Y: eccKey.Y.FillBytes(make([]byte, 32))},
 			epk,
 			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
 		},
@@ -839,7 +841,7 @@ func TestTPMAttestationVerificationFailPubArea(t *testing.T) {
 			"YMismatch",
 			webauthncose.EllipticKey,
 			nil,
-			&TPMECCTestParameters{X: eccKey.X.Bytes(), Y: corruptBytes(eccKey.Y.Bytes())},
+			&TPMECCTestParameters{X: eccKey.X.FillBytes(make([]byte, 32)), Y: corruptBytes(eccKey.Y.FillBytes(make([]byte, 32)))},
 			epk,
 			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
 		},
@@ -1004,6 +1006,112 @@ func TestTPMAttestationVerificationRSAExponent(t *testing.T) {
 				assert.Nil(t, x5cs)
 				assert.EqualError(t, aerr, tc.err)
 			})
+		})
+	}
+}
+
+func TestTPMAttestationVerificationECCCurve(t *testing.T) {
+	_, _, _, _, eccKey, err := getTPMAttestionKeys()
+	require.NoError(t, err)
+
+	k1 := secp256k1.Params()
+
+	testCases := []struct {
+		name         string
+		alg          webauthncose.COSEAlgorithmIdentifier
+		curve        webauthncose.COSEEllipticCurve
+		x, y         []byte
+		pubAreaCurve tpm2.TPMECCCurve
+		err          string
+	}{
+		{
+			"ShouldMatchCurveOfFullySpecifiedAlgorithmWithoutCurve",
+			webauthncose.AlgESP256,
+			webauthncose.EllipticCurveReserved,
+			eccKey.X.FillBytes(make([]byte, 32)),
+			eccKey.Y.FillBytes(make([]byte, 32)),
+			tpm2.TPMECCNistP256,
+			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest', EOF",
+		},
+		{
+			"ShouldMatchCurveOfFullySpecifiedAlgorithmWithCurve",
+			webauthncose.AlgESP256,
+			webauthncose.P256,
+			eccKey.X.FillBytes(make([]byte, 32)),
+			eccKey.Y.FillBytes(make([]byte, 32)),
+			tpm2.TPMECCNistP256,
+			"unmarshalling field 1 of struct of type 'tpm2.TPMSAttest', EOF",
+		},
+		{
+			"ShouldRejectFullySpecifiedAlgorithmWithoutCurveAndPubAreaWithoutCurve",
+			webauthncose.AlgESP256,
+			webauthncose.EllipticCurveReserved,
+			eccKey.X.FillBytes(make([]byte, 32)),
+			eccKey.Y.FillBytes(make([]byte, 32)),
+			tpm2.TPMECCNone,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"ShouldRejectSecp256k1WithoutCurveAndPubAreaWithoutCurve",
+			webauthncose.AlgES256K,
+			webauthncose.EllipticCurveReserved,
+			k1.Gx.FillBytes(make([]byte, 32)),
+			k1.Gy.FillBytes(make([]byte, 32)),
+			tpm2.TPMECCNone,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+		{
+			"ShouldRejectSecp256k1WithCurveAndPubAreaWithoutCurve",
+			webauthncose.AlgES256K,
+			webauthncose.Secp256k1,
+			k1.Gx.FillBytes(make([]byte, 32)),
+			k1.Gy.FillBytes(make([]byte, 32)),
+			tpm2.TPMECCNone,
+			"Mismatch between ECCParameters in pubArea and credentialPublicKey",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cpk, err := webauthncbor.Marshal(webauthncose.EC2PublicKeyData{
+				PublicKeyData: webauthncose.PublicKeyData{
+					KeyType:   int64(webauthncose.EllipticKey),
+					Algorithm: int64(tc.alg),
+				},
+				Curve:  int64(tc.curve),
+				XCoord: tc.x,
+				YCoord: tc.y,
+			})
+			require.NoError(t, err)
+
+			public := makeTPMTPublicECDSA(&TPMECCTestParameters{X: tc.x, Y: tc.y})
+
+			params, err := public.Parameters.ECCDetail()
+			require.NoError(t, err)
+
+			params.CurveID = tc.pubAreaCurve
+
+			attStmt := make(map[string]any, len(defaultAttStatement))
+			for id, v := range defaultAttStatement {
+				attStmt[id] = v
+			}
+
+			attStmt[stmtPubArea] = tpm2.Marshal(public)
+
+			att := AttestationObject{
+				AttStatement: attStmt,
+				AuthData: AuthenticatorData{
+					AttData: AttestedCredentialData{
+						CredentialPublicKey: cpk,
+					},
+				},
+			}
+
+			attestationType, x5cs, err := attestationFormatValidationHandlerTPM(att, nil, nil, AttestationPolicy{}, SignaturePolicy{})
+
+			assert.Empty(t, attestationType)
+			assert.Nil(t, x5cs)
+			assert.EqualError(t, err, tc.err)
 		})
 	}
 }
@@ -1414,8 +1522,8 @@ func getTPMAttestionKeys() ([]byte, []byte, []byte, rsa.PrivateKey, ecdsa.Privat
 		KeyType:   int64(webauthncose.EllipticKey),
 		Algorithm: int64(webauthncose.AlgES256),
 		Curve:     int64(webauthncose.P256),
-		XCoord:    eccKey.X.Bytes(),
-		YCoord:    eccKey.Y.Bytes(),
+		XCoord:    eccKey.X.FillBytes(make([]byte, 32)),
+		YCoord:    eccKey.Y.FillBytes(make([]byte, 32)),
 	}
 
 	e := webauthncose.EC2PublicKeyData{

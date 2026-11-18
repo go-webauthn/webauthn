@@ -308,6 +308,37 @@ func TestAttestationObject_VerifyAttestation_HandlerErrors(t *testing.T) {
 	}
 }
 
+func TestAttestationObject_VerifyAttestation_HandlerErrorInfo(t *testing.T) {
+	withFreshAttestationRegistry(t)
+
+	testCases := []struct {
+		name            string
+		attestationType string
+		err             *Error
+		info            string
+	}{
+		{"ShouldKeepHandlerInfo", "", ErrAttestationFormat.WithInfo("handler info"), "handler info"},
+		{"ShouldKeepHandlerInfoOverAttestationType", string(metadata.BasicFull), ErrAttestationFormat.WithInfo("handler info"), "handler info"},
+		{"ShouldUseAttestationTypeWithoutHandlerInfo", string(metadata.BasicFull), ErrAttestationFormat, string(metadata.BasicFull)},
+		{"ShouldLeaveInfoEmpty", "", ErrAttestationFormat, ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			attestationRegistry["test-format"] = func(AttestationObject, []byte, metadata.Provider, AttestationPolicy, SignaturePolicy) (string, []any, error) {
+				return tc.attestationType, nil, tc.err
+			}
+
+			att := AttestationObject{Format: "test-format", AttStatement: map[string]any{}}
+
+			var protoErr *Error
+
+			require.ErrorAs(t, att.VerifyAttestation([]byte("hash"), nil, AttestationPolicy{}, SignaturePolicy{}), &protoErr)
+			assert.Equal(t, tc.info, protoErr.DevInfo)
+		})
+	}
+}
+
 // Supporting functions.
 
 func attestationTestUnpackResponse(t *testing.T, response string) (pcc ParsedCredentialCreationData) {

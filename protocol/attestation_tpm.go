@@ -98,7 +98,9 @@ func attestationFormatValidationTPM(att AttestationObject, clientDataHash []byte
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 
-		if params.CurveID != k.TPMCurveID() {
+		// A curve the TPM has no identifier for is reported as TPM_ECC_NONE, which is not a curve a pubArea naming it
+		// can be said to share with the key.
+		if curve := k.TPMCurveID(); curve == tpm2.TPMECCNone || params.CurveID != curve {
 			return "", nil, ErrAttestationFormat.WithDetails("Mismatch between ECCParameters in pubArea and credentialPublicKey")
 		}
 

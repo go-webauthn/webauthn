@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -1223,6 +1224,54 @@ func TestValidateLogin_Full(t *testing.T) {
 		require.NotNil(t, credential)
 	})
 
+	t.Run("ShouldIgnoreTheAAGUIDOfFIDOU2FWithMDS", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+				MDS:       provider,
+			},
+		}
+
+		aaguid := uuid.MustParse("cb69481e-8ff7-4039-93ec-0a2729a154a8")
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:                credentialID,
+					PublicKey:         credPubKey,
+					AttestationType:   string(metadata.BasicFull),
+					AttestationFormat: string(protocol.AttestationFormatFIDOUniversalSecondFactor),
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+					Authenticator: Authenticator{
+						AAGUID: aaguid[:],
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		provider.EXPECT().GetEntry(gomock.Any(), uuid.Nil).Return(nil, nil)
+		provider.EXPECT().GetValidateEntryPermitZeroAAGUID(gomock.Any()).Return(true)
+
+		credential, err := w.ValidateLogin(user, session, parsedResponse)
+		require.NoError(t, err)
+		require.NotNil(t, credential)
+		assert.Equal(t, aaguid[:], credential.Authenticator.AAGUID)
+	})
+
 	t.Run("ShouldFailWithMDSInvalidAAGUID", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 
@@ -1307,6 +1356,59 @@ func TestValidateLogin_Full(t *testing.T) {
 		credential, err := w.ValidateLogin(user, session, parsedResponse)
 		require.NoError(t, err)
 		require.NotNil(t, credential)
+	})
+
+	t.Run("ShouldFailWithMDSValidateStatusReportsForCompound", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		provider := mocks.NewMockMetadataProvider(ctrl)
+
+		w := &WebAuthn{
+			Config: &Config{
+				RPID:      "example.org",
+				RPOrigins: []string{"https://example.org"},
+				MDS:       provider,
+			},
+		}
+
+		user := &defaultUser{
+			id: userID,
+			credentials: []Credential{
+				{
+					ID:                credentialID,
+					PublicKey:         credPubKey,
+					AttestationType:   string(metadata.BasicFull),
+					AttestationFormat: string(protocol.AttestationFormatCompound),
+					Flags: CredentialFlags{
+						UserPresent:    true,
+						BackupEligible: true,
+					},
+				},
+			},
+		}
+
+		session := SessionData{
+			UserID:    userID,
+			Challenge: challenge,
+		}
+
+		reports := []metadata.StatusReport{{Status: metadata.Revoked}}
+
+		provider.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(&metadata.Entry{
+			MetadataStatement: metadata.Statement{
+				AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+			},
+			StatusReports: reports,
+		}, nil)
+
+		provider.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true)
+		provider.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)
+		provider.EXPECT().GetValidateStatus(gomock.Any()).Return(true)
+		provider.EXPECT().ValidateStatusReports(gomock.Any(), reports).Return(fmt.Errorf("revoked"))
+
+		credential, err := w.ValidateLogin(user, session, parsedResponse)
+		assert.Nil(t, credential)
+		assert.EqualError(t, err, "Failed to validate credential record metadata")
 	})
 }
 

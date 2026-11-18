@@ -302,7 +302,11 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		var e *Error
 
 		if errors.As(err, &e) {
-			return e.WithInfo(attestationType)
+			if e.DevInfo == "" && attestationType != "" {
+				return e.WithInfo(attestationType)
+			}
+
+			return e
 		}
 
 		return ErrInvalidAttestation.WithDetails(err.Error()).WithInfo(attestationType).WithError(err)
@@ -320,7 +324,11 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 		return nil
 	}
 
-	if e := ValidateMetadataWithAuthenticatorData(context.Background(), mds, aaguid, a.Type, a.Format, x5cs, &a.AuthData); e != nil {
+	// The status of a compound attestation is not validated again here as each of its sub-statements was validated
+	// with its own trust path, which a compound attestation does not convey.
+	status := AttestationFormat(a.Format) != AttestationFormatCompound
+
+	if e := validateMetadata(context.Background(), mds, aaguid, a.Type, a.Format, x5cs, &a.AuthData, status); e != nil {
 		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
 	}
 

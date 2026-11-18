@@ -429,6 +429,40 @@ func TestPackedFormat_BasicAttestationCertRequirements(t *testing.T) {
 			},
 			err: "Attestation Certificate Common Name not set",
 		},
+		{
+			name: "ShouldFailMissingBasicConstraints",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"US"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore: time.Now().Add(-time.Hour),
+				NotAfter:  time.Now().Add(time.Hour),
+				KeyUsage:  x509.KeyUsageDigitalSignature,
+			},
+			err: "Attestation certificate's Basic Constraints extension is missing",
+		},
+		{
+			name: "ShouldFailBasicConstraintsCA",
+			template: &x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					Country:            []string{"US"},
+					Organization:       []string{"Test Org"},
+					OrganizationalUnit: []string{"Authenticator Attestation"},
+					CommonName:         "Test",
+				},
+				NotBefore:             time.Now().Add(-time.Hour),
+				NotAfter:              time.Now().Add(time.Hour),
+				KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+				BasicConstraintsValid: true,
+				IsCA:                  true,
+			},
+			err: "Attestation certificate's Basic Constraints marked as CA",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -525,10 +559,11 @@ func TestPackedFormat_BasicAttestationAAGUIDExtension(t *testing.T) {
 					OrganizationalUnit: []string{"Authenticator Attestation"},
 					CommonName:         "Test",
 				},
-				NotBefore:       time.Now().Add(-time.Hour),
-				NotAfter:        time.Now().Add(time.Hour),
-				KeyUsage:        x509.KeyUsageDigitalSignature,
-				ExtraExtensions: []pkix.Extension{{Id: oidFIDOGenCeAAGUID, Value: tc.value}},
+				NotBefore:             time.Now().Add(-time.Hour),
+				NotAfter:              time.Now().Add(time.Hour),
+				KeyUsage:              x509.KeyUsageDigitalSignature,
+				BasicConstraintsValid: true,
+				ExtraExtensions:       []pkix.Extension{{Id: oidFIDOGenCeAAGUID, Value: tc.value}},
 			}
 
 			certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)

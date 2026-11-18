@@ -177,6 +177,10 @@ func handleBasicAttestation(sig, clientDataHash, authData, aaguid []byte, alg in
 	}
 
 	// Step 2.2.4 The Basic Constraints extension MUST have the CA component set to false.
+	if !attestnCert.BasicConstraintsValid {
+		return "", x5c, ErrInvalidAttestation.WithDetails("Attestation certificate's Basic Constraints extension is missing")
+	}
+
 	if attestnCert.IsCA {
 		return "", x5c, ErrInvalidAttestation.WithDetails("Attestation certificate's Basic Constraints marked as CA")
 	}

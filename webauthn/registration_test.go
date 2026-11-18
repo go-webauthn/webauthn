@@ -1103,6 +1103,13 @@ func TestValidateFilteredCredential(t *testing.T) {
 		}
 	}
 
+	credentialWithFormat := func(aaguid uuid.UUID, format protocol.AttestationFormat) *Credential {
+		credential := credentialWith(aaguid, false)
+		credential.AttestationFormat = string(format)
+
+		return credential
+	}
+
 	testCases := []struct {
 		name       string
 		filtering  *FilteringConfig
@@ -1216,6 +1223,28 @@ func TestValidateFilteredCredential(t *testing.T) {
 				PermittedAAGUIDs:          []uuid.UUID{aaguidA},
 			},
 			credential: credentialWith(aaguidC, true),
+			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
+			name:       "ShouldAllowFIDOU2FClaimingAAGUIDNotInPermitList",
+			filtering:  &FilteringConfig{PermittedAAGUIDs: []uuid.UUID{aaguidA}},
+			credential: credentialWithFormat(aaguidC, protocol.AttestationFormatFIDOUniversalSecondFactor),
+		},
+		{
+			name:       "ShouldRejectFIDOU2FClaimingPermittedAAGUIDWhenZeroAAGUIDProhibited",
+			filtering:  &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{uuid.Nil}},
+			credential: credentialWithFormat(aaguidA, protocol.AttestationFormatFIDOUniversalSecondFactor),
+			err:        "Policy restriction prevented the operation from completing",
+		},
+		{
+			name:       "ShouldAllowFIDOU2FClaimingProhibitedAAGUID",
+			filtering:  &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{aaguidB}},
+			credential: credentialWithFormat(aaguidB, protocol.AttestationFormatFIDOUniversalSecondFactor),
+		},
+		{
+			name:       "ShouldRejectPackedProhibitedAAGUID",
+			filtering:  &FilteringConfig{ProhibitedAAGUIDs: []uuid.UUID{aaguidB}},
+			credential: credentialWithFormat(aaguidB, protocol.AttestationFormatPacked),
 			err:        "Policy restriction prevented the operation from completing",
 		},
 	}
