@@ -236,7 +236,16 @@ func (a *AttestationObject) Verify(relyingPartyID string, clientDataHash []byte,
 
 	// The credential public key must be a valid COSE_Key for its declared key type and algorithm, as not every
 	// attestation statement format parses it, and a credential whose key cannot be parsed can never be used.
-	if _, err = webauthncose.ParsePublicKey(a.AuthData.AttData.CredentialPublicKey); err != nil {
+	var key any
+
+	if key, err = webauthncose.ParsePublicKey(a.AuthData.AttData.CredentialPublicKey); err != nil {
+		return ErrAttestationFormat.WithDetails("Error parsing the credential public key").WithInfo(fmt.Sprintf("Error occurred parsing the credential public key: %+v", err)).WithError(err)
+	}
+
+	// RFC 8230 §4 requires the RSA modulus and exponent to use the minimum number of octets needed to represent their
+	// value. This is only enforced when the credential is registered, so a key stored before it was enforced can
+	// still be used to authenticate.
+	if err = validateCredentialPublicKeyEncoding(key); err != nil {
 		return ErrAttestationFormat.WithDetails("Error parsing the credential public key").WithInfo(fmt.Sprintf("Error occurred parsing the credential public key: %+v", err)).WithError(err)
 	}
 
@@ -313,6 +322,23 @@ func (a *AttestationObject) VerifyAttestation(clientDataHash []byte, mds metadat
 
 	if e := ValidateMetadataWithAuthenticatorData(context.Background(), mds, aaguid, a.Type, a.Format, x5cs, &a.AuthData); e != nil {
 		return ErrInvalidAttestation.WithInfo(fmt.Sprintf("Error occurred validating metadata during attestation validation: %+v", e)).WithDetails(e.DevInfo).WithError(e)
+	}
+
+	return nil
+}
+
+func validateCredentialPublicKeyEncoding(key any) error {
+	rsa, ok := key.(webauthncose.RSAPublicKeyData)
+	if !ok {
+		return nil
+	}
+
+	if len(rsa.Modulus) != 0 && rsa.Modulus[0] == 0 {
+		return webauthncose.ErrUnsupportedKey.WithDetails("RSA key modulus has a leading zero octet")
+	}
+
+	if len(rsa.Exponent) != 0 && rsa.Exponent[0] == 0 {
+		return webauthncose.ErrUnsupportedKey.WithDetails("RSA key exponent has a leading zero octet")
 	}
 
 	return nil

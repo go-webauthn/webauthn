@@ -174,7 +174,7 @@ func (k *RSAPublicKeyData) Verify(data []byte, sig []byte) (valid bool, err erro
 
 	switch coseAlg {
 	case AlgPS256, AlgPS384, AlgPS512:
-		err = rsa.VerifyPSS(pubkey, hash, h.Sum(nil), sig, nil)
+		err = rsa.VerifyPSS(pubkey, hash, h.Sum(nil), sig, &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: hash})
 
 		return err == nil, err
 	case AlgRS1, AlgRS256, AlgRS384, AlgRS512:
@@ -479,6 +479,12 @@ func validateOKPPublicKey(k *OKPPublicKeyData) error {
 		return ErrUnsupportedKey.WithDetails(fmt.Sprintf("OKP key x coordinate has invalid length %d, expected %d", len(k.XCoord), ed25519.PublicKeySize))
 	}
 
+	// A signature exists for a point of small order which verifies for any message, or for one message in every
+	// few, without knowledge of a private key. No honest authenticator generates such a key.
+	if ed25519HasSmallOrder(k.XCoord) {
+		return ErrUnsupportedKey.WithDetails("OKP key x coordinate is a point of small order")
+	}
+
 	return nil
 }
 
@@ -513,6 +519,12 @@ func validateEC2PublicKey(k *EC2PublicKeyData) error {
 }
 
 func validateRSAPublicKey(k *RSAPublicKeyData) (e int, err error) {
+	switch alg := COSEAlgorithmIdentifier(k.Algorithm); alg {
+	case AlgRS1, AlgRS256, AlgRS384, AlgRS512, AlgPS256, AlgPS384, AlgPS512:
+	default:
+		return e, ErrUnsupportedAlgorithm.WithDetails(fmt.Sprintf("RSA key has unsupported algorithm %s", alg))
+	}
+
 	n := new(big.Int).SetBytes(k.Modulus)
 	if n.Sign() <= 0 {
 		return e, ErrUnsupportedKey.WithDetails("RSA key contains zero or empty modulus")
@@ -526,8 +538,23 @@ func validateRSAPublicKey(k *RSAPublicKeyData) (e int, err error) {
 		return e, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key modulus size of %d bits exceeds the maximum of %d bits", n.BitLen(), rsaMaxModulusBits))
 	}
 
+	if n.Bit(0) == 0 {
+		return e, ErrUnsupportedKey.WithDetails("RSA key modulus is even")
+	}
+
 	if e, err = ParseRSAPublicKeyDataExponent(k); err != nil {
-		return e, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key contains invalid exponent: %v", err))
+		return 0, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key contains invalid exponent: %v", err))
+	}
+
+	// These are the bounds crypto/rsa places on a public exponent, so a key which is accepted here is one it will
+	// verify with. An exponent of 1 makes the signature its own message representative, and an even one cannot be
+	// the exponent of any RSA key.
+	if e < rsaMinExponent || e > rsaMaxExponent {
+		return 0, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key exponent %d is not between %d and %d", e, rsaMinExponent, rsaMaxExponent))
+	}
+
+	if e&1 == 0 {
+		return 0, ErrUnsupportedKey.WithDetails(fmt.Sprintf("RSA key exponent %d is even", e))
 	}
 
 	return e, nil

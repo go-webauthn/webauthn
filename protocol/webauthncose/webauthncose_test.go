@@ -72,6 +72,69 @@ func TestOKPVerifyRejectsUnsupportedAlgorithm(t *testing.T) {
 	assert.EqualError(t, err, "OKP key has unsupported algorithm RS256")
 }
 
+func TestOKPRejectsSmallOrderKey(t *testing.T) {
+	testCases := []struct {
+		name string
+		y    string
+	}{
+		{"ShouldRejectOrder4", "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"ShouldRejectOrder1", "0100000000000000000000000000000000000000000000000000000000000000"},
+		{"ShouldRejectOrder8", "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"},
+		{"ShouldRejectOrder8Negated", "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"},
+		{"ShouldRejectOrder2", "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+		{"ShouldRejectOrder4NonCanonical", "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+		{"ShouldRejectOrder1NonCanonical", "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+	}
+
+	// The encoding of the identity as R with a zero S, which satisfies the verification equation for a public key of
+	// small order whenever the order of the key divides the challenge.
+	sig := make([]byte, ed25519.SignatureSize)
+	sig[0] = 0x01
+
+	for _, tc := range testCases {
+		for _, sign := range []byte{0x00, 0x80} {
+			name := tc.name
+			if sign != 0 {
+				name += "WithSignBit"
+			}
+
+			t.Run(name, func(t *testing.T) {
+				x := MustDecodeHex(t, tc.y)
+				x[31] |= sign
+
+				var data []byte
+
+				for i := range 256 {
+					if ed25519.Verify(x, []byte{byte(i)}, sig) {
+						data = []byte{byte(i)}
+
+						break
+					}
+				}
+
+				require.NotNil(t, data, "the key must be of small order")
+
+				key := OKPPublicKeyData{
+					PublicKeyData: PublicKeyData{KeyType: int64(OctetKey), Algorithm: int64(AlgEdDSA)},
+					Curve:         int64(Ed25519),
+					XCoord:        x,
+				}
+
+				valid, err := key.Verify(data, sig)
+				assert.False(t, valid)
+				assert.EqualError(t, err, "OKP key x coordinate is a point of small order")
+
+				raw, err := webauthncbor.Marshal(key)
+				require.NoError(t, err)
+
+				parsed, err := ParsePublicKey(raw)
+				assert.Nil(t, parsed)
+				assert.EqualError(t, err, "OKP key x coordinate is a point of small order")
+			})
+		}
+	}
+}
+
 func TestP256SignatureVerification(t *testing.T) {
 	// Private/public key pair was generated with the following:
 	//
@@ -526,6 +589,16 @@ func TestParsePublicKeyValidation(t *testing.T) {
 	ec2X := ec2Pub[1:33]
 	ec2Y := ec2Pub[33:65]
 
+	rsaModulus := func(first byte, size int) []byte {
+		n := make([]byte, size)
+
+		n[0], n[size-1] = first, 0x01
+
+		return n
+	}
+
+	rsaMinModulus := rsaModulus(0x80, rsaMinModulusBits/8)
+
 	// COSE Key parameters per RFC 9052 §7 and RFC 9053 §2/§7:
 	//   1 (kty), 3 (alg), -1 (crv / n), -2 (x / e), -3 (y).
 	testCases := []struct {
@@ -553,7 +626,7 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		},
 		{
 			"ShouldAcceptValidRSAKey",
-			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMinModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x01, 0x00, 0x01}}),
 			"",
 		},
 		{
@@ -594,23 +667,78 @@ func TestParsePublicKeyValidation(t *testing.T) {
 		},
 		{
 			"ShouldRejectRSAWithUndersizedModulus",
-			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x7F}, make([]byte, rsaMinModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaModulus(0x7F, rsaMinModulusBits/8), -2: []byte{0x01, 0x00, 0x01}}),
 			"RSA key modulus size of 2047 bits is less than the minimum of 2048 bits",
 		},
 		{
 			"ShouldAcceptRSAWithMaximumModulus",
-			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMaxModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaModulus(0x80, rsaMaxModulusBits/8), -2: []byte{0x01, 0x00, 0x01}}),
 			"",
 		},
 		{
 			"ShouldRejectRSAWithOversizedModulus",
-			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x01}, make([]byte, rsaMaxModulusBits/8)...), -2: []byte{0x01, 0x00, 0x01}}),
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaModulus(0x01, rsaMaxModulusBits/8+1), -2: []byte{0x01, 0x00, 0x01}}),
 			"RSA key modulus size of 16385 bits exceeds the maximum of 16384 bits",
 		},
 		{
 			"ShouldRejectRSAWithEmptyExponent",
-			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMinModulusBits/8-1)...), -2: []byte{}}),
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{}}),
 			"RSA key contains invalid exponent: invalid exponent length",
+		},
+		{
+			"ShouldRejectRSAWithEvenModulus",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x80}, make([]byte, rsaMinModulusBits/8-1)...), -2: []byte{0x01, 0x00, 0x01}}),
+			"RSA key modulus is even",
+		},
+		{
+			"ShouldAcceptRSAWithLeadingZeroModulus",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: append([]byte{0x00}, rsaMinModulus...), -2: []byte{0x01, 0x00, 0x01}}),
+			"",
+		},
+		{
+			"ShouldRejectRSAWithZeroModulus",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: make([]byte, rsaMinModulusBits/8), -2: []byte{0x01, 0x00, 0x01}}),
+			"RSA key contains zero or empty modulus",
+		},
+		{
+			"ShouldAcceptRSAWithMinimumExponent",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x03}}),
+			"",
+		},
+		{
+			"ShouldAcceptRSAWithMaximumExponent",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x7F, 0xFF, 0xFF, 0xFF}}),
+			"",
+		},
+		{
+			"ShouldRejectRSAWithExponentOfOne",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x01}}),
+			"RSA key exponent 1 is not between 3 and 2147483647",
+		},
+		{
+			"ShouldRejectRSAWithExponentOfTwo",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x02}}),
+			"RSA key exponent 2 is not between 3 and 2147483647",
+		},
+		{
+			"ShouldRejectRSAWithEvenExponent",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x01, 0x00, 0x00}}),
+			"RSA key exponent 65536 is even",
+		},
+		{
+			"ShouldRejectRSAWithOversizedExponent",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x80, 0x00, 0x00, 0x01}}),
+			"RSA key exponent 2147483649 is not between 3 and 2147483647",
+		},
+		{
+			"ShouldRejectRSAWithZeroExponent",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x00}}),
+			"RSA key contains invalid exponent: Unsupported Public Key Type",
+		},
+		{
+			"ShouldAcceptRSAWithLeadingZeroExponent",
+			mustMarshalCOSEKey(t, int64(RSAKey), int64(AlgRS256), map[int64]any{-1: rsaMinModulus, -2: []byte{0x00, 0x01, 0x00, 0x01}}),
+			"",
 		},
 	}
 
@@ -667,6 +795,79 @@ func TestRSAVerifyModulusSize(t *testing.T) {
 				assert.True(t, valid)
 			}
 		})
+	}
+}
+
+func TestRSARejectsUnsupportedAlgorithm(t *testing.T) {
+	testCases := []struct {
+		name string
+		alg  COSEAlgorithmIdentifier
+		err  string
+	}{
+		{"ShouldRejectES256", AlgES256, "RSA key has unsupported algorithm ES256"},
+		{"ShouldRejectEdDSA", AlgEdDSA, "RSA key has unsupported algorithm EdDSA"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testRSARejectsAlgorithm(t, tc.alg, tc.err)
+		})
+	}
+}
+
+func TestRSAVerifyPSSSaltLength(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	data := []byte("signed data")
+
+	algs := []struct {
+		name string
+		alg  COSEAlgorithmIdentifier
+		hash crypto.Hash
+	}{
+		{"PS256", AlgPS256, crypto.SHA256},
+		{"PS384", AlgPS384, crypto.SHA384},
+		{"PS512", AlgPS512, crypto.SHA512},
+	}
+
+	for _, a := range algs {
+		testCases := []struct {
+			name       string
+			saltLength int
+			valid      bool
+		}{
+			{"ShouldAcceptSaltLengthEqualToHash", rsa.PSSSaltLengthEqualsHash, true},
+			{"ShouldRejectEmptySalt", 0, false},
+			{"ShouldRejectShortSalt", a.hash.Size() - 1, false},
+			{"ShouldRejectLongSalt", a.hash.Size() + 1, false},
+		}
+
+		for _, tc := range testCases {
+			t.Run(a.name+"/"+tc.name, func(t *testing.T) {
+				h := a.hash.New()
+				h.Write(data)
+
+				sig, err := rsa.SignPSS(rand.Reader, priv, a.hash, h.Sum(nil), &rsa.PSSOptions{SaltLength: tc.saltLength, Hash: a.hash})
+				require.NoError(t, err)
+
+				key := &RSAPublicKeyData{
+					PublicKeyData: PublicKeyData{KeyType: int64(RSAKey), Algorithm: int64(a.alg)},
+					Modulus:       priv.N.Bytes(),
+					Exponent:      big.NewInt(int64(priv.E)).Bytes(),
+				}
+
+				valid, err := key.Verify(data, sig)
+
+				if tc.valid {
+					assert.NoError(t, err)
+					assert.True(t, valid)
+				} else {
+					assert.EqualError(t, err, "crypto/rsa: verification error")
+					assert.False(t, valid)
+				}
+			})
+		}
 	}
 }
 
@@ -807,4 +1008,32 @@ func DeriveEC2P256PublicKeyFromPrivateKey(t *testing.T, keyHex string) []byte {
 	require.True(t, ok)
 
 	return public.Bytes()
+}
+
+func testRSARejectsAlgorithm(t *testing.T, alg COSEAlgorithmIdentifier, expected string) {
+	t.Helper()
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	key := RSAPublicKeyData{
+		PublicKeyData: PublicKeyData{KeyType: int64(RSAKey), Algorithm: int64(alg)},
+		Modulus:       priv.N.Bytes(),
+		Exponent:      big.NewInt(int64(priv.E)).Bytes(),
+	}
+
+	raw, err := webauthncbor.Marshal(key)
+	require.NoError(t, err)
+
+	_, err = ParsePublicKey(raw)
+	assert.EqualError(t, err, expected)
+
+	var valid bool
+
+	require.NotPanics(t, func() {
+		valid, err = key.Verify([]byte("signed data"), make([]byte, 256))
+	})
+
+	assert.False(t, valid)
+	assert.EqualError(t, err, expected)
 }

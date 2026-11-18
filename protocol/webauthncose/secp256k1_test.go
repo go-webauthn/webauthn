@@ -5,6 +5,7 @@ package webauthncose
 import (
 	"crypto/sha256"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -183,14 +184,18 @@ func TestEC2PublicKeyDataVerifySecp256k1RequiresCanonicalDER(t *testing.T) {
 func TestEC2PublicKeyDataVerifySecp256k1RejectsScalarsOutOfRange(t *testing.T) {
 	private, key := secp256k1TestKey(t)
 
-	data := []byte("data to sign")
-	der := secp256k1TestSign(t, private, data)
+	var (
+		data      []byte
+		signature asn1.ECDSASignature
+	)
 
-	var signature asn1.ECDSASignature
+	for i := 0; signature.R == nil || signature.R.BitLen() <= 248 || signature.S.BitLen() <= 248; i++ {
+		data = fmt.Appendf(nil, "data to sign %d", i)
 
-	_, err := asn1.Unmarshal(der, &signature)
+		_, err := asn1.Unmarshal(secp256k1TestSign(t, private, data), &signature)
 
-	require.NoError(t, err)
+		require.NoError(t, err)
+	}
 
 	order := secp256k1.Params().N
 
@@ -202,6 +207,8 @@ func TestEC2PublicKeyDataVerifySecp256k1RejectsScalarsOutOfRange(t *testing.T) {
 		{"ShouldRejectZeroS", signature.R, big.NewInt(0)},
 		{"ShouldRejectROverflowingOrder", order, signature.S},
 		{"ShouldRejectSOverflowingOrder", signature.R, order},
+		{"ShouldRejectRWithTrailingBytes", new(big.Int).Or(new(big.Int).Lsh(signature.R, 64), big.NewInt(0xdeadbeef)), signature.S},
+		{"ShouldRejectSWithTrailingByte", signature.R, new(big.Int).Lsh(signature.S, 8)},
 	}
 
 	for _, tc := range testCases {
