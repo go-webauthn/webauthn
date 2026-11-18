@@ -200,6 +200,7 @@ func TestPackedFormat_BasicAttestationMLDSA(t *testing.T) {
 			OrganizationalUnit: []string{"Authenticator Attestation"},
 			CommonName:         "ML-DSA Attestation Leaf",
 		},
+		BasicConstraintsValid: true,
 	}, root, leafKey.PublicKey(), rootKey)
 
 	roots := x509.NewCertPool()

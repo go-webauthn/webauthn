@@ -160,7 +160,9 @@ type Config struct {
 }
 
 // FilteringConfig configures the filtering of authenticators based on their AAGUIDs. This is useful for enforcing
-// policy on the authenticators that are available to be registered with the Relying Party.
+// policy on the authenticators that are available to be registered with the Relying Party. The AAGUID of a credential
+// with the fido-u2f attestation format is not covered by its attestation signature, so it is filtered as the zero
+// AAGUID.
 type FilteringConfig struct {
 	// ProhibitBackupEligibility if set will prohibit the use of authenticators with the backup eligible flag set.
 	ProhibitBackupEligibility bool

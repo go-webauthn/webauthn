@@ -242,6 +242,7 @@ func TestCredential_Verify(t *testing.T) {
 					},
 				}, nil)
 				provider.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
+				provider.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)
 				provider.EXPECT().GetValidateStatus(gomock.Any()).Return(true)
 				provider.EXPECT().ValidateStatusReports(gomock.Any(), gomock.Any()).Return(fmt.Errorf("status report invalid"))
 			},

@@ -15,9 +15,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/go-webauthn/webauthn/metadata"
 	"github.com/go-webauthn/webauthn/metadata/providers/memory"
+	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
 func TestVerifyU2FFormat(t *testing.T) {
@@ -126,6 +128,53 @@ func TestVerifyU2FFormat_AttestationType(t *testing.T) {
 			assert.Len(t, x5cs, 1)
 		})
 	}
+}
+
+func TestVerifyU2FFormat_MetadataIgnoresAAGUID(t *testing.T) {
+	pcc := attestationTestUnpackResponse(t, u2fTestResponse["success"])
+	att := pcc.Response.AttestationObject
+	clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+
+	claimed := uuid.MustParse("cb69481e-8ff7-4039-93ec-0a2729a154a8")
+	att.AuthData.AttData.AAGUID = claimed[:]
+
+	ctrl := gomock.NewController(t)
+	mds := mocks.NewMockMetadataProvider(ctrl)
+
+	mds.EXPECT().GetEntry(gomock.Any(), uuid.Nil).Return(nil, nil)
+	mds.EXPECT().GetValidateEntryPermitZeroAAGUID(gomock.Any()).Return(true)
+
+	require.NoError(t, att.VerifyAttestation(clientDataHash[:], mds, AttestationPolicy{}, SignaturePolicy{}))
+}
+
+func TestVerifyU2FFormat_CompoundMetadataIgnoresAAGUID(t *testing.T) {
+	pcc := attestationTestUnpackResponse(t, u2fTestResponse["success"])
+	att := pcc.Response.AttestationObject
+	clientDataHash := sha256.Sum256(pcc.Raw.AttestationResponse.ClientDataJSON)
+
+	claimed := uuid.MustParse("cb69481e-8ff7-4039-93ec-0a2729a154a8")
+	att.AuthData.AttData.AAGUID = claimed[:]
+
+	compound := AttestationObject{
+		Format:      string(AttestationFormatCompound),
+		AuthData:    att.AuthData,
+		RawAuthData: att.RawAuthData,
+		SubStatements: []NonCompoundAttestationObject{
+			{Format: att.Format, AttStatement: att.AttStatement},
+			{Format: att.Format, AttStatement: att.AttStatement},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	mds := mocks.NewMockMetadataProvider(ctrl)
+
+	mds.EXPECT().GetEntry(gomock.Any(), uuid.Nil).Return(nil, nil).Times(2)
+	mds.EXPECT().GetValidateEntryPermitZeroAAGUID(gomock.Any()).Return(true).Times(2)
+	mds.EXPECT().GetEntry(gomock.Any(), claimed).Return(nil, nil)
+	mds.EXPECT().GetValidateEntry(gomock.Any()).Return(false)
+
+	require.NoError(t, compound.VerifyAttestation(clientDataHash[:], mds, AttestationPolicy{}, SignaturePolicy{}))
+	assert.Equal(t, claimed[:], compound.AuthData.AttData.AAGUID)
 }
 
 func TestVerifyU2FFormat_Errors(t *testing.T) {

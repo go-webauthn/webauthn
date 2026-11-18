@@ -498,6 +498,61 @@ func TestValidateMetadataExtendedStatusCertificateScope(t *testing.T) {
 	}
 }
 
+func TestValidateMetadataExtendedStatusCertificateScopeVerifiedChain(t *testing.T) {
+	aaguid := uuid.MustParse("0865c31d-05dc-4fb1-adce-3227bfb19967")
+
+	root, rootKey := metadataTestGenerateCertificate(t, "Metadata Root", nil, nil)
+	compromised, compromisedKey := metadataTestGenerateCertificate(t, "Compromised Batch", root, rootKey)
+	unaffected, unaffectedKey := metadataTestGenerateCertificate(t, "Unaffected Batch", root, rootKey)
+	compromisedLeaf, _ := metadataTestGenerateCertificate(t, "Compromised Leaf", compromised, compromisedKey)
+	unaffectedLeaf, _ := metadataTestGenerateCertificate(t, "Unaffected Leaf", unaffected, unaffectedKey)
+
+	effective := time.Now().Add(-time.Hour)
+
+	testCases := []struct {
+		name string
+		x5cs []any
+		err  bool
+	}{
+		{"ShouldApplyCompromiseOfOmittedTrustAnchor", []any{compromisedLeaf.Raw}, true},
+		{"ShouldApplyCompromiseOfSuppliedTrustAnchor", []any{compromisedLeaf.Raw, compromised.Raw}, true},
+		{"ShouldIgnoreCompromiseOfOtherTrustAnchor", []any{unaffectedLeaf.Raw}, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := &metadata.Entry{
+				AaGUID: aaguid,
+				MetadataStatement: metadata.Statement{
+					AttestationTypes:            metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+					AttestationRootCertificates: []*x509.Certificate{root, compromised, unaffected},
+				},
+				StatusReports: []metadata.StatusReport{
+					{Status: metadata.FidoCertified, EffectiveDate: &effective},
+					{Status: metadata.AttestationKeyCompromise, EffectiveDate: &effective, Certificate: compromised},
+				},
+			}
+
+			mds := metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{aaguid: entry}, nil,
+				memory.WithValidateTrustAnchor(true),
+				memory.WithValidateStatus(true),
+				memory.WithValidateStatusCertificateScope(true),
+			)
+
+			actual := ValidateMetadata(context.Background(), mds, aaguid, string(metadata.BasicFull), "packed", tc.x5cs)
+
+			if !tc.err {
+				assert.Nil(t, actual)
+
+				return
+			}
+
+			require.NotNil(t, actual)
+			assert.Contains(t, actual.DevInfo, "Error occurred validating the authenticator status")
+		})
+	}
+}
+
 func TestValidateMetadataExtendedStatusCertificateScopeEmpty(t *testing.T) {
 	aaguid := uuid.MustParse("0865c31d-05dc-4fb1-adce-3227bfb19967")
 

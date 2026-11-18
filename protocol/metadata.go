@@ -32,14 +32,28 @@ func ValidateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UU
 // the validations of the flags, credential public key, and extension outputs. When authData is nil those validations
 // are not performed.
 //
-//nolint:gocyclo
+// The FIDO U2F attestation signature does not cover the AAGUID, so for the fido-u2f attestation format the aaguid is
+// treated as the zero AAGUID and the metadata entry is only found by the attestation certificate key identifier.
+//
+// The status reports of the metadata entry are validated for every attestation format other than none, including a
+// compound attestation. When no x5cs are provided, such as for a stored credential during login, the status reports
+// are not scoped to a certificate so all of them apply.
 func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType, attestationFormat string, x5cs []any, authData *AuthenticatorData) (protoErr *Error) {
+	return validateMetadata(ctx, mds, aaguid, attestationType, attestationFormat, x5cs, authData, true)
+}
+
+//nolint:gocyclo
+func validateMetadata(ctx context.Context, mds metadata.Provider, aaguid uuid.UUID, attestationType, attestationFormat string, x5cs []any, authData *AuthenticatorData, status bool) (protoErr *Error) {
 	if mds == nil {
 		return nil
 	}
 
 	if AttestationFormat(attestationFormat) == AttestationFormatNone {
 		return nil
+	}
+
+	if AttestationFormat(attestationFormat) == AttestationFormatFIDOUniversalSecondFactor {
+		aaguid = uuid.Nil
 	}
 
 	extended, _ := mds.(metadata.ExtendedProvider)
@@ -114,21 +128,7 @@ func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Pro
 		}
 	}
 
-	if mds.GetValidateStatus(ctx) {
-		reports := entry.StatusReports
-
-		if len(x5cs) != 0 && extended != nil && extended.GetValidateStatusCertificateScope(ctx) {
-			if protoErr = parse(); protoErr != nil {
-				return protoErr
-			}
-
-			reports = metadataStatusReportsInScope(reports, certs)
-		}
-
-		if err = mds.ValidateStatusReports(ctx, reports); err != nil {
-			return ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. Error occurred validating the authenticator status: %+v", aaguid, err))
-		}
-	}
+	var chains [][]*x509.Certificate
 
 	if mds.GetValidateTrustAnchor(ctx) && len(x5cs) != 0 {
 		if protoErr = parse(); protoErr != nil {
@@ -150,9 +150,33 @@ func ValidateMetadataWithAuthenticatorData(ctx context.Context, mds metadata.Pro
 				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. Attestation was provided in the full format but the authenticator doesn't support the full attestation format.", aaguid))
 			}
 
-			if _, err = x5c.Verify(entry.MetadataStatement.Verifier(x5cis)); err != nil {
+			if chains, err = x5c.Verify(entry.MetadataStatement.Verifier(x5cis)); err != nil {
 				return ErrMetadata.WithDetails(fmt.Sprintf("Failed to validate attestation statement signature during attestation validation for Authenticator Attestation GUID '%s'. The attestation certificate could not be verified due to an error validating the trust chain against the Metadata Service.", aaguid)).WithError(err)
 			}
+		}
+	}
+
+	// The status is validated after the trust anchor so a status report scoped to a certificate is applied when that
+	// certificate is part of a verified chain, including a trust anchor the client omitted from the trust path.
+	if status && mds.GetValidateStatus(ctx) {
+		reports := entry.StatusReports
+
+		if len(x5cs) != 0 && extended != nil && extended.GetValidateStatusCertificateScope(ctx) {
+			if protoErr = parse(); protoErr != nil {
+				return protoErr
+			}
+
+			path := slices.Clone(certs)
+
+			for _, chain := range chains {
+				path = append(path, chain...)
+			}
+
+			reports = metadataStatusReportsInScope(reports, path)
+		}
+
+		if err = mds.ValidateStatusReports(ctx, reports); err != nil {
+			return ErrMetadata.WithInfo(fmt.Sprintf("Failed to validate authenticator metadata for Authenticator Attestation GUID '%s'. Error occurred validating the authenticator status: %+v", aaguid, err))
 		}
 	}
 

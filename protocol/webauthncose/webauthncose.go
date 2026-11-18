@@ -358,8 +358,17 @@ func DisplayPublicKey(cpk []byte) string {
 	return string(pemBytes)
 }
 
+// TPMCurveID returns the TPM_ECC_CURVE identifier of the curve the key is on. A key which does not carry the crv
+// parameter is on the curve its algorithm names, which is the case for the fully specified algorithms. It returns
+// TPM_ECC_NONE for a curve which has no such identifier, which a caller must not take to match a TPM key.
 func (k *EC2PublicKeyData) TPMCurveID() tpm2.TPMECCCurve {
-	switch COSEEllipticCurve(k.Curve) {
+	curve := COSEEllipticCurve(k.Curve)
+
+	if curve == EllipticCurveReserved {
+		curve = coseAlgorithmCurves[COSEAlgorithmIdentifier(k.Algorithm)].curve
+	}
+
+	switch curve {
 	case P256:
 		return tpm2.TPMECCNistP256 // TPM_ECC_NIST_P256.
 	case P384:

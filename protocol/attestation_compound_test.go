@@ -2,9 +2,12 @@ package protocol
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -12,6 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/go-webauthn/webauthn/metadata"
+	"github.com/go-webauthn/webauthn/metadata/providers/memory"
 	"github.com/go-webauthn/webauthn/testing/mocks"
 )
 
@@ -639,6 +643,73 @@ func TestAttestationFormatValidationHandlerCompoundSubStatementScope(t *testing.
 			})
 		}
 	})
+}
+
+func TestCompoundAttestationStatusCertificateScope(t *testing.T) {
+	aaguid := uuid.MustParse("0865c31d-05dc-4fb1-adce-3227bfb19967")
+
+	root, rootKey := metadataTestGenerateCertificate(t, "Metadata Root", nil, nil)
+	compromised, _ := metadataTestGenerateCertificate(t, "Compromised Batch", root, rootKey)
+	unaffected, _ := metadataTestGenerateCertificate(t, "Unaffected Batch", root, rootKey)
+
+	effective := time.Now().Add(-time.Hour)
+
+	testCases := []struct {
+		name string
+		path *x509.Certificate
+		err  bool
+	}{
+		{"ShouldIgnoreCompromiseOfOtherBatch", unaffected, false},
+		{"ShouldApplyCompromiseOfSubStatementBatch", compromised, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			withFreshAttestationRegistry(t)
+
+			handler := func(AttestationObject, []byte, metadata.Provider, AttestationPolicy, SignaturePolicy) (string, []any, error) {
+				return string(metadata.BasicFull), []any{tc.path.Raw}, nil
+			}
+
+			attestationRegistry[AttestationFormatPacked] = handler
+			attestationRegistry[AttestationFormatApple] = handler
+
+			entry := &metadata.Entry{
+				AaGUID: aaguid,
+				StatusReports: []metadata.StatusReport{
+					{Status: metadata.FidoCertified, EffectiveDate: &effective},
+					{Status: metadata.AttestationKeyCompromise, EffectiveDate: &effective, BatchCertificate: compromised},
+				},
+			}
+
+			mds := metadataTestExtendedProvider(t, map[uuid.UUID]*metadata.Entry{aaguid: entry}, nil,
+				memory.WithValidateStatus(true),
+				memory.WithValidateStatusCertificateScope(true),
+			)
+
+			att := compoundScopeTestAttestation(aaguid[:])
+
+			err := att.VerifyAttestation([]byte("hash"), mds, AttestationPolicy{}, SignaturePolicy{})
+
+			if !tc.err {
+				assert.NoError(t, err)
+
+				return
+			}
+
+			require.Error(t, err)
+
+			var status bool
+
+			for e := err; e != nil; e = errors.Unwrap(e) {
+				if protoErr, ok := e.(*Error); ok && strings.Contains(protoErr.DevInfo, "Error occurred validating the authenticator status") {
+					status = true
+				}
+			}
+
+			assert.True(t, status)
+		})
+	}
 }
 
 func TestCompoundSubStatementFailureReason(t *testing.T) {

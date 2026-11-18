@@ -239,7 +239,9 @@ func (webauthn *WebAuthn) CreateCredential(user User, session SessionData, parse
 // as "no filtering" and the function returns nil.
 //
 // The zero AAGUID ([uuid.Nil]) is never excluded by the permitted list, preserving the documented
-// [FilteringConfig] contract for authenticators that report no AAGUID.
+// [FilteringConfig] contract for authenticators that report no AAGUID. The FIDO U2F attestation signature does not
+// cover the AAGUID, so a credential with the fido-u2f attestation format is treated as having the zero AAGUID
+// regardless of the AAGUID it reported.
 //
 // This function is invoked automatically by [WebAuthn.CreateCredential] using the [Config.Filtering] value;
 // relying parties may also call it directly (e.g. to pre-validate a credential before persistence) with any
@@ -263,6 +265,10 @@ func ValidateFilteredCredential(credential *Credential, filtering *FilteringConf
 
 	if err = aaguid.UnmarshalBinary(credential.Authenticator.AAGUID); err != nil {
 		return protocol.ErrBadRequest.WithInfo("The AAGUID of the credential is not a valid UUID")
+	}
+
+	if protocol.AttestationFormat(credential.AttestationFormat) == protocol.AttestationFormatFIDOUniversalSecondFactor {
+		aaguid = uuid.Nil
 	}
 
 	if len(filtering.PermittedAAGUIDs) != 0 {

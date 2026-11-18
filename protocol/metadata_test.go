@@ -129,6 +129,7 @@ func TestValidateMetadata(t *testing.T) {
 				}
 				mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
 				mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
+				mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)
 				mds.EXPECT().GetValidateStatus(gomock.Any()).Return(true)
 				mds.EXPECT().ValidateStatusReports(gomock.Any(), gomock.Any()).Return(fmt.Errorf("revoked"))
 
@@ -137,6 +138,30 @@ func TestValidateMetadata(t *testing.T) {
 			aaguid:            aaguid,
 			attestationType:   string(metadata.BasicFull),
 			attestationFormat: "packed",
+			err:               &Error{Type: "invalid_metadata", Details: "", DevInfo: "Failed to validate authenticator metadata for Authenticator Attestation GUID '0865c31d-05dc-4fb1-adce-3227bfb19967'. Error occurred validating the authenticator status: revoked"},
+		},
+		{
+			name: "ShouldFailWhenStatusValidationFailsForCompoundFormat",
+			setup: func(t *testing.T) metadata.Provider {
+				ctrl := gomock.NewController(t)
+				mds := mocks.NewMockMetadataProvider(ctrl)
+				entry := &metadata.Entry{
+					MetadataStatement: metadata.Statement{
+						AttestationTypes: metadata.AuthenticatorAttestationTypes{metadata.BasicFull},
+					},
+					StatusReports: []metadata.StatusReport{{Status: metadata.Revoked}},
+				}
+				mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
+				mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
+				mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(false)
+				mds.EXPECT().GetValidateStatus(gomock.Any()).Return(true)
+				mds.EXPECT().ValidateStatusReports(gomock.Any(), entry.StatusReports).Return(fmt.Errorf("revoked"))
+
+				return mds
+			},
+			aaguid:            aaguid,
+			attestationType:   string(metadata.BasicFull),
+			attestationFormat: "compound",
 			err:               &Error{Type: "invalid_metadata", Details: "", DevInfo: "Failed to validate authenticator metadata for Authenticator Attestation GUID '0865c31d-05dc-4fb1-adce-3227bfb19967'. Error occurred validating the authenticator status: revoked"},
 		},
 		{
@@ -173,7 +198,7 @@ func TestValidateMetadata(t *testing.T) {
 				}
 				mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
 				mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
-				mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false)
+				mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false).AnyTimes()
 				mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(true)
 
 				return mds
@@ -261,7 +286,7 @@ func TestValidateMetadataTrustAnchor(t *testing.T) {
 
 			mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
 			mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(false)
-			mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false)
+			mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false).AnyTimes()
 			mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(true)
 
 			actual := ValidateMetadata(context.Background(), mds, aaguid, string(metadata.BasicFull), "packed", tc.x5cs)
@@ -323,7 +348,7 @@ func TestValidateMetadataTrustAnchorAttestationTypes(t *testing.T) {
 
 			mds.EXPECT().GetEntry(gomock.Any(), gomock.Any()).Return(entry, nil)
 			mds.EXPECT().GetValidateAttestationTypes(gomock.Any()).Return(true)
-			mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false)
+			mds.EXPECT().GetValidateStatus(gomock.Any()).Return(false).AnyTimes()
 			mds.EXPECT().GetValidateTrustAnchor(gomock.Any()).Return(true)
 
 			actual := ValidateMetadata(context.Background(), mds, aaguid, string(tc.attestationType), string(tc.format), []any{cert.Raw})

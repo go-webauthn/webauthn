@@ -135,6 +135,37 @@ func TestOKPRejectsSmallOrderKey(t *testing.T) {
 	}
 }
 
+func TestEC2PublicKeyDataTPMCurveID(t *testing.T) {
+	testCases := []struct {
+		name     string
+		alg      COSEAlgorithmIdentifier
+		curve    COSEEllipticCurve
+		expected tpm2.TPMECCCurve
+	}{
+		{"ShouldReturnP256", AlgES256, P256, tpm2.TPMECCNistP256},
+		{"ShouldReturnP384", AlgES384, P384, tpm2.TPMECCNistP384},
+		{"ShouldReturnP521", AlgES512, P521, tpm2.TPMECCNistP521},
+		{"ShouldReturnP256ForESP256WithCurve", AlgESP256, P256, tpm2.TPMECCNistP256},
+		{"ShouldReturnP256ForESP256WithoutCurve", AlgESP256, EllipticCurveReserved, tpm2.TPMECCNistP256},
+		{"ShouldReturnP384ForESP384WithoutCurve", AlgESP384, EllipticCurveReserved, tpm2.TPMECCNistP384},
+		{"ShouldReturnP521ForESP512WithoutCurve", AlgESP512, EllipticCurveReserved, tpm2.TPMECCNistP521},
+		{"ShouldReturnNoneForSecp256k1WithCurve", AlgES256K, Secp256k1, tpm2.TPMECCNone},
+		{"ShouldReturnNoneForSecp256k1WithoutCurve", AlgES256K, EllipticCurveReserved, tpm2.TPMECCNone},
+		{"ShouldReturnNoneForUnknownAlgorithmWithoutCurve", COSEAlgorithmIdentifier(999), EllipticCurveReserved, tpm2.TPMECCNone},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := EC2PublicKeyData{
+				PublicKeyData: PublicKeyData{KeyType: int64(EllipticKey), Algorithm: int64(tc.alg)},
+				Curve:         int64(tc.curve),
+			}
+
+			assert.Equal(t, tc.expected, key.TPMCurveID())
+		})
+	}
+}
+
 func TestP256SignatureVerification(t *testing.T) {
 	// Private/public key pair was generated with the following:
 	//
