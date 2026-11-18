@@ -249,6 +249,89 @@ func TestBeginRegistration_Timeouts(t *testing.T) {
 	}
 }
 
+func TestBeginRegistration_TimeoutOption(t *testing.T) {
+	testCases := []struct {
+		name     string
+		timeout  int64
+		expected int64
+		err      string
+	}{
+		{
+			name:     "ShouldUseOptionTimeout",
+			timeout:  60000,
+			expected: 60000,
+		},
+		{
+			name:     "ShouldAcceptMaximumTimeout",
+			timeout:  maximumTimeout.Milliseconds(),
+			expected: maximumTimeout.Milliseconds(),
+		},
+		{
+			name:    "ShouldFailNegativeTimeout",
+			timeout: -1,
+			err:     "error generating credential creation: the timeout must not be negative but it is -1 milliseconds",
+		},
+		{
+			name:    "ShouldFailTimeoutAboveMaximum",
+			timeout: 4294967296,
+			err:     "error generating credential creation: the timeout must be at most 4294967295 milliseconds as it is sent to the client as an unsigned long but it is 4294967296 milliseconds",
+		},
+	}
+
+	begins := map[string]func(w *WebAuthn, user User, opts ...RegistrationOption) (*protocol.CredentialCreation, *SessionData, error){
+		"BeginRegistration": (*WebAuthn).BeginRegistration,
+		"BeginMediatedRegistration": func(w *WebAuthn, user User, opts ...RegistrationOption) (*protocol.CredentialCreation, *SessionData, error) {
+			return w.BeginMediatedRegistration(user, protocol.MediationConditional, opts...)
+		},
+	}
+
+	for _, tc := range testCases {
+		for name, begin := range begins {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				w, err := New(&Config{
+					RPID:          "example.com",
+					RPDisplayName: "Test Display Name",
+					RPOrigins:     []string{"https://example.com"},
+					Timeouts:      TimeoutsConfig{Registration: TimeoutConfig{Enforce: true}},
+				})
+				require.NoError(t, err)
+
+				opt := func(options *protocol.PublicKeyCredentialCreationOptions) error {
+					options.Timeout = int(tc.timeout)
+
+					return nil
+				}
+
+				if int64(int(tc.timeout)) != tc.timeout {
+					t.Skipf("timeout %d is not representable as an int on this platform", tc.timeout)
+				}
+
+				before := time.Now()
+
+				creation, session, err := begin(w, newTestUser(t), opt)
+
+				after := time.Now()
+
+				if tc.err != "" {
+					assert.Nil(t, creation)
+					assert.Nil(t, session)
+					assert.EqualError(t, err, tc.err)
+
+					return
+				}
+
+				require.NoError(t, err)
+				assert.Equal(t, tc.expected, int64(creation.Response.Timeout))
+
+				timeout := time.Millisecond * time.Duration(tc.expected)
+
+				assert.False(t, session.Expires.Before(before.Add(timeout)))
+				assert.False(t, session.Expires.After(after.Add(timeout)))
+			})
+		}
+	}
+}
+
 func TestBeginRegistration_EncodeUserIDAsString(t *testing.T) {
 	testCases := []struct {
 		name           string
@@ -1861,7 +1944,7 @@ func TestCreateCredentialPropagatesFilteringFailure(t *testing.T) {
 }
 
 func TestBeginMediatedRegistrationRejectsInvalidConfig(t *testing.T) {
-	// The configuration is validated lazily on first use, so a WebAuthn built without New must fail the ceremony
+	// The configuration is validated on every use, so a WebAuthn built without New must fail the ceremony
 	// rather than emitting creation options derived from an incomplete configuration.
 	w := &WebAuthn{Config: &Config{}}
 
