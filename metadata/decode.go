@@ -41,6 +41,7 @@ type Decoder struct {
 	hook                     mapstructure.DecodeHookFunc
 	root                     string
 	ignoreEntryParsingErrors bool
+	revocationHardFail       bool
 }
 
 // Parse handles parsing of the raw JSON values of the metadata blob. Should be used after using [Decoder.Decode] or
@@ -115,7 +116,7 @@ func (d *Decoder) DecodeBytes(bytes []byte) (payload *PayloadJSON, err error) {
 		}
 
 		// The certificate chain MUST be verified to properly chain to the metadata TOC signing trust anchor.
-		if valid, err = validateChain(d.root, chain); !valid || err != nil {
+		if valid, err = validateChain(d.root, chain, d.revocationHardFail); !valid || err != nil {
 			return nil, err
 		}
 
@@ -187,7 +188,21 @@ func WithRootCertificate(value string) DecoderOption {
 	}
 }
 
-func validateChain(root string, chain []any) (bool, error) {
+// WithRevocationHardFail is a DecoderOption which rejects the metadata payload when the revocation status of a
+// certificate in the signing certificate chain can't be determined, for example because the certificate revocation list
+// is unreachable. By default such a certificate is treated as not revoked.
+//
+// The trust anchor is never checked for revocation, with or without this option, including when it signs the metadata
+// payload directly.
+func WithRevocationHardFail() DecoderOption {
+	return func(decoder *Decoder) (err error) {
+		decoder.revocationHardFail = true
+
+		return nil
+	}
+}
+
+func validateChain(root string, chain []any, hardfail bool) (bool, error) {
 	if len(chain) == 0 {
 		return false, errInvalidCertificateChain
 	}
@@ -258,25 +273,30 @@ func validateChain(root string, chain []any) (bool, error) {
 
 	if verified := chains[0]; len(verified) > 2 {
 		for _, intcert := range verified[1 : len(verified)-1] {
-			if err = validateChainCheckRevocation(intcert, errIntermediateCertRevoked); err != nil {
+			if err = validateChainCheckRevocation(intcert, errIntermediateCertRevoked, hardfail); err != nil {
 				return false, err
 			}
 		}
 	}
 
-	if err = validateChainCheckRevocation(leafcert, errLeafCertRevoked); err != nil {
+	if err = validateChainCheckRevocation(leafcert, errLeafCertRevoked, hardfail); err != nil {
 		return false, err
 	}
 
 	return true, nil
 }
 
-func validateChainCheckRevocation(cert *x509.Certificate, revokedErr error) error {
-	if revoked, ok := revoke.VerifyCertificate(cert); ok && revoked {
-		return revokedErr
-	}
+func validateChainCheckRevocation(cert *x509.Certificate, revokedErr error, hardfail bool) error {
+	revoked, ok := revoke.VerifyCertificate(cert)
 
-	return nil
+	switch {
+	case !ok && hardfail:
+		return errCRLUnavailable
+	case ok && revoked:
+		return revokedErr
+	default:
+		return nil
+	}
 }
 
 func mdsParseX509Certificate(value string) (certificate *x509.Certificate, err error) {
